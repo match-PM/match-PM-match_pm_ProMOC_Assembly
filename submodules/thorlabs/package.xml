@@ -1,16 +1,11 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>planar_motor</name>
+  <name>thorlabs</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="pmlab_mover@todo.todo">pmlab_mover</maintainer>
   <license>TODO: License declaration</license>
-
-  <depend>rclpy</depend>
-  <depend>std_msgs</depend>
-  <depend>pmclib</depend>
-  <depend>planar_motor_interfaces</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
