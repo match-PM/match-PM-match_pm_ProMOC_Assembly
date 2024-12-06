@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'match_pm_promoc_assembly'
+package_name = 'match-PM-match_pm_ProMOC_Assembly'
 
 setup(
     name=package_name,

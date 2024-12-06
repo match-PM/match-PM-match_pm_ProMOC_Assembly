@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(match_pm_promoc_assembly)
+project(match-PM-match_pm_ProMOC_Assembly)
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
