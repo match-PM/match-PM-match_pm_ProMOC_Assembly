@@ -1,11 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>thorlabs</name>
+  <name>match_pm_promoc_assembly</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="pmlab_mover@todo.todo">pmlab_mover</maintainer>
+  <maintainer email="sterni@todo.todo">sterni</maintainer>
   <license>TODO: License declaration</license>
+  
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  
+
+  <!-- For custom interfaces -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

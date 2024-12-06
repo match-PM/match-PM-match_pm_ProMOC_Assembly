@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'launch_utils'
+package_name = 'match_pm_promoc_assembly'
 
 setup(
     name=package_name,
@@ -13,13 +13,15 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='pmlab_mover',
-    maintainer_email='pmlab_mover@todo.todo',
+    maintainer='C.Sternberg',
+    maintainer_email='C.Sternberg@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "mover_service_node = nodes.planar_motor.mover_service_node:main",
+            "mover_client_node = nodes.planar_motor.mover_client_node:main"
         ],
     },
 )
