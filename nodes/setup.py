@@ -1,27 +1,28 @@
 from setuptools import find_packages, setup
 
-package_name = 'match-PM-match_pm_ProMOC_Assembly'
+package_name = 'nodes'
 
 setup(
     name=package_name,
     version='0.0.0',
     packages=find_packages(exclude=['test']),
     data_files=[
-        ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
+        # Dateien, die in den Ressourcenindex von Ament eingefügt werden
+        ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
+        # Die package.xml wird im Installationsverzeichnis des Pakets platziert
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='C.Sternberg',
-    maintainer_email='C.Sternberg@todo.todo',
+    maintainer='sterni',
+    maintainer_email='thesterni91@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "mover_service_node = nodes.planar_motor.mover_service_node:main",
-            "mover_client_node = nodes.planar_motor.mover_client_node:main"
+            'test_node = nodes.test_nodes.test_node:main',  # Beispiel für einen Node
         ],
     },
+    
 )
