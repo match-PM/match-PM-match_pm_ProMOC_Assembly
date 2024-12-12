@@ -5,18 +5,18 @@ from pmclib import system_commands as sys   # PMC System related commands
 from pmclib import xbot_commands as bot     # PMC Mover related commands
 from pmclib import pmc_types                # PMC API Types
 
-from interfaces.mover_interfaces.msg import XBotInfo
-from interfaces.mover_interfaces.srv import LinearMotionSi
-from interfaces.mover_interfaces.srv import SixDofMotion
-from interfaces.mover_interfaces.srv import ActivateXbots
-from interfaces.mover_interfaces.srv import LevitationXbots
+from promoc_assembly_interfaces.msg import XBotInfo
+from promoc_assembly_interfaces.srv import LinearMotionSi
+from promoc_assembly_interfaces.srv import SixDofMotion
+from promoc_assembly_interfaces.srv import ActivateXbots
+from promoc_assembly_interfaces.srv import LevitationXbots
 
 import time
 
 class MoverServiceNode(Node): 
     def __init__(self):
         super().__init__("mover_node")
-        
+        self.add_on_shutdown_callback(self.cleanup_function())
 
         self.xbot_id = 1
 
@@ -28,7 +28,7 @@ class MoverServiceNode(Node):
         self.linear_movement_server = self.create_service(LinearMotionSi,f"{self.get_name()}/linear_mover_motion",self.callback_linear_motion_si)
         self.six_d_movement_server = self.create_service(SixDofMotion,f"{self.get_name()}/six_d_mover_motion",self.callback_six_d_motion)
         self.xbot_activation_server = self.create_service(ActivateXbots,f"{self.get_name()}/activate_xbots",self.callback_activate_xbot)
-        #self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
+        self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
         
 
         #Timer
@@ -66,8 +66,11 @@ class MoverServiceNode(Node):
                 raise TimeoutError("PMC Activation timeout")
             
 
-
-
+    def cleanup_function():
+        bot.deactivate_xbots()
+        print("Node is shuting down ")
+        print("Deactivating XBots...")
+    
     def xbot_postition_publisher(self):
         xbot_data_list=bot.get_all_xbot_info(0)
         msg=XBotInfo()
@@ -170,8 +173,14 @@ class MoverServiceNode(Node):
 def main(args=None):
     rclpy.init(args=args)   
     node = MoverServiceNode()   
-    rclpy.spin(node)
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Ensure that the cleanup function is called when the node shuts down
+        node.destroy_node()
+        rclpy.shutdown()
 
     
 

@@ -7,9 +7,11 @@ from pmclib import xbot_commands as bot     # PMC Mover related commands
 from pmclib import pmc_types                # PMC API Types
 
 
-from interfaces.mover_interfaces.msg import XBotInfo
-from interfaces.mover_interfaces.srv import LinearMotionSi
-from interfaces.mover_interfaces.srv import SixDofMotion
+from promoc_assembly_interfaces.msg import XBotInfo
+from promoc_assembly_interfaces.srv import LinearMotionSi
+from promoc_assembly_interfaces.srv import SixDofMotion
+from promoc_assembly_interfaces.srv import ActivateXbots
+from promoc_assembly_interfaces.srv import LevitationXbots
 
 import time
 
@@ -71,6 +73,24 @@ class MoverClientNode(Node):
         future = self.six_d_motion_client.call_async(request)
         future.add_done_callback(self.callback)
 
+    def xbot_activation_request(self, xbot_id, activate):
+        request = ActivateXbots.Request()
+        request.xbot_id = xbot_id
+        request.activation_status=activate
+
+        # Call the service asynchronously
+        future = self.linear_motion_client.call_async(request)
+        future.add_done_callback(self.callback)
+
+    def levitation_request(self, xbot_id, levitate):
+        request = LevitationXbots.Request()
+        request.xbot_id = xbot_id
+        request.levitation_status=levitate
+
+        # Call the service asynchronously
+        future = self.linear_motion_client.call_async(request)
+        future.add_done_callback(self.callback)
+
     def callback(self, future):
         try:
             response = future.result()
@@ -79,7 +99,8 @@ class MoverClientNode(Node):
 
     def xbot_postion_callback(self,msg):
         self.xpos=msg
-        
+
+    
 
 
         

@@ -1,5 +1,5 @@
 import rclpy
-from nodes.planar_motor.mover_client_node import MoverClientNode  # Import the MoverClientNode class
+from nodes.nodes.planar_motor.mover_client_node import MoverClientNode  # Import the MoverClientNode class
 from rclpy.node import Node
 #from interfaces.mover_interfaces.srv import LinearMotionSi
 
@@ -29,6 +29,16 @@ def main():
                                           xy_max_speed=0.5, xy_max_accl=1.0, 
                                           z_max_speed=1.0, rx_max_speed=0.1, 
                                           ry_max_speed=0.1, rz_max_speed=0.1)
+    
+    move_client.levitation_request(xbot_id=1, levitate=False)
+    move_client.levitation_request(xbot_id=1, levitate=True)
+    
+    move_client.xbot_activation_request(xbot_id=1, activate=False)
+    move_client.xbot_activation_request(xbot_id=1, activate=True)
+
+
+    print('Finished the Testfile succesfull ')
+    
     
     
     # Spin to handle incoming responses
