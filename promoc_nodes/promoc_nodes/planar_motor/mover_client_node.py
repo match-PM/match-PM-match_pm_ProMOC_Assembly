@@ -11,7 +11,7 @@ from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import LinearMotionSi
 from promoc_assembly_interfaces.srv import SixDofMotion
 from promoc_assembly_interfaces.srv import ActivateXbots
-from promoc_assembly_interfaces.srv import LevitationXbots
+#from promoc_assembly_interfaces.srv import LevitationXbots
 
 import time
 
@@ -82,14 +82,14 @@ class MoverClientNode(Node):
         future = self.linear_motion_client.call_async(request)
         future.add_done_callback(self.callback)
 
-    def levitation_request(self, xbot_id, levitate):
-        request = LevitationXbots.Request()
-        request.xbot_id = xbot_id
-        request.levitation_status=levitate
+    # def levitation_request(self, xbot_id, levitate):
+    #     request = LevitationXbots.Request()
+    #     request.xbot_id = xbot_id
+    #     request.levitation_status=levitate
 
-        # Call the service asynchronously
-        future = self.linear_motion_client.call_async(request)
-        future.add_done_callback(self.callback)
+    #     # Call the service asynchronously
+    #     future = self.linear_motion_client.call_async(request)
+    #     future.add_done_callback(self.callback)
 
     def callback(self, future):
         try:

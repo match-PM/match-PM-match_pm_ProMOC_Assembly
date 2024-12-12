@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
 from pmclib import system_commands as sys   # PMC System related commands
@@ -9,14 +8,14 @@ from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import LinearMotionSi
 from promoc_assembly_interfaces.srv import SixDofMotion
 from promoc_assembly_interfaces.srv import ActivateXbots
-from promoc_assembly_interfaces.srv import LevitationXbots
+#from promoc_assembly_interfaces.srv import LevitationXbots
 
 import time
 
 class MoverServiceNode(Node): 
     def __init__(self):
         super().__init__("mover_node")
-        self.add_on_shutdown_callback(self.cleanup_function())
+        
 
         self.xbot_id = 1
 
@@ -28,7 +27,7 @@ class MoverServiceNode(Node):
         self.linear_movement_server = self.create_service(LinearMotionSi,f"{self.get_name()}/linear_mover_motion",self.callback_linear_motion_si)
         self.six_d_movement_server = self.create_service(SixDofMotion,f"{self.get_name()}/six_d_mover_motion",self.callback_six_d_motion)
         self.xbot_activation_server = self.create_service(ActivateXbots,f"{self.get_name()}/activate_xbots",self.callback_activate_xbot)
-        self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
+        #self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
         
 
         #Timer
@@ -66,10 +65,6 @@ class MoverServiceNode(Node):
                 raise TimeoutError("PMC Activation timeout")
             
 
-    def cleanup_function():
-        bot.deactivate_xbots()
-        print("Node is shuting down ")
-        print("Deactivating XBots...")
     
     def xbot_postition_publisher(self):
         xbot_data_list=bot.get_all_xbot_info(0)
@@ -159,14 +154,17 @@ class MoverServiceNode(Node):
          return response
     
     
-    def callback_levitation_xbot(self, request, response):
-        #xbot_id = request.xbot_id
-        if request.levitation == True:
-            bot.levitation_command(request.xbot_id, pmc_types.LevitateOptions.LEVITATE)
-            response.levitation = True
-        else:
-            bot.levitation_command(request.xbot_id, pmc_types.LevitateOptions.LAND)
-            response.levitation = False
+    # def callback_levitation_xbot(self, request, response):
+    #     xbot_id = request.xbot_id
+
+    #     if request.levitation == True:
+    #         bot.levitation_command(xbot_id, 1)
+    #         response.levitation = True
+    #     else:
+    #         bot.levitation_command(xbot_id, 0)
+    #         response.levitation = False
+
+    #     return response
 
 
          

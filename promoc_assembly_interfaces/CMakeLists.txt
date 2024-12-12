@@ -19,7 +19,11 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/test/Test.msg"
-
+  "msg/planar_motor/XBotInfo.msg"
+  "srv/planar_motor/ActivateXbots.srv"
+  "srv/planar_motor/LevitationXbots.srv"
+  "srv/planar_motor/LinearMotionSi.srv"
+  "srv/planar_motor/SixDofMotion.srv"
 )
 
 ament_export_dependencies(rosidl_default_runtime)
