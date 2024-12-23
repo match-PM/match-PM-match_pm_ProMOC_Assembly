@@ -27,8 +27,13 @@ class MoverServiceNode(Node):
         self.linear_movement_server = self.create_service(LinearMotionSi,f"{self.get_name()}/linear_mover_motion",self.callback_linear_motion_si)
         self.six_d_movement_server = self.create_service(SixDofMotion,f"{self.get_name()}/six_d_mover_motion",self.callback_six_d_motion)
         self.xbot_activation_server = self.create_service(ActivateXbots,f"{self.get_name()}/activate_xbots",self.callback_activate_xbot)
+        # To implement
         #self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
-        
+        #arc_motion
+        #short_axis_motion
+        #spin_motion
+
+
 
         #Timer
         self.xbot_position_timer =self.create_timer(0.1,self.xbot_postition_publisher)
