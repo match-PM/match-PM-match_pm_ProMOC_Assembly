@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "mover_service_node = promoc_nodes.planar_motor.mover_service_node:main"
+            "toolchangersrvice_node = promoc_nodes.toolchanger.toolchanger_service_noce:main"
         ],
     },
 )
