@@ -12,6 +12,7 @@ class ToolchangerServiceNode(Node):
     
     def getStatus_toolchanger(self):
         # get the status of the toolchanger
+        #statusToolchanger = ???
         pass
         #return statusToolchanger
 
