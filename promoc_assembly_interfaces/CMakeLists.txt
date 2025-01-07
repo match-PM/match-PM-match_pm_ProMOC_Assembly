@@ -24,6 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/planar_motor/LevitationXbots.srv"
   "srv/planar_motor/LinearMotionSi.srv"
   "srv/planar_motor/SixDofMotion.srv"
+  "srv/planar_motor/ArcMotion.srv"
 )
 
 ament_export_dependencies(rosidl_default_runtime)

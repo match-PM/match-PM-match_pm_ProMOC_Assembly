@@ -1,11 +1,10 @@
-# Project Title
+# PM Promoc_Assembly
 
 A brief description of your project goes here.
 
 ## Table of Contents
 
-- [Project Title](#project-title)
-  - [Table of Contents](#table-of-contents)
+- [Project Title](PM_Promoc_Assembly)
   - [Installation](#installation)
   - [Usage](#usage)
   - [Testing](#testing)
@@ -44,7 +43,7 @@ A brief description of your project goes here.
      - If you have configured it in your `.bashrc`, run:
 
        ```bash
-       source /opt/ros/<ros_distro>/setup.bash
+       source .bashrc
        ```
 
      - Alternatively, source the workspace setup file directly:
@@ -53,7 +52,7 @@ A brief description of your project goes here.
        source ~/ros2_ws/install/setup.bash
        ```
 
-   Replace `<ros_distro>` with the name of your ROS2 distribution (e.g., `humble`, `foxy`).
+   
 
 
 ## Usage
@@ -73,6 +72,21 @@ A brief description of your project goes here.
      ```
 
    - Once the build is complete, remember to source the workspace again. For instructions, refer to step 4 in the **Installation** section.
+
+### How to use the specific Nodes
+  - To start the main node (e.g., mover_service_node), use the following command:
+  ```bash
+  ros2 run promoc_nodes mover_service_node
+  ```
+  - Once the node is running, you can send Service commands or monitor topics using tools like rqt or the ros_sequential_action_programmer. To run the ros_sequential_action_programmer, use:
+  ```bash
+  ros2 run ros_sequential_action_programmer ros_sequential_action_programmer
+  ```
+
+### How to use the Library Project at Home
+  - The Service Node includes a parameter called use_simulation_mode. When this parameter is set to True, the code will bypass sections that require a connected PMC (Planar Motor Controller). This allows you to compile and run your code without the PMC being physically connected, making it easier to test and develop in a simulated environment.
+  
+
 
 
 ## Testing
