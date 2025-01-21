@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'promoc_nodes'
+package_name = 'planar_motor_nodes'
 
 setup(
     name=package_name,
@@ -25,3 +25,4 @@ setup(
         ],
     },
 )
+
