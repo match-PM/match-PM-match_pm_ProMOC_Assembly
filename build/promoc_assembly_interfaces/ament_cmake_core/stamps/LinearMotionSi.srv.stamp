@@ -1,7 +1,0 @@
-int32 xbot_id
-float64 x_pos
-float64 y_pos
-float64 xy_max_speed
-float64 xy_max_accl
----
-bool finished

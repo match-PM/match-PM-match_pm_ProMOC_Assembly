@@ -1,6 +1,0 @@
-setup.py
-promoc_assembly_interfaces/__init__.py
-promoc_assembly_interfaces.egg-info/PKG-INFO
-promoc_assembly_interfaces.egg-info/SOURCES.txt
-promoc_assembly_interfaces.egg-info/dependency_links.txt
-promoc_assembly_interfaces.egg-info/top_level.txt

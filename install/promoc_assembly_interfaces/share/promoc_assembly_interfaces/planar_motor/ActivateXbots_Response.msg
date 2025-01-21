@@ -1,2 +1,0 @@
-
-bool activation_status

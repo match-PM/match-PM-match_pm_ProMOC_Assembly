@@ -1,7 +1,0 @@
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:msg/Test.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:msg/XBotInfo.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/ActivateXbots.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/LevitationXbots.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/LinearMotionSi.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/SixDofMotion.idl
-/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/ArcMotion.idl

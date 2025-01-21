@@ -1,4 +1,0 @@
-[console_scripts]
-mover_client_node = promoc_nodes.planar_motor.mover_client_node:main
-mover_service_node = promoc_nodes.planar_motor.mover_service_node:main
-
