@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+
 from pmclib import system_commands as sys   # PMC System related commands
 from pmclib import xbot_commands as bot     # PMC Mover related commands
 from pmclib import pmc_types                # PMC API Types
@@ -9,6 +10,9 @@ from promoc_assembly_interfaces.srv import LinearMotionSi
 from promoc_assembly_interfaces.srv import SixDofMotion
 from promoc_assembly_interfaces.srv import ActivateXbots
 from promoc_assembly_interfaces.srv import LevitationXbots
+from promoc_assembly_interfaces.srv import ArcMotionTargetRadius
+from promoc_assembly_interfaces.srv import StopMotion
+from promoc_assembly_interfaces.srv import RotaryMotion
 
 import time
 
@@ -16,6 +20,9 @@ class MoverServiceNode(Node):
     def __init__(self):
         super().__init__("mover_node")
         self.xbot_id = 1
+        
+        
+
         # Initialize simulation variables (default values for positions)
         self.sim_x_pos = 120.0  # Simulated X position (in meters)
         self.sim_y_pos = 120.0  # Simulated Y position (in meters)
@@ -36,12 +43,16 @@ class MoverServiceNode(Node):
         self.six_d_movement_server = self.create_service(SixDofMotion, f"{self.get_name()}/six_d_mover_motion", self.callback_six_d_motion)
         self.xbot_activation_server = self.create_service(ActivateXbots, f"{self.get_name()}/activate_xbots", self.callback_activate_xbot)
         self.xbot_levitation_server = self.create_service(LevitationXbots, f"{self.get_name()}/levitation_xbots", self.callback_levitation_xbot)
+        self.xbot_arc_motion_target_radius_server = self.create_service(ArcMotionTargetRadius,f"{self.get_name()}/arcmotion_target_radius",self.callback_arc_motion_target_radius)
+        self.xbot_stop_motion_server = self.create_service(StopMotion, f"{self.get_name()}/stop_motion", self.callback_stop_motion)
+        self.xbot_rotary_motion_server =self.create_service(RotaryMotion,f"{self.get_name()}/rotary_motion",self.callback_rotary_motion)
+        # Initialize connection to PMC and XBot
+        self.startup_connection()
 
         # Timer to periodically publish XBot position
         self.xbot_position_timer = self.create_timer(0.1, self.xbot_postition_publisher)
         
-        # Initialize connection to PMC and XBot
-        self.startup_connection()
+        
 
     def xbot_postition_publisher(self):
         
@@ -59,14 +70,18 @@ class MoverServiceNode(Node):
             msg.ry_pos = self.sim_ry_pos
             msg.rz_pos = self.sim_rz_pos
         else:
-            # In real mode, fetch the actual position data from the XBot
-            xbot_data_list = bot.get_all_xbot_info(0)
-            msg.x_pos = float(xbot_data_list[0].x_pos)
-            msg.y_pos = float(xbot_data_list[0].y_pos)
-            msg.z_pos = float(xbot_data_list[0].z_pos)
-            msg.rx_pos = float(xbot_data_list[0].rx_pos)
-            msg.ry_pos = float(xbot_data_list[0].ry_pos)
-            msg.rz_pos = float(xbot_data_list[0].rz_pos)
+            try:
+                # In real mode, fetch the actual position data from the XBot
+                xbot_data_list = bot.get_all_xbot_info(0)
+                msg.x_pos = float(xbot_data_list[0].x_pos)
+                msg.y_pos = float(xbot_data_list[0].y_pos)
+                msg.z_pos = float(xbot_data_list[0].z_pos)
+                msg.rx_pos = float(xbot_data_list[0].rx_pos)
+                msg.ry_pos = float(xbot_data_list[0].ry_pos)
+                msg.rz_pos = float(xbot_data_list[0].rz_pos)
+            except IndexError:
+                print("Error: xbot_data_list is empty")
+                # Catch the Error that on Startup the xbot.pos list isnt filed with data
         
         # Publish the XBot position message
         self.xbot_pos_publisher_.publish(msg)
@@ -91,16 +106,67 @@ class MoverServiceNode(Node):
             xy_max_accl = request.xy_max_accl
 
             # Execute the linear motion command
-            travel_time_sec = bot.linear_motion_si(xbot_id, x_pos/1000, y_pos/1000, xy_max_speed, xy_max_accl)
+            try:
+                bot.linear_motion_si(xbot_id, x_pos/1000, y_pos/1000, xy_max_speed, xy_max_accl)
+                response = True
+            except:
+                self.get_logger().info("INVALID PARAMETER")
+                response = False
             
             # Set the response based on whether the motion was successful
-            if travel_time_sec > 0.0:
+        return response
+
+    def callback_arc_motion_target_radius(self,request,response): 
+        if self.use_simulation_mode:
+            response.finished = True
+        else:
+            xbot_id = request.xbot_id
+            arc_type = request.arc_type                 #0= MInorArc , 1=Majorarc
+            arc_dir = request.arc_dir                   #0=CLockwise ,1=COunterCLockwise
+            postion_mode = request.postion_mode         
+            x_pos = request.x_pos  
+            y_pos = request.y_pos
+            final_speed = request.final_speed
+            xy_max_speed = request.xy_max_speed
+            xy_max_accl = request.xy_max_accl
+            radius_meters = request.radius_meters           #TODO Abfangen des INValid Parameter fehlers durch zu hohe oder geringe radien
+            try:
+                bot.arc_motion_target_radius(xbot_id,x_pos/1000,y_pos/1000,arc_type,postion_mode,arc_dir,
+                                         radius_meters/1000,xy_max_speed,xy_max_accl,final_speed)
                 response.finished = True
-            else:
+                
+            except:
+                self.get_logger().info("INVALID PARAMETER")
                 response.finished = False
             
         return response
 
+
+    def callback_rotary_motion(self,request,response):
+        if self.use_simulation_mode:
+            response.finished =True
+        else:
+            try:
+                bot.rotary_motion(request.xbot_id,request.target_rz,request.max_speed,request.max_accel)
+                response.finished =True
+            except:
+                self.get_logger().info("INVALID PARAM")
+                response.finished =False#
+
+        return response 
+
+
+    def callback_stop_motion(self,request,response):
+        if self.use_simulation_mode:
+            pass
+        else:
+            try:    
+                bot.stop_motion(request.xbot_id)
+                response.finished = True
+            except:
+                self.get_logger().info("Stop Motion didnt work")
+                response.finished = False
+                
     def callback_six_d_motion(self, request, response):
         
         # Service callback for handling 6D motion requests.
@@ -134,10 +200,13 @@ class MoverServiceNode(Node):
             rz_max_speed = request.rz_max_speed
 
             # Execute the 6D motion command
-            bot.six_d_of_motion_si(xbot_id, x_pos/1000, y_pos/1000, z_pos/1000, rx_pos/1000, ry_pos/1000, rz_pos/1000, 
-                                    xy_max_speed, xy_max_accl, z_max_speed, rx_max_speed, ry_max_speed, rz_max_speed)
+            try:
+                bot.six_d_of_motion_si(xbot_id, x_pos/1000, y_pos/1000, z_pos/1000, rx_pos/1000, ry_pos/1000, rz_pos/1000, 
+                                        xy_max_speed, xy_max_accl, z_max_speed, rx_max_speed, ry_max_speed, rz_max_speed)
 
-            response.finished = True
+                response.finished = True
+            except:
+                self.get_logger().info("INVALID PARAMETER")
 
         return response
 
@@ -171,10 +240,10 @@ class MoverServiceNode(Node):
             response.levitation = True if request.levitation else False
         else:
             if request.levitation:
-                bot.match_levitate_xbot_command(xbot_id)
+                bot.levitate_xbot_command(xbot_id,1)
                 response.levitation = True
             else:
-                bot.match_land_xbot_command(xbot_id)
+                bot.levitate_xbot_command(xbot_id,0)
                 response.levitation = False
 
         return response

@@ -2,7 +2,7 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from promoc_assembly_interfaces.srv import LinearMotionSi, SixDofMotion, ActivateXbots, LevitationXbots
 from promoc_assembly_interfaces.msg import XBotInfo
-from promoc_nodes.planar_motor.mover_client_node import MoverClientNode  # Import the existing MoverClientNode class
+from mover_client_node import MoverClientNode  # Import the existing MoverClientNode class
 
 
 def main(args=None):
