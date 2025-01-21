@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from promoc_assembly_interfaces/srv/planar_motor/LinearMotionSi.srv
+// generated code does not contain a copyright notice
+
+
+module promoc_assembly_interfaces {
+  module srv {
+    struct LinearMotionSi_Request {
+      int32 xbot_id;
+
+      double x_pos;
+
+      double y_pos;
+
+      double xy_max_speed;
+
+      double xy_max_accl;
+    };
+    struct LinearMotionSi_Response {
+      boolean finished;
+    };
+  };
+};

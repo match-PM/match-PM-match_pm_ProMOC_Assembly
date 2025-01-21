@@ -1,0 +1,13 @@
+int32 xbot_id
+int32 arc_mode
+int32 arc_type
+int32 arc_dir
+int32 postion_mode
+float64 x_pos
+float64 y_pos
+float64 final_speed
+float64 xy_max_speed
+float64 xy_max_accl
+float64 radius_meters
+float64 angle_radians
+

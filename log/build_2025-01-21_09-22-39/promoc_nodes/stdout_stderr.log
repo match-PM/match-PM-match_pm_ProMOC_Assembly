@@ -1,0 +1,52 @@
+running egg_info
+creating ../build/promoc_nodes/promoc_nodes.egg-info
+writing ../build/promoc_nodes/promoc_nodes.egg-info/PKG-INFO
+writing dependency_links to ../build/promoc_nodes/promoc_nodes.egg-info/dependency_links.txt
+writing entry points to ../build/promoc_nodes/promoc_nodes.egg-info/entry_points.txt
+writing requirements to ../build/promoc_nodes/promoc_nodes.egg-info/requires.txt
+writing top-level names to ../build/promoc_nodes/promoc_nodes.egg-info/top_level.txt
+writing manifest file '../build/promoc_nodes/promoc_nodes.egg-info/SOURCES.txt'
+reading manifest file '../build/promoc_nodes/promoc_nodes.egg-info/SOURCES.txt'
+writing manifest file '../build/promoc_nodes/promoc_nodes.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes
+copying promoc_nodes/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/thorlabs
+copying promoc_nodes/thorlabs/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/thorlabs
+copying promoc_nodes/thorlabs/lts300_service_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/thorlabs
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor
+copying promoc_nodes/planar_motor/mover_service_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor
+copying promoc_nodes/planar_motor/mover_client_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor
+copying promoc_nodes/planar_motor/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor
+running install
+running install_lib
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/thorlabs
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/thorlabs/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/thorlabs
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/thorlabs/lts300_service_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/thorlabs
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor/mover_service_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor/mover_client_node.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor
+copying /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/build/lib/promoc_nodes/planar_motor/__init__.py -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/thorlabs/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/thorlabs/lts300_service_node.py to lts300_service_node.cpython-310.pyc
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/__init__.py to __init__.cpython-310.pyc
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor/mover_service_node.py to mover_service_node.cpython-310.pyc
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor/mover_client_node.py to mover_client_node.cpython-310.pyc
+byte-compiling /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes/planar_motor/__init__.py to __init__.cpython-310.pyc
+running install_data
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/share/ament_index
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/share/ament_index/resource_index
+creating /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/share/ament_index/resource_index/packages
+copying resource/promoc_nodes -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/share/ament_index/resource_index/packages
+copying package.xml -> /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/share/promoc_nodes
+running install_egg_info
+Copying ../build/promoc_nodes/promoc_nodes.egg-info to /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/python3.10/site-packages/promoc_nodes-0.0.0-py3.10.egg-info
+running install_scripts
+Installing mover_client_node script to /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/promoc_nodes
+Installing mover_service_node script to /home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/install/promoc_nodes/lib/promoc_nodes
+writing list of installed files to '/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_nodes/install.log'

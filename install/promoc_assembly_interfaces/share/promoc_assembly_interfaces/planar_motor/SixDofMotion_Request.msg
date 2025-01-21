@@ -1,0 +1,12 @@
+float64 x_pos
+float64 y_pos
+float64 z_pos
+float64 rx_pos
+float64 ry_pos
+float64 rz_pos
+float64 xy_max_speed
+float64 xy_max_accl
+float64 z_max_speed
+float64 rx_max_speed
+float64 ry_max_speed
+float64 rz_max_speed

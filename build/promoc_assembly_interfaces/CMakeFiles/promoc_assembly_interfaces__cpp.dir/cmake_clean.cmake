@@ -1,0 +1,43 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/promoc_assembly_interfaces__cpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/test__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/test__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/test__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/test__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/x_bot_info__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/x_bot_info__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/x_bot_info__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/detail/x_bot_info__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/test.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/msg/x_bot_info.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/activate_xbots.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/arc_motion.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/activate_xbots__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/activate_xbots__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/activate_xbots__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/activate_xbots__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/arc_motion__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/arc_motion__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/arc_motion__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/arc_motion__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/levitation_xbots__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/levitation_xbots__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/levitation_xbots__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/levitation_xbots__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/linear_motion_si__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/linear_motion_si__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/linear_motion_si__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/linear_motion_si__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/six_dof_motion__builder.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/six_dof_motion__struct.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/six_dof_motion__traits.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/detail/six_dof_motion__type_support.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/levitation_xbots.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/linear_motion_si.hpp"
+  "rosidl_generator_cpp/promoc_assembly_interfaces/srv/six_dof_motion.hpp"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang )
+  include(CMakeFiles/promoc_assembly_interfaces__cpp.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

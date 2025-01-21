@@ -1,0 +1,31 @@
+{
+  "package_name": "promoc_assembly_interfaces",
+  "output_dir": "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_typesupport_introspection_c/promoc_assembly_interfaces",
+  "template_dir": "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource",
+  "idl_tuples": [
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:msg/Test.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:msg/XBotInfo.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/ActivateXbots.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/LevitationXbots.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/LinearMotionSi.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/SixDofMotion.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces:srv/ArcMotion.idl"
+  ],
+  "target_dependencies": [
+    "/opt/ros/humble/lib/rosidl_typesupport_introspection_c/rosidl_typesupport_introspection_c",
+    "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_typesupport_introspection_c/__init__.py",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/idl__rosidl_typesupport_introspection_c.h.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/idl__type_support.c.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/msg__rosidl_typesupport_introspection_c.h.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/msg__type_support.c.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/srv__rosidl_typesupport_introspection_c.h.em",
+    "/opt/ros/humble/share/rosidl_typesupport_introspection_c/resource/srv__type_support.c.em",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/msg/Test.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/msg/XBotInfo.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/srv/ActivateXbots.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/srv/LevitationXbots.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/srv/LinearMotionSi.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/srv/SixDofMotion.idl",
+    "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/build/promoc_assembly_interfaces/rosidl_adapter/promoc_assembly_interfaces/srv/ArcMotion.idl"
+  ]
+}
