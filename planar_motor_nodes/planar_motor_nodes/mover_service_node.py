@@ -112,11 +112,36 @@ class MoverServiceNode(Node):
                                    request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000,
                                    request.xy_max_speed, request.xy_max_accl, request.z_max_speed,
                                    request.rx_max_speed, request.ry_max_speed, request.rz_max_speed)
+            
+            target_position = [request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
+                               request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000]
+
+            while not self.check_position_reached(target_position, self.get_current_position(), tolerance=0.01):
+                time.sleep(0.1)
+
             response.finished = True
         except:
             self.get_logger().error("INVALID PARAMETER")
             response.finished = False
         return response
+
+
+    def check_position_reached(self, target_position, current_position, tolerance):
+        for i in range(len(target_position)):
+            if abs(target_position[i] - current_position[i]) > tolerance:
+                return False
+        return True
+    
+    def get_current_position(self):
+        try:
+            xbot_data_list = bot.get_all_xbot_info(0)
+            current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
+                                  float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
+            return current_position
+        except IndexError:
+            self.get_logger().error("Error: xbot_data_list is empty")
+            return [0, 0, 0, 0, 0, 0]
+        
 
     def callback_activate_xbot(self, request, response):
         if request.activation_status:
