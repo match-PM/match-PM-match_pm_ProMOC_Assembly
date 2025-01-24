@@ -1,4 +1,4 @@
-int32 xbot_id
+int32   xbot_id
 float64 target_rz
 float64 max_rz_speed
 float64 max_accel_rz
