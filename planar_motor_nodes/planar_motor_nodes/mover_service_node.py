@@ -1,14 +1,15 @@
 
 import sys
 import os
-
-# To use the mock_pmclib we need to add the current script's directory to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import rclpy
 from rclpy.node import Node
 import time
 
+# To use the mock_pmclib we need to add the current script's directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+
+# import of mock_pmclib incase of pmclib not being available
 try:
     from pmclib import system_commands as sys
     from pmclib import xbot_commands as bot
@@ -19,15 +20,16 @@ except ImportError as e:
     from mock_pmclib import xbot_commands as bot
     from mock_pmclib import pmc_types
 
-
+# import of promoc_assembly_interfaces
 from promoc_assembly_interfaces.msg import XBotInfo
-from promoc_assembly_interfaces.srv import LinearMotionSi
-from promoc_assembly_interfaces.srv import SixDofMotion
 from promoc_assembly_interfaces.srv import ActivateXbots
-from promoc_assembly_interfaces.srv import LevitationXbots
 from promoc_assembly_interfaces.srv import ArcMotionTargetRadius
-from promoc_assembly_interfaces.srv import StopMotion
+from promoc_assembly_interfaces.srv import LevitationXbots
+from promoc_assembly_interfaces.srv import LinearMotionSi
 from promoc_assembly_interfaces.srv import RotaryMotion
+from promoc_assembly_interfaces.srv import SixDofMotion
+from promoc_assembly_interfaces.srv import StopMotion
+
 
 
 
