@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import rclpy
 from rclpy.node import Node
+import time
 
 try:
     from pmclib import system_commands as sys
@@ -28,10 +29,23 @@ from promoc_assembly_interfaces.srv import ArcMotionTargetRadius
 from promoc_assembly_interfaces.srv import StopMotion
 from promoc_assembly_interfaces.srv import RotaryMotion
 
-import time
+
 
 class MoverServiceNode(Node): 
     def __init__(self):
+        """
+        Initialize the MoverServiceNode class.
+
+        This function sets up the ROS node, creates publishers and service servers for handling motions and commands,
+        initializes the connection to the PMC and XBot, and starts a timer to periodically publish XBot position.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+        """
+
         super().__init__("mover_node")
         self.xbot_id = 1
 
@@ -54,6 +68,20 @@ class MoverServiceNode(Node):
         self.xbot_position_timer = self.create_timer(0.1, self.xbot_postition_publisher)
 
     def xbot_postition_publisher(self):
+        """
+        This function publishes the current position of the XBot to a ROS topic.
+
+        Parameters:
+        None
+
+        Returns:
+        None
+
+        The function initializes an XBotInfo message, retrieves the current position of the XBot using the
+        `bot.get_all_xbot_info` function, and populates the message fields with the XBot's position data.
+        If the `xbot_data_list` is empty, an error message is logged. Finally, the message is published to the
+        `xbot_pos_publisher_` topic.
+        """
         msg = XBotInfo()
         try:
             xbot_data_list = bot.get_all_xbot_info(0)
@@ -70,11 +98,22 @@ class MoverServiceNode(Node):
 
     def callback_linear_motion_si(self, request, response):
         try:
-            bot.linear_motion_si(request.xbot_id, request.x_pos / 1000, request.y_pos / 1000, request.xy_max_speed, request.xy_max_accl)
+            # Convert position values from millimeters to meters
+            target_position = [
+                request.x_pos / 1000, request.y_pos / 1000
+            ]
+            # The * infront of targe_postion unpacks the target_position list into individual parameters.
+            bot.linear_motion_si(request.xbot_id, *target_position, request.xy_max_speed, request.xy_max_accl)
+            # Wait until the target position is reached within tolerance
+            while not self.check_position_reached(target_position, self.get_current_position(), tolerance=0.01):
+                time.sleep(0.001)
+
             response.finished = True
-        except:
-            self.get_logger().error("INVALID PARAMETER")
+        
+        except Exception as e:
+            self.get_logger().error(f"INVALID PARAMETER: {e}")
             response.finished = False
+
         return response
 
     def callback_arc_motion_target_radius(self, request, response): 
@@ -107,32 +146,58 @@ class MoverServiceNode(Node):
         return response
 
     def callback_six_d_motion(self, request, response):
-        try:
-            bot.six_d_of_motion_si(request.xbot_id, request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
-                                   request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000,
-                                   request.xy_max_speed, request.xy_max_accl, request.z_max_speed,
-                                   request.rx_max_speed, request.ry_max_speed, request.rz_max_speed)
-            
-            target_position = [request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
-                               request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000]
+        """
+        Handles a six-dimensional motion request for a specific XBot.
 
+        This function converts the position values from millimeters to meters, executes the motion command with the
+        converted positions and speed parameters, waits until the target position is reached within a specified tolerance,
+        and returns a response indicating whether the motion was successfully completed.
+
+        Parameters:
+        - request (promoc_assembly_interfaces.srv.SixDofMotion.Request): The motion request containing the XBot ID,
+          target position, and maximum speed and acceleration parameters.
+
+        - response (promoc_assembly_interfaces.srv.SixDofMotion.Response): The response to be filled with the success status
+          of the motion.
+
+        Returns:
+        - response (promoc_assembly_interfaces.srv.SixDofMotion.Response): The response containing the success status
+          of the motion.
+        """
+        try:
+            # Convert position values from millimeters to meters
+            target_position = [
+                request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
+                request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000
+            ]
+
+            # Execute motion command with converted positions and speed parameters
+            bot.six_d_of_motion_si(
+                request.xbot_id, *target_position,
+                request.xy_max_speed, request.xy_max_accl, request.z_max_speed,
+                request.rx_max_speed, request.ry_max_speed, request.rz_max_speed
+            )
+
+            # Wait until the target position is reached within tolerance
             while not self.check_position_reached(target_position, self.get_current_position(), tolerance=0.01):
-                time.sleep(0.1)
+                time.sleep(0.001)
 
             response.finished = True
-        except:
-            self.get_logger().error("INVALID PARAMETER")
+
+        except Exception as e:
+            self.get_logger().error(f"INVALID PARAMETER: {e}")
             response.finished = False
+
         return response
 
 
-    def check_position_reached(self, target_position, current_position, tolerance):
+    def check_position_reached(self, target_position:list, current_position:list, tolerance:float):
         for i in range(len(target_position)):
             if abs(target_position[i] - current_position[i]) > tolerance:
                 return False
         return True
     
-    def get_current_position(self):
+    def get_current_position(self) -> list:
         try:
             xbot_data_list = bot.get_all_xbot_info(0)
             current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
