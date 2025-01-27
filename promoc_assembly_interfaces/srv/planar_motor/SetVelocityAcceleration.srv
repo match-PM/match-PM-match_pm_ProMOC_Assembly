@@ -1,0 +1,11 @@
+float64 xy_vel
+float64 xy_max_accel
+float64 z_vel
+float64 z_max_accel
+float64 rx_vel
+float64 ry_vel
+float64 rz_vel
+
+
+---
+bool finished
