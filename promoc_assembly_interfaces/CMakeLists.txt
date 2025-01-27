@@ -28,6 +28,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/planar_motor/RotaryMotion.srv"
   "srv/planar_motor/SixDofMotion.srv"
   "srv/planar_motor/StopMotion.srv"
+  "srv/planar_motor/SetVelocityAcceleration.srv"
   "msg/test/Test.msg"
   DEPENDENCIES service_msgs
 )

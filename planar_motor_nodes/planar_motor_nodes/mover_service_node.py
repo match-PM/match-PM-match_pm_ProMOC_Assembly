@@ -58,7 +58,9 @@ class MoverServiceNode(Node):
 
         # Start timers
         self.setup_timers()
-
+    
+    
+    # Initialization functions
     def initialize_parameters(self):
         """Initialize core parameters related to XBot and motion tolerances."""
         self.xbot_id = 1
@@ -123,6 +125,8 @@ class MoverServiceNode(Node):
         self.velocity_acceleration_params = self.velocity_acceleration_standard_params.copy()
 
     
+
+    # Timer callback functions
     def xbot_postition_publisher(self):
         """
         This function publishes the current position of the XBot to a ROS topic.
@@ -152,6 +156,8 @@ class MoverServiceNode(Node):
 
         self.xbot_pos_publisher_.publish(msg)
 
+
+    # Callback functions for ROS services
     def callback_linear_motion_si(self, request, response):
         try:
             # Convert position values from millimeters to meters
@@ -274,22 +280,10 @@ class MoverServiceNode(Node):
         
         return response
 
-    def check_position_reached(self, target_position:list, current_position:list, tolerance:float):
-        for i in range(len(target_position)):
-            if abs(target_position[i] - current_position[i]) > tolerance:
-                return False
-        return True
-    
-    def get_current_position(self) -> list:
-        try:
-            xbot_data_list = bot.get_all_xbot_info(0)
-            current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
-                                  float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
-            return current_position
-        except IndexError:
-            self.get_logger().error("Error: xbot_data_list is empty")
-            return [0, 0, 0, 0, 0, 0]
-        
+    def callback_levitation_xbot(self, request, response):
+        bot.levitate_xbot_command(request.xbot_id, int(request.levitation))
+        response.levitation = request.levitation
+        return response     
 
     def callback_activate_xbot(self, request, response):
         if request.activation_status:
@@ -299,13 +293,23 @@ class MoverServiceNode(Node):
         response.activation_status = request.activation_status
         return response
 
-    def callback_levitation_xbot(self, request, response):
-        bot.levitate_xbot_command(request.xbot_id, int(request.levitation))
-        response.levitation = request.levitation
-        return response
 
+    # Helper functions
+    def get_current_position(self) -> list:
+        try:
+            xbot_data_list = bot.get_all_xbot_info(0)
+            current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
+                                  float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
+            return current_position
+        except IndexError:
+            self.get_logger().error("Error: xbot_data_list is empty")
+            return [0, 0, 0, 0, 0, 0]
     
-        
+    def check_position_reached(self, target_position:list, current_position:list, tolerance:float):
+        for i in range(len(target_position)):
+            if abs(target_position[i] - current_position[i]) > tolerance:
+                return False
+        return True
 
 
 def main(args=None):

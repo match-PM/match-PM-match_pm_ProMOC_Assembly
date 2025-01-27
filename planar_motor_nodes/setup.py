@@ -21,7 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "mover_service_node = planar_motor_nodes.mover_service_node:main",
-            "mover_client_node = planar_motor_nodes.mover_client_node:main"
+            "mover_service_client = planar_motor_nodes.mover_service_client:main",
         ],
     },
 )
