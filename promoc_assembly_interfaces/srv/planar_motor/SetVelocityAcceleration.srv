@@ -1,3 +1,4 @@
+int32   xbot_id
 float64 xy_vel
 float64 xy_max_accel
 float64 z_vel

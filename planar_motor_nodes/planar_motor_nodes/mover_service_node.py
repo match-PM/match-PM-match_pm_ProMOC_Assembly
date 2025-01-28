@@ -63,7 +63,6 @@ class MoverServiceNode(Node):
     # Initialization functions
     def initialize_parameters(self):
         """Initialize core parameters related to XBot and motion tolerances."""
-        self.xbot_id = 1
         self.xy_tolerance = 0.1  # Tolerance for position in meters
 
         self.velocity_acceleration_params = {}
@@ -159,24 +158,63 @@ class MoverServiceNode(Node):
 
     # Callback functions for ROS services
     def callback_linear_motion_si(self, request, response):
+        """
+        Handles a linear motion request for a specific XBot.
+
+        This function converts the position values from millimeters to meters, executes the motion command with the
+        converted positions and speed parameters, waits until the target position is reached within a specified tolerance,
+        and returns a response indicating whether the motion was successfully completed.
+
+        Parameters:
+        - request (promoc_assembly_interfaces.srv.LinearMotionSI.Request): The motion request containing the XBot ID,
+        target position, and maximum speed and acceleration parameters.
+
+        - response (promoc_assembly_interfaces.srv.LinearMotionSI.Response): The response to be filled with the success status
+        of the motion.
+
+        Returns:
+        - response (promoc_assembly_interfaces.srv.LinearMotionSI.Response): The response containing the success status
+        of the motion.
+        """    
         try:
+
             # Convert position values from millimeters to meters
             target_position = [
                 request.x_pos / 1000, request.y_pos / 1000
             ]
-            # The * infront of targe_postion unpacks the target_position list into individual parameters.
-            bot.linear_motion_si(request.xbot_id, *target_position,
-                                  self.velocity_acceleration_params['xy_vel'], 
-                                  self.velocity_acceleration_params['xy_max_accel']
+            self.get_logger().info(f"Starting linear motion for bot {request.xbot_id} to target position: {target_position}")
+
+            # Get speed parameters for the bot
+            speed_params = self.velocity_acceleration_params.get(request.xbot_id)
+            if speed_params:
+                # The * infront of targe_postion unpacks the target_position list into individual parameters.
+                bot.linear_motion_si(request.xbot_id, *target_position,
+                                    speed_params['xy_vel'], 
+                                    speed_params['xy_max_accel']
+                )
+            else:
+                self.get_logger().error(f"Speed parameters not found for bot {request.xbot_id}")
+                self.get_logger().error("Using standard speed parameters for this bot")
+                # The * infront of targe_postion unpacks the target_position list into individual parameters.
+                bot.linear_motion_si(request.xbot_id, *target_position,
+                                    self.velocity_acceleration_standard_params['xy_vel'], 
+                                    self.velocity_acceleration_standard_params['xy_max_accel']
             )
+                
             # Wait until the target position is reached within tolerance
             while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
                 time.sleep(self.xy_tolerance/10)
 
             response.finished = True
         
+        except ValueError as e:
+            self.get_logger().error(f"Invalid parameter value: {e}")
+            response.finished = False
+        except KeyError as e:
+            self.get_logger().error(f"Missing parameter in speed_params: {e}")
+            response.finished = False
         except Exception as e:
-            self.get_logger().error(f"INVALID PARAMETER: {e}")
+            self.get_logger().error(f"Unexpected error: {e}")
             response.finished = False
 
         return response
@@ -220,14 +258,14 @@ class MoverServiceNode(Node):
 
         Parameters:
         - request (promoc_assembly_interfaces.srv.SixDofMotion.Request): The motion request containing the XBot ID,
-          target position, and maximum speed and acceleration parameters.
+        target position, and maximum speed and acceleration parameters.
 
         - response (promoc_assembly_interfaces.srv.SixDofMotion.Response): The response to be filled with the success status
-          of the motion.
+        of the motion.
 
         Returns:
         - response (promoc_assembly_interfaces.srv.SixDofMotion.Response): The response containing the success status
-          of the motion.
+        of the motion.
         """
         try:
             # Convert position values from millimeters to meters
@@ -235,33 +273,60 @@ class MoverServiceNode(Node):
                 request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
                 request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000
             ]
+        
+            speed_params = self.velocity_acceleration_params.get(request.xbot_id)
 
-            # Execute motion command with converted positions and speed parameters
-            bot.six_d_of_motion_si(
-                request.xbot_id, *target_position,
-                self.velocity_acceleration_params['xy_vel'], 
-                self.velocity_acceleration_params['xy_max_accel'], 
-                self.velocity_acceleration_params['z_vel'],
-                self.velocity_acceleration_params['rx_vel'],
-                self.velocity_acceleration_params['ry_vel'],
-                self.velocity_acceleration_params['rz_vel']
-            )
+            if speed_params:
 
-            # Wait until the target position is reached within tolerance
+
+                # Execute motion command with converted positions and speed parameters
+                bot.six_d_of_motion_si(
+                    request.xbot_id, *target_position,
+                    speed_params['xy_vel'], 
+                    speed_params['xy_max_accel'], 
+                    speed_params['z_vel'],
+                    speed_params['rx_vel'],
+                    speed_params['ry_vel'],
+                    speed_params['rz_vel']
+                )
+            else:
+                self.get_logger().error(f"Speed parameters not found for bot {request.xbot_id}")
+                self.get_logger().error("Using standard speed parameters for this bot")
+                
+
+                # Execute motion command with converted positions and standard speed parameters
+                bot.six_d_of_motion_si(
+                    request.xbot_id, *target_position,
+                    self.velocity_acceleration_standard_params['xy_vel'], 
+                    self.velocity_acceleration_standard_params['xy_max_accel'], 
+                    self.velocity_acceleration_standard_params['z_vel'],
+                    self.velocity_acceleration_standard_params['rx_vel'],
+                    self.velocity_acceleration_standard_params['ry_vel'],
+                    self.velocity_acceleration_standard_params['rz_vel']
+                )
+            # Wait until the target position is reached within tolerance 
             while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
                 time.sleep(self.xy_tolerance/10)
 
             response.finished = True
 
-        except Exception as e:
-            self.get_logger().error(f"INVALID PARAMETER: {e}")
+        except ValueError as e:
+            self.get_logger().error(f"Invalid parameter value: {e}")
             response.finished = False
-
+        except KeyError as e:
+            self.get_logger().error(f"Missing parameter in speed_params: {e}")
+            response.finished = False
+        except Exception as e:
+            self.get_logger().error(f"Unexpected error: {e}")
+            response.finished = False
         return response
 
     def callback_set_velocity_acceleration(self, request, response):
         try:
-            self.velocity_acceleration_params = {
+             # Extract xbot_id from the request
+            xbot_id = request.xbot_id
+
+            self.velocity_acceleration_params[xbot_id] = {
                 'xy_vel': request.xy_vel,
                 'z_vel': request.z_vel,
                 'rx_vel': request.rx_vel,
@@ -270,11 +335,13 @@ class MoverServiceNode(Node):
                 'xy_max_accel': request.xy_max_accel,
                 'z_max_accel': request.z_max_accel
             }
+            
+            self.get_logger().info(f'Velocity and acceleration parameters set successfully for bot {xbot_id}')
             response.finished = True
-            self.get_logger().info('Velocity and acceleration parameters set successfully')
         except Exception as e:
-            self.get_logger().error(f"INVALID PARAMETER: {e}")
-            self.get_logger().error("set_velocity_acceleration to standart parameters")
+            # Log error and set response to False
+            self.get_logger().error(f"INVALID PARAMETER for bot {xbot_id}: {e}")
+            self.get_logger().error("Setting velocity and acceleration to standard parameters for this bot")
 
             response.finished = False
         

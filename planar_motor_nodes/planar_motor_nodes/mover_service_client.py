@@ -48,16 +48,128 @@ class MoverServiceClient(Node):
         else:
             self.get_logger().error("Linear motion failed")
 
-    # Add similar call_service functions for other services...
+    def call_six_d_motion_service(self, xbot_id, x_pos, y_pos, z_pos, rx_pos, ry_pos, rz_pos):
+        request = SixDofMotion.Request()
+        request.xbot_id = xbot_id
+        request.x_pos = x_pos
+        request.y_pos = y_pos
+        request.z_pos = z_pos
+        request.rx_pos = rx_pos
+        request.ry_pos = ry_pos
+        request.rz_pos = rz_pos
+
+        future = self.six_d_motion_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("Six-D motion completed successfully")
+        else:
+            self.get_logger().error("Six-D motion failed")
+
+    def call_arc_motion_service(self, xbot_id, x_pos, y_pos, arc_type, postion_mode, arc_dir, radius_meters, xy_max_speed, xy_max_accl, final_speed):
+        request = ArcMotionTargetRadius.Request()
+        request.xbot_id = xbot_id
+        request.x_pos = x_pos
+        request.y_pos = y_pos
+        request.arc_type = arc_type
+        request.postion_mode = postion_mode
+        request.arc_dir = arc_dir
+        request.radius_meters = radius_meters
+        request.xy_max_speed = xy_max_speed
+        request.xy_max_accl = xy_max_accl
+        request.final_speed = final_speed
+
+        future = self.arc_motion_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("Arc motion completed successfully")
+        else:
+            self.get_logger().error("Arc motion failed")
+
+    def call_rotary_motion_service(self, xbot_id, target_rz, max_rz_speed, max_accel_rz):
+        request = RotaryMotion.Request()
+        request.xbot_id = xbot_id
+        request.target_rz = target_rz
+        request.max_rz_speed = max_rz_speed
+        request.max_accel_rz = max_accel_rz
+
+        future = self.rotary_motion_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("Rotary motion completed successfully")
+        else:
+            self.get_logger().error("Rotary motion failed")
+
+    def call_stop_motion_service(self, xbot_id):
+        request = StopMotion.Request()
+        request.xbot_id = xbot_id
+
+        future = self.stop_motion_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("Motion stopped successfully")
+        else:
+            self.get_logger().error("Failed to stop motion")
+
+    def call_set_velocity_acceleration_service(self, xbot_id, xy_vel, xy_max_accel, z_vel, z_max_accel,rx_vel,ry_vel,rz_vel):
+        request = SetVelocityAcceleration.Request()
+        request.xbot_id = xbot_id
+        request.xy_vel = xy_vel
+        request.xy_max_accel = xy_max_accel
+        request.z_vel = z_vel
+        request.z_max_accel = z_max_accel
+        request.rx_vel = rx_vel
+        request.ry_vel = ry_vel
+        request.rz_vel = rz_vel
+
+        future = self.set_velocity_acceleration_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("Velocity and acceleration set successfully")
+        else:
+            self.get_logger().error("Failed to set velocity and acceleration")
+
+    def call_levitation_xbots_service(self, xbot_id, levitation):
+        request = LevitationXbots.Request()
+        request.xbot_id = xbot_id
+        request.levitation = levitation
+
+        future = self.levitation_xbots_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("XBot levitation completed successfully")
+        else:
+            self.get_logger().error("Failed to levitate XBot")
+
+    def call_activate_xbots_service(self, xbot_id, activate):
+        request = ActivateXbots.Request()
+        request.xbot_id = xbot_id
+        request.activation_status = activate
+
+        future = self.activate_xbots_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        response = future.result()
+        if response.finished:
+            self.get_logger().info("XBot activation completed successfully")
+        else:
+            self.get_logger().error("Failed to activate XBot")
 
 
 def main(args=None):
     rclpy.init(args=args)
     client = MoverServiceClient()
-
-    # Call the service functions with desired parameters
-    client.call_linear_motion_service(1, 0.5, 0.5)
-    # Add similar calls for other services...
 
     rclpy.shutdown()
 
