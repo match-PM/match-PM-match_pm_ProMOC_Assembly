@@ -170,6 +170,7 @@ class MoverServiceClient(Node):
 def main(args=None):
     rclpy.init(args=args)
     client = MoverServiceClient()
+    client.call_linear_motion_service(1, 120.0, 160.0)
 
     rclpy.shutdown()
 

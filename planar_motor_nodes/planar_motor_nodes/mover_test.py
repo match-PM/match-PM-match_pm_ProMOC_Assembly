@@ -6,7 +6,7 @@ def main(args=None):
     client = MoverServiceClient()
 
     # Call the service functions with desired parameters
-    response = client.call_linear_motion_service(1, 120.0, 120.0)
+    response = client.call_linear_motion_service(1, 120.0, 160.0)
     
     
     
