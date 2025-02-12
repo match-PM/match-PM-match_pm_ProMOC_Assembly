@@ -13,7 +13,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-#find_package(service_msgs REQUIRED)
+find_package(service_msgs REQUIRED)
 
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -27,10 +27,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/planar_motor/StopMotion.srv"
   "srv/planar_motor/SetVelocityAcceleration.srv"
   "msg/test/Test.msg"
-  
+  DEPENDENCIES service_msgs
 )
 
-#DEPENDENCIES service_msgs
+
 ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

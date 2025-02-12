@@ -58,6 +58,9 @@ class MoverServiceNode(Node):
 
         # Start timers
         self.setup_timers()
+
+
+
     
     
     # Initialization functions
@@ -216,8 +219,9 @@ class MoverServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error: {e}")
             response.finished = False
-
-        return response
+        
+        finally:
+            return response
 
     def callback_arc_motion_target_radius(self, request, response): 
         try:
@@ -305,8 +309,8 @@ class MoverServiceNode(Node):
                     self.velocity_acceleration_standard_params['rz_vel']
                 )
             # Wait until the target position is reached within tolerance 
-            while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
-                time.sleep(self.xy_tolerance/10)
+            while not self.check_position_reached(target_position, self.get_current_position()):
+                time.sleep(0.01)
 
             response.finished = True
 
@@ -319,7 +323,10 @@ class MoverServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error: {e}")
             response.finished = False
-        return response
+
+
+        finally:
+            return response
 
     def callback_set_velocity_acceleration(self, request, response):
         try:

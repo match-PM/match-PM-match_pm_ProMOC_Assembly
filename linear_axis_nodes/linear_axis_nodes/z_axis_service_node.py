@@ -1,9 +1,8 @@
-"""
-lts_pythonnet
-==================
+# ROS 2 imports
+import rclpy
+from rclpy.node import Node
 
-An example of using the LTS integrated stages with python via pythonnet
-"""
+'Thorlabs Kinesis imports'
 import platform
 import time
 import clr
@@ -11,10 +10,6 @@ import clr
 if platform.system() != "Windows":
     print("This script is intended to run on Windows only.")
     exit()
-
-
-
-
 
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
@@ -24,16 +19,48 @@ from Thorlabs.MotionControl.GenericMotorCLI import *
 from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
 from System import Decimal  # necessary for real world units
 
-def main():
-    """The main entry point for the application"""
 
-    # Uncomment this line if you are using
-    # SimulationManager.Instance.InitializeSimulations()
 
-    try:
+# Import custom message and service interfaces from promoc_assembly_interfaces
+from promoc_assembly_interfaces.msg import XBotInfo
+from promoc_assembly_interfaces.srv import (
+    ActivateXbots,
+    ArcMotionTargetRadius,
+    LevitationXbots,
+    LinearMotionSi,
+    RotaryMotion,
+    SetVelocityAcceleration,
+    SixDofMotion,
+    StopMotion,
+)
 
-        DeviceManagerCLI.BuildDeviceList()
 
+
+
+class Z_Axis_Service_Node(Node): 
+    def __init__(self):
+        """
+        Initialize the MoverServiceNode class.
+
+        This function sets up the ROS node, creates publishers and service servers for handling motions and commands,
+        initializes the connection to the PMC and XBot, and starts a timer to periodically publish XBot position.
+        """
+
+        super().__init__("z_axis_service_node")
+
+        # Initialize core parameters
+        self.initialize_parameters()
+
+        # Setup ROS publishers and services
+        self.setup_publishers()
+        self.setup_services()
+
+        # Initialize connections
+        self.startup_connection()
+
+
+
+    def startup_connection(self):
         # create new device
         serial_no = "45877001"  # Replace this line with your device's serial number
 
@@ -67,32 +94,26 @@ def main():
         # Set homing params (if changed)
         device.SetHomingParams(home_params)
 
-        # Home or Zero the device (if a motor/piezo)
-        print("Homing Device")
-        device.Home(60000)  # 60 second timeout
-        print("Done")
 
-        # Get Velocity Params
-        vel_params = device.GetVelocityParams()
-        vel_params.MaxVelocity = Decimal(50.0)  # This is a bad idea
-        device.SetVelocityParams(vel_params)
-        # Move the device to a new position
-        new_pos = Decimal(150.0)  # Must be a .NET decimal
-        print(f'Moving to {new_pos}')
-        device.MoveTo(new_pos, 60000)  # 60 second timeout
-        print("Done")
 
-        # Stop Polling and Disconnect
-        device.StopPolling()
-        device.Disconnect()
 
-    except Exception as e:
-        print(e)
 
-    # Uncomment this line if you are using Simulations
-    # SimulationManager.Instance.UninitializeSimulations()
-    ...
 
+def main(args=None):
+    rclpy.init(args=args)   
+    node = Z_Axis_Service_Node()   
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            try:
+                rclpy.shutdown()
+            except rclpy.exceptions.RCLError:
+                pass  # Ignore the shutdown error 
 
 if __name__ == "__main__":
     main()
+
