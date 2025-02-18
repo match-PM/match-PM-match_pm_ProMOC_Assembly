@@ -32,6 +32,8 @@ from promoc_assembly_interfaces.srv import (
     SetVelocityAcceleration,
     SixDofMotion,
     StopMotion,
+    MoveTo,
+    Home
 )
 
 
