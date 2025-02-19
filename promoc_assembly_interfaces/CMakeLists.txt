@@ -28,8 +28,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/planar_motor/StopMotion.srv"
   "srv/planar_motor/SetVelocityAcceleration.srv"
   "msg/test/Test.msg"
+  "msg/linear_axis/LinearAxisInfo.msg"
   "srv/linear_axis/MoveTo.srv"
   "srv/linear_axis/Home.srv"
+  "srv/linear_axis/ShutdownLinearAxis.srv"
   DEPENDENCIES service_msgs
 )
 

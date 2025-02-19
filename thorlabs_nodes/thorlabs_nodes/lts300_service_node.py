@@ -35,7 +35,7 @@ def main():
         DeviceManagerCLI.BuildDeviceList()
 
         # create new device
-        serial_no = "45877001"  # Replace this line with your device's serial number
+        serial_no = '45318394'  # Replace this line with your device's serial number
 
         # Connect, begin polling, and enable
         device = LongTravelStage.CreateLongTravelStage(serial_no)
@@ -52,9 +52,8 @@ def main():
         device.EnableDevice()
         time.sleep(0.25)  # Wait for device to enable
 
-        # Get Device Information and display description
-        device_info = device.GetDeviceInfo()
-        print(device_info.Description)
+
+        
 
         # Load any configuration settings needed by the controller/stage
         motor_config = device.LoadMotorConfiguration(serial_no)
@@ -63,7 +62,7 @@ def main():
         home_params = device.GetHomingParams()
         print(f'Homing velocity: {home_params.Velocity}\n,'
               f'Homing Direction: {home_params.Direction}')
-        home_params.Velocity = Decimal(10.0)  # real units, mm/s
+        home_params.Velocity = Decimal(5.0)  # real units, mm/s
         # Set homing params (if changed)
         device.SetHomingParams(home_params)
 
@@ -74,13 +73,17 @@ def main():
 
         # Get Velocity Params
         vel_params = device.GetVelocityParams()
-        vel_params.MaxVelocity = Decimal(50.0)  # This is a bad idea
+        vel_params.MaxVelocity = Decimal(20.0)  # This is a bad idea
         device.SetVelocityParams(vel_params)
         # Move the device to a new position
-        new_pos = Decimal(150.0)  # Must be a .NET decimal
+        new_pos = Decimal(25.0)  # Must be a .NET decimal
         print(f'Moving to {new_pos}')
         device.MoveTo(new_pos, 60000)  # 60 second timeout
         print("Done")
+
+                # Get Device Information and display description
+        device_info = device.TargetPosition()
+        print(type(device_info))
 
         # Stop Polling and Disconnect
         device.StopPolling()

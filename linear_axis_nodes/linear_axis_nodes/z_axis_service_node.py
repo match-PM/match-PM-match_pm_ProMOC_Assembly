@@ -14,7 +14,7 @@ if platform.system() != "Windows":
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
-from Thorlabs.MotionControl.DeviceManagerCLI import *
+from Thorlabs.MotionControl.DeviceManagerCLI import * 
 from Thorlabs.MotionControl.GenericMotorCLI import *
 from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
 from System import Decimal  # necessary for real world units
@@ -22,7 +22,7 @@ from System import Decimal  # necessary for real world units
 
 
 # Import custom message and service interfaces from promoc_assembly_interfaces
-from promoc_assembly_interfaces.msg import XBotInfo, LinearAxisInfo
+from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import (
     ActivateXbots,
     ArcMotionTargetRadius,
@@ -50,10 +50,9 @@ class Z_Axis_Service_Node(Node):
         """
 
         super().__init__("z_axis_service_node")
-
+        self.device = None
         # Initialize core parameters
         
-        self.declare_parameter('serial_number', value="45318394")
 
         # Setup ROS publishers and services
         self.setup_services()
@@ -63,42 +62,62 @@ class Z_Axis_Service_Node(Node):
 
 
     
-
-    
-
     def startup_connection(self):
-        # create new device
-        self.serial_no = self.get_parameter("serial_number").get_parameter_value().string_value
-        # Connect, begin polling, and enable
-        self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
-        self.device.Connect(self.serial_no)
+        try:
+            # create new device
+            serial_no ='45318394'
+            print(f"Attempting to connect to device with serial number: {serial_no}")
+            while self.device == None:
+                try:
+                    self.device = LongTravelStage.CreateLongTravelStage(serial_no)
+                    self.device.Connect(serial_no)
+                    print("Device connected successfully!")
+                except Exception as e:
+                    print(f"Connection failed: {e}. Retrying in 5 seconds...")
+                    time.sleep(5)
+            self.device.StartPolling(500)  # Increase polling rate to 500ms
+            time.sleep(0.5)  # Give some time to establish the connection
+        except DeviceNotReadyException:
+            print(f"Device with serial number {serial_no} is not ready.")
+            return
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            return
 
         # Ensure that the device settings have been initialized
-        if not self.device.IsSettingsInitialized():
-            self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
-            assert self.device.IsSettingsInitialized() is True
+        try:
+            if not self.device.IsSettingsInitialized():
+                self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
+                assert self.device.IsSettingsInitialized() is True
+            # Start polling and enable
+            self.device.StartPolling(250)  # 250ms polling rate
+            time.sleep(0.25)
+            self.device.EnableDevice()
+            time.sleep(0.25)  # Wait for the device to enable
 
-        # Start polling and enable
-        self.device.StartPolling(250)  #250ms polling rate
-        time.sleep(0.25)
-        self.device.Enableself.device()
-        time.sleep(0.25)  # Wait for self.device to enable
+            # Get device Information and display description
+            device_info = self.device.GetDeviceInfo()
 
-        # Get self.device Information and display description
-        device_info = self.device.GetDeviceInfo()
-        print(device_info.Description)
+            # Load any configuration settings needed by the controller/stage
+            motor_config = self.device.LoadMotorConfiguration(serial_no)
 
-        # Load any configuration settings needed by the controller/stage
-        motor_config = self.device.LoadMotorConfiguration(self.serial_no)
+            # Get parameters related to homing/zeroing/other
+            home_params = self.device.GetHomingParams()
+            print(f'Homing velocity: {home_params.Velocity}\n,'
+                  f'Homing Direction: {home_params.Direction}')
+            home_params.Velocity = Decimal(5.0)  # real units, mm/s
+            # Set homing params (if changed)
+            self.device.SetHomingParams(home_params)
+        except DeviceNotReadyException:
+            print(f"Device with serial number {serial_no} is not ready.")
+        except Exception as e:
+            print(f"Error occurred during initialization: {e}")
 
-        # Get parameters related to homing/zeroing/other
-        home_params = self.device.GetHomingParams()
-        print(f'Homing velocity: {home_params.Velocity}\n,'
-              f'Homing Direction: {home_params.Direction}')
-        home_params.Velocity = Decimal(10.0)  # real units, mm/s
-        # Set homing params (if changed)
-        self.device.SetHomingParams(home_params)
 
+        
+      
+
+        
 
    
 
