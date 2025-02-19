@@ -22,7 +22,7 @@ from System import Decimal  # necessary for real world units
 
 
 # Import custom message and service interfaces from promoc_assembly_interfaces
-from promoc_assembly_interfaces.msg import XBotInfo
+from promoc_assembly_interfaces.msg import XBotInfo, LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
     ActivateXbots,
     ArcMotionTargetRadius,
@@ -33,7 +33,8 @@ from promoc_assembly_interfaces.srv import (
     SixDofMotion,
     StopMotion,
     MoveTo,
-    Home
+    Home,
+    ShutdownLinearAxis
 )
 
 
@@ -51,54 +52,117 @@ class Z_Axis_Service_Node(Node):
         super().__init__("z_axis_service_node")
 
         # Initialize core parameters
-        self.initialize_parameters()
+        
+        self.declare_parameter('serial_number', value="45318394")
 
         # Setup ROS publishers and services
-        self.setup_publishers()
         self.setup_services()
 
         # Initialize connections
         self.startup_connection()
 
 
+    
+
+    
 
     def startup_connection(self):
         # create new device
-        serial_no = "45877001"  # Replace this line with your device's serial number
-
+        self.serial_no = self.get_parameter("serial_number").get_parameter_value().string_value
         # Connect, begin polling, and enable
-        device = LongTravelStage.CreateLongTravelStage(serial_no)
-        device.Connect(serial_no)
+        self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
+        self.device.Connect(self.serial_no)
 
         # Ensure that the device settings have been initialized
-        if not device.IsSettingsInitialized():
-            device.WaitForSettingsInitialized(10000)  # 10 second timeout
-            assert device.IsSettingsInitialized() is True
+        if not self.device.IsSettingsInitialized():
+            self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
+            assert self.device.IsSettingsInitialized() is True
 
         # Start polling and enable
-        device.StartPolling(250)  #250ms polling rate
+        self.device.StartPolling(250)  #250ms polling rate
         time.sleep(0.25)
-        device.EnableDevice()
-        time.sleep(0.25)  # Wait for device to enable
+        self.device.Enableself.device()
+        time.sleep(0.25)  # Wait for self.device to enable
 
-        # Get Device Information and display description
-        device_info = device.GetDeviceInfo()
+        # Get self.device Information and display description
+        device_info = self.device.GetDeviceInfo()
         print(device_info.Description)
 
         # Load any configuration settings needed by the controller/stage
-        motor_config = device.LoadMotorConfiguration(serial_no)
+        motor_config = self.device.LoadMotorConfiguration(self.serial_no)
 
         # Get parameters related to homing/zeroing/other
-        home_params = device.GetHomingParams()
+        home_params = self.device.GetHomingParams()
         print(f'Homing velocity: {home_params.Velocity}\n,'
               f'Homing Direction: {home_params.Direction}')
         home_params.Velocity = Decimal(10.0)  # real units, mm/s
         # Set homing params (if changed)
-        device.SetHomingParams(home_params)
+        self.device.SetHomingParams(home_params)
+
+
+   
+
+
+    def setup_services(self):
+        self.homing_server = self.create_service(Home, f"{self.get_name()}/home", self.callback_home)
+        
+        self.move_to_server =self.create_service(MoveTo, f"{self.get_name()}/move_to", self.callback_linear_axis_move_to)
+
+        self.shutdown_device = self.create_service(ShutdownLinearAxis, f"{self.get_name()}/move_to", self.callback_shutdown_device)
+
+
+    def callback_home(self,request,response):
+
+        self.get_logger().info(f"Starting homing motion for Axis {self.serial_no} ")
+        try: 
+            if request.homing == True:
+                self.device.Home(60000)
+                self.get_logger().info("Device is Homed")
+                response.finished = True
+            else:
+                self.get_logger().info("Device will do Nothing")
+                response.finished = True
+        except Exception as e:
+                self.get_logger().warning("Something went terribly wrong")
+
+                response.finished = False
+        finally:
+            return response
+
+        
+
+
+    def callback_linear_axis_move_to(self, request, response):
+        try:
+            target_pos = Decimal(request.axis_position)
+            self.get_logger().info(f"Starting motion for Axis {self.serial_no} to position {target_pos}")
+            self.device.MoveTo(target_pos, 60000)
+            self.get_logger().info(f'Done')
+            response.finished = True  # Indicating successful motion
+        except Exception as e:
+            self.get_logger().warning(f"Something went terribly wrong: {str(e)}")
+            response.finished = False  # Indicating failure
+        return response
 
 
 
+    def callback_shutdown_device(self,request,response):
+        try:
+            if request.shutdown == True:
+                self.device.StopPolling()
+                self.device.Disconnect()
+                response.finished = True
+            else:
+                self.get_logger().info(f'Nothing Happend')
+                response.finished = True
+                
+        except Exception as e:
+            self.get_logger().warning(f"Something went terribly wrong: {str(e)}")
+            response.finished = False  # Indicating failure
+        finally:
+            return response
 
+        
 
 
 def main(args=None):
