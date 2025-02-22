@@ -5,7 +5,7 @@ from rclpy.node import Node
 'Thorlabs Kinesis imports'
 import platform
 import time
-import clr
+import clr # type: ignore
 
 if platform.system() != "Windows":
     print("This script is intended to run on Windows only.")
@@ -14,10 +14,10 @@ if platform.system() != "Windows":
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
-from Thorlabs.MotionControl.DeviceManagerCLI import * 
-from Thorlabs.MotionControl.GenericMotorCLI import *
-from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
-from System import Decimal  # necessary for real world units
+from Thorlabs.MotionControl.DeviceManagerCLI import * # type: ignore
+from Thorlabs.MotionControl.GenericMotorCLI import * # type: ignore
+from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import * # type: ignore
+from System import Decimal  # type: ignore # necessary for real world units
 
 
 
@@ -172,7 +172,7 @@ class Z_Axis_Service_Node(Node):
                 self.device.Disconnect()
                 response.finished = True
             else:
-                self.get_logger().info(f'Nothing Happend')
+                self.get_logger().info(f'Nothing Happened')
                 response.finished = True
                 
         except Exception as e:
