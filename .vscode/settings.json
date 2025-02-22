@@ -15,5 +15,8 @@
         "/home/promoc/promoc_ws/build/planar_motor_nodes",
         "/home/promoc/promoc_ws/install/planar_motor_nodes/lib/python3.12/site-packages",
         "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "cSpell.words": [
+        "accl"
     ]
 }

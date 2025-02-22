@@ -12,9 +12,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import pmclib or fallback to mock_pmclib if unavailable
 try:
-    from pmclib import system_commands as sys
-    from pmclib import xbot_commands as bot
-    from pmclib import pmc_types
+    from pmclib import system_commands as sys           # type: ignore
+    from pmclib import xbot_commands as bot             # type: ignore
+    from pmclib import pmc_types                        # type: ignore
 except ImportError as e:
     print(f"Using mock pmclib due to import error: {e}")
     from mock_pmclib import system_commands as sys
@@ -190,7 +190,7 @@ class MoverServiceNode(Node):
             # Get speed parameters for the bot
             speed_params = self.velocity_acceleration_params.get(request.xbot_id)
             if speed_params:
-                # The * infront of targe_postion unpacks the target_position list into individual parameters.
+                # The * infront of targe_position unpacks the target_position list into individual parameters.
                 bot.linear_motion_si(request.xbot_id, *target_position,
                                     speed_params['xy_vel'], 
                                     speed_params['xy_max_accel']
@@ -198,7 +198,7 @@ class MoverServiceNode(Node):
             else:
                 self.get_logger().error(f"Speed parameters not found for bot {request.xbot_id}")
                 self.get_logger().error("Using standard speed parameters for this bot")
-                # The * infront of targe_postion unpacks the target_position list into individual parameters.
+                # The * infront of targe_position unpacks the target_position list into individual parameters.
                 bot.linear_motion_si(request.xbot_id, *target_position,
                                     self.velocity_acceleration_standard_params['xy_vel'], 
                                     self.velocity_acceleration_standard_params['xy_max_accel']
@@ -226,7 +226,7 @@ class MoverServiceNode(Node):
     def callback_arc_motion_target_radius(self, request, response): 
         try:
             bot.arc_motion_target_radius(request.xbot_id, request.x_pos / 1000, request.y_pos / 1000, request.arc_type,
-                                         request.postion_mode, request.arc_dir, request.radius_meters / 1000,
+                                         request.position_mode, request.arc_dir, request.radius_meters / 1000,
                                          request.xy_max_speed, request.xy_max_accl, request.final_speed)
             response.finished = True
         except:

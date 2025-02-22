@@ -63,53 +63,56 @@ class Z_Axis_Service_Node(Node):
 
     
     def startup_connection(self):
-        try:
-            # create new device
-            serial_no ='45318394'
-            print(f"Attempting to connect to device with serial number: {serial_no}")
-            while self.device == None:
-                try:
-                    self.device = LongTravelStage.CreateLongTravelStage(serial_no)
-                    self.device.Connect(serial_no)
-                    print("Device connected successfully!")
-                except Exception as e:
-                    print(f"Connection failed: {e}. Retrying in 5 seconds...")
-                    time.sleep(5)
-            self.device.StartPolling(500)  # Increase polling rate to 500ms
-            time.sleep(0.5)  # Give some time to establish the connection
-        except DeviceNotReadyException:
-            print(f"Device with serial number {serial_no} is not ready.")
-            return
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            return
+        device_serial_number = '45318394'
+        print(f"Attempting to connect to device with serial number: {device_serial_number}")
 
-        # Ensure that the device settings have been initialized
+        # Connect to the device
+        self.connect_to_device(device_serial_number)
+
+        # Initialize device settings
+        self.initialize_device_settings(device_serial_number)
+
+    def connect_to_device(self, device_serial_number):
+        while self.device_instance is None:
+            try:
+                self.device_instance = LongTravelStage.CreateLongTravelStage(device_serial_number)
+                self.device_instance.Connect(device_serial_number)
+                print("Device connected successfully!")
+            except Exception as e:
+                print(f"Connection failed: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+        self.device_instance.StartPolling(500)  # Increase polling rate to 500ms
+        time.sleep(0.5)  # Give some time to establish the connection
+
+    def initialize_device_settings(self, device_serial_number):
         try:
-            if not self.device.IsSettingsInitialized():
-                self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
-                assert self.device.IsSettingsInitialized() is True
+            if not self.device_instance.IsSettingsInitialized():
+                self.device_instance.WaitForSettingsInitialized(10000)  # 10 second timeout
+                assert self.device_instance.IsSettingsInitialized() is True
+
             # Start polling and enable
-            self.device.StartPolling(250)  # 250ms polling rate
+            self.device_instance.StartPolling(250)  # 250ms polling rate
             time.sleep(0.25)
-            self.device.EnableDevice()
+            self.device_instance.EnableDevice()
             time.sleep(0.25)  # Wait for the device to enable
 
-            # Get device Information and display description
-            device_info = self.device.GetDeviceInfo()
+            # Get device information and display description
+            device_information = self.device_instance.GetDeviceInfo()
 
             # Load any configuration settings needed by the controller/stage
-            motor_config = self.device.LoadMotorConfiguration(serial_no)
+            motor_configuration = self.device_instance.LoadMotorConfiguration(device_serial_number)
 
             # Get parameters related to homing/zeroing/other
-            home_params = self.device.GetHomingParams()
-            print(f'Homing velocity: {home_params.Velocity}\n,'
-                  f'Homing Direction: {home_params.Direction}')
-            home_params.Velocity = Decimal(5.0)  # real units, mm/s
+            homing_parameters = self.device_instance.GetHomingParams()
+            print(f'Homing velocity: {homing_parameters.Velocity}\n,'
+                  f'Homing Direction: {homing_parameters.Direction}')
+            
+            homing_parameters.Velocity = Decimal(5.0)  # real units, mm/s
+
             # Set homing params (if changed)
-            self.device.SetHomingParams(home_params)
+            self.device_instance.SetHomingParams(homing_parameters)
         except DeviceNotReadyException:
-            print(f"Device with serial number {serial_no} is not ready.")
+            print(f"Device with serial number {device_serial_number} is not ready.")
         except Exception as e:
             print(f"Error occurred during initialization: {e}")
 
