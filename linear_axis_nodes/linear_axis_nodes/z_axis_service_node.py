@@ -2,15 +2,17 @@
 import rclpy
 from rclpy.node import Node
 
-'Thorlabs Kinesis imports'
+# Thorlabs Kinesis imports
 import platform
 import time
 import clr # type: ignore
 
+# Check if the script is running on Windows
 if platform.system() != "Windows":
     print("This script is intended to run on Windows only.")
     exit()
 
+# Add references to Thorlabs Kinesis DLLs
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
@@ -19,10 +21,8 @@ from Thorlabs.MotionControl.GenericMotorCLI import * # type: ignore
 from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import * # type: ignore
 from System import Decimal  # type: ignore # necessary for real world units
 
-
-
 # Import custom message and service interfaces from promoc_assembly_interfaces
-from promoc_assembly_interfaces.msg import XBotInfo
+from promoc_assembly_interfaces.msg import XBotInfo, LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
     ActivateXbots,
     ArcMotionTargetRadius,
@@ -37,33 +37,29 @@ from promoc_assembly_interfaces.srv import (
     ShutdownLinearAxis
 )
 
-
-
-
 class Z_Axis_Service_Node(Node): 
     def __init__(self):
         """
-        Initialize the MoverServiceNode class.
+        Initialize the Z_Axis_Service_Node class.
 
         This function sets up the ROS node, creates publishers and service servers for handling motions and commands,
         initializes the connection to the PMC and XBot, and starts a timer to periodically publish XBot position.
         """
-
         super().__init__("z_axis_service_node")
         self.device = None
         # Initialize core parameters
-        
-
+        self.declare_parameter('device_serial_number', '45318394')
         # Setup ROS publishers and services
         self.setup_services()
 
         # Initialize connections
         self.startup_connection()
 
+        # Start a timer to periodically publish the position
+        self.position_timer = self.create_timer(1.0, self.publish_position)
 
-    
     def startup_connection(self):
-        device_serial_number = '45318394'
+        device_serial_number = self.get_parameter('device_serial_number').get_parameter_value().string_value
         print(f"Attempting to connect to device with serial number: {device_serial_number}")
 
         # Connect to the device
@@ -116,25 +112,16 @@ class Z_Axis_Service_Node(Node):
         except Exception as e:
             print(f"Error occurred during initialization: {e}")
 
-
-        
-      
-
-        
-
-   
-
-
     def setup_services(self):
+        # Create ROS services
         self.homing_server = self.create_service(Home, f"{self.get_name()}/home", self.callback_home)
-        
-        self.move_to_server =self.create_service(MoveTo, f"{self.get_name()}/move_to", self.callback_linear_axis_move_to)
-
+        self.move_to_server = self.create_service(MoveTo, f"{self.get_name()}/move_to", self.callback_linear_axis_move_to)
         self.shutdown_device = self.create_service(ShutdownLinearAxis, f"{self.get_name()}/move_to", self.callback_shutdown_device)
 
-
-    def callback_home(self,request,response):
-
+    def callback_home(self, request, response):
+        """
+        Callback function for the home service.
+        """
         self.get_logger().info(f"Starting homing motion for Axis {self.serial_no} ")
         try: 
             if request.homing == True:
@@ -145,16 +132,15 @@ class Z_Axis_Service_Node(Node):
                 self.get_logger().info("Device will do Nothing")
                 response.finished = True
         except Exception as e:
-                self.get_logger().warning("Something went terribly wrong")
-
-                response.finished = False
+            self.get_logger().warning("Something went terribly wrong")
+            response.finished = False
         finally:
             return response
 
-        
-
-
     def callback_linear_axis_move_to(self, request, response):
+        """
+        Callback function for the move_to service.
+        """
         try:
             target_pos = Decimal(request.axis_position)
             self.get_logger().info(f"Starting motion for Axis {self.serial_no} to position {target_pos}")
@@ -166,9 +152,31 @@ class Z_Axis_Service_Node(Node):
             response.finished = False  # Indicating failure
         return response
 
+    def get_position(self):
+        """
+        Get the current position of the device.
+        """
+        try:
+            position = self.device_instance.Position
+            return position
+        except Exception as e:
+            self.get_logger().warning(f"Failed to get position: {str(e)}")
+            return None
+        
+    def publish_position(self):
+        """
+        Publish the current position of the device.
+        """
+        position = self.get_position()
+        if position is not None:
+            self.get_logger().info(f"Current position: {position}")
+        else:
+            self.get_logger().warning("Failed to get current position")
 
-
-    def callback_shutdown_device(self,request,response):
+    def callback_shutdown_device(self, request, response):
+        """
+        Callback function for the shutdown_device service.
+        """
         try:
             if request.shutdown == True:
                 self.device.StopPolling()
@@ -177,15 +185,11 @@ class Z_Axis_Service_Node(Node):
             else:
                 self.get_logger().info(f'Nothing Happened')
                 response.finished = True
-                
         except Exception as e:
             self.get_logger().warning(f"Something went terribly wrong: {str(e)}")
             response.finished = False  # Indicating failure
         finally:
             return response
-
-        
-
 
 def main(args=None):
     rclpy.init(args=args)   

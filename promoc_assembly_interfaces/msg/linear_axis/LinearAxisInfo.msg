@@ -1,1 +1,2 @@
+string device_serial_number
 float64 axis_position
