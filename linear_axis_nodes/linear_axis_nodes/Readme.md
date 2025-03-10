@@ -2,17 +2,15 @@ How to use the ros2 node on win
 
 1. Open Tabby Terminal as Administrator.
 2. on the top terminal icon select a Developer Promt for VS2019
-3.source zour ros2 installation with 
-
- C:\dev\ros2_jazzy\setup.bat
+3.source your ros2 installation with 
+call C:\dev\ros2_jazzy\setup.bat
 4. source the workspace with 
 call C:\Users\admin\promoc_ros2_ws\install\setup.bat
-
-C:\Users\admin\promoc_ros2_ws\install\setup.bat
+c
 5. Navigate to your ROS2 workspace with > cd C:\Users\admin\promoc_ros2_ws
 
 6. build changes with > colcon build --merge-install
- or for more information use > colcon build --symlink-install --merge-install --event-handlers console_direct+
+ or for more information use > colcon build --merge-install --event-handlers console_direct+
 
  7. run the node with> 
  ros2 run linear_axis_nodes z_axis_service_node

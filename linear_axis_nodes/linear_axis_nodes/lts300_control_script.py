@@ -19,10 +19,10 @@ if platform.system() != "Windows":
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
 clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
-from Thorlabs.MotionControl.DeviceManagerCLI import *
-from Thorlabs.MotionControl.GenericMotorCLI import *
-from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *
-from System import Decimal  # necessary for real world units
+from Thorlabs.MotionControl.DeviceManagerCLI import *           #type:ignore
+from Thorlabs.MotionControl.GenericMotorCLI import *            #type:ignore
+from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import * #type:ignore
+from System import Decimal  # necessary for real world units    #type:ignore
 
 def main():
     """The main entry point for the application"""
@@ -32,13 +32,13 @@ def main():
 
     try:
 
-        DeviceManagerCLI.BuildDeviceList()
+        DeviceManagerCLI.BuildDeviceList()      #type:ignore
 
         # create new device
         serial_no = '45318394'  # Replace this line with your device's serial number
 
         # Connect, begin polling, and enable
-        device = LongTravelStage.CreateLongTravelStage(serial_no)
+        device = LongTravelStage.CreateLongTravelStage(serial_no)       #type:ignore
         device.Connect(serial_no)
 
         # Ensure that the device settings have been initialized
