@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'z_axis_service_node = linear_axis_nodes.z_axis_service_node:main'
+            'lts300_service_node = linear_axis_nodes.lts300_service_node:main'
         ],
     },
 )
+

@@ -1,71 +1,65 @@
-
-import os
-import sys
-import time
-import threading
+# ROS 2 imports
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
-from promoc_assembly_interfaces.srv import MoveTo, Home
+from std_srvs.srv import Trigger
+from geometry_msgs.msg import Point
 
-# Add path to Thorlabs DLLs
-kinesis_path = "C:\\Program Files\\Thorlabs\\Kinesis"
-if kinesis_path not in sys.path:
-    sys.path.append(kinesis_path)
-
-# Import .NET interoperability
+# Import the platform check and Thorlabs libraries from lts300.py
+import platform
+import time
 import clr
+import threading
 
-# Load required .NET assemblies
-clr.AddReference("Thorlabs.MotionControl.DeviceManagerCLI")
-clr.AddReference("Thorlabs.MotionControl.GenericMotorCLI")
-clr.AddReference("Thorlabs.MotionControl.KCube.DCServoCLI")
+if platform.system() != "Windows":
+    print("This script is intended to run on Windows only.")
+    exit()
 
-from Thorlabs.MotionControl.DeviceManagerCLI import *
-from Thorlabs.MotionControl.GenericMotorCLI import *
-from Thorlabs.MotionControl.KCube.DCServoCLI import *
-from System import Decimal
+# Load Thorlabs .NET assemblies
+clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
+clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
+clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
+from Thorlabs.MotionControl.DeviceManagerCLI import DeviceManagerCLI
+from Thorlabs.MotionControl.GenericMotorCLI import MotorDirection
+from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage
+from System import Decimal  # necessary for real world units
 
-class LTS300Node(Node):
+from promoc_assembly_interfaces.srv import MoveTo, Home
+from promoc_assembly_interfaces.msg import LinearAxisInfo
+
+class LTS300ServiceNode(Node):
     def __init__(self):
-        super().__init__('lts300_node')
+        super().__init__('lts300_service_node')
+        # Initialize core parameter
+        self.initialize_parameters()
         
-        # Parameters
-        self.declare_parameter('serial_number', '')
-        self.serial_no = self.get_parameter('serial_number').get_parameter_value().string_value
-        
-        if not self.serial_no:
-            self.get_logger().error('No serial number provided. Please set the "serial_number" parameter.')
-            return
-            
-        self.device = None
-        self.connected = False
-        self.lock = threading.Lock()
-        
+
         # Services
-        self.move_to_service = self.create_service(
-            MoveTo, 'lts300/move_to', self.move_to_callback)
-        self.home_service = self.create_service(
-            Home, 'lts300/home', self.home_callback)
-            
-        # Publisher
-        self.position_pub = self.create_publisher(
-            Float64, 'lts300/position', 10)
-            
-        # Timer for regular position updates
-        self.position_timer = self.create_timer(0.1, self.publish_position)
+        self.setup_services()
         
-        # Establish connection
+        # Connect to the device
         self.connect()
+
+        if self.connected:
+            self.get_logger().info('LTS300 node initialized')
+        else:
+            self.get_logger().error('Failed to initialize LTS300 node')
         
+    def initialize_parameters(self):
+        # Parameters
+        self.declare_parameter('serial_number', '45318394')  # Default serial number
+        self.serial_no = self.get_parameter('serial_number').get_parameter_value().string_value
+        self.connected = False
+        self.device = None
+
     def connect(self):
-        """Establish connection to the LTS300"""
+        """Connect to the LTS300 device"""
         try:
             self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
-            
+
             # Initialize the DeviceManager
             DeviceManagerCLI.BuildDeviceList()
-            
+
             # Check if the device is connected
             if not DeviceManagerCLI.IsDeviceConnected(self.serial_no):
                 available_devices = DeviceManagerCLI.GetDeviceList()
@@ -74,121 +68,114 @@ class LTS300Node(Node):
                 for device in available_devices:
                     self.get_logger().info(f' - {device}')
                 return
-            
-            # Connect to the controller
-            self.device = KCubeDCServo.CreateKCubeDCServo(self.serial_no)
+
+            # Create and connect to the device
+            self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
             self.device.Connect(self.serial_no)
-            
-            # Wait for initialization
-            time.sleep(1)
-            
-            # Initialize the controller
+
+            # Ensure that the device settings have been initialized
+            if not self.device.IsSettingsInitialized():
+                self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
+                assert self.device.IsSettingsInitialized() is True
+
+            # Start polling and enable
+            self.device.StartPolling(250)  # 250ms polling rate
+            time.sleep(0.25)
             self.device.EnableDevice()
-            self.get_logger().info('Device enabled')
-            
-            # Load the configuration
-            self.device.LoadMotorConfiguration(self.serial_no)
-            
-            # Get the configuration
+            time.sleep(0.25)  # Wait for device to enable
+
+            # Get the device info
             device_info = self.device.GetDeviceInfo()
-            
             self.get_logger().info(f'Connected to {device_info.Name}')
+
+            # Set the device connected flag
             self.connected = True
-            
+
         except Exception as e:
             self.get_logger().error(f'Error connecting: {e}')
             self.connected = False
-    
-    def disconnect(self):
-        """Disconnect from the LTS300"""
-        if self.device and self.connected:
-            try:
-                self.device.Disconnect(True)
-                self.get_logger().info('Connection closed')
-                self.connected = False
-            except Exception as e:
-                self.get_logger().error(f'Error disconnecting: {e}')
-    
     def move_to_callback(self, request, response):
-        """Callback for the MoveTo service"""
-        if not self.connected or not self.device:
+        """Handle move_to service requests"""
+        if not self.connected:
             response.success = False
-            response.message = "Not connected to device"
+            response.message = "Device not connected"
             return response
-            
+        
         try:
-            with self.lock:
-                self.get_logger().info(f'Moving to position {request.position}mm...')
-                self.device.MoveTo(Decimal(request.position), 60000)  # 60s timeout
-                
-                # Read current position
-                pos = self.device.Position
-                self.get_logger().info(f'Position reached: {pos}mm')
-                
-                response.success = True
-                response.message = f"Position {pos}mm reached"
+            position = request.position
+            self.get_logger().info(f'Moving to position: {position} mm')
+            
+            # Convert to Decimal for the Thorlabs API
+            decimal_position = Decimal(position)
+            
+            # Move to position
+            self.is_moving = True
+            self.device.MoveTo(decimal_position, 60000)  # 60 second timeout
+            self.is_moving = False
+            
+            self.position = position
+            response.success = True
+            response.message = f"Moved to {position} mm"
         except Exception as e:
-            self.get_logger().error(f'Error during movement: {e}')
+            self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
-            response.message = str(e)
-            
+            response.message = f"Error: {str(e)}"
+        
         return response
-    
+
     def home_callback(self, request, response):
-        """Callback for the Home service"""
-        if not self.connected or not self.device:
+        """Handle home service requests"""
+        if not self.connected:
             response.success = False
-            response.message = "Not connected to device"
+            response.message = "Device not connected"
             return response
-            
+        
         try:
-            with self.lock:
-                self.get_logger().info('Moving to home position...')
-                self.device.Home(60000)  # 60s timeout
-                self.get_logger().info('Home position reached')
-                
-                response.success = True
-                response.message = "Home position reached"
+            self.get_logger().info('Homing device...')
+            self.is_moving = True
+            self.device.Home(60000)  # 60 second timeout
+            self.is_moving = False
+            self.position = 0.0
+            
+            response.success = True
+            response.message = "Homing completed successfully"
         except Exception as e:
             self.get_logger().error(f'Error during homing: {e}')
             response.success = False
-            response.message = str(e)
-            
+            response.message = f"Error: {str(e)}"
+        
         return response
     
-    def publish_position(self):
-        """Publish current position"""
-        if not self.connected or not self.device:
-            return
-            
-        try:
-            # Read current position
-            pos = self.device.Position
-            
-            # Publish position
-            msg = Float64()
-            msg.data = float(pos)
-            self.position_pub.publish(msg)
-        except Exception as e:
-            self.get_logger().debug(f'Error reading position: {e}')
-    
-    def __del__(self):
-        """Destructor"""
-        self.disconnect()
+    def setup_services(self):
+        self.move_to_service = self.create_service(MoveTo, 'lts300/move_to', self.move_to_callback)
+        self.home_service = self.create_service(Home, 'lts300/home', self.home_callback)
 
+    def shutdown(self):
+        """Shutdown the device properly"""
+        if self.connected and self.device:
+            try:
+                self.device.StopPolling()
+                self.device.Disconnect(False)
+                self.connected = False
+                self.get_logger().info('Device disconnected')
+            except Exception as e:
+                self.get_logger().error(f'Error during shutdown: {e}')
 def main(args=None):
-    rclpy.init(args=args)
-    
-    node = LTS300Node()
-    
+    rclpy.init(args=args)   
+    node = LTS300ServiceNode()   
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.disconnect()
+        node.shutdown()  # Properly shutdown the device
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            try:
+                rclpy.shutdown()
+            except rclpy.exceptions.RCLError:
+                pass  # Ignore the shutdown error 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+
