@@ -29,8 +29,8 @@ from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  #
 from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore    
 
 # Import custom service and message types
-from promoc_assembly_interfaces.srv import MoveTo, Home, ShutdownLinearAxis, GetPosition
-from promoc_assembly_interfaces.msg import LinearAxisInfo
+from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, ShutdownLinearAxis, GetPosition
+
 
 class LTS300ServiceNode(Node):
     """
@@ -267,10 +267,10 @@ class LTS300ServiceNode(Node):
     def setup_services(self):
         # Create service for moving
         self.move_absolute_service = self.create_service(
-            MoveTo, 'lts300/move_to', self.move_absolute_callback)
+            MoveAbsolute, 'lts300/move_to', self.move_absolute_callback)
         
         self.move_relative_service = self.create_service(
-            MoveTo, 'lts300/move_to', self.move_relative_callback)
+            MoveRelativ, 'lts300/move_to', self.move_relative_callback)
         
         # Create service for homing the device
         self.home_service = self.create_service(

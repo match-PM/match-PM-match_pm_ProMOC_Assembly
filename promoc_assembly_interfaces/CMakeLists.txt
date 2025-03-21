@@ -14,7 +14,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-find_package(service_msgs REQUIRED)
+#find_package(service_msgs REQUIRED)          #comment for ros2_humble
 
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -29,10 +29,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/planar_motor/SetVelocityAcceleration.srv"
   "msg/test/Test.msg"
   "msg/linear_axis/LinearAxisInfo.msg"
-  "srv/linear_axis/MoveTo.srv"
+  "srv/linear_axis/MoveAbsolute.srv"
+  "srv/linear_axis/MoveRelativ.srv"
   "srv/linear_axis/Home.srv"
   "srv/linear_axis/ShutdownLinearAxis.srv"
-  DEPENDENCIES service_msgs
+  "srv/linear_axis/GetPosition.srv"
+  #DEPENDENCIES service_msgs                #comment for ros2_humble
 )
 
 
