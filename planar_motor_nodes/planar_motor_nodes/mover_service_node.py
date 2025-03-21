@@ -380,10 +380,28 @@ class MoverServiceNode(Node):
             return [0, 0, 0, 0, 0, 0]
     
     def check_position_reached(self, target_position:list, current_position:list, tolerance:float):
-        for i in range(len(target_position)):
-            if abs(target_position[i] - current_position[i]) > tolerance:
-                return False
-        return True
+        def check_position_reached(self, target_position: list, current_position: list, tolerance: float) -> bool:
+            """
+            Check if the current position has reached the target position within a specified tolerance.
+
+            This function compares each component of the target position with the corresponding
+            component of the current position. If any component differs by more than the specified
+            tolerance, the function returns False. Otherwise, it returns True.
+
+            Parameters:
+            target_position (list): A list of float values representing the target position.
+            current_position (list): A list of float values representing the current position.
+            tolerance (float): The maximum allowed difference between corresponding components
+                               of the target and current positions.
+
+            Returns:
+            bool: True if all components of the current position are within the specified tolerance
+                  of the corresponding components in the target position, False otherwise.
+            """
+            for i in range(len(target_position)):
+                if abs(target_position[i] - current_position[i]) > tolerance:
+                    return False
+            return True
 
 
 def main(args=None):

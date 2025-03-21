@@ -1,15 +1,15 @@
 # ROS 2 imports
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Float64
-from std_srvs.srv import Trigger
-from geometry_msgs.msg import Point
+import rclpy                                    #type:ignore
+from rclpy.node import Node                     #type:ignore    
+#from std_msgs.msg import Float64                #type:ignore
+#from std_srvs.srv import Trigger                #type:ignore
+#from geometry_msgs.msg import Point             #type:ignore
 
 # Import the platform check and Thorlabs libraries from lts300.py
 import platform
 import time
 import clr
-import threading
+#import threading
 
 # Check if running on Windows, as Thorlabs libraries only work on Windows
 if platform.system() != "Windows":
@@ -29,7 +29,7 @@ from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  #
 from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore    
 
 # Import custom service and message types
-from promoc_assembly_interfaces.srv import MoveTo, Home
+from promoc_assembly_interfaces.srv import MoveTo, Home, ShutdownLinearAxis, GetPosition
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 
 class LTS300ServiceNode(Node):
@@ -58,7 +58,8 @@ class LTS300ServiceNode(Node):
             self.get_logger().info('LTS300 node initialized')
         else:
             self.get_logger().error('Failed to initialize LTS300 node')
-        
+
+    # Initialization functions    
     def initialize_parameters(self):
         # Declare the serial number parameter with a default value
         # This can be overridden when launching the node
@@ -72,7 +73,6 @@ class LTS300ServiceNode(Node):
         self.device = None      # Will hold the device object when connected
         
         # Additional state variables could be added here (position, status, etc.)
-
     def connect(self):
         try:
             self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
@@ -123,15 +123,17 @@ class LTS300ServiceNode(Node):
             self.get_logger().error(f'Error connecting: {e}')
             self.connected = False
 
-    def move_to_callback(self, request, response):
+
+    # Callback functions for ROS services
+    def move_absolute_callback(self, request, response):
         if not self.connected:
             response.success = False
             response.error_message = "Device not connected"
             return response
 
         try:
-            position = request.axis_position  
-            self.get_logger().info(f'Moving to position: {position} mm')
+            target_position = request.axis_position  
+            self.get_logger().info(f'Moving to position: {target_position} mm')
 
             # Ensure the device is enabled and settings are initialized
             if not self.device.IsSettingsInitialized():
@@ -145,13 +147,13 @@ class LTS300ServiceNode(Node):
                 time.sleep(0.5)  # Wait for device to enable
 
 
-            decimal_position = Decimal(position)
+            decimal_position = Decimal(target_position)
 
             self.is_moving = True
             self.device.MoveTo(decimal_position, 60000)
             self.is_moving = False
 
-            self.position = position
+            self.position = target_position
             response.success = True
             response.error_message = ""
         except Exception as e:
@@ -161,8 +163,44 @@ class LTS300ServiceNode(Node):
 
         return response
 
+    def move_relative_callback(self, request, response):
+        if not self.connected:
+            response.success = False
+            response.error_message = "Device not connected"
+            return response
+
+        try:
+            relative_position = request.axis_position
+            target_position = self.position + relative_position
+            self.get_logger().info(f'Moving to position: {target_position} mm')
+
+            # Ensure the device is enabled and settings are initialized
+            if not self.device.IsSettingsInitialized():
+                self.device.WaitForSettingsInitialized(5000)
+            if not self.device.IsSettingsInitialized():
+                raise Exception("Device settings not initialized")
+
+            # Check if the device is enabled (assuming IsEnabled is a property, not a method)
+            if not self.device.IsEnabled:
+                self.device.EnableDevice()
+                time.sleep(0.5)  # Wait for device to enable
 
 
+            decimal_position = Decimal(target_position)
+
+            self.is_moving = True
+            self.device.MoveTo(decimal_position, 60000)
+            self.is_moving = False
+
+            self.position = target_position
+            response.success = True
+            response.error_message = ""
+        except Exception as e:
+            self.get_logger().error(f'Error moving to position: {e}')
+            response.success = False
+            response.error_message = f"Error: {str(e)}"
+        finally:
+            return response
 
     def home_callback(self, request, response):
         if not self.connected:
@@ -188,18 +226,63 @@ class LTS300ServiceNode(Node):
 
         return response
 
+    def shutdown_callback(self, request, response):
+        if not self.connected:
+            response.success = False
+            response.error_message = "Device not connected"
+            return response
+        self.get_logger().info('Shutting down LTS300 node...')
+        try:
+            self.shutdown()
+            response.success = True
+            response.error_message = ""
+        except Exception as e:
+            self.get_logger().error(f'Error moving to position: {e}')
+            response.success = False
+            response.error_message = f"Error: {str(e)}"
+        finally:
+            return response
     
+    def get_position_callback(self, request, response):
+        if not self.connected:
+            response.success = False
+            response.error_message = "Device not connected"
+            return response
+
+        try:
+            # Get the current position from the device
+            response.position = self.position
+            response.error_message = ""
+        except Exception as e:
+            self.get_logger().error(f'Error getting position: {e}')
+            response.success = False
+            response.axis_position = 0.0
+            response.error_message = f"Error: {str(e)}"
+
+        return response
+
+
+
+    # Helper functions
     def setup_services(self):
-        # Create service for moving to a position
-        self.move_to_service = self.create_service(
-            MoveTo, 'lts300/move_to', self.move_to_callback)
+        # Create service for moving
+        self.move_absolute_service = self.create_service(
+            MoveTo, 'lts300/move_to', self.move_absolute_callback)
+        
+        self.move_relative_service = self.create_service(
+            MoveTo, 'lts300/move_to', self.move_relative_callback)
         
         # Create service for homing the device
         self.home_service = self.create_service(
             Home, 'lts300/home', self.home_callback)
         
+        self.shutdown_service = self.create_service(
+            ShutdownLinearAxis, 'lts300/shutdown', self.shutdown_callback)
+        
+        self.get_position_service = self.create_service(
+            GetPosition, 'lts300/get_position', self.get_position_callback)
+        
         # Additional services could be added here (get_position, stop, etc.)
-
     def shutdown(self):
         """
         Properly shutdown the device connection.
@@ -220,6 +303,7 @@ class LTS300ServiceNode(Node):
                 self.get_logger().info('Device disconnected')
             except Exception as e:
                 self.get_logger().error(f'Error during shutdown: {e}')
+
 
 def main(args=None):
     # Initialize the ROS2 Python client library
