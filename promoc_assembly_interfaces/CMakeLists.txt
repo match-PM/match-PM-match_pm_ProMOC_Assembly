@@ -14,10 +14,15 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-find_package(service_msgs REQUIRED)          #comment for ros2_humble
 
+# Check ROS 2 distribution
+# needed because jazzy needs this two dependencies but humble doesnt
+if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
+  find_package(service_msgs REQUIRED)
+  set(ADDITIONAL_DEPENDENCIES service_msgs)
+endif()
 
-rosidl_generate_interfaces(${PROJECT_NAME}
+set(INTERFACE_FILES
   "msg/planar_motor/XBotInfo.msg"
   "srv/planar_motor/ActivateXbots.srv"
   "srv/planar_motor/ArcMotionTargetRadius.srv"
@@ -36,9 +41,18 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/linear_axis/GetPosition.srv"
   "srv/linear_axis/GetSetHomingParams.srv"
   "srv/linear_axis/GetSetVelocityParams.srv"
-  DEPENDENCIES service_msgs                #comment for ros2_humble
 )
 
+if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
+  rosidl_generate_interfaces(${PROJECT_NAME}
+    ${INTERFACE_FILES}
+    DEPENDENCIES ${ADDITIONAL_DEPENDENCIES}
+  )
+else()
+  rosidl_generate_interfaces(${PROJECT_NAME}
+    ${INTERFACE_FILES}
+  )
+endif()
 
 ament_export_dependencies(rosidl_default_runtime)
 
