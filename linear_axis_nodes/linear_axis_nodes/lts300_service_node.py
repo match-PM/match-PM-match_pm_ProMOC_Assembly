@@ -122,7 +122,23 @@ class LTS300ServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error connecting: {e}')
             self.connected = False
-
+    def setup_services(self):
+        # Create service for moving
+        self.move_absolute_service = self.create_service(
+            MoveAbsolute, 'lts300/move_absolute', self.move_absolute_callback)
+        
+        self.move_relative_service = self.create_service(
+            MoveRelativ, 'lts300/move_relative', self.move_relative_callback)
+        
+        # Create service for homing the device
+        self.home_service = self.create_service(
+            Home, 'lts300/home', self.home_callback)
+        
+        self.shutdown_service = self.create_service(
+            ShutdownLinearAxis, 'lts300/shutdown', self.shutdown_callback)
+        
+        self.get_position_service = self.create_service(
+            GetPosition, 'lts300/get_position', self.get_position_callback)
 
     # Callback functions for ROS services
     def move_absolute_callback(self, request, response):
@@ -264,25 +280,6 @@ class LTS300ServiceNode(Node):
 
 
     # Helper functions
-    def setup_services(self):
-        # Create service for moving
-        self.move_absolute_service = self.create_service(
-            MoveAbsolute, 'lts300/move_to', self.move_absolute_callback)
-        
-        self.move_relative_service = self.create_service(
-            MoveRelativ, 'lts300/move_to', self.move_relative_callback)
-        
-        # Create service for homing the device
-        self.home_service = self.create_service(
-            Home, 'lts300/home', self.home_callback)
-        
-        self.shutdown_service = self.create_service(
-            ShutdownLinearAxis, 'lts300/shutdown', self.shutdown_callback)
-        
-        self.get_position_service = self.create_service(
-            GetPosition, 'lts300/get_position', self.get_position_callback)
-        
-        # Additional services could be added here (get_position, stop, etc.)
     def shutdown(self):
         """
         Properly shutdown the device connection.
