@@ -13,7 +13,7 @@ c
  or for more information use > colcon build --merge-install --event-handlers console_direct+
 
  7. run the node with> 
- ros2 run linear_axis_nodes z_axis_service_node
+ ros2 run linear_axis_nodes lts300_service_node
 
 
  Dummerweise gibt es Probleme mit der ROS2 Verbindung zu den lts300 dehsalb wird der ros2 node nur als wrapper für das lts300 COntrollscript genutz zumindest ist das der plan 

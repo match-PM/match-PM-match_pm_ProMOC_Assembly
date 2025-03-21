@@ -74,25 +74,12 @@ class LTS300ServiceNode(Node):
         # Additional state variables could be added here (position, status, etc.)
 
     def connect(self):
-        """
-        Connect to the LTS300 device using the Thorlabs Kinesis library.
-        
-        This method:
-        1. Builds a list of connected devices
-        2. Checks if our device is connected
-        3. Creates and connects to the device
-        4. Initializes the device settings
-        5. Starts polling and enables the device
-        """
         try:
             self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
 
-            # Initialize the DeviceManager to discover connected devices
             DeviceManagerCLI.BuildDeviceList()
 
-            # Check if our device is connected by serial number
             if not DeviceManagerCLI.IsDeviceConnected(self.serial_no):
-                # If not connected, list available devices to help troubleshooting
                 available_devices = DeviceManagerCLI.GetDeviceList()
                 self.get_logger().error(f'Device with serial number {self.serial_no} not found!')
                 self.get_logger().info('Available devices:')
@@ -100,22 +87,26 @@ class LTS300ServiceNode(Node):
                     self.get_logger().info(f' - {device}')
                 return
 
-            # Create the device object and connect to it
             self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
+
+            # Connect to the device
             self.device.Connect(self.serial_no)
 
-            # Ensure that the device settings have been initialized
-            # This is important before sending commands to the device
+            # Wait for the device settings to initialize
             if not self.device.IsSettingsInitialized():
                 self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
-                assert self.device.IsSettingsInitialized() is True
 
-            # Start polling (periodic status updates from the device)
-            # and enable the device for operation
-            self.device.StartPolling(250)  # 250ms polling rate
-            time.sleep(0.25)  # Short delay to allow polling to start
+            if not self.device.IsSettingsInitialized():
+                raise Exception("Failed to initialize device settings")
+
+            # Load the device configuration
+            self.device.LoadMotorConfiguration(self.serial_no)
+
+            # Start polling and enable the device
+            self.device.StartPolling(250)
+            time.sleep(0.5)  # Increased delay to allow polling to start
             self.device.EnableDevice()
-            time.sleep(0.25)  # Wait for device to enable
+            time.sleep(0.5)  # Wait for device to enable
 
             # Get and log the device info
             device_info = self.device.GetDeviceInfo()
@@ -124,93 +115,79 @@ class LTS300ServiceNode(Node):
             # Set the device connected flag to true
             self.connected = True
 
+            # Home the device
+            self.device.Home(60000)
+            self.position = 0
+
         except Exception as e:
-            # Log any errors that occur during connection
             self.get_logger().error(f'Error connecting: {e}')
             self.connected = False
 
     def move_to_callback(self, request, response):
-        """
-        Handle move_to service requests to move the stage to a specific position.
-        
-        Args:
-            request: The service request containing the target position
-            response: The service response to be filled
-            
-        Returns:
-            The filled service response
-        """
-        # Check if device is connected before attempting to move
         if not self.connected:
             response.success = False
-            response.message = "Device not connected"
+            response.error_message = "Device not connected"
             return response
-        
+
         try:
-            position = request.position
+            position = request.axis_position  
             self.get_logger().info(f'Moving to position: {position} mm')
-            
-            # Convert to Decimal for the Thorlabs API (requires .NET Decimal type)
+
+            # Ensure the device is enabled and settings are initialized
+            if not self.device.IsSettingsInitialized():
+                self.device.WaitForSettingsInitialized(5000)
+            if not self.device.IsSettingsInitialized():
+                raise Exception("Device settings not initialized")
+
+            # Check if the device is enabled (assuming IsEnabled is a property, not a method)
+            if not self.device.IsEnabled:
+                self.device.EnableDevice()
+                time.sleep(0.5)  # Wait for device to enable
+
+
             decimal_position = Decimal(position)
-            
-            # Move to position with a timeout
-            # The is_moving flag could be used by other methods to check movement status
+
             self.is_moving = True
-            self.device.MoveTo(decimal_position, 60000)  # 60 second timeout
+            self.device.MoveTo(decimal_position, 60000)
             self.is_moving = False
-            
-            # Update internal position state and prepare successful response
+
             self.position = position
             response.success = True
-            response.message = f"Moved to {position} mm"
+            response.error_message = ""
         except Exception as e:
-            # Log and return any errors that occur during movement
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
-            response.message = f"Error: {str(e)}"
-        
+            response.error_message = f"Error: {str(e)}"
+
         return response
 
+
+
+
     def home_callback(self, request, response):
-        """
-        Handle home service requests to home the stage.
-        
-        Homing is the process of moving to a known reference position (usually zero).
-        
-        Args:
-            request: The service request (empty for Home service)
-            response: The service response to be filled
-            
-        Returns:
-            The filled service response
-        """
-        # Check if device is connected before attempting to home
         if not self.connected:
             response.success = False
-            response.message = "Device not connected"
+            response.error_message = "Device not connected"
             return response
-        
+
         try:
             self.get_logger().info('Homing device...')
-            
-            # Execute the homing operation with a timeout
+
             self.is_moving = True
             self.device.Home(60000)  # 60 second timeout
             self.is_moving = False
-            
-            # Update internal position state (home is position 0)
+
             self.position = 0.0
-            
-            # Prepare successful response
+
             response.success = True
-            response.message = "Homing completed successfully"
+            response.error_message = "Homing completed successfully"
         except Exception as e:
-            # Log and return any errors that occur during homing
             self.get_logger().error(f'Error during homing: {e}')
             response.success = False
-            response.message = f"Error: {str(e)}"
-        
+            response.error_message = f"Error: {str(e)}"
+
         return response
+
     
     def setup_services(self):
         # Create service for moving to a position

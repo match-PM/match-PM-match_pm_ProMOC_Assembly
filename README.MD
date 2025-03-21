@@ -37,6 +37,9 @@ A brief description of your project goes here.
      colcon build --symlink-install
      ```
 
+  - Depending on your ROS2 version, you may encounter an error during the build due to the service messages. For ROS2 Humble, you need to comment out the `std_msgs` import, while for ROS2 Jazzy, it is required.
+
+
 ### 4. Source the ROS2 Setup File
    - After the build is complete, source the ROS2 setup file in the same terminal:
 
