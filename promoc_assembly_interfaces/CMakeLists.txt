@@ -34,6 +34,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/linear_axis/Home.srv"
   "srv/linear_axis/ShutdownLinearAxis.srv"
   "srv/linear_axis/GetPosition.srv"
+  "srv/linear_axis/GetSetHomingParams.srv"
+  "srv/linear_axis/GetSetVelocityParams.srv"
   DEPENDENCIES service_msgs                #comment for ros2_humble
 )
 
