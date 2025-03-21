@@ -14,7 +14,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-#find_package(service_msgs REQUIRED)          #comment for ros2_humble
+find_package(service_msgs REQUIRED)          #comment for ros2_humble
 
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -34,7 +34,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/linear_axis/Home.srv"
   "srv/linear_axis/ShutdownLinearAxis.srv"
   "srv/linear_axis/GetPosition.srv"
-  #DEPENDENCIES service_msgs                #comment for ros2_humble
+  DEPENDENCIES service_msgs                #comment for ros2_humble
 )
 
 

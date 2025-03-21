@@ -81,7 +81,7 @@ def main():
         device.MoveTo(new_pos, 60000)  # 60 second timeout
         print("Done")
 
-                # Get Device Information and display description
+        # Get Device Information and display description
         device_info = device.TargetPosition()
         print(type(device_info))
 

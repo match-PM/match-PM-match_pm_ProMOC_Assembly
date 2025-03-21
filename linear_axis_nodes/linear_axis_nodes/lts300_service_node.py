@@ -29,7 +29,7 @@ from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  #
 from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore    
 
 # Import custom service and message types
-from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, ShutdownLinearAxis, GetPosition
+from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, ShutdownLinearAxis, GetPosition,GetSetHomingParams ,GetSetVelocityParams
 
 
 class LTS300ServiceNode(Node):
@@ -134,6 +134,9 @@ class LTS300ServiceNode(Node):
         self.home_service = self.create_service(
             Home, 'lts300/home', self.home_callback)
         
+        self.get_set_homing_params_service = self.create_service(
+            GetSetHomingParams, 'lts300/get_set_homing_params', self.get_set_homing_params_callback)
+        
         self.shutdown_service = self.create_service(
             ShutdownLinearAxis, 'lts300/shutdown', self.shutdown_callback)
         
@@ -171,7 +174,7 @@ class LTS300ServiceNode(Node):
 
             self.position = target_position
             response.success = True
-            response.error_message = ""
+            response.error_message = "Successfully moved to position{target_position} mm"
         except Exception as e:
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
@@ -210,7 +213,7 @@ class LTS300ServiceNode(Node):
 
             self.position = target_position
             response.success = True
-            response.error_message = ""
+            response.error_message = "Successfully moved to position{target_position} mm"
         except Exception as e:
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
@@ -251,7 +254,7 @@ class LTS300ServiceNode(Node):
         try:
             self.shutdown()
             response.success = True
-            response.error_message = ""
+            response.error_message = "Successfully shutdown device"
         except Exception as e:
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
@@ -261,14 +264,19 @@ class LTS300ServiceNode(Node):
     
     def get_position_callback(self, request, response):
         if not self.connected:
+            response.axis_position = 0.0
             response.success = False
             response.error_message = "Device not connected"
             return response
 
         try:
             # Get the current position from the device
-            response.position = self.position
-            response.error_message = ""
+            response.axis_position = self.position
+            device_info = self.device.TargetPosition()
+            self.get_logger().info(type(device_info))
+            response.error_message = "Successfully retrieved position"
+            response.success = True
+            self.get_logger().info(f'Current position: {response.axis_position} mm')
         except Exception as e:
             self.get_logger().error(f'Error getting position: {e}')
             response.success = False
@@ -277,8 +285,69 @@ class LTS300ServiceNode(Node):
 
         return response
 
+    def get_set_homing_params_callback(self, request, response):
+        if not self.connected:
+            response.success = False
+            response.error_message = "Device not connected"
+            return response
 
+        try:
+            # Get current homing parameters
+            home_params = self.device.GetHomingParams()
+            
+            # If a new velocity is provided, set it
+            if request.new_velocity > 0:
+                home_params.Velocity = Decimal(request.new_velocity)
+                self.device.SetHomingParams(home_params)
 
+            # Get the (possibly updated) homing parameters
+            home_params = self.device.GetHomingParams()
+
+            # Fill the response
+            response.velocity = float(home_params.Velocity)
+            response.direction = int(home_params.Direction)
+            response.success = True
+            response.error_message = "Set Homing Parameters Successfully"
+
+        except Exception as e:
+            self.get_logger().error(f'Error getting/setting homing parameters: {e}')
+            response.success = False
+            response.error_message = f"Error: {str(e)}"
+
+        return response
+    def get_set_velocity_params_callback(self, request, response):
+        if not self.connected:
+            response.success = False
+            response.error_message = "Device not connected"
+            return response
+
+        try:
+            # Get current velocity parameters
+            vel_params = self.device.GetVelocityParams()
+            
+            # Check if new parameters are provided and set them
+            if request.new_max_velocity > 0 or request.new_acceleration > 0:
+                if request.new_max_velocity > 0 & request.new_max_velocity < 10:
+                    vel_params.MaxVelocity = Decimal(request.new_max_velocity)
+                if request.new_acceleration > 0 & request.new_acceleration < 3:
+                    vel_params.Acceleration = Decimal(request.new_acceleration)
+                self.device.SetVelocityParams(vel_params)
+
+            # Get the (possibly updated) velocity parameters
+            vel_params = self.device.GetVelocityParams()
+
+            # Fill the response
+            response.max_velocity = float(vel_params.MaxVelocity)
+            response.acceleration = float(vel_params.Acceleration)
+            response.success = True
+            response.error_message = "Successfully set velocity parameters"
+
+        except Exception as e:
+            self.get_logger().error(f'Error getting/setting velocity parameters: {e}')
+            response.success = False
+            response.error_message = f"Error: {str(e)}"
+
+        return response
     # Helper functions
     def shutdown(self):
         """
