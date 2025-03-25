@@ -372,29 +372,34 @@ class LTS300ServiceNode(Node):
 
 
 def main(args=None):
-    # Initialize the ROS2 Python client library
     rclpy.init(args=args)
-    
-    # Create the node
     node = LTS300ServiceNode()
-    
+
     try:
-        # Keep the node running until interrupted
         rclpy.spin(node)
     except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully
-        pass
+        node.get_logger().info('Received keyboard interrupt, shutting down...')
     finally:
-        # Ensure proper cleanup
-        node.shutdown()  # Properly shutdown the device
-        node.destroy_node()
-        
-        # Shutdown ROS2 client library if it's still running
-        if rclpy.ok():
+        node.get_logger().info('Preparing for shutdown...')
+        if node.connected and node.device:
             try:
-                rclpy.shutdown()
-            except rclpy.exceptions.RCLError:
-                pass  # Ignore the shutdown error if ROS is already shutting down
+                node.get_logger().info('Homing device before shutdown...')
+                node.is_moving = True
+                node.device.Home(60000)  # 60 second timeout
+                node.is_moving = False
+                node.get_logger().info('Homing completed successfully')
+            except Exception as e:
+                node.get_logger().error(f'Error during homing before shutdown: {e}')
+            finally:
+                try:
+                    node.shutdown()
+                except Exception as e:
+                    node.get_logger().error(f'Error during device shutdown: {e}')
+        node.destroy_node()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
+
