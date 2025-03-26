@@ -1,11 +1,13 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import ExecuteProcess
+from launch.actions import ExecuteProcess, DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
-from launch.actions import DeclareLaunchArgument
+from launch.actions import SetEnvironmentVariable
+import os
 
 def generate_launch_description():
     return LaunchDescription([
+        SetEnvironmentVariable('PYTHONPATH', os.path.dirname(os.path.abspath(__file__)) + ':' + os.environ.get('PYTHONPATH', '')),
         # Deklarieren Sie Launch-Argumente für die Seriennummern und Namen der LTS300-Geräte
         DeclareLaunchArgument(
             'lts300_serial_1',
@@ -27,7 +29,6 @@ def generate_launch_description():
             default_value='lts300_camera_x_axis',
             description='Name für das zweite LTS300-Gerät'
         ),
-        ## Launch-Argumente für SSH-Verbindung
         DeclareLaunchArgument(
            'remote_password',
             default_value='remote_password',
@@ -65,32 +66,28 @@ def generate_launch_description():
         ),
 
         # Starten Sie die zweite Instanz des lts300_service_node
-        Node(
-            package='linear_axis_nodes',
-            executable='lts300_service_node',
-            name=LaunchConfiguration('lts300_name_2'),
-            parameters=[{
-                'serial_number': LaunchConfiguration('lts300_serial_2'),
-                'node_name': LaunchConfiguration('lts300_name_2')
-            }],
-            output='screen'
-        ),
+        # Node(
+        #     package='linear_axis_nodes',
+        #     executable='lts300_service_node',
+        #     name=LaunchConfiguration('lts300_name_2'),
+        #     parameters=[{
+        #         'serial_number': LaunchConfiguration('lts300_serial_2'),
+        #         'node_name': LaunchConfiguration('lts300_name_2')
+        #     }],
+        #     output='screen'
+        # ),
 
-        # Beispiel für einen Remote-Prozess-Start (hier als Kommentar
-        # aufgeführt, da es nicht auf allen Systemen funktioniert)
-        '''
-        # Starten Sie eine Instanz des lts300_service_node auf der entfernten Maschine
-        ExecuteProcess(
-            cmd=[
-                'ssh',
-                LaunchConfiguration('remote_user') + '@' + LaunchConfiguration('remote_host'),
-                'source /opt/ros/foxy/setup.bash && ' +  # Passen Sie dies an Ihre ROS2-Version an
-                'ros2 run linear_axis_nodes lts300_service_node ' +
-                '--ros-args ' +
-                '-p serial_number:=' + LaunchConfiguration('lts300_serial_1') + ' ' +
-                '-p node_name:=' + LaunchConfiguration('lts300_name_1')
-            ],
-            output='screen'
-        ),'''
+        # Beispiel für einen Remote-Prozess-Start (auskommentiert)
+        # ExecuteProcess(
+        #     cmd=[
+        #         'ssh',
+        #         LaunchConfiguration('remote_user') + '@' + LaunchConfiguration('remote_host'),
+        #         'source /opt/ros/foxy/setup.bash && ' +  # Passen Sie dies an Ihre ROS2-Version an
+        #         'ros2 run linear_axis_nodes lts300_service_node ' +
+        #         '--ros-args ' +
+        #         '-p serial_number:=' + LaunchConfiguration('lts300_serial_1') + ' ' +
+        #         '-p node_name:=' + LaunchConfiguration('lts300_name_1')
+        #     ],
+        #     output='screen'
+        # ),
     ])
-    

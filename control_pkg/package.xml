@@ -11,6 +11,11 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <depend>rclpy</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>planar_motor_nodes</depend>
+  <depend>linear_axis_nodes</depend>
 
   <export>
     <build_type>ament_python</build_type>
