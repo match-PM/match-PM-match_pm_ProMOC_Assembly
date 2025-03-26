@@ -1,63 +1,63 @@
 # ROS 2 imports
 import rclpy                                    #type:ignore
 from rclpy.node import Node                     #type:ignore    
-#from std_msgs.msg import Float64                #type:ignore
-#from std_srvs.srv import Trigger                #type:ignore
-#from geometry_msgs.msg import Point             #type:ignore
+
 
 # Import the platform check and Thorlabs libraries from lts300.py
 import platform
 import time
-import clr
-#import threading
+
 
 # Check if running on Windows, as Thorlabs libraries only work on Windows
-if platform.system() != "Windows":
+if platform.system() == "Windows":
+    import clr                                                                                                              #type:ignore
+    # Load Thorlabs .NET assemblies using Python.NET (clr)
+    # These DLLs provide the interface to control Thorlabs motion devices
+    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
+    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
+    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
+
+    # Import specific classes from the Thorlabs .NET libraries
+    from Thorlabs.MotionControl.DeviceManagerCLI import DeviceManagerCLI  # For device discovery and connection             #type:ignore
+    from Thorlabs.MotionControl.GenericMotorCLI import MotorDirection     # For specifying motor direction                  #type:ignore
+    from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  # For controlling the LTS300 stage       #type:ignore
+    from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore   
+else:
     print("This script is intended to run on Windows only.")
-    exit()
+    print("Starting Simulation Node")
+    from mock_thorlabs import MockDeviceManagerCLI as DeviceManagerCLI, MockMotorDirection as MotorDirection, MockLongTravelStage as LongTravelStage, MockDecimal as Decimal
 
-# Load Thorlabs .NET assemblies using Python.NET (clr)
-# These DLLs provide the interface to control Thorlabs motion devices
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
 
-# Import specific classes from the Thorlabs .NET libraries
-from Thorlabs.MotionControl.DeviceManagerCLI import DeviceManagerCLI  # For device discovery and connection             #type:ignore
-from Thorlabs.MotionControl.GenericMotorCLI import MotorDirection     # For specifying motor direction                  #type:ignore
-from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  # For controlling the LTS300 stage       #type:ignore
-from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore    
+
+ 
 
 # Import custom service and message types
 from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, ShutdownLinearAxis, GetPosition,GetSetHomingParams ,GetSetVelocityParams
 
+print("This script is intended to run on Windows only.")
 
 class LTS300ServiceNode(Node):
-    """
-    ROS2 Node for controlling a Thorlabs LTS300 Linear Translation Stage.
-    
-    This node provides services to move the stage to specific positions and to home the stage.
-    It uses the Thorlabs Kinesis .NET libraries via Python.NET to communicate with the hardware.
-    """
     def __init__(self):
+        # Holen Sie sich den Node-Namen aus den Parametern oder verwenden Sie einen Standardwert
+        self.node_name = self.declare_parameter('node_name', 'lts300_service_node').get_parameter_value().string_value
 
-        # Initialize the ROS2 node with name 'lts300_service_node'
-        super().__init__('lts300_service_node')
-        
-        # Initialize core parameters and device connection
+        # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
+        super().__init__(self.node_name)
+
+        # Initialisieren Sie die Kernparameter und die Geräteverbindung
         self.initialize_parameters()
-        
-        # Set up ROS2 services
+
+        # Richten Sie ROS2-Dienste ein
         self.setup_services()
-        
-        # Connect to the physical LTS300 device
+
+        # Verbinden Sie sich mit dem physischen LTS300-Gerät
         self.connect()
 
-        # Log initialization status
+        # Protokollieren Sie den Initialisierungsstatus
         if self.connected:
-            self.get_logger().info('LTS300 node initialized')
+            self.get_logger().info(f'{self.node_name} initialisiert')
         else:
-            self.get_logger().error('Failed to initialize LTS300 node')
+            self.get_logger().error(f'Fehler bei der Initialisierung von {self.node_name}')
 
     # Initialization functions    
     def initialize_parameters(self):
@@ -67,7 +67,7 @@ class LTS300ServiceNode(Node):
         
         # Get the serial number from parameters
         self.serial_no = self.get_parameter('serial_number').get_parameter_value().string_value
-        
+        self.simulation_mode = platform.system() != "Windows"
         # Initialize connection state variables
         self.connected = False  # Flag to track connection status
         self.device = None      # Will hold the device object when connected
@@ -78,6 +78,12 @@ class LTS300ServiceNode(Node):
             self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
 
             DeviceManagerCLI.BuildDeviceList()
+            if self.simulation_mode:
+                self.get_logger().info('Running in simulation mode. Simulating successful connection.')
+                self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
+                self.connected = True
+                self.position = 0
+                return
 
             if not DeviceManagerCLI.IsDeviceConnected(self.serial_no):
                 available_devices = DeviceManagerCLI.GetDeviceList()
@@ -125,62 +131,66 @@ class LTS300ServiceNode(Node):
     def setup_services(self):
         # Create service for moving
         self.move_absolute_service = self.create_service(
-            MoveAbsolute, 'lts300/move_absolute', self.move_absolute_callback)
+            MoveAbsolute, f'{self.node_name}/move_absolute', self.move_absolute_callback)
         
         self.move_relative_service = self.create_service(
-            MoveRelativ, 'lts300/move_relative', self.move_relative_callback)
+            MoveRelativ, f'{self.node_name}/move_relative', self.move_relative_callback)
         
         # Create service for homing the device
         self.home_service = self.create_service(
-            Home, 'lts300/home', self.home_callback)
+            Home, f'{self.node_name}/home', self.home_callback)
         
         self.get_set_homing_params_service = self.create_service(
-            GetSetHomingParams, 'lts300/get_set_homing_params', self.get_set_homing_params_callback)
+            GetSetHomingParams, f'{self.node_name}/get_set_homing_params', self.get_set_homing_params_callback)
         
         self.shutdown_service = self.create_service(
-            ShutdownLinearAxis, 'lts300/shutdown', self.shutdown_callback)
+            ShutdownLinearAxis, f'{self.node_name}/shutdown', self.shutdown_callback)
         
         self.get_position_service = self.create_service(
-            GetPosition, 'lts300/get_position', self.get_position_callback)
+            GetPosition, f'{self.node_name}/get_position', self.get_position_callback)
 
     # Callback functions for ROS services
-    def move_absolute_callback(self, request, response):
+    def move_relative_callback(self, request, response):
         if not self.connected:
             response.success = False
             response.error_message = "Device not connected"
             return response
 
         try:
-            target_position = request.axis_position  
+            relative_position = request.axis_position
+            target_position = self.position + relative_position
             self.get_logger().info(f'Moving to position: {target_position} mm')
 
-            # Ensure the device is enabled and settings are initialized
-            if not self.device.IsSettingsInitialized():
-                self.device.WaitForSettingsInitialized(5000)
-            if not self.device.IsSettingsInitialized():
-                raise Exception("Device settings not initialized")
+            if self.simulation_mode:
+                self.position = target_position
+                self.get_logger().info(f'Simulation: Moved to position {target_position} mm')
+            else:
+                # Ensure the device is enabled and settings are initialized
+                if not self.device.IsSettingsInitialized():
+                    self.device.WaitForSettingsInitialized(5000)
+                if not self.device.IsSettingsInitialized():
+                    raise Exception("Device settings not initialized")
 
-            # Check if the device is enabled (assuming IsEnabled is a property, not a method)
-            if not self.device.IsEnabled:
-                self.device.EnableDevice()
-                time.sleep(0.5)  # Wait for device to enable
+                # Check if the device is enabled (assuming IsEnabled is a property, not a method)
+                if not self.device.IsEnabled:
+                    self.device.EnableDevice()
+                    time.sleep(0.5)  # Wait for device to enable
 
+                decimal_position = Decimal(target_position)
 
-            decimal_position = Decimal(target_position)
-
-            self.is_moving = True
-            self.device.MoveTo(decimal_position, 60000)
-            self.is_moving = False
+                self.is_moving = True
+                self.device.MoveTo(decimal_position, 60000)
+                self.is_moving = False
 
             self.position = target_position
             response.success = True
-            response.error_message = "Successfully moved to position{target_position} mm"
+            response.error_message = f"Successfully moved to position {target_position} mm"
         except Exception as e:
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
             response.error_message = f"Error: {str(e)}"
-
-        return response
+        finally:
+            return response
 
     def move_relative_callback(self, request, response):
         if not self.connected:
@@ -230,11 +240,14 @@ class LTS300ServiceNode(Node):
         try:
             self.get_logger().info('Homing device...')
 
-            self.is_moving = True
-            self.device.Home(60000)  # 60 second timeout
-            self.is_moving = False
-
-            self.position = 0.0
+            if self.simulation_mode:
+                self.position = 0.0
+                self.get_logger().info('Simulation: Device homed')
+            else:
+                self.is_moving = True
+                self.device.Home(60000)  # 60 second timeout
+                self.is_moving = False
+                self.position = 0.0
 
             response.success = True
             response.error_message = "Homing completed successfully"
@@ -285,36 +298,6 @@ class LTS300ServiceNode(Node):
 
         return response
 
-    def get_set_homing_params_callback(self, request, response):
-        if not self.connected:
-            response.success = False
-            response.error_message = "Device not connected"
-            return response
-
-        try:
-            # Get current homing parameters
-            home_params = self.device.GetHomingParams()
-            
-            # If a new velocity is provided, set it
-            if request.new_velocity > 0:
-                home_params.Velocity = Decimal(request.new_velocity)
-                self.device.SetHomingParams(home_params)
-
-            # Get the (possibly updated) homing parameters
-            home_params = self.device.GetHomingParams()
-
-            # Fill the response
-            response.velocity = float(home_params.Velocity)
-            response.direction = int(home_params.Direction)
-            response.success = True
-            response.error_message = "Set Homing Parameters Successfully"
-
-        except Exception as e:
-            self.get_logger().error(f'Error getting/setting homing parameters: {e}')
-            response.success = False
-            response.error_message = f"Error: {str(e)}"
-
-        return response
     def get_set_velocity_params_callback(self, request, response):
         if not self.connected:
             response.success = False
@@ -322,23 +305,27 @@ class LTS300ServiceNode(Node):
             return response
 
         try:
-            # Get current velocity parameters
-            vel_params = self.device.GetVelocityParams()
-            
-            # Check if new parameters are provided and set them
-            if request.new_max_velocity > 0 or request.new_acceleration > 0:
-                if request.new_max_velocity > 0 & request.new_max_velocity < 10:
-                    vel_params.MaxVelocity = Decimal(request.new_max_velocity)
-                if request.new_acceleration > 0 & request.new_acceleration < 3:
-                    vel_params.Acceleration = Decimal(request.new_acceleration)
-                self.device.SetVelocityParams(vel_params)
+            if self.simulation_mode:
+                response.max_velocity = 5.0  # Default simulated max velocity
+                response.acceleration = 1.0  # Default simulated acceleration
+            else:
+                # Get current velocity parameters
+                vel_params = self.device.GetVelocityParams()
 
-            # Get the (possibly updated) velocity parameters
-            vel_params = self.device.GetVelocityParams()
+                # Check if new parameters are provided and set them
+                if request.new_max_velocity > 0 or request.new_acceleration > 0:
+                    if request.new_max_velocity > 0 and request.new_max_velocity < 10:
+                        vel_params.MaxVelocity = Decimal(request.new_max_velocity)
+                    if request.new_acceleration > 0 and request.new_acceleration < 3:
+                        vel_params.Acceleration = Decimal(request.new_acceleration)
+                    self.device.SetVelocityParams(vel_params)
 
-            # Fill the response
-            response.max_velocity = float(vel_params.MaxVelocity)
-            response.acceleration = float(vel_params.Acceleration)
+                # Get the (possibly updated) velocity parameters
+                vel_params = self.device.GetVelocityParams()
+
+                # Fill the response
+                response.max_velocity = float(vel_params.MaxVelocity)
+                response.acceleration = float(vel_params.Acceleration)
             response.success = True
             response.error_message = "Successfully set velocity parameters"
 
@@ -348,6 +335,7 @@ class LTS300ServiceNode(Node):
             response.error_message = f"Error: {str(e)}"
 
         return response
+
     # Helper functions
     def shutdown(self):
         """
