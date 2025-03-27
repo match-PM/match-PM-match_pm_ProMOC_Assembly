@@ -70,7 +70,7 @@ Setup Instructions for Windows
 
 7. Run the Node:
    ```bash
-   ros2 run linear_axis_nodes lts300_servic_enode
+   ros2 run linear_axis_nodes lts300_service_node
    ```
 
 This guide provides a structured approach to setting up and running a ROS 2 node on Windows using CycloneDDS, ensuring proper configuration and execution within your development environment.
