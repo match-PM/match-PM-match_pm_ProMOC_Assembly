@@ -79,7 +79,7 @@ A brief description of your project goes here.
 ### How to use the specific Nodes
   - To start the main node (e.g., mover_service_node), use the following command:
   ```bash
-  ros2 run promoc_nodes mover_service_node
+  ros2 run planar_motor_nodes mover_service_node
   ```
   - Once the node is running, you can send Service commands or monitor topics using tools like rqt or the ros_sequential_action_programmer. To run the ros_sequential_action_programmer, use:
   ```bash

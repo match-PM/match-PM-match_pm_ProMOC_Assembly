@@ -51,12 +51,12 @@ Setup Instructions for Windows
 
 4. Source Your Workspace:
    ```bash
-   call C:\Users\admin\promocros2ws\install\setup.bat
+   call C:\Users\admin\promoc_ros2_ws\install\setup.bat
    ```
 
 5. Navigate to Workspace:
    ```bash
-   cd C:\Users\admin\promocros2ws
+   cd C:\Users\admin\promoc_ros2_ws
    ```
 
 6. Build the Workspace:
@@ -70,7 +70,7 @@ Setup Instructions for Windows
 
 7. Run the Node:
    ```bash
-   ros2 run linearaxisnodes lts300servicenode
+   ros2 run linear_axis_nodes lts300_servic_enode
    ```
 
 This guide provides a structured approach to setting up and running a ROS 2 node on Windows using CycloneDDS, ensuring proper configuration and execution within your development environment.

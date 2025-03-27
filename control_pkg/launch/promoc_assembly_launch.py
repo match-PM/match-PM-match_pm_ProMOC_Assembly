@@ -24,6 +24,7 @@ def generate_launch_description():
             default_value='lts300_z_axis',
             description='Name für das erste LTS300-Gerät'
         ),
+
         DeclareLaunchArgument(
             'lts300_name_2',
             default_value='lts300_camera_x_axis',
@@ -81,8 +82,12 @@ def generate_launch_description():
         # ExecuteProcess(
         #     cmd=[
         #         'ssh',
+        #         '-i', '/path/to/your/private_key',  # Pfad zum privaten SSH-Schlüssel
         #         LaunchConfiguration('remote_user') + '@' + LaunchConfiguration('remote_host'),
-        #         'source /opt/ros/foxy/setup.bash && ' +  # Passen Sie dies an Ihre ROS2-Version an
+        #         'source /opt/ros/humble/setup.bash && ' +  # Passen Sie dies an Ihre ROS2-Version an
+        #         'cd C:\Users\admin\promoc_ros2_ws && ' +     # Passe den Pfad zu deinem Remote Workspace an    
+        #         'call call C:\dev\ros2_jazzy\setup.bat && ' +  # Passe dies an deine ROS2-Version an
+        #         call C:\Users\admin\promoc_ros2_ws\install\setup.bat && ' +  # Passe dies an deinen Workspace an  
         #         'ros2 run linear_axis_nodes lts300_service_node ' +
         #         '--ros-args ' +
         #         '-p serial_number:=' + LaunchConfiguration('lts300_serial_1') + ' ' +
