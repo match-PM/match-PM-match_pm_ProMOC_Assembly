@@ -403,6 +403,17 @@ class MoverServiceNode(Node):
                     return False
             return True
 
+    def destroy_node(self):
+        self.get_logger().info("Shutting down MoverServiceNode")
+        try:    
+            self.get_logger().info("Deactivating XBot")
+            bot.deactivate_xbots()
+            self.get_logger().info("XBot deactivated Successfully")
+        except Exception as e:
+            self.get_logger().error(f"Error deactivating XBot: {e}")
+        finally:
+            super().destroy_node()
+
 
 def main(args=None):
     rclpy.init(args=args)   
