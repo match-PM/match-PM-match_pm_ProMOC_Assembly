@@ -42,13 +42,13 @@ from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, Shutd
 
 
 
-class LTS300ServiceNode(Node):
+class LTS300ZAxisNode(Node):
     def __init__(self):
         # Holen Sie sich den Node-Namen aus den Parametern oder verwenden Sie einen Standardwert
         
 
         # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
-        super().__init__('lts300_service_node')
+        super().__init__('lts300_z_axis_node')
 
         # Initialisieren Sie die Kernparameter und die Geräteverbindung
         self.initialize_parameters()
@@ -70,6 +70,7 @@ class LTS300ServiceNode(Node):
         # Declare the serial number parameter with a default value
         
         self.serial_no = '45318394'
+        self.node_name = 'lts300_z_axis'
         
         self.simulation_mode = platform.system() != "Windows"
         # Initialize connection state variables
@@ -389,7 +390,7 @@ class LTS300ServiceNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = LTS300ServiceNode()
+    node = LTS300ZAxisNode()
 
     try:
         rclpy.spin(node)
