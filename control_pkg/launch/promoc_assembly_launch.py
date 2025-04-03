@@ -76,12 +76,12 @@ def generate_launch_description():
         remote_user_arg,
         remote_host_arg,
         # Start the mover_service_node
-        Node(
-            package='planar_motor_nodes',
-            executable='mover_service_node',
-            name='mover_service_node',
-            output='screen'
-        ),
+        # Node(
+        #     package='planar_motor_nodes',
+        #     executable='mover_service_node',
+        #     name='mover_service_node',
+        #     output='screen'
+        # ),
         # Start the remote node using OpaqueFunction
         OpaqueFunction(function=launch_remote_node)
     ])
