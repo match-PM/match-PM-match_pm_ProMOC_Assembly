@@ -59,7 +59,6 @@ def generate_launch_description():
             f'call C:\\\\Users\\\\admin\\\\promoc_ros2_ws\\\\install\\\\setup.bat && '
             f'set ROS_DOMAIN_ID=13 && '
             f'ros2 run linear_axis_nodes lts300_z_axis_node'
-            f'--ros-args '
             #f'-p serial_number:={lts300_serial_1} '
             #f'-p node_name:={lts300_name_1}"'
         ]
@@ -87,3 +86,11 @@ def generate_launch_description():
     ])
 
     return ld
+
+
+
+#TODO ssh Verbindung überarbeiten sodass sie ohne passwort funktioniert
+    #Parameter chekcne warum das nicht funktioniert
+    #Node für die Kamerachse ready machen
+    #Code aufräumen
+    #DDS überarbeiten

@@ -76,7 +76,7 @@ class LTS300ZAxisNode(Node):
         # Initialize connection state variables
         self.connected = False  # Flag to track connection status
         self.device = None      # Will hold the device object when connected
-        # Additional state variables could be added here (position, status, etc.)
+        # Additional state variables could be added here (position, statunodes, etc.)
     def connect(self):
         try:
             self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
