@@ -47,8 +47,8 @@ def generate_launch_description():
     def launch_remote_node(context):
         remote_user = LaunchConfiguration('remote_user').perform(context)
         remote_host = LaunchConfiguration('remote_host').perform(context)
-        lts300_serial_1 = LaunchConfiguration('lts300_serial_1').perform(context)
-        lts300_name_1 = LaunchConfiguration('lts300_name_1').perform(context)
+        #lts300_serial_1 = LaunchConfiguration('lts300_serial_1').perform(context)
+        #lts300_name_1 = LaunchConfiguration('lts300_name_1').perform(context)
 
         ssh_command = [
             'ssh',
@@ -58,10 +58,10 @@ def generate_launch_description():
             f'call C:\\\\dev\\\\ros2_jazzy\\\\setup.bat && '
             f'call C:\\\\Users\\\\admin\\\\promoc_ros2_ws\\\\install\\\\setup.bat && '
             f'set ROS_DOMAIN_ID=13 && '
-            f'ros2 run linear_axis_nodes lts300_service_node '
+            f'ros2 run linear_axis_nodes lts300_z_axis_node'
             f'--ros-args '
-            f'-p serial_number:={lts300_serial_1} '
-            f'-p node_name:={lts300_name_1}"'
+            #f'-p serial_number:={lts300_serial_1} '
+            #f'-p node_name:={lts300_name_1}"'
         ]
         return [ExecuteProcess(cmd=ssh_command, output='screen')]
 
