@@ -67,10 +67,13 @@ class LTS300ServiceNode(Node):
 
     # Initialization functions    
     def initialize_parameters(self):
-        self.node_name = self.declare_parameter('node_name', 'lts300_service_node').get_parameter_value().string_value
+        self.declare_parameter('serial_number', '45318394') #default value as string
+        self.declare_parameter('node_name', 'lts300_z_axis')
         # Declare the serial number parameter with a default value
-        self.declare_parameter('serial_number', '45318394')
+        
         self.serial_no = self.get_parameter('serial_number').get_parameter_value().string_value
+        self.node_name = self.get_parameter('node_name').get_parameter_value().string_value
+        
         self.simulation_mode = platform.system() != "Windows"
         # Initialize connection state variables
         self.connected = False  # Flag to track connection status
