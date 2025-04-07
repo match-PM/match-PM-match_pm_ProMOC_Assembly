@@ -1,4 +1,15 @@
 
+from promoc_assembly_interfaces.srv import (
+    ActivateXbots,
+    ArcMotionTargetRadius,
+    LevitationXbots,
+    LinearMotionSi,
+    RotaryMotion,
+    SetVelocityAcceleration,
+    SixDofMotion,
+    StopMotion,
+)
+from promoc_assembly_interfaces.msg import XBotInfo
 import sys
 import os
 import time
@@ -22,20 +33,9 @@ except ImportError as e:
     from mock_pmclib import pmc_types
 
 # Import custom message and service interfaces from promoc_assembly_interfaces
-from promoc_assembly_interfaces.msg import XBotInfo
-from promoc_assembly_interfaces.srv import (
-    ActivateXbots,
-    ArcMotionTargetRadius,
-    LevitationXbots,
-    LinearMotionSi,
-    RotaryMotion,
-    SetVelocityAcceleration,
-    SixDofMotion,
-    StopMotion,
-)
 
 
-class MoverServiceNode(Node): 
+class MoverServiceNode(Node):
     def __init__(self):
         """
         Initialize the MoverServiceNode class.
@@ -59,29 +59,31 @@ class MoverServiceNode(Node):
         # Start timers
         self.setup_timers()
 
-
-
-    
-    
     # Initialization functions
+
     def initialize_parameters(self):
-        """Initialize core parameters related to XBot and motion tolerances."""
+        # Initialize core parameters related to XBot and motion tolerances."""
         self.xy_tolerance = 0.1  # Tolerance for position in meters
 
         self.velocity_acceleration_params = {}
         self.velocity_acceleration_standard_params = {
-            'xy_vel': 1.00,   
-            'z_vel': 0.10,    
-            'rx_vel': 0.10,   
-            'ry_vel': 0.10,   
-            'rz_vel': 0.10,   
-            'xy_max_accel': 5.00,  
-            'z_max_accel': 1.00    
+            'xy_vel': 1.00,
+            'z_vel': 0.10,
+            'rx_vel': 0.10,
+            'ry_vel': 0.10,
+            'rz_vel': 0.10,
+            'xy_max_accel': 5.00,
+            'z_max_accel': 1.00
         }
+        # Define the Movement Areas
+        self.x_min, self.x_max = 0.055, 0.420
+        self.y_min, self.y_max = -0.055, 0.180
+        self.z_min, self.z_max = 0.000, 0.004
 
     def setup_publishers(self):
         """Create ROS publishers for XBot information."""
-        self.xbot_pos_publisher_ = self.create_publisher(XBotInfo, "xbot_info", 10)
+        self.xbot_pos_publisher_ = self.create_publisher(
+            XBotInfo, "xbot_info", 10)
 
     def setup_services(self):
         """Define and create ROS services for handling motions and commands."""
@@ -112,8 +114,9 @@ class MoverServiceNode(Node):
 
     def setup_timers(self):
         """Start timers to periodically publish XBot position."""
-        self.xbot_position_timer = self.create_timer(0.1, self.xbot_postition_publisher)
-    
+        self.xbot_position_timer = self.create_timer(
+            0.1, self.xbot_postition_publisher)
+
     def startup_connection(self):
         self.get_logger().info("Mover Node Started")
         self.get_logger().info("Connecting to PMC...")
@@ -123,12 +126,11 @@ class MoverServiceNode(Node):
         self.get_logger().info("Connected")
         bot.activate_xbots()
         self.get_logger().info("XBot Activated")
-        #set standard values for velocities and acceleration
+        # set standard values for velocities and acceleration
         self.velocity_acceleration_params = self.velocity_acceleration_standard_params.copy()
 
-    
-
     # Timer callback functions
+
     def xbot_postition_publisher(self):
         """
         This function publishes the current position of the XBot to a ROS topic.
@@ -158,8 +160,8 @@ class MoverServiceNode(Node):
 
         self.xbot_pos_publisher_.publish(msg)
 
-
     # Callback functions for ROS services
+
     def callback_linear_motion_si(self, request, response):
         """
         Handles a linear motion request for a specific XBot.
@@ -178,38 +180,42 @@ class MoverServiceNode(Node):
         Returns:
         - response (promoc_assembly_interfaces.srv.LinearMotionSI.Response): The response containing the success status
         of the motion.
-        """    
+        """
         try:
 
             # Convert position values from millimeters to meters
             target_position = [
                 request.x_pos / 1000, request.y_pos / 1000
             ]
-            self.get_logger().info(f"Starting linear motion for bot {request.xbot_id} to target position: {target_position}")
+            self.get_logger().info(
+                f"Starting linear motion for bot {request.xbot_id} to target position: {target_position}")
 
             # Get speed parameters for the bot
-            speed_params = self.velocity_acceleration_params.get(request.xbot_id)
+            speed_params = self.velocity_acceleration_params.get(
+                request.xbot_id)
             if speed_params:
                 # The * infront of targe_position unpacks the target_position list into individual parameters.
                 bot.linear_motion_si(request.xbot_id, *target_position,
-                                    speed_params['xy_vel'], 
-                                    speed_params['xy_max_accel']
-                )
+                                     speed_params['xy_vel'],
+                                     speed_params['xy_max_accel']
+                                     )
             else:
-                self.get_logger().error(f"Speed parameters not found for bot {request.xbot_id}")
+                self.get_logger().error(
+                    f"Speed parameters not found for bot {request.xbot_id}")
                 self.get_logger().error("Using standard speed parameters for this bot")
+
                 # The * infront of targe_position unpacks the target_position list into individual parameters.
                 bot.linear_motion_si(request.xbot_id, *target_position,
-                                    self.velocity_acceleration_standard_params['xy_vel'], 
-                                    self.velocity_acceleration_standard_params['xy_max_accel']
-            )
-                
+                                     self.velocity_acceleration_standard_params['xy_vel'],
+                                     self.velocity_acceleration_standard_params['xy_max_accel']
+                                     )
+
             # Wait until the target position is reached within tolerance
             while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
                 time.sleep(self.xy_tolerance/10)
 
             response.finished = True
-        
+
         except ValueError as e:
             self.get_logger().error(f"Invalid parameter value: {e}")
             response.finished = False
@@ -219,11 +225,11 @@ class MoverServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f"Unexpected error: {e}")
             response.finished = False
-        
+
         finally:
             return response
 
-    def callback_arc_motion_target_radius(self, request, response): 
+    def callback_arc_motion_target_radius(self, request, response):
         try:
             bot.arc_motion_target_radius(request.xbot_id, request.x_pos / 1000, request.y_pos / 1000, request.arc_type,
                                          request.position_mode, request.arc_dir, request.radius_meters / 1000,
@@ -236,12 +242,13 @@ class MoverServiceNode(Node):
 
     def callback_rotary_motion(self, request, response):
         try:
-            bot.rotary_motion(request.xbot_id, request.target_rz, request.max_speed, request.max_accel)
+            bot.rotary_motion(request.xbot_id, request.target_rz,
+                              request.max_speed, request.max_accel)
             response.finished = True
         except:
             self.get_logger().error("INVALID PARAMETER")
             response.finished = False
-        return response 
+        return response
 
     def callback_stop_motion(self, request, response):
         try:
@@ -273,42 +280,59 @@ class MoverServiceNode(Node):
         """
         try:
             # Convert position values from millimeters to meters
+            current_position = self.get_current_position()
+            # Konvertiere und validiere Positionswerte
+            x_pos_m = request.x_pos / 1000
+            y_pos_m = request.y_pos / 1000
+            z_pos_m = request.z_pos / 1000
+            rx_pos_m = request.rx_pos / 1000
+            ry_pos_m = request.ry_pos / 1000
+            rz_pos_m = request.rz_pos / 1000
+
+            # Erstelle Zielposition mit Bereichsprüfung
             target_position = [
-                request.x_pos / 1000, request.y_pos / 1000, request.z_pos / 1000,
-                request.rx_pos / 1000, request.ry_pos / 1000, request.rz_pos / 1000
+                x_pos_m if request.x_pos != 0 and self.x_min <= x_pos_m <= self.x_max else current_position[
+                    0],
+                y_pos_m if request.y_pos != 0 and self.y_min <= y_pos_m <= self.y_max else current_position[
+                    1],
+                z_pos_m if request.z_pos != 0 and self.z_min <= z_pos_m <= self.z_max else current_position[
+                    2],
+                rx_pos_m if request.rx_pos != 0 else current_position[3],
+                ry_pos_m if request.ry_pos != 0 else current_position[4],
+                rz_pos_m if request.rz_pos != 0 else current_position[5]
             ]
-        
-            speed_params = self.velocity_acceleration_params.get(request.xbot_id)
+
+            speed_params = self.velocity_acceleration_params.get(
+                request.xbot_id)
 
             if speed_params:
-
 
                 # Execute motion command with converted positions and speed parameters
                 bot.six_d_of_motion_si(
                     request.xbot_id, *target_position,
-                    speed_params['xy_vel'], 
-                    speed_params['xy_max_accel'], 
+                    speed_params['xy_vel'],
+                    speed_params['xy_max_accel'],
                     speed_params['z_vel'],
                     speed_params['rx_vel'],
                     speed_params['ry_vel'],
                     speed_params['rz_vel']
                 )
             else:
-                self.get_logger().error(f"Speed parameters not found for bot {request.xbot_id}")
+                self.get_logger().error(
+                    f"Speed parameters not found for bot {request.xbot_id}")
                 self.get_logger().error("Using standard speed parameters for this bot")
-                
 
                 # Execute motion command with converted positions and standard speed parameters
                 bot.six_d_of_motion_si(
                     request.xbot_id, *target_position,
-                    self.velocity_acceleration_standard_params['xy_vel'], 
-                    self.velocity_acceleration_standard_params['xy_max_accel'], 
+                    self.velocity_acceleration_standard_params['xy_vel'],
+                    self.velocity_acceleration_standard_params['xy_max_accel'],
                     self.velocity_acceleration_standard_params['z_vel'],
                     self.velocity_acceleration_standard_params['rx_vel'],
                     self.velocity_acceleration_standard_params['ry_vel'],
                     self.velocity_acceleration_standard_params['rz_vel']
                 )
-            # Wait until the target position is reached within tolerance 
+            # Wait until the target position is reached within tolerance
             while not self.check_position_reached(target_position, self.get_current_position()):
                 time.sleep(0.01)
 
@@ -324,13 +348,12 @@ class MoverServiceNode(Node):
             self.get_logger().error(f"Unexpected error: {e}")
             response.finished = False
 
-
         finally:
             return response
 
     def callback_set_velocity_acceleration(self, request, response):
         try:
-             # Extract xbot_id from the request
+            # Extract xbot_id from the request
             xbot_id = request.xbot_id
 
             self.velocity_acceleration_params[xbot_id] = {
@@ -342,22 +365,25 @@ class MoverServiceNode(Node):
                 'xy_max_accel': request.xy_max_accel,
                 'z_max_accel': request.z_max_accel
             }
-            
-            self.get_logger().info(f'Velocity and acceleration parameters set successfully for bot {xbot_id}')
+
+            self.get_logger().info(
+                f'Velocity and acceleration parameters set successfully for bot {xbot_id}')
             response.finished = True
         except Exception as e:
             # Log error and set response to False
-            self.get_logger().error(f"INVALID PARAMETER for bot {xbot_id}: {e}")
-            self.get_logger().error("Setting velocity and acceleration to standard parameters for this bot")
+            self.get_logger().error(
+                f"INVALID PARAMETER for bot {xbot_id}: {e}")
+            self.get_logger().error(
+                "Setting velocity and acceleration to standard parameters for this bot")
 
             response.finished = False
-        
+
         return response
 
     def callback_levitation_xbot(self, request, response):
         bot.levitate_xbot_command(request.xbot_id, int(request.levitation))
         response.levitation = request.levitation
-        return response     
+        return response
 
     def callback_activate_xbot(self, request, response):
         if request.activation_status:
@@ -367,19 +393,19 @@ class MoverServiceNode(Node):
         response.activation_status = request.activation_status
         return response
 
-
     # Helper functions
+
     def get_current_position(self) -> list:
         try:
             xbot_data_list = bot.get_all_xbot_info(0)
             current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
-                                  float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
+                                float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
             return current_position
         except IndexError:
             self.get_logger().error("Error: xbot_data_list is empty")
             return [0, 0, 0, 0, 0, 0]
-    
-    def check_position_reached(self, target_position:list, current_position:list, tolerance:float):
+
+    def check_position_reached(self, target_position: list, current_position: list, tolerance: float):
         def check_position_reached(self, target_position: list, current_position: list, tolerance: float) -> bool:
             """
             Check if the current position has reached the target position within a specified tolerance.
@@ -405,7 +431,7 @@ class MoverServiceNode(Node):
 
     def destroy_node(self):
         self.get_logger().info("Shutting down MoverServiceNode")
-        try:    
+        try:
             self.get_logger().info("Deactivating XBot")
             bot.deactivate_xbots()
             self.get_logger().info("XBot deactivated Successfully")
@@ -416,8 +442,8 @@ class MoverServiceNode(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)   
-    node = MoverServiceNode()   
+    rclpy.init(args=args)
+    node = MoverServiceNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -428,7 +454,8 @@ def main(args=None):
             try:
                 rclpy.shutdown()
             except rclpy.exceptions.RCLError:
-                pass  # Ignore the shutdown error 
+                pass  # Ignore the shutdown error
+
 
 if __name__ == "__main__":
     main()
