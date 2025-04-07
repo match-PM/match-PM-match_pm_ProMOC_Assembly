@@ -76,9 +76,22 @@ class MoverServiceNode(Node):
             'z_max_accel': 1.00
         }
         # Define the Movement Areas
-        self.x_min, self.x_max = 0.055, 0.420
-        self.y_min, self.y_max = -0.055, 0.180
-        self.z_min, self.z_max = 0.000, 0.004
+
+        # Define the Movement Areas as ROS2 parameters with default values
+        self.declare_parameter('x_min', 0.055)
+        self.declare_parameter('x_max', 0.420)
+        self.declare_parameter('y_min', -0.055)
+        self.declare_parameter('y_max', 0.180)
+        self.declare_parameter('z_min', 0.000)
+        self.declare_parameter('z_max', 0.004)
+        
+        # Get parameter values
+        self.x_min = self.get_parameter('x_min').value
+        self.x_max = self.get_parameter('x_max').value
+        self.y_min = self.get_parameter('y_min').value
+        self.y_max = self.get_parameter('y_max').value
+        self.z_min = self.get_parameter('z_min').value
+        self.z_max = self.get_parameter('z_max').value
 
     def setup_publishers(self):
         """Create ROS publishers for XBot information."""

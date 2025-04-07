@@ -47,7 +47,19 @@ else:
 
 class LTS300ServiceNode(Node):
     def __init__(self):
-        # Holen Sie sich den Node-Namen aus den Parametern oder verwenden Sie einen Standardwert
+        """
+        Initialize the LTS300ServiceNode.
+
+        This constructor initializes a ROS2 node for controlling a Thorlabs LTS300 linear stage.
+        It sets up the node parameters, establishes services and clients, connects to the 
+        physical device (or simulation), and logs the initialization status.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
 
         # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
         super().__init__('lts300_service_node')
@@ -72,6 +84,19 @@ class LTS300ServiceNode(Node):
 
     # Initialization functions
     def initialize_parameters(self):
+        """
+        Initialize the node parameters and state variables.
+
+        This function declares and retrieves ROS parameters for the node,
+        sets up the simulation mode based on the operating system,
+        and initializes connection state variables.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
         # default value as string
         self.declare_parameter('serial_number', '45318394')
         self.declare_parameter('node_name', 'lts300_z_axis')
@@ -147,6 +172,21 @@ class LTS300ServiceNode(Node):
             self.connected = False
 
     def setup_services(self):
+        """
+        Set up ROS2 services for controlling the LTS300 linear stage.
+
+        This function creates and registers all the service endpoints that allow
+        external nodes to interact with the linear stage. Services include
+        movement control (absolute and relative), homing operations, parameter
+        configuration, position queries, and shutdown functionality.
+
+        Parameters:
+            None
+
+        Returns:
+            None: The function registers service handlers with the ROS2 node
+                 but does not return any values.
+        """
         # Create service for moving
         self.move_absolute_service = self.create_service(
             MoveAbsolute, f'{self.node_name}/move_absolute', self.move_absolute_callback)
@@ -169,6 +209,25 @@ class LTS300ServiceNode(Node):
 
     # Callback functions for ROS services
     def move_absolute_callback(self, request, response):
+        """
+        Callback function for the move_absolute service.
+
+        Moves the linear stage to an absolute position specified in the request.
+        Before moving, it checks if the device is connected and if other axes are
+        in a safe position. The function handles device initialization, movement
+        execution, and error reporting.
+
+        Parameters:
+            request (MoveAbsolute.Request): The service request containing:
+                - axis_position (float): The target absolute position in mm
+            response (MoveAbsolute.Response): The service response object to be populated with:
+                - success (bool): Whether the movement was successful
+                - error_message (str): Description of the result or error
+
+        Returns:
+            MoveAbsolute.Response: The populated response object indicating success or failure
+                                  and providing an error message if applicable
+        """
         if not self.connected:
             response.success = False
             response.error_message = "Device not connected"
