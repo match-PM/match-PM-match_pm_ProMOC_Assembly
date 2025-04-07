@@ -3,7 +3,9 @@ import time
 import logging
 
 # Konfiguriere das Logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 class LTS300Controller:
     def __init__(self, port, baudrate=115200, timeout=1):
@@ -50,14 +52,17 @@ class LTS300Controller:
                     logging.debug(f"Antwort empfangen: {response.hex()}")
                     return response
                 elif len(response) > 0:
-                    logging.warning(f"Unvollständige Antwort empfangen: {response.hex()}")
+                    logging.warning(
+                        f"Unvollständige Antwort empfangen: {response.hex()}")
                 else:
-                    logging.warning(f"Keine Antwort empfangen (Versuch {attempt + 1}/{max_attempts})")
+                    logging.warning(
+                        f"Keine Antwort empfangen (Versuch {attempt + 1}/{max_attempts})")
             except serial.SerialException as e:
                 logging.error(f"Fehler beim Lesen der Antwort: {e}")
             time.sleep(delay)
 
-        raise ValueError(f"Keine gültige Antwort nach {max_attempts} Versuchen")
+        raise ValueError(
+            f"Keine gültige Antwort nach {max_attempts} Versuchen")
 
     def home_motor(self, channel=1):
         """
@@ -81,10 +86,13 @@ class LTS300Controller:
             except ValueError as e:
                 logging.error(f"Fehler beim Lesen der Antwort: {e}")
 
-            logging.debug(f"Warte vor dem nächsten Versuch (Versuch {attempt + 1}/{max_attempts})")
+            logging.debug(
+                f"Warte vor dem nächsten Versuch (Versuch {attempt + 1}/{max_attempts})")
             time.sleep(1)
 
-        raise TimeoutError(f"Homing-Prozess nicht abgeschlossen nach {max_attempts} Versuchen")
+        raise TimeoutError(
+            f"Homing-Prozess nicht abgeschlossen nach {max_attempts} Versuchen")
+
     def move_absolute(self, position, channel=1):
         """
         Bewegt den Motor auf eine absolute Position.
@@ -93,7 +101,8 @@ class LTS300Controller:
         :param channel: Der Kanal, für den die Bewegung durchgeführt werden soll (standardmäßig 1).
         """
         # MGMSG_MOT_MOVE_ABSOLUTE (0x0453)
-        move_command = bytes([0x53, 0x04, channel, 0x00]) + position.to_bytes(4, byteorder='little')
+        move_command = bytes([0x53, 0x04, channel, 0x00]) + \
+            position.to_bytes(4, byteorder='little')
         self.send_command(move_command)
 
     def move_relative(self, distance, channel=1):
@@ -104,7 +113,8 @@ class LTS300Controller:
         :param channel: Der Kanal, für den die Bewegung durchgeführt werden soll (standardmäßig 1).
         """
         # MGMSG_MOT_MOVE_RELATIVE (0x0448)
-        move_command = bytes([0x48, 0x04, channel, 0x00]) + distance.to_bytes(4, byteorder='little')
+        move_command = bytes([0x48, 0x04, channel, 0x00]) + \
+            distance.to_bytes(4, byteorder='little')
         self.send_command(move_command)
 
     def stop_motor(self, channel=1):
@@ -125,7 +135,9 @@ class LTS300Controller:
             self.ser.close()
             logging.info("Serielle Verbindung geschlossen.")
         except Exception as e:
-            logging.error(f"Fehler beim Schließen der seriellen Verbindung: {e}")
+            logging.error(
+                f"Fehler beim Schließen der seriellen Verbindung: {e}")
+
 
 # Test code
 if __name__ == "__main__":

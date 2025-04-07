@@ -4,25 +4,26 @@ lts_pythonnet
 
 An example of using the LTS integrated stages with python via pythonnet
 """
+from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import *  # type:ignore
+from Thorlabs.MotionControl.GenericMotorCLI import *  # type:ignore
+from Thorlabs.MotionControl.DeviceManagerCLI import *  # type:ignore
+from System import Decimal  # necessary for real world units    #type:ignore
 import platform
 import time
-import clr
+import clr  # type:ignore
 
 if platform.system() != "Windows":
     print("This script is intended to run on Windows only.")
     exit()
 
 
+clr.AddReference(
+    "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
+clr.AddReference(
+    "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
+clr.AddReference(
+    "C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
 
-
-
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
-clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
-from Thorlabs.MotionControl.DeviceManagerCLI import *           #type:ignore
-from Thorlabs.MotionControl.GenericMotorCLI import *            #type:ignore
-from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import * #type:ignore
-from System import Decimal  # necessary for real world units    #type:ignore
 
 def main():
     """The main entry point for the application"""
@@ -32,13 +33,14 @@ def main():
 
     try:
 
-        DeviceManagerCLI.BuildDeviceList()      #type:ignore
+        DeviceManagerCLI.BuildDeviceList()  # type:ignore
 
         # create new device
         serial_no = '45318394'  # Replace this line with your device's serial number
 
         # Connect, begin polling, and enable
-        device = LongTravelStage.CreateLongTravelStage(serial_no)       #type:ignore
+        device = LongTravelStage.CreateLongTravelStage(             # type:ignore
+            serial_no)  # type:ignore
         device.Connect(serial_no)
 
         # Ensure that the device settings have been initialized
@@ -47,13 +49,10 @@ def main():
             assert device.IsSettingsInitialized() is True
 
         # Start polling and enable
-        device.StartPolling(250)  #250ms polling rate
+        device.StartPolling(250)  # 250ms polling rate
         time.sleep(0.25)
         device.EnableDevice()
         time.sleep(0.25)  # Wait for device to enable
-
-
-        
 
         # Load any configuration settings needed by the controller/stage
         motor_config = device.LoadMotorConfiguration(serial_no)

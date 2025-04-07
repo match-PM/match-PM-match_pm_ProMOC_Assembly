@@ -44,7 +44,7 @@ from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, Shutd
 
 class LTS300ZAxisNode(Node):
     def __init__(self):
-        # Holen Sie sich den Node-Namen aus den Parametern oder verwenden Sie einen Standardwert
+        
         
 
         # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen

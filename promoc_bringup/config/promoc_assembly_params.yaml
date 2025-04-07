@@ -1,0 +1,18 @@
+lts300_devices:
+  device1:
+    serial_number: '45318394'
+    node_name: 'lts300_z_axis'
+    other_axes: [lts300_camera_x_axis]
+  device2:
+    serial_number: '45318395'
+    node_name: 'lts300_camera_x_axis'
+    other_axes: [lts300_z_axis]
+    
+
+remote_connection:
+  user: 'admin'
+  host: '10.145.4.63'
+  ros_domain_id: '13'
+
+namespace: 'promoc_assembly'
+

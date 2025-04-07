@@ -1,8 +1,9 @@
 # ROS 2 imports
+from promoc_assembly_interfaces.srv import MoveAbsolute, MoveRelativ, Home, ShutdownLinearAxis, GetPosition, GetSetHomingParams, GetSetVelocityParams
 import sys
 import os
-import rclpy                                    #type:ignore
-from rclpy.node import Node                     #type:ignore    
+import rclpy  # type:ignore
+from rclpy.node import Node  # type:ignore
 
 
 # Import the platform check and Thorlabs libraries from lts300.py
@@ -13,18 +14,25 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Check if running on Windows, as Thorlabs libraries only work on Windows
 if platform.system() == "Windows":
-    import clr                                                                                                              #type:ignore
+    import clr  # type:ignore
     # Load Thorlabs .NET assemblies using Python.NET (clr)
     # These DLLs provide the interface to control Thorlabs motion devices
-    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
-    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
-    clr.AddReference("C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
+    clr.AddReference(
+        "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.DeviceManagerCLI.dll")
+    clr.AddReference(
+        "C:\\Program Files\\Thorlabs\\Kinesis\\Thorlabs.MotionControl.GenericMotorCLI.dll")
+    clr.AddReference(
+        "C:\\Program Files\\Thorlabs\\Kinesis\\ThorLabs.MotionControl.IntegratedStepperMotorsCLI.dll")
 
     # Import specific classes from the Thorlabs .NET libraries
-    from Thorlabs.MotionControl.DeviceManagerCLI import DeviceManagerCLI  # For device discovery and connection             #type:ignore
-    from Thorlabs.MotionControl.GenericMotorCLI import MotorDirection     # For specifying motor direction                  #type:ignore
-    from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  # For controlling the LTS300 stage       #type:ignore
-    from System import Decimal  # .NET Decimal type for precise position values                                             #type:ignore   
+    # For device discovery and connection
+    from Thorlabs.MotionControl.DeviceManagerCLI import DeviceManagerCLI  # type:ignore
+    # For specifying motor direction
+    from Thorlabs.MotionControl.GenericMotorCLI import MotorDirection  # type:ignore
+    # For controlling the LTS300 stage
+    from Thorlabs.MotionControl.IntegratedStepperMotorsCLI import LongTravelStage  # type:ignore
+    # .NET Decimal type for precise position values
+    from System import Decimal  # type:ignore
 else:
     print("This script is intended to run on Windows only.")
     try:
@@ -34,18 +42,12 @@ else:
         exit()
 
 
-
- 
-
 # Import custom service and message types
-from promoc_assembly_interfaces.srv import MoveAbsolute,MoveRelativ, Home, ShutdownLinearAxis, GetPosition,GetSetHomingParams ,GetSetVelocityParams
-
 
 
 class LTS300ServiceNode(Node):
     def __init__(self):
         # Holen Sie sich den Node-Namen aus den Parametern oder verwenden Sie einen Standardwert
-        
 
         # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
         super().__init__('lts300_service_node')
@@ -56,6 +58,8 @@ class LTS300ServiceNode(Node):
         # Richten Sie ROS2-Dienste ein
         self.setup_services()
 
+        self.setup_clients()
+
         # Verbinden Sie sich mit dem physischen LTS300-Gerät
         self.connect()
 
@@ -63,37 +67,43 @@ class LTS300ServiceNode(Node):
         if self.connected:
             self.get_logger().info(f'{self.node_name} initialisiert')
         else:
-            self.get_logger().error(f'Fehler bei der Initialisierung von {self.node_name}')
+            self.get_logger().error(
+                f'Fehler bei der Initialisierung von {self.node_name}')
 
-    # Initialization functions    
+    # Initialization functions
     def initialize_parameters(self):
-        self.declare_parameter('serial_number', '45318394') #default value as string
+        # default value as string
+        self.declare_parameter('serial_number', '45318394')
         self.declare_parameter('node_name', 'lts300_z_axis')
         # Declare the serial number parameter with a default value
-        
-        self.serial_no = self.get_parameter('serial_number').get_parameter_value().string_value
-        self.node_name = self.get_parameter('node_name').get_parameter_value().string_value
-        
+
+        self.serial_no = self.get_parameter('serial_number').value
+        self.node_name = self.get_parameter('node_name').value
+
         self.simulation_mode = platform.system() != "Windows"
         # Initialize connection state variables
         self.connected = False  # Flag to track connection status
         self.device = None      # Will hold the device object when connected
         # Additional state variables could be added here (position, status, etc.)
+
     def connect(self):
         try:
-            self.get_logger().info(f'Connecting to LTS300 (SN: {self.serial_no})...')
+            self.get_logger().info(
+                f'Connecting to LTS300 (SN: {self.serial_no})...')
 
             DeviceManagerCLI.BuildDeviceList()
             if self.simulation_mode:
                 self.get_logger().info('Running in simulation mode. Simulating successful connection.')
-                self.device = LongTravelStage.CreateLongTravelStage(self.serial_no)
+                self.device = LongTravelStage.CreateLongTravelStage(
+                    self.serial_no)
                 self.connected = True
                 self.position = 0
                 return
 
             if not DeviceManagerCLI.IsDeviceConnected(self.serial_no):
                 available_devices = DeviceManagerCLI.GetDeviceList()
-                self.get_logger().error(f'Device with serial number {self.serial_no} not found!')
+                self.get_logger().error(
+                    f'Device with serial number {self.serial_no} not found!')
                 self.get_logger().info('Available devices:')
                 for device in available_devices:
                     self.get_logger().info(f' - {device}')
@@ -106,7 +116,8 @@ class LTS300ServiceNode(Node):
 
             # Wait for the device settings to initialize
             if not self.device.IsSettingsInitialized():
-                self.device.WaitForSettingsInitialized(10000)  # 10 second timeout
+                self.device.WaitForSettingsInitialized(
+                    10000)  # 10 second timeout
 
             if not self.device.IsSettingsInitialized():
                 raise Exception("Failed to initialize device settings")
@@ -134,24 +145,25 @@ class LTS300ServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error connecting: {e}')
             self.connected = False
+
     def setup_services(self):
         # Create service for moving
         self.move_absolute_service = self.create_service(
             MoveAbsolute, f'{self.node_name}/move_absolute', self.move_absolute_callback)
-        
+
         self.move_relative_service = self.create_service(
             MoveRelativ, f'{self.node_name}/move_relative', self.move_relative_callback)
-        
+
         # Create service for homing the device
         self.home_service = self.create_service(
             Home, f'{self.node_name}/home', self.home_callback)
-        
+
         self.get_set_homing_params_service = self.create_service(
             GetSetHomingParams, f'{self.node_name}/get_set_homing_params', self.get_set_homing_params_callback)
-        
+
         self.shutdown_service = self.create_service(
             ShutdownLinearAxis, f'{self.node_name}/shutdown', self.shutdown_callback)
-        
+
         self.get_position_service = self.create_service(
             GetPosition, f'{self.node_name}/get_position', self.get_position_callback)
 
@@ -161,9 +173,13 @@ class LTS300ServiceNode(Node):
             response.success = False
             response.error_message = "Device not connected"
             return response
+        if not self.check_other_axis_position():
+            response.success = False
+            response.error_message = f"Moving not possible\n{self.other_axis_name} is not Homed"
+            return response
 
         try:
-            target_position = request.axis_position  
+            target_position = request.axis_position
             self.get_logger().info(f'Moving to position: {target_position} mm')
 
             # Ensure the device is enabled and settings are initialized
@@ -176,7 +192,6 @@ class LTS300ServiceNode(Node):
             if not self.device.IsEnabled:
                 self.device.EnableDevice()
                 time.sleep(0.5)  # Wait for device to enable
-
 
             decimal_position = Decimal(target_position)
 
@@ -199,7 +214,10 @@ class LTS300ServiceNode(Node):
             response.success = False
             response.error_message = "Device not connected"
             return response
-
+        if not self.check_other_axis_position():
+            response.success = False
+            response.error_message = f"Moving not possible\n{self.other_axis_name} is not Homed"
+            return response
         try:
             relative_position = request.axis_position
             target_position = self.position + relative_position
@@ -215,7 +233,6 @@ class LTS300ServiceNode(Node):
             if not self.device.IsEnabled:
                 self.device.EnableDevice()
                 time.sleep(0.5)  # Wait for device to enable
-
 
             decimal_position = Decimal(target_position)
 
@@ -276,7 +293,7 @@ class LTS300ServiceNode(Node):
             response.error_message = f"Error: {str(e)}"
         finally:
             return response
-    
+
     def get_position_callback(self, request, response):
         if not self.connected:
             response.axis_position = 0.0
@@ -291,7 +308,8 @@ class LTS300ServiceNode(Node):
             self.get_logger().info(type(device_info))
             response.error_message = "Successfully retrieved position"
             response.success = True
-            self.get_logger().info(f'Current position: {response.axis_position} mm')
+            self.get_logger().info(
+                f'Current position: {response.axis_position} mm')
         except Exception as e:
             self.get_logger().error(f'Error getting position: {e}')
             response.success = False
@@ -299,6 +317,7 @@ class LTS300ServiceNode(Node):
             response.error_message = f"Error: {str(e)}"
 
         return response
+
     def get_set_homing_params_callback(self, request, response):
         if not self.connected:
             response.success = False
@@ -308,7 +327,7 @@ class LTS300ServiceNode(Node):
         try:
             # Get current homing parameters
             home_params = self.device.GetHomingParams()
-            
+
             # If a new velocity is provided, set it
             if request.new_velocity > 0:
                 home_params.Velocity = Decimal(request.new_velocity)
@@ -324,11 +343,13 @@ class LTS300ServiceNode(Node):
             response.error_message = "Set Homing Parameters Successfully"
 
         except Exception as e:
-            self.get_logger().error(f'Error getting/setting homing parameters: {e}')
+            self.get_logger().error(
+                f'Error getting/setting homing parameters: {e}')
             response.success = False
             response.error_message = f"Error: {str(e)}"
 
         return response
+
     def get_set_velocity_params_callback(self, request, response):
         if not self.connected:
             response.success = False
@@ -346,9 +367,11 @@ class LTS300ServiceNode(Node):
                 # Check if new parameters are provided and set them
                 if request.new_max_velocity > 0 or request.new_acceleration > 0:
                     if request.new_max_velocity > 0 and request.new_max_velocity < 10:
-                        vel_params.MaxVelocity = Decimal(request.new_max_velocity)
+                        vel_params.MaxVelocity = Decimal(
+                            request.new_max_velocity)
                     if request.new_acceleration > 0 and request.new_acceleration < 3:
-                        vel_params.Acceleration = Decimal(request.new_acceleration)
+                        vel_params.Acceleration = Decimal(
+                            request.new_acceleration)
                     self.device.SetVelocityParams(vel_params)
 
                 # Get the (possibly updated) velocity parameters
@@ -361,7 +384,8 @@ class LTS300ServiceNode(Node):
             response.error_message = "Successfully set velocity parameters"
 
         except Exception as e:
-            self.get_logger().error(f'Error getting/setting velocity parameters: {e}')
+            self.get_logger().error(
+                f'Error getting/setting velocity parameters: {e}')
             response.success = False
             response.error_message = f"Error: {str(e)}"
 
@@ -371,23 +395,84 @@ class LTS300ServiceNode(Node):
     def shutdown(self):
         """
         Properly shutdown the device connection.
-        
+
         This ensures the device is left in a good state and resources are released.
         """
         if self.connected and self.device:
             try:
                 # Stop polling for status updates
                 self.device.StopPolling()
-                
+
                 # Disconnect from the device
                 # False parameter means don't wait for responses
                 self.device.Disconnect(False)
-                
+
                 # Update connection state
                 self.connected = False
                 self.get_logger().info('Device disconnected')
             except Exception as e:
                 self.get_logger().error(f'Error during shutdown: {e}')
+
+    def setup_clients(self):
+
+        # Richtet Clients für die andere Achse ein (X oder Z).
+        # Die Z-Achse fragt die Position der X-Achse ab und umgekehrt.
+
+        # Bestimme, welche Achse dieser Node repräsentiert
+        is_z_axis = 'z_axis' in self.node_name.lower()
+
+        # Konfiguriere den Client für die jeweils andere Achse
+        if is_z_axis:
+            # Wenn dies die Z-Achse ist, verbinde mit der X-Achse
+            other_axis_name = 'lts300_camera_x_axis'
+            self.get_logger().info(
+                f'Z-Achse: Erstelle Client für X-Achse: {other_axis_name}')
+        else:
+            # Wenn dies die X-Achse ist, verbinde mit der Z-Achse
+            other_axis_name = 'lts300_z_axis'
+            self.get_logger().info(
+                f'X-Achse: Erstelle Client für Z-Achse: {other_axis_name}')
+
+        # Initialisiere das Dictionary für den Client
+        self.other_axis_clients = {}
+
+        # Erstelle den Client für die andere Achse
+        client = self.create_client(
+            GetPosition, f'{other_axis_name}/get_position')
+        self.other_axis_clients[other_axis_name] = client
+
+        # Warte auf die Verfügbarkeit des Services
+        ready = client.wait_for_service(timeout_sec=5.0)
+        if not ready:
+            self.get_logger().warning(
+                f'Service für {other_axis_name} nicht verfügbar')
+        else:
+            self.get_logger().info(
+                f'Verbindung zu {other_axis_name} hergestellt')
+
+    def check_other_axis_position(self):
+        for axis_name, client in self.other_axis_clients.items():
+            request = GetPosition.Request()
+            future = client.call_async(request)
+            rclpy.spin_until_future_complete(self, future)
+
+            if future.result() is not None:
+                response = future.result()
+                if response.success:
+                    if abs(response.axis_position) > 0.001:  # Toleranz für Rundungsfehler
+                        self.get_logger().error(
+                            f'{axis_name} ist nicht gehomed (Position: {response.axis_position})')
+                        return False
+                else:
+                    self.get_logger().error(
+                        f'Fehler beim Abrufen der Position von {axis_name}: {response.error_message}')
+                    return False
+            else:
+                self.get_logger().error(
+                    f'Service-Aufruf für {axis_name} fehlgeschlagen')
+                return False
+
+        return True  # Alle überprüften Achsen sind gehomed
 
 
 def main(args=None):
@@ -408,17 +493,19 @@ def main(args=None):
                 node.is_moving = False
                 node.get_logger().info('Homing completed successfully')
             except Exception as e:
-                node.get_logger().error(f'Error during homing before shutdown: {e}')
+                node.get_logger().error(
+                    f'Error during homing before shutdown: {e}')
             finally:
                 try:
                     node.shutdown()
                 except Exception as e:
-                    node.get_logger().error(f'Error during device shutdown: {e}')
+                    node.get_logger().error(
+                        f'Error during device shutdown: {e}')
         node.destroy_node()
 
         if rclpy.ok():
             rclpy.shutdown()
 
+
 if __name__ == "__main__":
     main()
-
