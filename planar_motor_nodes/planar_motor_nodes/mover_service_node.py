@@ -223,9 +223,9 @@ class MoverServiceNode(Node):
                                      self.velocity_acceleration_standard_params['xy_max_accel']
                                      )
 
-            # Wait until the target position is reached within tolerance
-            while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
-                time.sleep(self.xy_tolerance/10)
+            # # Wait until the target position is reached within tolerance
+            # while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
+            #     time.sleep(self.xy_tolerance/10)
 
             response.finished = True
 
