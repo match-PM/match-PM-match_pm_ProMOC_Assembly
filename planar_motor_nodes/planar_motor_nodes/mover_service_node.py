@@ -84,7 +84,7 @@ class MoverServiceNode(Node):
         self.declare_parameter('y_max', 0.180)
         self.declare_parameter('z_min', 0.000)
         self.declare_parameter('z_max', 0.004)
-        
+
         # Get parameter values
         self.x_min = self.get_parameter('x_min').value
         self.x_max = self.get_parameter('x_max').value
@@ -224,10 +224,14 @@ class MoverServiceNode(Node):
                                      )
 
             # Wait until the target position is reached within tolerance
-            while not self.check_position_reached(target_position, self.get_current_position(), self.xy_tolerance):
-                time.sleep(self.xy_tolerance/10)
+            position_reached = self.check_position_reached(
+                target_position,
+                self.get_current_position(),
+                self.xy_tolerance,
+                max_wait_time=2.0
+            )
 
-            response.finished = True
+            response.finished = position_reached
 
         except ValueError as e:
             self.get_logger().error(f"Invalid parameter value: {e}")
@@ -346,10 +350,14 @@ class MoverServiceNode(Node):
                     self.velocity_acceleration_standard_params['rz_vel']
                 )
             # Wait until the target position is reached within tolerance
-            while not self.check_position_reached(target_position, self.get_current_position()):
-                time.sleep(0.01)
+            position_reached = self.check_position_reached(
+                target_position,
+                current_position,
+                self.six_d_tolerance,
+                max_wait_time=2.0
+            )
 
-            response.finished = True
+            response.finished = position_reached
 
         except ValueError as e:
             self.get_logger().error(f"Invalid parameter value: {e}")
@@ -418,29 +426,44 @@ class MoverServiceNode(Node):
             self.get_logger().error("Error: xbot_data_list is empty")
             return [0, 0, 0, 0, 0, 0]
 
-    def check_position_reached(self, target_position: list, current_position: list, tolerance: float):
-        def check_position_reached(self, target_position: list, current_position: list, tolerance: float) -> bool:
-            """
-            Check if the current position has reached the target position within a specified tolerance.
+    def check_position_reached(self, target_position: list, current_position: list, tolerance: float = 0.1, max_wait_time: float = 2.0) -> bool:
+        """
+        Check if the current position has reached the target position within a specified tolerance.
+        Optionally wait until the position is reached or timeout occurs.
 
-            This function compares each component of the target position with the corresponding
-            component of the current position. If any component differs by more than the specified
-            tolerance, the function returns False. Otherwise, it returns True.
+        Parameters:
+        target_position (list): A list of float values representing the target position.
+        current_position (list): A list of float values representing the current position.
+        tolerance (float): The maximum allowed difference between corresponding components
+                        of the target and current positions.
+        wait (bool): If True, wait until position is reached or timeout occurs.
+        max_wait_time (float): Maximum time to wait in seconds.
+        check_interval (float): Time between position checks in seconds.
 
-            Parameters:
-            target_position (list): A list of float values representing the target position.
-            current_position (list): A list of float values representing the current position.
-            tolerance (float): The maximum allowed difference between corresponding components
-                               of the target and current positions.
-
-            Returns:
-            bool: True if all components of the current position are within the specified tolerance
-                  of the corresponding components in the target position, False otherwise.
-            """
-            for i in range(len(target_position)):
+        Returns:
+        bool: True if all components of the current position are within the specified tolerance
+            of the corresponding components in the target position, False otherwise.
+        """
+        # Function to check if position is within tolerance
+        def is_within_tolerance():
+            for i in range(min(len(target_position), len(current_position))):
                 if abs(target_position[i] - current_position[i]) > tolerance:
                     return False
             return True
+
+        # Wait until position is reached or timeout
+        start_time = time.time()
+        while not is_within_tolerance():
+            if time.time() - start_time > max_wait_time:
+                self.get_logger().warning(
+                    f"Timeout erreicht! Zielposition möglicherweise nicht erreichbar: {target_position}")
+                return False
+
+            time.sleep(check_interval=0.1)  # Check every 0.1 seconds
+            # Update current position
+            current_position = self.get_current_position()
+
+        return True
 
     def destroy_node(self):
         self.get_logger().info("Shutting down MoverServiceNode")

@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "/home/pmlab_mover/Documents/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/promoc_assembly_interfaces",
+    "cmake.sourceDirectory": "/home/c-sternberg/Dokumente/promoc_ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/promoc_assembly_interfaces",
     "python.autoComplete.extraPaths": [
         "/home/promoc/promoc_ws/build/thorlabs_nodes",
         "/home/promoc/promoc_ws/install/thorlabs_nodes/lib/python3.12/site-packages",

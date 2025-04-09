@@ -48,32 +48,25 @@ else:
 class LTS300ServiceNode(Node):
     def __init__(self):
         """
-        Initialize the LTS300ServiceNode.
-
-        This constructor initializes a ROS2 node for controlling a Thorlabs LTS300 linear stage.
-        It sets up the node parameters, establishes services and clients, connects to the 
-        physical device (or simulation), and logs the initialization status.
-
-        Parameters:
-            None
-
-        Returns:
-            None
+        Initialize the LTS300ServiceNode with improved service handling.
         """
-
         # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
         super().__init__('lts300_service_node')
 
         # Initialisieren Sie die Kernparameter und die Geräteverbindung
         self.initialize_parameters()
 
-        # Richten Sie ROS2-Dienste ein
-        self.setup_services()
-
-        self.setup_clients()
+        # Flag für Client-Verbindung
+        self.client_connected = False
 
         # Verbinden Sie sich mit dem physischen LTS300-Gerät
         self.connect()
+
+        # Richten Sie ROS2-Dienste ein
+        self.setup_services()
+
+        # Richten Sie Clients für andere Achsen ein
+        self.setup_clients()
 
         # Protokollieren Sie den Initialisierungsstatus
         if self.connected:
@@ -81,8 +74,8 @@ class LTS300ServiceNode(Node):
         else:
             self.get_logger().error(
                 f'Fehler bei der Initialisierung von {self.node_name}')
-
     # Initialization functions
+
     def initialize_parameters(self):
         """
         Initialize the node parameters and state variables.
@@ -483,14 +476,14 @@ class LTS300ServiceNode(Node):
         # Konfiguriere den Client für die jeweils andere Achse
         if is_z_axis:
             # Wenn dies die Z-Achse ist, verbinde mit der X-Achse
-            other_axis_name = 'lts300_camera_x_axis'
+            self.other_axis_name = 'lts300_camera_x_axis'
             self.get_logger().info(
-                f'Z-Achse: Erstelle Client für X-Achse: {other_axis_name}')
+                f'Z-Achse: Erstelle Client für X-Achse: {self.other_axis_name}')
         else:
             # Wenn dies die X-Achse ist, verbinde mit der Z-Achse
             other_axis_name = 'lts300_z_axis'
             self.get_logger().info(
-                f'X-Achse: Erstelle Client für Z-Achse: {other_axis_name}')
+                f'X-Achse: Erstelle Client für Z-Achse: {self.other_axis_name}')
 
         # Initialisiere das Dictionary für den Client
         self.other_axis_clients = {}
@@ -500,36 +493,94 @@ class LTS300ServiceNode(Node):
             GetPosition, f'{other_axis_name}/get_position')
         self.other_axis_clients[other_axis_name] = client
 
-        # Warte auf die Verfügbarkeit des Services
-        ready = client.wait_for_service(timeout_sec=5.0)
-        if not ready:
-            self.get_logger().warning(
-                f'Service für {other_axis_name} nicht verfügbar')
-        else:
-            self.get_logger().info(
-                f'Verbindung zu {other_axis_name} hergestellt')
+        # Starte einen Timer, der regelmäßig versucht, die Verbindung herzustellen
+        self.client_check_timer = self.create_timer(
+            5.0, self.check_client_connection)
+
+    #    Flag, um zu verfolgen, ob die Verbindung hergestellt wurde
+        self.client_connected = False
+
+    def check_client_connection(self):
+        """
+        Überprüft periodisch die Verbindung zum anderen Achsen-Service.
+        """
+        if self.client_connected:
+            # Wenn bereits verbunden, Timer stoppen
+            self.client_check_timer.cancel()
+            return
+
+        client = self.other_axis_clients.get(self.other_axis_name)
+        if client:
+            ready = client.wait_for_service(timeout_sec=1.0)
+            if ready:
+                self.get_logger().info(
+                    f'Verbindung zu {self.other_axis_name} hergestellt')
+                self.client_connected = True
+                # Timer stoppen, da Verbindung hergestellt
+                self.client_check_timer.cancel()
+            else:
+                self.get_logger().warning(
+                    f'Service für {self.other_axis_name} noch nicht verfügbar, versuche erneut...')
 
     def check_other_axis_position(self):
-        for axis_name, client in self.other_axis_clients.items():
-            request = GetPosition.Request()
-            future = client.call_async(request)
-            rclpy.spin_until_future_complete(self, future)
+        """
+        Überprüft die Position der anderen Achse und implementiert Fehlerbehandlung.
 
-            if future.result() is not None:
-                response = future.result()
-                if response.success:
-                    if abs(response.axis_position) > 0.001:  # Toleranz für Rundungsfehler
+        Returns:
+            bool: True, wenn die andere Achse gehomed ist oder wenn der Service nicht 
+                verfügbar ist (um Blockaden zu vermeiden), False sonst.
+        """
+        # Wenn keine Verbindung hergestellt wurde, erlaube die Bewegung trotzdem
+        if not self.client_connected:
+            self.get_logger().warning(
+                f'Keine Verbindung zu {self.other_axis_name}, erlaube Bewegung trotzdem')
+            return True
+
+        for axis_name, client in self.other_axis_clients.items():
+            try:
+                request = GetPosition.Request()
+                # Kürzeres Timeout für den Service-Aufruf
+                future = client.call_async(request)
+
+                # Warte maximal 2 Sekunden auf eine Antwort
+                timeout_sec = 2.0
+                start_time = time.time()
+                while (time.time() - start_time) < timeout_sec and not future.done():
+                    rclpy.spin_once(self, timeout_sec=0.1)
+
+                if not future.done():
+                    self.get_logger().error(
+                        f'Timeout beim Warten auf Antwort von {axis_name}')
+                    # Erlaube die Bewegung trotz Timeout
+                    return True
+
+                if future.result() is not None:
+                    response = future.result()
+                    if response.success:
+                        if abs(response.axis_position) > 0.001:  # Toleranz für Rundungsfehler
+                            self.get_logger().error(
+                                f'{axis_name} ist nicht gehomed (Position: {response.axis_position})')
+                            return False
+                        else:
+                            self.get_logger().info(
+                                f'{axis_name} ist gehomed (Position: {response.axis_position})')
+                            return True
+                    else:
                         self.get_logger().error(
-                            f'{axis_name} ist nicht gehomed (Position: {response.axis_position})')
-                        return False
+                            f'Fehler beim Abrufen der Position von {axis_name}: {response.error_message}')
+                        # Erlaube die Bewegung trotz Fehler
+                        return True
                 else:
                     self.get_logger().error(
-                        f'Fehler beim Abrufen der Position von {axis_name}: {response.error_message}')
-                    return False
-            else:
+                        f'Service-Aufruf für {axis_name} fehlgeschlagen')
+                    # Erlaube die Bewegung trotz Fehler
+                    return True
+
+            except Exception as e:
                 self.get_logger().error(
-                    f'Service-Aufruf für {axis_name} fehlgeschlagen')
-                return False
+                    f'Unerwarteter Fehler bei der Überprüfung von {axis_name}: {e}')
+                # Erlaube die Bewegung trotz Fehler
+                return True
 
         return True  # Alle überprüften Achsen sind gehomed
 
