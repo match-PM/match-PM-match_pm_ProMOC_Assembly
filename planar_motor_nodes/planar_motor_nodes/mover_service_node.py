@@ -354,7 +354,7 @@ class MoverServiceNode(Node):
                 target_position,
                 current_position,
                 self.six_d_tolerance,
-                max_wait_time=2.0
+                max_wait_time=1.0
             )
 
             response.finished = position_reached
