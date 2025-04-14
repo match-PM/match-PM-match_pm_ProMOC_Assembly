@@ -96,15 +96,22 @@ class LTS300ServiceNode(Node):
         # default value as string
         self.declare_parameter('serial_number', '45318394')
         self.declare_parameter('node_name', 'lts300_z_axis')
+        self.declare_parameter('number_of_axes', 1)
         # Declare the serial number parameter with a default value
 
         self.serial_no = self.get_parameter('serial_number').value
         self.node_name = self.get_parameter('node_name').value
+        self.number_of_axes = int(self.get_parameter('number_of_axes').value)
 
         self.simulation_mode = platform.system() != "Windows"
         # Initialize connection state variables
         self.connected = False  # Flag to track connection status
         self.device = None      # Will hold the device object when connected
+        if self.serial_no == '45318394' or 'z_axis' in self.node_name.lower():
+            self.other_axis_name = 'lts300_camera_x_axis'
+        else:
+            self.other_axis_name = 'lts300_z_axis'
+
         # Additional state variables could be added here (position, status, etc.)
 
     def connect(self):
@@ -351,7 +358,7 @@ class LTS300ServiceNode(Node):
 
     def get_position_callback(self, request, response):
         if not self.connected:
-            response.axis_position = 0.0
+            response.axis_position = -1.0
             response.success = False
             response.error_message = "Device not connected"
             return response
@@ -359,8 +366,8 @@ class LTS300ServiceNode(Node):
         try:
             # Get the current position from the device
             response.axis_position = self.position
-            device_info = self.device.TargetPosition()
-            self.get_logger().info(type(device_info))
+            #   device_info = self.device.TargetPosition()
+            #   self.get_logger().info(type(device_info))
             response.error_message = "Successfully retrieved position"
             response.success = True
             self.get_logger().info(
@@ -368,7 +375,7 @@ class LTS300ServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error getting position: {e}')
             response.success = False
-            response.axis_position = 0.0
+            response.axis_position = -1.0
             response.error_message = f"Error: {str(e)}"
 
         return response
@@ -470,31 +477,21 @@ class LTS300ServiceNode(Node):
 
     def setup_clients(self):
 
+         # If there's only one axis, skip client setup
+        if self.number_of_axes == 1:
+            self.get_logger().info('Single axis setup. Skipping client setup.')
+            return
+
         # Richtet Clients für die andere Achse ein (X oder Z).
         # Die Z-Achse fragt die Position der X-Achse ab und umgekehrt.
-
-        # Bestimme, welche Achse dieser Node repräsentiert
-        is_z_axis = 'z_axis' in self.node_name.lower()
-
-        # Konfiguriere den Client für die jeweils andere Achse
-        if is_z_axis:
-            # Wenn dies die Z-Achse ist, verbinde mit der X-Achse
-            self.other_axis_name = 'lts300_camera_x_axis'
-            self.get_logger().info(
-                f'Z-Achse: Erstelle Client für X-Achse: {self.other_axis_name}')
-        else:
-            # Wenn dies die X-Achse ist, verbinde mit der Z-Achse
-            other_axis_name = 'lts300_z_axis'
-            self.get_logger().info(
-                f'X-Achse: Erstelle Client für Z-Achse: {self.other_axis_name}')
-
+        
         # Initialisiere das Dictionary für den Client
         self.other_axis_clients = {}
 
         # Erstelle den Client für die andere Achse
         client = self.create_client(
-            GetPosition, f'{other_axis_name}/get_position')
-        self.other_axis_clients[other_axis_name] = client
+            GetPosition, f'{self.other_axis_name}/get_position')
+        self.other_axis_clients[self.other_axis_name] = client
 
         # Starte einen Timer, der regelmäßig versucht, die Verbindung herzustellen
         self.client_check_timer = self.create_timer(
@@ -507,6 +504,9 @@ class LTS300ServiceNode(Node):
         """
         Überprüft periodisch die Verbindung zum anderen Achsen-Service.
         """
+        # If there's only one axis, always return True
+        if self.number_of_axes == 1:
+            return True
         if self.client_connected:
             # Wenn bereits verbunden, Timer stoppen
             self.client_check_timer.cancel()
@@ -523,7 +523,7 @@ class LTS300ServiceNode(Node):
                 self.client_check_timer.cancel()
             else:
                 self.get_logger().warning(
-                    f'Service für {self.other_axis_name} noch nicht verfügbar, versuche erneut...')
+                    f'Service for {self.other_axis_name} not aviable, trying again...')
 
     def check_other_axis_position(self):
         """
@@ -534,10 +534,10 @@ class LTS300ServiceNode(Node):
                 verfügbar ist (um Blockaden zu vermeiden), False sonst.
         """
         # Wenn keine Verbindung hergestellt wurde, erlaube die Bewegung trotzdem
-        if not self.client_connected:
+        if not self.client_connected & self.number_of_axes > 1:
             self.get_logger().warning(
-                f'Keine Verbindung zu {self.other_axis_name}, erlaube Bewegung trotzdem')
-            return True
+                f'No Connection to {self.other_axis_name},no movement possible ')
+            return False
 
         for axis_name, client in self.other_axis_clients.items():
             try:

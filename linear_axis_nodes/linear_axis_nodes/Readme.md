@@ -44,22 +44,18 @@ Setup Instructions for Windows
 2. Developer Command Prompt:
    - Click on the terminal icon at the top and choose the "Developer Prompt for VS2019".
 
-3. Source ROS 2 Installation:
+3. Source ROS 2 Installation & Workspace:
    ```bash
    call C:\dev\ros2_jazzy\setup.bat
-   ```
-
-4. Source Your Workspace:
-   ```bash
    call C:\Users\admin\promoc_ros2_ws\install\setup.bat
    ```
 
-5. Navigate to Workspace:
+4. Navigate to Workspace:
    ```bash
    cd C:\Users\admin\promoc_ros2_ws
    ```
 
-6. Build the Workspace:
+5. Build the Workspace:
    ```bash
    colcon build --merge-install
    ```
@@ -68,7 +64,7 @@ Setup Instructions for Windows
    colcon build --merge-install --event-handlers console_direct+
    ```
 
-7. Run the Node:
+6. Run the Node:
    ```bash
    ros2 run linear_axis_nodes lts300_service_node
    ```
