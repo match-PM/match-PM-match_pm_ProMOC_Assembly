@@ -79,13 +79,12 @@ def create_ssh_command(remote_user, remote_host, ros_domain_id, executable, seri
             f'call C:\\\\dev\\\\ros2_jazzy\\\\setup.bat && '
             f'call C:\\\\Users\\\\admin\\\\promoc_ros2_ws\\\\install\\\\setup.bat && '
             f'set ROS_DOMAIN_ID={ros_domain_id} && '
-            f'set RMW_IMPLEMENTATION=rmw_cyclonedds_cpp && '
-            f'set CYCLONEDDS_URI=file:///C:/Users/admin/cyclonedds.xml && '
             f'ros2 run linear_axis_nodes {executable} '
             f'--ros-args -p serial_number:=\\"{serial_number}\\" '
             f'-p node_name:={node_name} '
             f'-r __ns:=/{namespace}"'
         ]
+        
     except Exception as e:
         print(f"Fehler beim Erstellen des SSH-Befehls: {e}")
         return None
@@ -114,7 +113,7 @@ def generate_launch_description():
                 os.path.abspath(__file__)) + ':' + os.environ.get('PYTHONPATH', '')),
             SetEnvironmentVariable('ROS_DOMAIN_ID', ros_domain_id),
             SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'),
-            SetEnvironmentVariable('CYCLONEDDS_URI', f'file://{os.path.expanduser("~")}/.ros2/cyclonedds.xml'),
+            SetEnvironmentVariable('CYCLONEDDS_URI', f'file://{os.path.expanduser("~/Dokumente/cyclonedds_config/cyclonedds.xml")}'),
 
             # Start the mover_service_node
             Node(

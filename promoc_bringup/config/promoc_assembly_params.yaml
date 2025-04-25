@@ -21,7 +21,7 @@ mover_node:
 
 remote_connection:
   user: 'admin'
-  host: '10.145.4.63'
+  host: '10.145.4.39'
   ros_domain_id: '13'
 
 namespace: 'promoc_assembly'
