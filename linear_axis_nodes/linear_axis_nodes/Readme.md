@@ -8,27 +8,22 @@ markdown
 Ensure that CycloneDDS is used on both Windows and Ubuntu platforms. Below is a sample XML configuration file for CycloneDDS:
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
     <Domain id="any">
         <General>
-            <Interfaces>
-                <NetworkInterface address="YOUR_IP"/>
-            </Interfaces>
-            <AllowMulticast>default</AllowMulticast>
+            <NetworkInterfaceAddress>auto</NetworkInterfaceAddress>
+            <AllowMulticast>true</AllowMulticast>
             <MaxMessageSize>65500B</MaxMessageSize>
             <FragmentSize>4000B</FragmentSize>
         </General>
         <Discovery>
-            <Peers>
-                <Peer address="YOUR_IP"/>
-                <Peer address="OTHER_IP"/>
-            </Peers>
             <ParticipantIndex>auto</ParticipantIndex>
             <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
         </Discovery>
         <Tracing>
-            <Verbosity>warning</Verbosity>
+            <Verbosity>config</Verbosity>
             <OutputFile>stdout</OutputFile>
         </Tracing>
     </Domain>
