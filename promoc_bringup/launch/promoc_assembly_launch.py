@@ -165,7 +165,8 @@ def generate_launch_description():
         return LaunchDescription([])
 
 
-# TODO 
+# TODO
+    # es gibt probleme mit der kamerachse in kombination mit der z achse da kinesis nicht zeitgleich beide laden will
     # Node für die Kamerachse ready machen
     # Code aufräumen
     
