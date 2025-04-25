@@ -21,14 +21,16 @@ from rclpy.node import Node
 # Ensure the current script's directory is in the Python path to allow local imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import pmclib or fallback to mock_pmclib if unavailable
-try:
-    from pmclib import system_commands as sys           # type: ignore
-    from pmclib import xbot_commands as bot             # type: ignore
-    from pmclib import pmc_types                        # type: ignore
+    # Try to import from standard pmclib module
+try: 
+    from pmclib import system_commands as sys_cmd
+    from pmclib import xbot_commands as bot
+    from pmclib import pmc_types
+    print("Successfully imported modules from standard pmclib")
 except ImportError as e:
+    #Fall back to Mock_implementation
     print(f"Using mock pmclib due to import error: {e}")
-    from mock_pmclib import system_commands as sys
+    from mock_pmclib import system_commands as sys_cmd
     from mock_pmclib import xbot_commands as bot
     from mock_pmclib import pmc_types
 
@@ -64,6 +66,7 @@ class MoverServiceNode(Node):
     def initialize_parameters(self):
         # Initialize core parameters related to XBot and motion tolerances."""
         self.xy_tolerance = 0.1  # Tolerance for position in meters
+        self.six_d_tolerance = 0.1  # Tolerance for position in meters
 
         self.velocity_acceleration_params = {}
         self.velocity_acceleration_standard_params = {
@@ -126,7 +129,18 @@ class MoverServiceNode(Node):
         )
 
     def setup_timers(self):
-        """Start timers to periodically publish XBot position."""
+        """
+        Set up periodic timers for the node's recurring tasks.
+        
+        This function initializes timers that trigger callback functions at specified intervals.
+        Currently, it creates a timer that publishes the XBot's position information every 0.1 seconds.
+        
+        Parameters:
+            None
+            
+        Returns:
+            None
+        """
         self.xbot_position_timer = self.create_timer(
             0.1, self.xbot_postition_publisher)
 
@@ -135,7 +149,7 @@ class MoverServiceNode(Node):
         self.get_logger().info("Connecting to PMC...")
         success = False
         while not success:
-            success = sys.connect_to_pmc("192.168.10.100")
+            success = sys_cmd.connect_to_pmc("192.168.10.100")
         self.get_logger().info("Connected")
         bot.activate_xbots()
         self.get_logger().info("XBot Activated")
@@ -430,16 +444,14 @@ class MoverServiceNode(Node):
         """
         Check if the current position has reached the target position within a specified tolerance.
         Optionally wait until the position is reached or timeout occurs.
-
+    
         Parameters:
         target_position (list): A list of float values representing the target position.
         current_position (list): A list of float values representing the current position.
         tolerance (float): The maximum allowed difference between corresponding components
                         of the target and current positions.
-        wait (bool): If True, wait until position is reached or timeout occurs.
         max_wait_time (float): Maximum time to wait in seconds.
-        check_interval (float): Time between position checks in seconds.
-
+    
         Returns:
         bool: True if all components of the current position are within the specified tolerance
             of the corresponding components in the target position, False otherwise.
@@ -450,21 +462,23 @@ class MoverServiceNode(Node):
                 if abs(target_position[i] - current_position[i]) > tolerance:
                     return False
             return True
-
+    
         # Wait until position is reached or timeout
         start_time = time.time()
+        check_interval = 0.1  # Check every 0.1 seconds
+        
         while not is_within_tolerance():
             if time.time() - start_time > max_wait_time:
                 self.get_logger().warning(
                     f"Timeout erreicht! Zielposition möglicherweise nicht erreichbar: {target_position}")
                 return False
-
-            time.sleep(check_interval=0.1)  # Check every 0.1 seconds
+    
+            time.sleep(check_interval)  # Fixed: removed keyword argument
             # Update current position
             current_position = self.get_current_position()
-
+    
         return True
-
+        
     def destroy_node(self):
         self.get_logger().info("Shutting down MoverServiceNode")
         try:
