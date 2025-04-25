@@ -4,11 +4,11 @@ lts300_devices:
     serial_number: '45318394'
     node_name: 'lts300_z_axis'
     other_axes: [lts300_camera_x_axis]
-  #device2:
-    #executable: lts300_service_node 
-    #serial_number: '45318395'
-    #node_name: 'lts300_camera_x_axis'
-    #other_axes: [lts300_z_axis]
+  # device2:
+  #   executable: lts300_service_node 
+  #   serial_number: '45456044'
+  #   node_name: 'lts300_camera_x_axis'
+  #   other_axes: [lts300_z_axis]
     
 mover_node:
   move_area_parameters:

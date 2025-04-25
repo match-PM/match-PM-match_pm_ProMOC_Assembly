@@ -66,7 +66,7 @@ def create_ssh_command(remote_user, remote_host, ros_domain_id, executable, seri
     """Create the SSH Command for the Remote Node."""
     try:
         remote_password = get_password_from_file()
-        
+        remote_cyclonedds_config_path = 'C:\\\\cyclonedds_config\\\\cyclonedds.xml' 
         return [
             'sshpass',
             '-p',
@@ -79,11 +79,13 @@ def create_ssh_command(remote_user, remote_host, ros_domain_id, executable, seri
             f'call C:\\\\dev\\\\ros2_jazzy\\\\setup.bat && '
             f'call C:\\\\Users\\\\admin\\\\promoc_ros2_ws\\\\install\\\\setup.bat && '
             f'set ROS_DOMAIN_ID={ros_domain_id} && '
+            f'set CYCLONEDDS_URI=C:\\\\cyclonedds_config\\\\cyclonedds.xml && ' 
             f'ros2 run linear_axis_nodes {executable} '
             f'--ros-args -p serial_number:=\\"{serial_number}\\" '
             f'-p node_name:={node_name} '
             f'-r __ns:=/{namespace}"'
         ]
+
         
     except Exception as e:
         print(f"Fehler beim Erstellen des SSH-Befehls: {e}")
@@ -163,7 +165,7 @@ def generate_launch_description():
         return LaunchDescription([])
 
 
-# TODO # DDS überarbeiten
+# TODO 
     # Node für die Kamerachse ready machen
     # Code aufräumen
     
