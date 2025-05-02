@@ -64,5 +64,10 @@ Setup Instructions for Windows
    ros2 run linear_axis_nodes lts300_service_node
    ```
 
+
+
+#General Information
+Somtimes there is an error when the connection isnt closed properly so we cant connect to the lts300 anymore if that happens you need to restart the lts300 by turning it on and off
+
 This guide provides a structured approach to setting up and running a ROS 2 node on Windows using CycloneDDS, ensuring proper configuration and execution within your development environment.
 ``

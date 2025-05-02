@@ -182,8 +182,9 @@ class MoverServiceNode(Node):
             msg.rx_pos = float(xbot_data_list[0].rx_pos)
             msg.ry_pos = float(xbot_data_list[0].ry_pos)
             msg.rz_pos = float(xbot_data_list[0].rz_pos)
-        except IndexError:
-            self.get_logger().error("Error: xbot_data_list is empty")
+        except IndexError as e:
+            pass
+            #self.get_logger().error("Error: xbot_data_list is empty")
 
         self.xbot_pos_publisher_.publish(msg)
 
