@@ -64,10 +64,10 @@ class MoverServiceNode(Node):
     # Initialization functions
 
     def initialize_parameters(self):
+
         # Initialize core parameters related to XBot and motion tolerances."""
         self.xy_tolerance = 0.1  # Tolerance for position in meters
-        self.six_d_tolerance = 0.1  # Tolerance for position in meters
-
+        self.six_d_tolerance = 0.1  # Tolerance for position in meters  
         self.velocity_acceleration_params = {}
         self.velocity_acceleration_standard_params = {
             'xy_vel': 1.00,
@@ -78,7 +78,9 @@ class MoverServiceNode(Node):
             'xy_max_accel': 5.00,
             'z_max_accel': 1.00
         }
-        # Define the Movement Areas
+        
+        self.declare_parameter('node_name', 'mover_node')
+        self.node_name = self.get_parameter('node_name').value  
 
         # Define the Movement Areas as ROS2 parameters with default values
         self.declare_parameter('x_min', 0.055)

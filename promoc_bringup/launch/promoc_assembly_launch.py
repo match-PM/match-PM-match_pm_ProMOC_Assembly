@@ -1,172 +1,112 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import ExecuteProcess
-from launch.actions import SetEnvironmentVariable
 from ament_index_python.packages import get_package_share_directory
 import os
 import yaml
 
-
 def load_yaml_config():
-    """Load the promoc_assembly_params.yaml."""
+    """
+    Load YAML configuration file for ProMOC assembly.
+
+    This function attempts to load a YAML configuration file from a predefined location.
+    If the file is not found in the expected directory, it tries an alternative location.
+    If the file is not found in either location, it raises a FileNotFoundError.
+
+    Returns:
+        dict: A dictionary containing the configuration parameters loaded from the YAML file.
+              Returns None if an error occurs during the loading process.
+
+    Raises:
+        FileNotFoundError: If the configuration file is not found in either of the expected locations.
+        Exception: For any other error that occurs during the file loading or parsing process.
+    """
     try:
-        config_dir = os.path.join(
-            get_package_share_directory('promoc_bringup'), 'config')
+        config_dir = os.path.join(get_package_share_directory('promoc_bringup'), 'config')
         config_file = os.path.join(config_dir, 'promoc_assembly_params.yaml')
 
-        print(f"Suche Konfigurationsdatei in: {config_file}")
-
         if not os.path.exists(config_file):
-            # Versuche, die Datei direkt aus dem Quellverzeichnis zu laden
             src_config_file = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                 'config', 'promoc_assembly_params.yaml')
-            print(f"Konfigurationsdatei nicht im installierten Paket gefunden. Versuche: {src_config_file}")
             
             if os.path.exists(src_config_file):
                 config_file = src_config_file
             else:
-                raise FileNotFoundError(
-                    f"Konfigurationsdatei nicht gefunden: {config_file} oder {src_config_file}")
+                raise FileNotFoundError(f"Configuration file not found: {config_file} or {src_config_file}")
 
-        print(f"Lade Konfigurationsdatei: {config_file}")
         with open(config_file, 'r') as file:
-            config = yaml.safe_load(file)
-
-        # Validiere die Konfiguration
-        if 'lts300_devices' not in config or 'remote_connection' not in config:
-            raise ValueError(
-                "Konfigurationsdatei fehlen erforderliche Abschnitte")
-
-        return config
+            return yaml.safe_load(file)
     except Exception as e:
-        print(f"Fehler beim Laden der Konfiguration: {e}")
+        print(f"Error loading configuration: {e}")
         return None
 
-def get_password_from_file():
-    """Read password from credentials file."""
-    try:
-        credentials_file = os.path.expanduser('~/.ssh_credentials')
-        print(f"Lese SSH-Anmeldeinformationen aus: {credentials_file}")
-        
-        if not os.path.exists(credentials_file):
-            raise FileNotFoundError(f"SSH-Anmeldeinformationsdatei nicht gefunden: {credentials_file}")
-            
-        with open(credentials_file, 'r') as f:
-            remote_password = f.read().strip()
-            if not remote_password:
-                raise ValueError("SSH-Anmeldeinformationsdatei ist leer")
-            return remote_password
-    except Exception as e:
-        print(f'Fehler beim Lesen der SSH-Anmeldeinformationen: {e}')
-        raise RuntimeError(f'Fehler beim Lesen der SSH-Anmeldeinformationen: {e}')
+def create_mover_node(namespace, device_data):
+    move_area_params = device_data.get('move_area_parameters', {})
+    return Node(
+        package=device_data['package'],
+        executable=device_data['executable'],
+        namespace=namespace,
+        name=device_data['node_name'],
+        parameters=[
+            {'node_name': device_data['node_name']},
+            {'x_min': move_area_params.get('x_min', 0.055)},
+            {'x_max': move_area_params.get('x_max', 0.420)},
+            {'y_min': move_area_params.get('y_min', -0.055)},
+            {'y_max': move_area_params.get('y_max', 0.180)},
+            {'z_min': move_area_params.get('z_min', 0.000)},
+            {'z_max': move_area_params.get('z_max', 0.004)},
+        ],
+        output='screen'
+    )
 
-
-def create_ssh_command(remote_user, remote_host, ros_domain_id, executable, serial_number, node_name, namespace):
-    """Create the SSH Command for the Remote Node."""
-    try:
-        remote_password = get_password_from_file()
-        remote_cyclonedds_config_path = 'C:\\\\cyclonedds_config\\\\cyclonedds.xml' 
-        return [
-            'sshpass',
-            '-p',
-            remote_password,
-            'ssh',
-            '-o', 'StrictHostKeyChecking=no',
-            '-t',
-            f"{remote_user}@{remote_host}",
-            f'cmd.exe /c "cd C:\\\\Users\\\\admin\\\\promoc_ros2_ws && '
-            f'call C:\\\\dev\\\\ros2_jazzy\\\\setup.bat && '
-            f'call C:\\\\Users\\\\admin\\\\promoc_ros2_ws\\\\install\\\\setup.bat && '
-            f'set ROS_DOMAIN_ID={ros_domain_id} && '
-            f'set CYCLONEDDS_URI=C:\\\\cyclonedds_config\\\\cyclonedds.xml && ' 
-            f'ros2 run linear_axis_nodes {executable} '
-            f'--ros-args -p serial_number:=\\"{serial_number}\\" '
-            f'-p node_name:={node_name} '
-            f'-r __ns:=/{namespace}"'
-        ]
-
-        
-    except Exception as e:
-        print(f"Fehler beim Erstellen des SSH-Befehls: {e}")
+def create_lts300_node(namespace, device_data, total_devices):
+    required_keys = ['package', 'executable', 'serial_number', 'node_name', 'serial_port']
+    if not all(key in device_data for key in required_keys):
+        print(f"Warning: Missing required parameters for device {device_data.get('node_name', 'unknown')}, skipping...")
         return None
+
+    return Node(
+        package=device_data['package'],
+        executable=device_data['executable'],
+        namespace=namespace,
+        name=device_data['node_name'],
+        parameters=[
+            {'serial_number': device_data['serial_number']},
+            {'serial_port': device_data['serial_port']},
+            {'node_name': device_data['node_name']},
+            {'number_of_axes': total_devices}
+        ],
+        output='screen'
+    )
 
 
 def generate_launch_description():
-    """Generate the launch description for the promoc assembly."""
-    # load the parameters from promoc_assembly_params.yaml
-    config = load_yaml_config()
-    
-    if config is None:
-        print("Fehler: Konfiguration konnte nicht geladen werden.")
-        # Wir müssen eine leere LaunchDescription zurückgeben, um einen Fehler zu vermeiden
+    promoc_assembly_params = load_yaml_config()
+    if promoc_assembly_params is None:
+        print("Error: Configuration could not be loaded.")
         return LaunchDescription([])
-
-    try:
-        # extracte the remote connection parameters
-        remote_user = config['remote_connection']['user']
-        remote_host = config['remote_connection']['host']
-        ros_domain_id = config['remote_connection']['ros_domain_id']
-        namespace = config.get('namespace', 'promoc_assembly')
-        
-        # Create a launch description for the local node
-        ld = LaunchDescription([
-            SetEnvironmentVariable('PYTHONPATH', os.path.dirname(
-                os.path.abspath(__file__)) + ':' + os.environ.get('PYTHONPATH', '')),
-            SetEnvironmentVariable('ROS_DOMAIN_ID', ros_domain_id),
-            SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'),
-            SetEnvironmentVariable('CYCLONEDDS_URI', f'file://{os.path.expanduser("~/Dokumente/cyclonedds_config/cyclonedds.xml")}'),
-
-            # Start the mover_service_node
-            Node(
-                package='planar_motor_nodes',
-                executable='mover_service_node',
-                namespace=namespace,
-                name='mover_service_node',
-                output='screen'
-            )
-        ])
-
-        # Add the amount of LTS300 devices that have parameters in the yaml via remote ssh-access
-        if 'lts300_devices' in config and config['lts300_devices']:
-            for device_name, device_data in config['lts300_devices'].items():
-                try:
-                    # Überprüfe, ob alle erforderlichen Schlüssel für das Gerät vorhanden sind
-                    if 'executable' not in device_data:
-                        print(f"Warnung: 'executable' fehlt für Gerät {device_name}, überspringe...")
-                        continue
-                    if 'serial_number' not in device_data:
-                        print(f"Warnung: 'serial_number' fehlt für Gerät {device_name}, überspringe...")
-                        continue
-                    if 'node_name' not in device_data:
-                        print(f"Warnung: 'node_name' fehlt für Gerät {device_name}, überspringe...")
-                        continue
-                        
-                    ssh_command = create_ssh_command(
-                        remote_user,
-                        remote_host,
-                        ros_domain_id,
-                        device_data['executable'],
-                        device_data['serial_number'],
-                        device_data['node_name'],
-                        namespace
-                    )
-
-                    if ssh_command:
-                        ld.add_action(ExecuteProcess(cmd=ssh_command, output='screen'))
-                except Exception as e:
-                    print(f"Fehler beim Hinzufügen des Geräts {device_name}: {e}")
-        else:
-            print("Warnung: Keine LTS300-Geräte in der Konfiguration gefunden.")
-
-        return ld
-    except Exception as e:
-        print(f"Fehler beim Generieren der Launch-Beschreibung: {e}")
-        return LaunchDescription([])
-
-
-# TODO
-    # es gibt probleme mit der kamerachse in kombination mit der z achse da kinesis nicht zeitgleich beide laden will
-    # Node für die Kamerachse ready machen
-    # Code aufräumen
     
+    print("Loaded configuration:", promoc_assembly_params)
+
+    namespace = promoc_assembly_params.get('namespace', 'promoc_assembly')
+    nodes = []
+
+    
+    mover_data = promoc_assembly_params.get('mover_node', {})
+    if isinstance(mover_data, dict) and all(key in mover_data for key in ['package', 'executable', 'node_name']):
+        mover_node = create_mover_node(namespace, mover_data)
+        nodes.append(mover_node)
+    else:
+        print("Warning: Invalid or missing data for mover node")
+
+    # Create and add LTS300 nodes
+    lts300_devices = promoc_assembly_params.get('lts300_devices', {})
+    for device_name, device_data in lts300_devices.items():
+        lts300_node = create_lts300_node(namespace, device_data, len(lts300_devices))
+        if lts300_node:
+            nodes.append(lts300_node)
+
+    print(f"Total number of LTS300 devices: {len(lts300_devices)}")
+    print(f"Total number of nodes: {len(nodes)}")
+
+    return LaunchDescription(nodes)

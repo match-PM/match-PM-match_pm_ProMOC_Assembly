@@ -1,18 +1,21 @@
 lts300_devices:
   device1:
-    executable: lts300_service_node 
+    package: 'linear_axis_nodes'
+    executable: lts300_service_node_linux
+    serial_port: '/dev/ttyUSB0'
     serial_number: '45407924'
     node_name: 'lts300_z_axis'
-    other_axes: [lts300_camera_x_axis]
-    number_of_axes: 2
   device2:
-    executable: lts300_service_node 
+    package: 'linear_axis_nodes'
+    executable: lts300_service_node_linux 
     serial_number: '45456044'
-    node_name: 'lts300_camera_x_axis'
-    other_axes: [lts300_z_axis]
-    number_of_axes: 2
+    serial_port: '/dev/ttyUSB1'
+    node_name: 'lts300_x_axis'
     
 mover_node:
+  package: 'planar_motor_nodes'
+  executable: mover_service_node
+  node_name: 'mover_node'
   move_area_parameters:
     x_min: 0.055
     x_max: 0.420
@@ -21,10 +24,10 @@ mover_node:
     z_min: 0.000
     z_max: 0.004
 
-remote_connection:
-  user: 'admin'
-  host: '10.145.4.39'
-  ros_domain_id: '13'
+#remote_connection:
+  #user: 'admin'
+  #host: '10.145.4.39'
+  #ros_domain_id: '13'
 
 namespace: 'promoc_assembly'
 

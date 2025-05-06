@@ -1,12 +1,10 @@
 from pylablib.devices import Thorlabs
 import sys
-print(f"Python version: {sys.version}")
-print(f"Python path: {sys.executable}")
-print(f"sys.path: {sys.path}")
+import time
+
 
 try:
     from pylablib.devices import Thorlabs
-    print("Successfully imported Thorlabs from pylablib")
 except ImportError as e:
     print(f"Error importing Thorlabs: {e}")
 
@@ -23,20 +21,25 @@ from rclpy.node import Node  # type:ignore
 
 class LTS300ServiceNode(Node):
     def __init__(self):
-        """
-        Initialize the LTS300ServiceNode with improved service handling.
-        """
-        # Initialisieren Sie den ROS2-Node mit dem konfigurierten Namen
-        super().__init__('lts300_service_node')
+        # Initialisieren Sie den ROS2-Node mit einem temporären Namen
+        super().__init__('lts300_service_node_temp')
 
         # Initialisieren Sie die Kernparameter und die Geräteverbindung
         self.initialize_parameters()
 
-        # Flag für Client-Verbindung
-        self.client_connected = False
-
         # Verbinden Sie sich mit dem physischen LTS300-Gerät
         self.connect()
+
+        # Ändern Sie den Node-Namen nach der Verbindung
+        if self.connected:
+            self.get_logger().info(f'Changing node name to {self.node_name}')
+            self.get_node_names_and_namespaces()  # This is required to update the node name
+            rclpy.shutdown()
+            rclpy.init()
+            super().__init__(self.node_name)
+
+        # Flag für Client-Verbindung
+        self.client_connected = False
 
         # Richten Sie ROS2-Dienste ein
         self.setup_services()
@@ -48,52 +51,42 @@ class LTS300ServiceNode(Node):
         if self.connected:
             self.get_logger().info(f'{self.node_name} initialisiert')
         else:
-            self.get_logger().error(
-                f'Fehler bei der Initialisierung von {self.node_name}')
-    # Initialization functions
-
+            self.get_logger().error(f'Fehler bei der Initialisierung von {self.node_name}')
+    
+    
     def initialize_parameters(self):
-        """
-        Initialize the node parameters and state variables.
+        
+        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.serial_port = self.get_parameter('serial_port').value
 
-        This function declares and retrieves ROS parameters for the node,
-        sets up the simulation mode based on the operating system,
-        and initializes connection state variables.
+        self.simulation_mode = False
+        self.connected = False
+        self.device = None
 
-        Parameters:
-            None
+        # Initialisieren Sie diese Variablen erst nach der Verbindung
+        self.serial_no = None
+        self.axis_type = None
+        self.node_name = None
 
-
-
-
-        Returns:
-            None
-        """
-        # default value as string
-        self.declare_parameter('serial_number', '45407924')
-        self.declare_parameter('node_name', 'lts300_z_axis')
-        self.declare_parameter('number_of_axes', 1)
-        # Declare the serial number parameter with a default value
-
-        self.serial_no = self.get_parameter('serial_number').value
-        self.node_name = self.get_parameter('node_name').value
-        self.number_of_axes = int(self.get_parameter('number_of_axes').value)
-
-        self.simulation_mode = False #platform.system() != "Windows"
-        # Initialize connection state variables
-        self.connected = False  # Flag to track connection status
-        self.device = None      # Will hold the device object when connected
-
-        # Additional state variables could be added here (position, status, etc.)
 
     def connect(self):
         try:
-            self.get_logger().info(
-                f'Connecting to LTS300 (SN: {self.serial_no})...')
-            self.device = Thorlabs.KinesisMotor("/dev/ttyUSB1", scale="m")
+            self.get_logger().info(f'Connecting to LTS300 on port {self.serial_port}...')
+            
+            self.device = Thorlabs.KinesisMotor(self.serial_port, scale="m")
+            
+            # Lesen Sie die Seriennummer aus
+            self.serial_no = self.device.get_device_info()[0]
+            self.get_logger().info(f'Detected serial number: {self.serial_no}')
+            
+            # Bestimmen Sie den Achsentyp
+            self.axis_type = self.determine_axis(self.serial_no)
+            
+            # Setzen Sie den Node-Namen basierend auf dem Achsentyp
+            self.node_name = f'lts300_{self.axis_type}_axis'
+            
+            self.get_logger().info(f'Connected to {self.axis_type.upper()}-axis (SN: {self.serial_no})')
 
-
-            # Set the device connected flag to true
             self.connected = True
 
             # Home the device
@@ -144,16 +137,18 @@ class LTS300ServiceNode(Node):
     def move_absolute_callback(self, request, response):
     
         try:
-            target_position = request.axis_position*409600
+            target_position = request.axis_position
             self.get_logger().info(f'Moving to position: {target_position} mm')
 
-            self.is_moving = True
-            self.device.move_to(target_position)
-            self.is_moving = False
+            
+            self.device.move_to(target_position*409600,scale=False)
+            while self.device.is_moving():
+                time.sleep(0.1)
+            
 
-            self.position = target_position
+            self.position = self.device.get_position()/409600
             response.success = True
-            response.error_message = "Successfully moved to position{target_position} mm"
+            response.error_message = f"Successfully moved to position{self.position} mm"
         except Exception as e:
             self.get_logger().error(f'Error moving to position: {e}')
             response.success = False
@@ -162,7 +157,31 @@ class LTS300ServiceNode(Node):
         return response
 
     def move_relative_callback(self, request, response):
-        pass
+        try:
+            relative_position = request.axis_position * 409600
+            current_position = self.device.get_position()
+            target_position = current_position + relative_position
+            
+            self.get_logger().info(f'Moving relatively by: {relative_position/409600} mm')
+            self.get_logger().info(f'Target position: {target_position/409600} mm')
+
+            
+            self.device.move_by(relative_position)
+            while self.device.is_moving():
+                time.sleep(0.1)
+            
+
+            self.position = self.device.get_position()/409600
+            response.success = True
+            response.error_message = f"Successfully moved to position {self.position/409600} mm"
+        except Exception as e:
+            self.get_logger().error(f'Error moving relatively: {e}')
+            response.success = False
+            response.error_message = f"Error: {str(e)}"
+
+        return response
+
+
 
     def home_callback(self, request, response):
         try:
@@ -170,8 +189,7 @@ class LTS300ServiceNode(Node):
             self.is_moving = True
             self.device.home(force=True)  
             self.is_moving = False
-            self.position = 0.0
-
+    
             response.success = True
             response.error_message = "Homing completed successfully"
         
@@ -195,7 +213,17 @@ class LTS300ServiceNode(Node):
             return response
 
     def get_position_callback(self, request, response):
-       pass
+        try:
+            response.position = self.device.get_position()/409600
+            response.success = True
+            response.error_message = "Successfully retrieved position"
+            return response
+        except Exception as e:
+            response.position=None
+            response.success = False
+            self.get_logger().error(f'Error getting position: {e}')
+            return response 
+        
 
     def get_set_homing_params_callback(self, request, response):
         pass
@@ -211,7 +239,7 @@ class LTS300ServiceNode(Node):
         """
         if self.connected and self.device:
             try:
-                self.device.close(False)
+                self.device.close()
 
                 # Update connection state
                 self.connected = False
@@ -227,6 +255,20 @@ class LTS300ServiceNode(Node):
     def check_other_axis_position(self):
         pass
 
+    def determine_axis(self, serial_number:str):
+    # Definieren Sie hier Ihre Seriennummern für X und Z Achsen
+        x_axis_serials = [45456044] # Seriennummer für X-Achse
+        z_axis_serials = [45407924]  # Seriennummer für Z-Achse
+
+        if serial_number in x_axis_serials:
+            self.get_logger().info(f"Recognized X-axis with serial number: {serial_number}")
+            return 'x'
+        elif serial_number in z_axis_serials:
+            self.get_logger().info(f"Recognized Z-axis with serial number: {serial_number}")
+            return 'z'
+        else:
+            self.get_logger().warning(f"Unknown serial number: {serial_number}. Defaulting to 'unknown' axis.")
+            return 'unknown'
 
 def main(args=None):
     rclpy.init(args=args)
