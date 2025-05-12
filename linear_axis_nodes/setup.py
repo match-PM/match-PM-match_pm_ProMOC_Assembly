@@ -21,7 +21,6 @@ setup(
     entry_points={
         'console_scripts': [
             'lts300_service_node = linear_axis_nodes.lts300_service_node:main',
-            'lts300_service_node_linux = linear_axis_nodes.lts300_service_node_linux:main',
         ],
     },
 )
