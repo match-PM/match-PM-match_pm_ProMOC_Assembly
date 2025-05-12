@@ -1,0 +1,4 @@
+---
+float64 axis_position
+bool success
+string error_message

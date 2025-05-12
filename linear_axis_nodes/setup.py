@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'thorlabs_nodes'
+package_name = 'linear_axis_nodes'
 
 setup(
     name=package_name,
@@ -13,13 +13,14 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='pmlab_mover',
-    maintainer_email='pmlab_mover@todo.todo',
+    maintainer='promoc',
+    maintainer_email='promoc@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'lts300_service_node = linear_axis_nodes.lts300_service_node:main',
         ],
     },
 )
