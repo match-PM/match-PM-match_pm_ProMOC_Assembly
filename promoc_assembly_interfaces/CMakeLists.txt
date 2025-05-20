@@ -41,6 +41,8 @@ set(INTERFACE_FILES
   "srv/linear_axis/GetPosition.srv"
   "srv/linear_axis/GetSetHomingParams.srv"
   "srv/linear_axis/GetSetVelocityParams.srv"
+  "msg/usb_relay/RelayInfo.msg"
+  "srv/usb_relay/SetRelay.srv"
 )
 
 if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
