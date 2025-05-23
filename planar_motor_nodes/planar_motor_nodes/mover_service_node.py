@@ -13,6 +13,7 @@ from promoc_assembly_interfaces.msg import XBotInfo
 import sys
 import os
 import time
+import math
 
 # ROS 2 imports
 import rclpy
@@ -191,6 +192,24 @@ class MoverServiceNode(Node):
         self.xbot_pos_publisher_.publish(msg)
 
     # Callback functions for ROS services
+    def calculate_rz_ry_max(self, mover_width:float,safety_factor:float=0.5,z_value:float=0.001)->float:
+        """
+        Calculate the maximum rz value based on the mover width and a safety factor.
+
+        Parameters:
+        mover_width (float): The width of the mover.
+        safety_factor (float): The safety factor to be applied.
+
+        Returns:
+        float: The calculated maximum rz value.
+        """
+        r = (mover_width / 2) *math.sqrt(2)
+        if z_value <= 0:
+            return 0.0
+        rz_max = math.atan(r / z_value) *safety_factor
+        
+        return rz_max
+    
 
     def callback_linear_motion_si(self, request, response):
         """
@@ -325,12 +344,17 @@ class MoverServiceNode(Node):
 
             # Erstelle Zielposition mit Bereichsprüfung
             target_position = [
-                x_pos_m if request.x_pos != 0 and self.x_min <= x_pos_m <= self.x_max else current_position[
-                    0],
-                y_pos_m if request.y_pos != 0 and self.y_min <= y_pos_m <= self.y_max else current_position[
-                    1],
-                z_pos_m if request.z_pos != 0 and self.z_min <= z_pos_m <= self.z_max else current_position[
-                    2]
+                x_pos_m if request.x_pos != 0 and self.x_min <= x_pos_m <= self.x_max 
+                else current_position[0],
+                y_pos_m if request.y_pos != 0 and self.y_min <= y_pos_m <= self.y_max 
+                else current_position[1],
+                z_pos_m if request.z_pos != 0 and self.z_min <= z_pos_m <= self.z_max 
+                else current_position[2],
+                rx_pos_m if -self.calculate_rz_ry_max(120,0.1,z_pos_m) <= rx_pos_m <= self.calculate_rz_ry_max(120,0.1,z_pos_m)
+                else current_position[3],
+                ry_pos_m if -self.calculate_rz_ry_max(120,0.1,z_pos_m) <= ry_pos_m <= self.calculate_rz_ry_max(120,0.1,z_pos_m)
+                else current_position[4],
+                rz_pos_m
             ]
 
             speed_params = self.velocity_acceleration_params.get(
