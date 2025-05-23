@@ -23,7 +23,7 @@ lts300_devices:
     serial_number: '45407924'
     node_name: 'lts300_z_axis'
     parameters:
-      collision_threshold: 10.0
+      collision_threshold: 200.0
       device_units_per_mm: 409600.0
   
   x_axis:
@@ -33,7 +33,7 @@ lts300_devices:
     serial_number: '45456044'
     node_name: 'lts300_x_axis'
     parameters:
-      collision_threshold: 10.0
+      collision_threshold: 30.0
       device_units_per_mm: 409600.0
 
 # Remote connection settings (commented out for local development)

@@ -330,10 +330,7 @@ class MoverServiceNode(Node):
                 y_pos_m if request.y_pos != 0 and self.y_min <= y_pos_m <= self.y_max else current_position[
                     1],
                 z_pos_m if request.z_pos != 0 and self.z_min <= z_pos_m <= self.z_max else current_position[
-                    2],
-                rx_pos_m if request.rx_pos != 0 else current_position[3],
-                ry_pos_m if request.ry_pos != 0 else current_position[4],
-                rz_pos_m if request.rz_pos != 0 else current_position[5]
+                    2]
             ]
 
             speed_params = self.velocity_acceleration_params.get(

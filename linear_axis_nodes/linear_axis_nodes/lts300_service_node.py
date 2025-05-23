@@ -33,7 +33,7 @@ class LTS300ServiceNode(Node):
         3. Reinitializes the node with the proper name based on the detected axis type
         4. Sets up services, publishers, and subscribers
         
-        The node is first created with a temporary name because the actual node name
+        The node is first created with a temporary name because the actual nod0e name
         depends on the detected axis type (X or Z), which is determined during the
         connection process.
         
@@ -98,7 +98,7 @@ class LTS300ServiceNode(Node):
         self.declare_parameter('x_axis_serial', '45456044')
         self.declare_parameter('z_axis_serial', '45407924')
         self.declare_parameter('device_units_per_mm', 409600.0)
-        self.declare_parameter('collision_threshold', 10.0)
+        self.declare_parameter('collision_threshold', 300.0)
         self.declare_parameter('node_name', 'lts300_x_axis_node')
         self.declare_parameter('namespace', 'promoc_assembly')
         
@@ -334,7 +334,6 @@ class LTS300ServiceNode(Node):
         return response
 
 
-    
 
     def home_callback(self, request, response):
         """
@@ -401,9 +400,6 @@ class LTS300ServiceNode(Node):
             response.error_message = f"Error getting position: {str(e)}"
             return response 
         
-
-    
-
     # Helper functions
     def shutdown(self):
         """
@@ -420,9 +416,6 @@ class LTS300ServiceNode(Node):
                 self.get_logger().info('Device disconnected')
             except Exception as e:
                 self.get_logger().error(f'Error during shutdown: {e}')
-
-
-
 
     def determine_axis(self, serial_number:str):
         """

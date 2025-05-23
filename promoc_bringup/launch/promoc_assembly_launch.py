@@ -65,17 +65,27 @@ def create_lts300_node(namespace, device_data, total_devices):
         print(f"Warning: Missing required parameters for device {device_data.get('node_name', 'unknown')}, skipping...")
         return None
 
+    parameters = [
+        {'serial_number': device_data['serial_number']},
+        {'serial_port': device_data['serial_port']},
+        {'node_name': device_data['node_name']},
+        {'number_of_axes': total_devices}
+    ]
+
+    # Liste der zusätzlichen Parameter, die wir überprüfen wollen
+    additional_params = ['collision_threshold', 'device_units_per_mm']
+
+    # Überprüfen Sie jeden zusätzlichen Parameter
+    for param in additional_params:
+        if param in device_data.get('parameters', {}):
+            parameters.append({param: device_data['parameters'][param]})
+
     return Node(
         package=device_data['package'],
         executable=device_data['executable'],
         namespace=namespace,
         name=device_data['node_name'],
-        parameters=[
-            {'serial_number': device_data['serial_number']},
-            {'serial_port': device_data['serial_port']},
-            {'node_name': device_data['node_name']},
-            {'number_of_axes': total_devices}
-        ],
+        parameters=parameters,
         output='screen'
     )
 
