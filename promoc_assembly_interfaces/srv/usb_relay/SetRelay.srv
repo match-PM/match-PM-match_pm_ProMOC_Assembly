@@ -2,4 +2,4 @@ int32   relay_number
 bool    relay_status
 float64 activation_time
 ---
-bool    activation_status
+bool    success

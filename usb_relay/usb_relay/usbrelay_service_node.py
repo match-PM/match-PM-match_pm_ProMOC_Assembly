@@ -41,7 +41,7 @@ class USBrelayServiceNode(Node):
             False,      # initial status of relay 1
             False,      # initial status of relay 2
             True,       # initial status of relay 3
-            False,      # initial status of relay 4
+            True,      # initial status of relay 4
             False,      # initial status of relay 5
             False,      # initial status of relay 6
             False,      # initial status of relay 7
@@ -88,16 +88,6 @@ class USBrelayServiceNode(Node):
         self.set_relay_state(6, self.relay_state[5])
         self.set_relay_state(7, self.relay_state[6])
         self.set_relay_state(8, self.relay_state[7])
-        
-        # self.set_relay_state(self.device, 1, self.status_relay_1)
-        # self.set_relay_state(self.device, 2, self.status_relay_2)
-        # self.set_relay_state(self.device, 3, self.status_relay_3)
-        # self.set_relay_state(self.device, 4, self.status_relay_4)
-        # self.set_relay_state(self.device, 5, self.status_relay_5)
-        # self.set_relay_state(self.device, 6, self.status_relay_6)
-        # self.set_relay_state(self.device, 7, self.status_relay_7)
-        # self.set_relay_state(self.device, 8, self.status_relay_8)
-        #return device
 
     # Timer callback functions
 
@@ -146,6 +136,7 @@ class USBrelayServiceNode(Node):
                 time.sleep(request.activation_time)
                 self.device.write([0, 0xFD, request.relay_number, 0, 0, 0, 0, 0, 1])
                 self.relay_state[request.relay_number - 1] = False
+                response.success = True
         elif request.relay_status == False:
             self.device.write([0, 0xFD, request.relay_number, 0, 0, 0, 0, 0, 1])
             self.relay_state[request.relay_number - 1] = False
@@ -153,6 +144,12 @@ class USBrelayServiceNode(Node):
                 time.sleep(request.activation_time)
                 self.device.write([0, 0xFF, request.relay_number, 0, 0, 0, 0, 0, 1])
                 self.relay_state[request.relay_number - 1] = True
+                response.success = True
+        else:
+            self.get_logger().info("relay_status has to be 'True' or 'False'.")
+            response.success = False
+        
+        return response
 
     # Helper functions
 
