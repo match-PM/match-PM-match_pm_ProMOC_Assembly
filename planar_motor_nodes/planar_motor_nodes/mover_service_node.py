@@ -295,7 +295,7 @@ class MoverServiceNode(Node):
 
     def callback_rotary_motion(self, request, response):
         try:
-            bot.rotary_motion(request.xbot_id, request.target_rz,
+            bot.rotary_motion(request.xbot_id, request.target_rz/1000,
                               request.max_speed, request.max_accel)
             response.finished = True
         except:
