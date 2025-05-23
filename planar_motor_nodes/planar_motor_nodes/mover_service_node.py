@@ -296,7 +296,7 @@ class MoverServiceNode(Node):
     def callback_rotary_motion(self, request, response):
         try:
             bot.rotary_motion(request.xbot_id, request.target_rz/1000,
-                              request.max_speed, request.max_accel)
+                              request.max_rz_speed, request.max_accel_rz)
             response.finished = True
         except:
             self.get_logger().error("INVALID PARAMETER")
