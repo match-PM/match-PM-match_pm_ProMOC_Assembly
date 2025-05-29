@@ -1,4 +1,6 @@
 int32 xbot_id
 bool levitation
 ---
+bool success
 bool levitation
+string status_message

@@ -2,4 +2,5 @@ int32 xbot_id
 float64 x_pos
 float64 y_pos
 ---
-bool finished
+bool success
+string status_message

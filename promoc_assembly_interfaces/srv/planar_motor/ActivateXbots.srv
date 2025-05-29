@@ -1,4 +1,5 @@
-int32   xbot_id
 bool    activation_status
 ---
+bool    success
 bool    activation_status
+string  status_message

@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "C:/Users/admin/promoc_ros2_ws/src/match-PM-match_pm_ProMOC_Assembly/promoc_assembly_interfaces",
+    "cmake.sourceDirectory": "/home/soc/Development/Ros2/promoc_assembly/src/match-PM-match_pm_ProMOC_Assembly/promoc_assembly_interfaces",
     "python.autoComplete.extraPaths": [
         "/home/promoc/promoc_ws/build/thorlabs_nodes",
         "/home/promoc/promoc_ws/install/thorlabs_nodes/lib/python3.12/site-packages",
@@ -18,5 +18,6 @@
     ],
     "cSpell.words": [
         "accl"
-    ]
+    ],
+    "ros.distro": "jazzy"
 }

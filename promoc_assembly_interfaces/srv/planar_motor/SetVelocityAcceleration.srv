@@ -7,4 +7,5 @@ float64 rx_vel
 float64 ry_vel
 float64 rz_vel
 ---
-bool finished
+bool success
+string status_message

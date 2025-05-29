@@ -6,4 +6,5 @@ float64 rx_pos
 float64 ry_pos
 float64 rz_pos
 ---
-bool finished
+bool success
+string status_message
