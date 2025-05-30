@@ -3,4 +3,4 @@ float64 new_velocity
 float64 velocity
 int32 direction
 bool success
-string error_message
+string status_message

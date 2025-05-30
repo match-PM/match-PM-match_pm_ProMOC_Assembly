@@ -19,18 +19,28 @@ import math
 import rclpy
 from rclpy.node import Node
 
+# Add local_libs directory to Python path for PMCLib access
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.join(script_dir, '..', '..',
+                            '..')  # Navigate to project root
+local_libs_path = os.path.join(project_root, 'local_libs')
+if os.path.exists(local_libs_path):
+    sys.path.insert(0, local_libs_path)
+    print(f"Added local_libs to Python path: {local_libs_path}")
+
 # Ensure the current script's directory is in the Python path to allow local imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Try to import from standard pmclib module
+# Try to import from PMCLib in local_libs directory
 try:
     from pmclib import system_commands as sys_cmd
     from pmclib import xbot_commands as bot
     from pmclib import pmc_types
-    print("Successfully imported modules from standard pmclib")
+    print("✓ Successfully imported PMCLib from local_libs/pmclib")
 except ImportError as e:
-    # Fall back to Mock_implementation
-    print(f"Using mock pmclib due to import error: {e}")
+    # Fall back to Mock implementation
+    print(f"⚠ Using mock pmclib due to import error: {e}")
+    print("  PMCLib not found in local_libs/ - using mock for development")
     from mock_pmclib import system_commands as sys_cmd
     from mock_pmclib import xbot_commands as bot
     from mock_pmclib import pmc_types

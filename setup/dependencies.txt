@@ -1,0 +1,46 @@
+# ProMOC Assembly System Dependencies
+# This file lists all Python and system dependencies required for the ProMOC Assembly ROS2 packages
+
+# === SYSTEM DEPENDENCIES (install via apt) ===
+# For PMCLib (.NET integration):
+# Option 1 (preferred): .NET Core/SDK 8.0
+# sudo apt-get update
+# sudo apt-get install -y dotnet-sdk-8.0 aspnetcore-runtime-8.0
+#
+# Option 2 (fallback): Mono runtime  
+# sudo apt-get install -y mono-complete mono-devel
+#
+# Additional build dependencies:
+# sudo apt-get install -y zlib1g
+# sudo apt-get install -y clang libglib2.0-dev
+
+# === PYTHON DEPENDENCIES ===
+
+# Core Python dependencies for hardware integration
+pythonnet>=3.0.0  # Required for PMCLib integration with .NET libraries (planar_motor_nodes)
+pylablib>=1.4.0   # Required for Thorlabs hardware control (linear_axis_nodes)
+
+# Additional dependencies for pylablib
+pyserial>=3.4      # Serial communication for Thorlabs devices
+pyusb>=1.0.0       # USB communication support
+numpy>=1.20.0      # Required by pylablib
+
+# ROS2 Python dependencies (typically installed with ROS2)
+rclpy  # ROS2 Python client library
+std_msgs  # Standard ROS2 message types
+geometry_msgs  # Geometry-related message types
+sensor_msgs  # Sensor-related message types
+
+# Build tools for pythonnet (if build from source is needed)
+wheel>=0.36.0      # Required for building pythonnet
+
+# Development and testing dependencies
+pytest>=6.0.0     # Testing framework
+flake8>=3.8.0     # Code linting
+pep257>=0.7.0     # Docstring style checker
+
+# Optional dependencies for enhanced functionality
+scipy>=1.7.0      # Scientific computing (if needed for advanced motion planning)
+
+# Note: ROS2 dependencies are typically managed through rosdep and package.xml files
+# This file is primarily for Python-specific dependencies not covered by ROS2 package management

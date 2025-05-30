@@ -4,4 +4,4 @@ float64 new_acceleration
 float64 max_velocity
 float64 acceleration
 bool success
-string error_message
+string status_message
