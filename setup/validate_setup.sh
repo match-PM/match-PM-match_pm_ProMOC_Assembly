@@ -3,7 +3,7 @@
 # ProMOC Assembly System Validation Script
 # This script tests the complete installation and setup
 
-# Removed set -e to allow all tests to run
+set -e  # Exit on error
 
 echo "ProMOC Assembly System Validation"
 echo "================================="
@@ -124,11 +124,11 @@ echo "4. Testing Hardware-Specific Dependencies..."
 echo "-------------------------------------------"
 
 # Test PMCLib directory
-if [[ -d "../local_libs/pmclib" && -f "../local_libs/pmclib/__init__.py" ]]; then
+if [[ -d "local_libs/pmclib" && -f "local_libs/pmclib/__init__.py" ]]; then
     test_status 0 "PMCLib directory structure found (local_libs/pmclib/)"
     
     # Test PMCLib import by adding local_libs to path
-    if python3 -c "import sys; sys.path.insert(0, '../local_libs'); import pmclib" 2>/dev/null; then
+    if python3 -c "import sys; sys.path.insert(0, 'local_libs'); import pmclib" 2>/dev/null; then
         test_status 0 "PMCLib import successful (planar motor support)"
     else
         test_status 1 "PMCLib import failed"
@@ -147,8 +147,8 @@ REQUIRED_FILES=(
     "install_system_deps.sh"
     "install_python_deps.sh"
     "check_dotnet_runtime.py"
-    "../.gitignore"
-    "../README.md"
+    ".gitignore"
+    "README.md"
     "QUICKSTART.md"
 )
 
@@ -162,11 +162,11 @@ done
 
 # Test directory structure
 REQUIRED_DIRS=(
-    "../promoc_assembly_interfaces"
-    "../linear_axis_nodes"
-    "../planar_motor_nodes"
-    "../promoc_bringup"
-    "../local_libs"
+    "promoc_assembly_interfaces"
+    "linear_axis_nodes"
+    "planar_motor_nodes"
+    "promoc_bringup"
+    "local_libs"
 )
 
 for dir in "${REQUIRED_DIRS[@]}"; do

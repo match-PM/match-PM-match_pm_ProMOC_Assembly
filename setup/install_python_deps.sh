@@ -145,7 +145,7 @@ else
 fi
 
 # Check if PMCLib directory exists in local_libs
-if [[ -d "../local_libs/pmclib" ]]; then
+if [[ -d "local_libs/pmclib" ]]; then
     echo "✓ PMCLib directory found in local_libs/pmclib"
     echo "  PMCLib will be imported directly from local_libs/ via Python path"
 else
@@ -161,7 +161,7 @@ echo "Summary:"
 echo "✓ Core Python packages installed"
 echo "✓ pythonnet installed (for .NET interop)"
 echo "✓ pylablib installed (for Thorlabs hardware)"
-if [[ -d "../local_libs/pmclib" ]]; then
+if [[ -d "local_libs/pmclib" ]]; then
     echo "✓ PMCLib directory available (will be imported via Python path)"
 else
     echo "⚠ PMCLib directory not found (extract PMCLib to local_libs/pmclib/)"
