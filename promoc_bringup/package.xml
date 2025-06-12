@@ -2,15 +2,19 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>promoc_bringup</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="thesterni91@gmail.com">c-sternberg</maintainer>
+  <version>0.1.0</version>
+  <description>ProMOC Assembly launch files and utilities</description>
+  <maintainer email="your_email@example.com">Your Name</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-  <exec_depend>planar_motor_motor_nodes</exec_depend>
-  <exec_depend>linear_axis_nodes</exec_depend>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>promoc_assembly_interfaces</depend>
+  <depend>planar_motor_nodes</depend>
+  <depend>linear_axis_nodes</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

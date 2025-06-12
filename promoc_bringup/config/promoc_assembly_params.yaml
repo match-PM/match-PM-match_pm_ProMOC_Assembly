@@ -1,12 +1,7 @@
-# Global configuration
-namespace: 'promoc_assembly'
-
-# Planar motor configuration
+# Mover Node Parameters
 mover_node:
-  package: 'planar_motor_nodes'
-  executable: 'mover_service_node'
-  node_name: 'mover_node'
-  move_area_parameters:
+  ros__parameters:
+    node_name: 'mover_node'
     x_min: 0.055
     x_max: 0.420
     y_min: -0.055
@@ -14,31 +9,18 @@ mover_node:
     z_min: 0.000
     z_max: 0.004
 
-# Linear axis devices configuration
-lts300_devices:
-  z_axis:
-    package: 'linear_axis_nodes'
-    executable: 'lts300_service_node'
+# LTS300 Z-Axis Parameters
+lts300_z_axis:
+  ros__parameters:
     serial_port: '/dev/ttyUSB0'
     serial_number: '45407924'
-    node_name: 'lts300_z_axis'
-    parameters:
-      collision_threshold: 200.0
-      device_units_per_mm: 409600.0
-  
-  x_axis:
-    package: 'linear_axis_nodes'
-    executable: 'lts300_service_node'
+    collision_threshold: 200.0
+    device_units_per_mm: 409600.0
+
+# LTS300 X-Axis Parameters
+lts300_x_axis:
+  ros__parameters:
     serial_port: '/dev/ttyUSB1'
     serial_number: '45456044'
-    node_name: 'lts300_x_axis'
-    parameters:
-      collision_threshold: 30.0
-      device_units_per_mm: 409600.0
-
-# Remote connection settings (commented out for local development)
-# remote_connection:
-#   user: 'admin'
-#   host: '10.145.4.39'
-#   ros_domain_id: '13'
-
+    collision_threshold: 30.0
+    device_units_per_mm: 409600.0
