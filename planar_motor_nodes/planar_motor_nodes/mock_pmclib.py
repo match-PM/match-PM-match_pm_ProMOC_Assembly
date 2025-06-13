@@ -48,9 +48,9 @@ class xbot_commands:
         print("Mock: Deactivating XBots")
 
     @staticmethod
-    def levitate_xbot_command(xbot_id, command):
+    def levitation_command( command):
         # Simulate levitation command for a specific XBot
-        print(f"Mock: Levitate XBot {xbot_id} command: {command}")
+        print(f"Mock: Levitate XBot  command: {command}")
 
     @staticmethod
     def linear_motion_si(xbot_id, x_pos, y_pos, xy_max_speed, xy_max_accl):

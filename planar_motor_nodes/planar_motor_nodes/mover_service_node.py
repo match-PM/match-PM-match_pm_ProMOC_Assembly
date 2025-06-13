@@ -43,7 +43,7 @@ except ImportError as e:
     print("  PMCLib not found in local_libs/ - using mock for development")
     from mock_pmclib import system_commands as sys_cmd
     from mock_pmclib import xbot_commands as bot
-    from mock_pmclib import pmc_types
+    from mock_pmclib import pmc_types 
 
 # Import custom message and service interfaces from promoc_assembly_interfaces
 
@@ -90,8 +90,13 @@ class MoverServiceNode(Node):
             'z_max_accel': 1.00
         }
 
+
         self.declare_parameter('node_name', 'mover_node')
         self.node_name = self.get_parameter('node_name').value
+        self.declare_parameter('debug_mode', False)
+        
+        self.debug_mode = self.get_parameter('debug_mode').get_parameter_value().bool_value
+        
 
         # Define the Movement Areas as ROS2 parameters with default values
         self.declare_parameter('x_min', 0.055)
@@ -158,14 +163,14 @@ class MoverServiceNode(Node):
             0.1, self.xbot_postition_publisher)
 
     def startup_connection(self):
-        self.get_logger().info("Mover Node Started")
-        self.get_logger().info("Connecting to PMC...")
+        self.get_logger().info("✅ Mover Node Started")
+        self.get_logger().info("🔗 Connecting to PMC...")
         success = False
         while not success:
             success = sys_cmd.connect_to_pmc("192.168.10.100")
-        self.get_logger().info("Connected")
+        self.get_logger().info("✅ Connected")
         bot.activate_xbots()
-        self.get_logger().info("XBot Activated")
+        self.get_logger().info("✅ XBot Activated")
         # set standard values for velocities and acceleration
         self.velocity_acceleration_params = self.velocity_acceleration_standard_params.copy()
 
@@ -243,10 +248,11 @@ class MoverServiceNode(Node):
 
             # Convert position values from millimeters to meters
             target_position = [
-                request.x_pos / 1000, request.y_pos / 1000
+                request.x_pos/1000 , request.y_pos/1000
             ]
-            self.get_logger().info(
-                f"Starting linear motion for bot {request.xbot_id} to target position: {target_position}")
+            if self.debug_mode:
+                self.get_logger().debug(
+                    f"🔧 Starting linear motion for bot {request.xbot_id} to target position: {target_position}")
 
             # Get speed parameters for the bot
             speed_params = self.velocity_acceleration_params.get(
@@ -258,9 +264,11 @@ class MoverServiceNode(Node):
                                      speed_params['xy_max_accel']
                                      )
             else:
-                self.get_logger().error(
-                    f"Speed parameters not found for bot {request.xbot_id}")
-                self.get_logger().error("Using standard speed parameters for this bot")
+                if self.debug_mode:
+                    self.get_logger().warn(
+                        f"⚠️Speed parameters not found for bot {request.xbot_id}")
+
+                self.get_logger().warn("⚠️ Using standard speed parameters for this bot")
 
                 # The * infront of targe_position unpacks the target_position list into individual parameters.
                 bot.linear_motion_si(request.xbot_id, *target_position,
@@ -283,17 +291,17 @@ class MoverServiceNode(Node):
                 response.status_message = "Failed to reach target position within timeout"
 
         except ValueError as e:
-            self.get_logger().error(f"Invalid parameter value: {e}")
+            self.get_logger().error(f"❌ Invalid parameter value: {e}")
             response.success = False
-            response.status_message = f"Error: {str(e)}"
+            response.status_message = f"❌ Error: {str(e)}"
         except KeyError as e:
-            self.get_logger().error(f"Missing parameter in speed_params: {e}")
+            self.get_logger().error(f"❌ Missing parameter in speed_params: {e}")
             response.success = False
             response.status_message = f"Error: Missing parameter in speed_params: {str(e)}"
         except Exception as e:
-            self.get_logger().error(f"Unexpected error: {e}")
+            self.get_logger().error(f"❌Unexpected error: {e}")
             response.success = False
-            response.status_message = f"Unexpected error: {str(e)}"
+            response.status_message = f"❌Unexpected error: {str(e)}"
 
         finally:
             return response
@@ -306,17 +314,22 @@ class MoverServiceNode(Node):
             response.success = True
             response.status_message = "Arc motion executed successfully"
         except Exception as e:
-            self.get_logger().error(f"INVALID PARAMETER: {str(e)}")
+            self.get_logger().error(f"❌ INVALID PARAMETER: {str(e)}")
             response.success = False
-            response.status_message = f"Error: {str(e)}"
+            response.status_message = f"❌ Error: {str(e)}"
         return response
 
     def callback_rotary_motion(self, request, response):
+        target_rz_degrees = request.target_rz
+        target_rz_rad = math.radians(target_rz_degrees)
+        
+
         try:
-            bot.rotary_motion(request.xbot_id, request.target_rz/1000,
+
+            bot.rotary_motion(request.xbot_id, target_rz_rad/10,
                               request.max_rz_speed, request.max_accel_rz)
             response.success = True
-            response.status_message = f"Rotary motion to {request.target_rz/1000} executed successfully"
+            response.status_message = f"Rotary motion to {request.target_rz}°executed successfully"
         except Exception as e:
             self.get_logger().error(f"INVALID PARAMETER: {str(e)}")
             response.success = False
@@ -329,7 +342,7 @@ class MoverServiceNode(Node):
             response.success = True
             response.status_message = f"Motion stopped for XBot {request.xbot_id}"
         except Exception as e:
-            self.get_logger().error(f"Stop Motion failed: {str(e)}")
+            self.get_logger().error(f"❌ Stop Motion failed: {str(e)}")
             response.success = False
             response.status_message = f"Error stopping motion: {str(e)}"
         return response
@@ -395,9 +408,10 @@ class MoverServiceNode(Node):
                     speed_params['rz_vel']
                 )
             else:
-                self.get_logger().error(
-                    f"Speed parameters not found for bot {request.xbot_id}")
-                self.get_logger().error("Using standard speed parameters for this bot")
+                if self.debug_mode:
+                    self.get_logger().warn(
+                        f"⚠️ Speed parameters not found for bot {request.xbot_id}")
+                self.get_logger().warn("⚠️ Using standard speed parameters for this bot")
 
                 # Execute motion command with converted positions and standard speed parameters
                 bot.six_d_of_motion_si(
@@ -424,17 +438,17 @@ class MoverServiceNode(Node):
                 response.status_message = "Failed to reach target position within timeout"
 
         except ValueError as e:
-            self.get_logger().error(f"Invalid parameter value: {e}")
+            self.get_logger().error(f"❌ Invalid parameter value: {e}")
             response.success = False
-            response.status_message = f"Error: {str(e)}"
+            response.status_message = f"❌ Error: {str(e)}"
         except KeyError as e:
-            self.get_logger().error(f"Missing parameter in speed_params: {e}")
+            self.get_logger().error(f"❌ Missing parameter in speed_params: {e}")
             response.success = False
-            response.status_message = f"Error: Missing parameter in speed_params: {str(e)}"
+            response.status_message = f"❌ Error: Missing parameter in speed_params: {str(e)}"
         except Exception as e:
-            self.get_logger().error(f"Unexpected error: {e}")
+            self.get_logger().error(f"❌ Unexpected error: {e}")
             response.success = False
-            response.status_message = f"Unexpected error: {str(e)}"
+            response.status_message = f"❌ Unexpected error: {str(e)}"
 
         finally:
             return response
@@ -455,15 +469,15 @@ class MoverServiceNode(Node):
             }
 
             self.get_logger().info(
-                f'Velocity and acceleration parameters set successfully for bot {xbot_id}')
+                f'✅ Velocity and acceleration parameters set successfully for bot {xbot_id}')
             response.success = True
-            response.status_message = "Velocity and acceleration parameters set successfully"
+            response.status_message = "✅ Velocity and acceleration parameters set successfully"
         except Exception as e:
             # Log error and set response to False
             self.get_logger().error(
-                f"INVALID PARAMETER for bot {xbot_id}: {e}")
+                f"❌ INVALID PARAMETER for bot {xbot_id}: {e}")
             self.get_logger().error(
-                "Setting velocity and acceleration to standard parameters for this bot")
+                "⚠️ Setting velocity and acceleration to standard parameters for this bot")
 
             response.success = False
             response.status_message = f"Error setting velocity and acceleration parameters: {str(e)}"
@@ -472,7 +486,9 @@ class MoverServiceNode(Node):
 
     def callback_levitation_xbot(self, request, response):
         try:
-            bot.levitate_xbot_command(request.xbot_id, int(request.levitation))
+            if request.levitation == True : lev_enum = 1
+            else : lev_enum = 0
+            bot.levitation_command(0,int(lev_enum))
             response.success = True
             response.levitation = request.levitation
             status = "activated" if request.levitation else "deactivated"
@@ -508,7 +524,7 @@ class MoverServiceNode(Node):
                                 float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
             return current_position
         except IndexError:
-            self.get_logger().error("Error: xbot_data_list is empty")
+            self.get_logger().error("❌ Error: xbot_data_list is empty")
             return [0, 0, 0, 0, 0, 0]
 
     def check_position_reached(self, target_position: list, current_position: list, tolerance: float = 0.1, max_wait_time: float = 2.0) -> bool:
@@ -541,7 +557,7 @@ class MoverServiceNode(Node):
         while not is_within_tolerance():
             if time.time() - start_time > max_wait_time:
                 self.get_logger().warning(
-                    f"Timeout erreicht! Zielposition möglicherweise nicht erreichbar: {target_position}")
+                    f"⚠️ Timeout erreicht! Zielposition möglicherweise nicht erreichbar: {target_position}")
                 return False
 
             time.sleep(check_interval)  # Fixed: removed keyword argument
@@ -555,9 +571,9 @@ class MoverServiceNode(Node):
         try:
             self.get_logger().info("Deactivating XBot")
             bot.deactivate_xbots()
-            self.get_logger().info("XBot deactivated Successfully")
+            self.get_logger().info("✅ XBot deactivated Successfully")
         except Exception as e:
-            self.get_logger().error(f"Error deactivating XBot: {e}")
+            self.get_logger().error(f"❌ Error deactivating XBot: {e}")
         finally:
             super().destroy_node()
 

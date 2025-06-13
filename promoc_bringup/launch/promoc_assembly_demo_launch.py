@@ -40,7 +40,7 @@ def generate_launch_description():
     # Demo Controller Node
     demo_controller = Node(
         package='promoc_bringup',
-        executable='demo_controller.py',  # Mit .py Extension, da es so installiert wird
+        executable='demo_controller.py',  
         name='demo_controller',
         output='screen'
     )
