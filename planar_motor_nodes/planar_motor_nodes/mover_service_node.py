@@ -43,7 +43,7 @@ except ImportError as e:
     print("  PMCLib not found in local_libs/ - using mock for development")
     from mock_pmclib import system_commands as sys_cmd
     from mock_pmclib import xbot_commands as bot
-    from mock_pmclib import pmc_types 
+    from mock_pmclib import pmc_types
 
 # Import custom message and service interfaces from promoc_assembly_interfaces
 
@@ -60,26 +60,54 @@ class MoverServiceNode(Node):
         super().__init__("mover_node")
 
         # Initialize core parameters
-        self.initialize_parameters()
+        self._initialize_parameters()
 
         # Setup ROS publishers and services
-        self.setup_publishers()
-        self.setup_services()
+        self._setup_ros_interfaces()
 
         # Initialize connections
-        self.startup_connection()
+        self._initalize_connection()
 
         # Start timers
-        self.setup_timers()
+        self._start_timers()
 
-    # Initialization functions
+    """------------------------------------------------------"""
+    """-----------Initialization functions-------------------"""
+    """------------------------------------------------------"""
 
-    def initialize_parameters(self):
+    def _initialize_parameters(self):
+        """Initialize and load all ROS parameters."""
+        # Declare parameters with defaults
+        self.declare_parameter('debug_mode', False)
+        self.declare_parameter('xy_tolerance', 0.001)
+        self.declare_parameter('six_d_tolerance', 0.001)
 
-        # Initialize core parameters related to XBot and motion tolerances."""
-        self.xy_tolerance = 0.1  # Tolerance for position in meters
-        self.six_d_tolerance = 0.1  # Tolerance for position in meters
-        self.velocity_acceleration_params = {}
+        # Movement boundaries
+        self.declare_parameter('x_min', 0.055)
+        self.declare_parameter('x_max', 0.420)
+        self.declare_parameter('y_min', -0.055)
+        self.declare_parameter('y_max', 0.180)
+        self.declare_parameter('z_min', 0.000)
+        self.declare_parameter('z_max', 0.004)
+
+        # Load parameter values
+        self.debug_mode = self.get_parameter('debug_mode').value
+        self.xy_tolerance = self.get_parameter('xy_tolerance').value
+        self.six_d_tolerance = self.get_parameter('six_d_tolerance').value
+
+        # Movement boundaries
+        self.x_min = self.get_parameter('x_min').value
+        self.x_max = self.get_parameter('x_max').value
+        self.y_min = self.get_parameter('y_min').value
+        self.y_max = self.get_parameter('y_max').value
+        self.z_min = self.get_parameter('z_min').value
+        self.z_max = self.get_parameter('z_max').value
+
+        # Initialize velocity parameters
+        self._initialize_velocity_parameters()
+
+    def _initialize_velocity_parameters(self):
+        """Initialize standard velocity and acceleration parameters."""
         self.velocity_acceleration_standard_params = {
             'xy_vel': 1.00,
             'z_vel': 0.10,
@@ -89,37 +117,19 @@ class MoverServiceNode(Node):
             'xy_max_accel': 5.00,
             'z_max_accel': 1.00
         }
+        self.velocity_acceleration_params = {}
 
+    def _setup_ros_interfaces(self):
+        """Set up ROS interfaces for publishers, subscribers, and services."""
+        self._setup_publishers()
+        self._setup_services()
 
-        self.declare_parameter('node_name', 'mover_node')
-        self.node_name = self.get_parameter('node_name').value
-        self.declare_parameter('debug_mode', False)
-        
-        self.debug_mode = self.get_parameter('debug_mode').get_parameter_value().bool_value
-        
-
-        # Define the Movement Areas as ROS2 parameters with default values
-        self.declare_parameter('x_min', 0.055)
-        self.declare_parameter('x_max', 0.420)
-        self.declare_parameter('y_min', -0.055)
-        self.declare_parameter('y_max', 0.180)
-        self.declare_parameter('z_min', 0.000)
-        self.declare_parameter('z_max', 0.004)
-
-        # Get parameter values
-        self.x_min = self.get_parameter('x_min').value
-        self.x_max = self.get_parameter('x_max').value
-        self.y_min = self.get_parameter('y_min').value
-        self.y_max = self.get_parameter('y_max').value
-        self.z_min = self.get_parameter('z_min').value
-        self.z_max = self.get_parameter('z_max').value
-
-    def setup_publishers(self):
+    def _setup_publishers(self):
         """Create ROS publishers for XBot information."""
         self.xbot_pos_publisher_ = self.create_publisher(
             XBotInfo, "xbot_info", 10)
 
-    def setup_services(self):
+    def _setup_services(self):
         """Define and create ROS services for handling motions and commands."""
         self.linear_movement_server = self.create_service(
             LinearMotionSi, f"{self.get_name()}/linear_mover_motion", self.callback_linear_motion_si
@@ -146,7 +156,7 @@ class MoverServiceNode(Node):
             SetVelocityAcceleration, f"{self.get_name()}/set_velocity_acceleration", self.callback_set_velocity_acceleration
         )
 
-    def setup_timers(self):
+    def _start_timers(self):
         """
         Set up periodic timers for the node's recurring tasks.
 
@@ -162,17 +172,16 @@ class MoverServiceNode(Node):
         self.xbot_position_timer = self.create_timer(
             0.1, self.xbot_postition_publisher)
 
-    def startup_connection(self):
-        self.get_logger().info("✅ Mover Node Started")
+    def _initalize_connection(self):
+        """Initialize connection to PMC."""
         self.get_logger().info("🔗 Connecting to PMC...")
         success = False
         while not success:
             success = sys_cmd.connect_to_pmc("192.168.10.100")
+
         self.get_logger().info("✅ Connected")
         bot.activate_xbots()
         self.get_logger().info("✅ XBot Activated")
-        # set standard values for velocities and acceleration
-        self.velocity_acceleration_params = self.velocity_acceleration_standard_params.copy()
 
     # Timer callback functions
 
@@ -248,7 +257,7 @@ class MoverServiceNode(Node):
 
             # Convert position values from millimeters to meters
             target_position = [
-                request.x_pos/1000 , request.y_pos/1000
+                request.x_pos/1000, request.y_pos/1000
             ]
             if self.debug_mode:
                 self.get_logger().debug(
@@ -295,7 +304,8 @@ class MoverServiceNode(Node):
             response.success = False
             response.status_message = f"❌ Error: {str(e)}"
         except KeyError as e:
-            self.get_logger().error(f"❌ Missing parameter in speed_params: {e}")
+            self.get_logger().error(
+                f"❌ Missing parameter in speed_params: {e}")
             response.success = False
             response.status_message = f"Error: Missing parameter in speed_params: {str(e)}"
         except Exception as e:
@@ -322,7 +332,6 @@ class MoverServiceNode(Node):
     def callback_rotary_motion(self, request, response):
         target_rz_degrees = request.target_rz
         target_rz_rad = math.radians(target_rz_degrees)
-        
 
         try:
 
@@ -442,7 +451,8 @@ class MoverServiceNode(Node):
             response.success = False
             response.status_message = f"❌ Error: {str(e)}"
         except KeyError as e:
-            self.get_logger().error(f"❌ Missing parameter in speed_params: {e}")
+            self.get_logger().error(
+                f"❌ Missing parameter in speed_params: {e}")
             response.success = False
             response.status_message = f"❌ Error: Missing parameter in speed_params: {str(e)}"
         except Exception as e:
@@ -486,9 +496,11 @@ class MoverServiceNode(Node):
 
     def callback_levitation_xbot(self, request, response):
         try:
-            if request.levitation == True : lev_enum = 1
-            else : lev_enum = 0
-            bot.levitation_command(0,int(lev_enum))
+            if request.levitation == True:
+                lev_enum = 1
+            else:
+                lev_enum = 0
+            bot.levitation_command(0, int(lev_enum))
             response.success = True
             response.levitation = request.levitation
             status = "activated" if request.levitation else "deactivated"

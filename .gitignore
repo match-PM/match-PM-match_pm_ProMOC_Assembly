@@ -11,6 +11,10 @@ __pycache__/
 build/
 install/
 log/
+pmclib/
+
+# Private PMCLib Repository
+src/match-PM-match_pm_ProMOC_Assembly/planar_motor_nodes/planar_motor_nodes/match_pm_xBot/
 
 # Environment files
 .env
@@ -30,3 +34,4 @@ log/
 .Trashes
 ehthumbs.db
 Thumbs.db
+setup/pmclib/xbot_commands.py
