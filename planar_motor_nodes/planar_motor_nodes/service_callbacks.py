@@ -1,8 +1,10 @@
 import math
 import time
-from typing import List
+from typing import List, Optional, Tuple
+from enum import Enum
 
 from .pmclib_loader import bot, get_pmclib_status
+from .position_utils import MotionStatus
 
 
 class ServiceCallbacks:
@@ -19,18 +21,17 @@ class ServiceCallbacks:
             self.node.get_logger().warning("⚠️ Running in MOCK mode!")
 
     def callback_linear_motion_si(self, request, response):
-        """Handle linear motion requests."""
+        """Handle linear motion requests with XBot status monitoring."""
         try:
-            # Validate XBot ID
+            # 1. Validate XBot ID
             if not self.pos_utils.validate_xbot_id(request.xbot_id):
                 response.success = False
                 response.status_message = "Invalid XBot ID"
                 return response
 
-            # Convert mm to meters
+            # 2. Convert and validate position
             target_position = [request.x_pos / 1000.0, request.y_pos / 1000.0]
 
-            # Validate position bounds
             if not self.pos_utils.validate_target_position(target_position[0], target_position[1], 0.001):
                 response.success = False
                 response.status_message = "Position outside valid bounds"
@@ -39,30 +40,58 @@ class ServiceCallbacks:
             self.node._log_debug(
                 f"Linear motion for XBot {request.xbot_id} to {target_position}")
 
-            # Get speed parameters
+            # 3. Get speed parameters
             speed_params = self.node._get_speed_params(request.xbot_id)
 
-            # Execute motion
-            bot.linear_motion_si(
+            # 4. Execute motion command
+            try:
+                travel_time = bot.linear_motion_si(
+                    request.xbot_id,
+                    target_position[0],
+                    target_position[1],
+                    speed_params['xy_vel'],
+                    speed_params['xy_max_accel']
+                )
+
+                self.node._log_debug(
+                    f"Linear motion estimated travel time: {travel_time:.2f}s")
+
+            except Exception as motion_error:
+                self.node.get_logger().error(
+                    f"❌ Linear motion execution failed: {motion_error}")
+                response.success = False
+                response.status_message = f"Motion command failed: {str(motion_error)}"
+                return response
+
+            # 5. Wait for completion using XBot status
+            target_position_6dof = target_position + \
+                [0.001, 0.0, 0.0, 0.0]  # Add Z and rotations
+            timeout = max(travel_time * 1.5 + 3.0, 5.0)  # Generous timeout
+
+            motion_result = self.pos_utils.wait_for_motion_completion(
                 request.xbot_id,
-                *target_position,
-                speed_params['xy_vel'],
-                speed_params['xy_max_accel']
-            )
-
-            # Wait for completion
-            success = self.pos_utils.check_position_reached(
-                target_position + [0.0, 0.0, 0.0, 0.0],  # Extend to 6DOF
+                target_position_6dof,
                 self.node.xy_tolerance,
-                max_wait_time=2.0,
-                xbot_id=request.xbot_id
+                timeout
             )
 
-            response.success = success
-            response.status_message = (
-                f"Successfully moved to {target_position}" if success
-                else "Failed to reach target position within timeout"
-            )
+            # 6. Prepare response based on motion result
+            success = motion_result == MotionStatus.COMPLETED
+
+            if success:
+                response.success = True
+                response.status_message = (
+                    f"Linear motion completed successfully to ({target_position[0]:.4f}, {target_position[1]:.4f})m. "
+                    f"XBot {request.xbot_id} is now IDLE."
+                )
+            else:
+                response.success = False
+                if motion_result == MotionStatus.TIMEOUT:
+                    response.status_message = f"Motion timeout after {timeout:.1f}s. XBot may still be moving."
+                elif motion_result == MotionStatus.ERROR:
+                    response.status_message = "Motion failed - XBot reports error state."
+                else:
+                    response.status_message = f"Motion incomplete - XBot status: {motion_result.value}"
 
         except Exception as e:
             self._handle_service_error(e, response)
@@ -70,69 +99,97 @@ class ServiceCallbacks:
         return response
 
     def callback_six_d_motion(self, request, response):
-        """Handle 6-DOF motion requests."""
+        """Handle 6-DOF motion requests with enhanced XBot status monitoring."""
         try:
-            # Validate XBot ID
+            # 1. Validate XBot ID
             if not self.pos_utils.validate_xbot_id(request.xbot_id):
                 response.success = False
                 response.status_message = "Invalid XBot ID"
                 return response
 
-            # Get current position for fallback values
+            # 2. Get current position for smart fallback
             current_position = self.pos_utils.get_current_position(
                 request.xbot_id)
+            if current_position is None:
+                response.success = False
+                response.status_message = "Failed to get current XBot position"
+                return response
 
-            # Convert positions from mm/degrees to m/radians
-            target_position_raw = [
-                request.x_pos / 1000.0,      # mm to m
-                request.y_pos / 1000.0,      # mm to m
-                request.z_pos / 1000.0,      # mm to m
-                # degrees to rad
-                math.radians(
-                    request.rx_pos) if request.rx_pos != 0 else current_position[3],
-                # degrees to rad
-                math.radians(
-                    request.ry_pos) if request.ry_pos != 0 else current_position[4],
-                # degrees to rad
-                math.radians(
-                    request.rz_pos) if request.rz_pos != 0 else current_position[5]
-            ]
+            # 3. Process and validate input
+            target_position_raw = self._process_6dof_input(
+                request, current_position)
+            validated_position = self._validate_6dof_position(
+                target_position_raw, current_position, request.xbot_id)
 
-            # Constrain to valid bounds (use current position if out of bounds)
-            target_position = self.pos_utils.constrain_position_to_bounds(
-                current_position, target_position_raw)
+            if validated_position is None:
+                response.success = False
+                response.status_message = "Position validation failed - out of bounds or unsafe"
+                return response
 
-            self.node._log_debug(
-                f"6DOF motion for XBot {request.xbot_id} to {target_position}")
-
-            # Get speed parameters
+            # 4. Get speed parameters
             speed_params = self.node._get_speed_params(request.xbot_id)
 
-            # Execute 6DOF motion
-            bot.six_d_of_motion_si(
+            # 5. Log motion details
+            self.node._log_debug(
+                f"6DOF motion for XBot {request.xbot_id}:\n"
+                f"  Target: ({validated_position[0]:.4f}, {validated_position[1]:.4f}, {validated_position[2]:.4f})m\n"
+                f"  Rotation: ({math.degrees(validated_position[3]):.1f}°, {math.degrees(validated_position[4]):.1f}°, {math.degrees(validated_position[5]):.1f}°)"
+            )
+
+            # 6. Execute 6DOF motion
+            try:
+                travel_time = bot.six_d_of_motion_si(
+                    request.xbot_id,
+                    validated_position[0], validated_position[1], validated_position[2],
+                    validated_position[3], validated_position[4], validated_position[5],
+                    speed_params['xy_vel'], speed_params['xy_max_accel'],
+                    speed_params['z_vel'], speed_params['rx_vel'],
+                    speed_params['ry_vel'], speed_params['rz_vel']
+                )
+
+                self.node._log_debug(
+                    f"6DOF motion estimated travel time: {travel_time:.2f}s")
+
+            except Exception as motion_error:
+                self.node.get_logger().error(
+                    f"❌ 6DOF motion execution failed: {motion_error}")
+                response.success = False
+                response.status_message = f"Motion execution failed: {str(motion_error)}"
+                return response
+
+            # 7. Wait for completion using XBot status monitoring
+            # More time for complex 6DOF motions
+            timeout = max(travel_time * 1.5 + 5.0, 8.0)
+
+            motion_result = self.pos_utils.wait_for_motion_completion(
                 request.xbot_id,
-                *target_position,
-                speed_params['xy_vel'],
-                speed_params['xy_max_accel'],
-                speed_params['z_vel'],
-                speed_params['rx_vel'],
-                speed_params['ry_vel'],
-                speed_params['rz_vel']
-            )
-
-            # Wait for completion
-            success = self.pos_utils.check_position_reached(
-                target_position,
+                validated_position,
                 self.node.six_d_tolerance,
-                max_wait_time=3.0,  # Longer timeout for 6DOF
-                xbot_id=request.xbot_id
+                timeout
             )
 
-            response.success = success
-            response.status_message = (
-                f"Successfully moved to 6-DOF position {target_position}" if success
-                else "Failed to reach target position within timeout"
-            )
+            # 8. Prepare comprehensive response
+            success = motion_result == MotionStatus.COMPLETED
+
+            if success:
+                response.success = True
+                response.status_message = (
+                    f"6DOF motion completed successfully. "
+                    f"Position: ({validated_position[0]:.4f}, {validated_position[1]:.4f}, {validated_position[2]:.4f})m, "
+                    f"Rotation: ({math.degrees(validated_position[3]):.1f}°, {math.degrees(validated_position[4]):.1f}°, {math.degrees(validated_position[5]):.1f}°). "
+                    f"XBot {request.xbot_id} is IDLE."
+                )
+            else:
+                response.success = False
+                if motion_result == MotionStatus.TIMEOUT:
+                    response.status_message = (
+                        f"6DOF motion timeout after {timeout:.1f}s. "
+                        f"XBot may still be moving or position not reached within tolerance."
+                    )
+                elif motion_result == MotionStatus.ERROR:
+                    response.status_message = "6DOF motion failed - XBot reports error state. Check XBot status."
+                else:
+                    response.status_message = f"6DOF motion incomplete - XBot status: {motion_result.value}"
 
         except Exception as e:
             self._handle_service_error(e, response)
@@ -255,20 +312,40 @@ class ServiceCallbacks:
         return response
 
     def callback_stop_motion(self, request, response):
-        """Handle stop motion."""
+        """Enhanced stop motion with status verification."""
         try:
-            # Validate XBot ID
             if not self.pos_utils.validate_xbot_id(request.xbot_id):
                 response.success = False
                 response.status_message = "Invalid XBot ID"
                 return response
 
+            # Execute stop command
             bot.stop_motion(request.xbot_id)
-            response.success = True
-            response.status_message = f"Motion stopped for XBot {request.xbot_id}"
 
-            self.node.get_logger().info(
-                f"🛑 Motion stopped for XBot {request.xbot_id}")
+            # Wait for XBot to report IDLE status
+            start_time = time.time()
+            max_stop_wait = 2.0
+
+            while time.time() - start_time < max_stop_wait:
+                status_info = self.pos_utils.get_xbot_status_info(
+                    request.xbot_id)
+                if status_info:
+                    motion_status = self.pos_utils._interpret_xbot_state(
+                        status_info['xbot_state'])
+                    if motion_status == MotionStatus.IDLE:
+                        response.success = True
+                        response.status_message = f"XBot {request.xbot_id} stopped successfully and is IDLE"
+                        self.node.get_logger().info(
+                            f"🛑 XBot {request.xbot_id} stopped and IDLE")
+                        return response
+
+                time.sleep(0.1)
+
+            # Timeout - command sent but status unclear
+            response.success = True  # Command was sent
+            response.status_message = f"Stop command sent to XBot {request.xbot_id}, but IDLE status not confirmed within timeout"
+            self.node.get_logger().warning(
+                f"⚠️ XBot {request.xbot_id} stop command sent, status unclear")
 
         except Exception as e:
             self._handle_service_error(e, response)
@@ -335,12 +412,29 @@ class ServiceCallbacks:
 
         return True
 
+    def _process_6dof_input(self, request, current_position: List[float]) -> List[float]:
+        """Process and convert 6DOF input with smart defaults."""
+        return [
+            request.x_pos /
+            1000.0 if request.x_pos != 0 else current_position[0],
+            request.y_pos /
+            1000.0 if request.y_pos != 0 else current_position[1],
+            request.z_pos /
+            1000.0 if request.z_pos != 0 else current_position[2],
+            math.radians(
+                request.rx_pos) if request.rx_pos != 0 else current_position[3],
+            math.radians(
+                request.ry_pos) if request.ry_pos != 0 else current_position[4],
+            math.radians(
+                request.rz_pos) if request.rz_pos != 0 else current_position[5]
+        ]
+
+    def _validate_6dof_position(self, target_pos: List[float],
+                                current_pos: List[float], xbot_id: int) -> Optional[List[float]]:
+        """Enhanced 6DOF position validation."""
+        return self.pos_utils.constrain_position_to_bounds(current_pos, target_pos)
+
     def _handle_service_error(self, error: Exception, response):
-        """Handle service errors consistently."""
-        error_msg = f"Service error: {str(error)}"
-        self.node.get_logger().error(f"❌ {error_msg}")
-        response.success = False
-        response.status_message = error_msg
         """Handle service errors consistently."""
         error_msg = f"Service error: {str(error)}"
         self.node.get_logger().error(f"❌ {error_msg}")
