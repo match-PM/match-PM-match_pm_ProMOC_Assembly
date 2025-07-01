@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 from enum import Enum
 
 # Smart PMCLib import
-from .pmclib_loader import bot, get_pmclib_status
+from .pmclib_loader import bot, get_pmclib_status, XbotState
 
 
 class MotionStatus(Enum):
@@ -31,16 +31,37 @@ class PositionUtils:
     def get_current_position(self, xbot_id: int = 0) -> Optional[List[float]]:
         """Get current XBot position."""
         try:
-            xbot_data_list = bot.get_all_xbot_info(
-                0)  # Feedback option 0 = position
-            if not xbot_data_list or len(xbot_data_list) <= xbot_id:
-                self.node.get_logger().error(f"❌ No data for XBot {xbot_id}")
+            # Enhanced debugging for real PMCLib (less verbose)
+            if not self.is_mock and xbot_id > 0:
+                self.node.get_logger().debug(f"🔍 Requesting position for XBot {xbot_id}")
+            
+            xbot_data_list = bot.get_all_xbot_info(0)  # Feedback option 0 = position
+            
+            if not xbot_data_list:
+                if not self.is_mock:
+                    self.node.get_logger().error(f"❌ No XBot data returned from PMCLib")
                 return None
+                
+            # Check if requested XBot ID exists
+            if xbot_id >= len(xbot_data_list):
+                if not self.is_mock:
+                    # Only log warning once per session for each XBot ID
+                    warning_key = f"xbot_{xbot_id}_unavailable"
+                    if not hasattr(self, '_logged_warnings'):
+                        self._logged_warnings = set()
+                    
+                    if warning_key not in self._logged_warnings:
+                        self.node.get_logger().warning(
+                            f"⚠️ XBot {xbot_id} not available. Available XBots: {len(xbot_data_list)} "
+                            f"(indices 0-{len(xbot_data_list)-1}). Using XBot 0 as fallback.")
+                        self._logged_warnings.add(warning_key)
+                
+                # Use XBot 0 as fallback
+                xbot_id = 0
 
-            xbot_data = xbot_data_list[xbot_id] if len(
-                xbot_data_list) > xbot_id else xbot_data_list[0]
+            xbot_data = xbot_data_list[xbot_id]
 
-            return [
+            position = [
                 float(xbot_data.x_pos),
                 float(xbot_data.y_pos),
                 float(xbot_data.z_pos),
@@ -48,51 +69,198 @@ class PositionUtils:
                 float(xbot_data.ry_pos),
                 float(xbot_data.rz_pos)
             ]
+            
+            return position
+            
         except (IndexError, AttributeError) as e:
             if not self.is_mock:
-                self.node.get_logger().error(f"❌ Error getting position: {e}")
+                self.node.get_logger().error(f"❌ Error getting position for XBot {xbot_id}: {e}")
             return None
 
     def get_xbot_status_info(self, xbot_id: int = 0) -> Optional[dict]:
         """Get comprehensive XBot status including movement state."""
         try:
-            # Get detailed status from XBot controller
-            xbot_status = bot.get_xbot_status(xbot_id)
+            # Enhanced debugging for real PMCLib
+            if not self.is_mock:
+                self.node.get_logger().debug(f"🔍 Getting status info for XBot {xbot_id}")
+            
+            # Get basic position first (most reliable)
+            current_pos = self.get_current_position(xbot_id)
+            if not current_pos:
+                if not self.is_mock:
+                    self.node.get_logger().warning(f"⚠️ No position data for XBot {xbot_id}, but continuing with status check")
+                # Don't return None immediately - try to get status anyway
+                current_pos = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Fallback
 
-            # Get basic info for position
-            xbot_data_list = bot.get_all_xbot_info(0)
-            if not xbot_data_list or len(xbot_data_list) <= xbot_id:
-                return None
-
-            xbot_data = xbot_data_list[xbot_id] if len(
-                xbot_data_list) > xbot_id else xbot_data_list[0]
+            # Try to get detailed status from XBot controller
+            try:
+                if not self.is_mock:
+                    self.node.get_logger().debug(f"🔍 Calling bot.get_xbot_status({xbot_id})")
+                
+                xbot_status = bot.get_xbot_status(xbot_id)
+                
+                if not self.is_mock:
+                    self.node.get_logger().debug(f"🔍 XBot {xbot_id} raw status: {xbot_status}")
+                    self.node.get_logger().debug(f"🔍 XBot {xbot_id} state: {xbot_status.xbot_state}")
+                
+                xbot_state_str = self._xbot_state_to_string(xbot_status.xbot_state)
+                xbot_state_enum = xbot_status.xbot_state
+                
+                if not self.is_mock:
+                    self.node.get_logger().debug(f"🔍 XBot {xbot_id} interpreted state: {xbot_state_str}")
+                
+            except Exception as e:
+                # Fallback if status call fails
+                if not self.is_mock:
+                    self.node.get_logger().warning(f"⚠️ Could not get XBot {xbot_id} status: {e}")
+                    # Try to understand what XBots are available
+                    try:
+                        # Check how many XBots the system thinks are available
+                        all_status = []
+                        for test_id in range(4):  # Test first 4 XBot IDs
+                            try:
+                                test_status = bot.get_xbot_status(test_id)
+                                all_status.append(f"XBot {test_id}: available")
+                            except Exception as test_e:
+                                all_status.append(f"XBot {test_id}: {test_e}")
+                        self.node.get_logger().debug(f"🔍 XBot availability check: {all_status}")
+                    except:
+                        pass
+                        
+                xbot_state_str = "IDLE"
+                xbot_state_enum = XbotState.XBOT_IDLE
 
             status_info = {
-                'position': [
-                    float(xbot_data.x_pos),
-                    float(xbot_data.y_pos),
-                    float(xbot_data.z_pos),
-                    float(xbot_data.rx_pos),
-                    float(xbot_data.ry_pos),
-                    float(xbot_data.rz_pos)
-                ],
-                'xbot_state': xbot_data.xbot_state,
-                'xbot_id': xbot_data.xbot_id,
-                'cmd_label': getattr(xbot_status, 'cmd_label', 0),
-                'force_mode': getattr(xbot_status, 'force_mode', False),
-                'motion_buffer_blocked': getattr(xbot_status, 'motion_buffer_blocked', False),
-                'buffered_motion_count': getattr(xbot_status, 'buffered_motion_count', 0),
-                'is_connected_to_group': getattr(xbot_status, 'connected_to_group', False),
-                'connected_group_id': getattr(xbot_status, 'connected_group_id', -1)
+                'position': current_pos,
+                'xbot_state': xbot_state_enum,
+                'xbot_state_string': xbot_state_str,
+                'xbot_id': xbot_id,
+                'cmd_label': 0,
+                'force_mode': False,
+                'motion_buffer_blocked': False,
+                'buffered_motion_count': 0,
+                'is_connected_to_group': False,
+                'connected_group_id': -1
             }
 
             return status_info
 
         except Exception as e:
             if not self.is_mock:
-                self.node.get_logger().error(
-                    f"❌ Error getting XBot status: {e}")
+                self.node.get_logger().error(f"❌ Error getting XBot status: {e}")
             return None
+
+    def diagnose_xbot_availability(self, max_xbot_id: int = 4) -> dict:
+        """Diagnose which XBots are available and responding."""
+        diagnosis = {
+            'available_xbots': [],
+            'total_from_get_all': 0,
+            'errors': [],
+            'feedback_options': {}
+        }
+        
+        try:
+            # Test different feedback options
+            for feedback_opt in [0, 1, 2]:
+                try:
+                    data_list = bot.get_all_xbot_info(feedback_opt)
+                    count = len(data_list) if data_list else 0
+                    diagnosis['feedback_options'][feedback_opt] = {
+                        'count': count,
+                        'success': True
+                    }
+                    if feedback_opt == 0:  # Position feedback
+                        diagnosis['total_from_get_all'] = count
+                except Exception as e:
+                    diagnosis['feedback_options'][feedback_opt] = {
+                        'count': 0,
+                        'success': False,
+                        'error': str(e)
+                    }
+            
+            # Test individual XBot status calls
+            for xbot_id in range(max_xbot_id):
+                try:
+                    status = bot.get_xbot_status(xbot_id)
+                    diagnosis['available_xbots'].append({
+                        'id': xbot_id,
+                        'status': 'available',
+                        'state': self._xbot_state_to_string(status.xbot_state)
+                    })
+                except Exception as e:
+                    diagnosis['available_xbots'].append({
+                        'id': xbot_id,
+                        'status': 'error',
+                        'error': str(e)
+                    })
+                    
+        except Exception as e:
+            diagnosis['errors'].append(f"General diagnosis error: {e}")
+            
+        return diagnosis
+
+    def get_xbot_state_string(self, xbot_id: int = 0) -> str:
+        """Get just the XBot state as a string - simple and reliable."""
+        try:
+            # For real PMCLib, handle the case where only XBot 0 is available
+            if not self.is_mock:
+                # First check how many XBots are available
+                try:
+                    xbot_data_list = bot.get_all_xbot_info(0)
+                    available_count = len(xbot_data_list) if xbot_data_list else 0
+                    
+                    if xbot_id >= available_count:
+                        # Only log debug message, not warning
+                        self.node.get_logger().debug(
+                            f"🔍 XBot {xbot_id} not available (only {available_count} XBots), using XBot 0")
+                        xbot_id = 0  # Fallback to XBot 0
+                except:
+                    pass  # If this fails, continue with original xbot_id
+                    
+            xbot_status = bot.get_xbot_status(xbot_id)
+            return self._xbot_state_to_string(xbot_status.xbot_state)
+        except Exception as e:
+            if not self.is_mock:
+                self.node.get_logger().debug(f"🔍 get_xbot_state_string failed for XBot {xbot_id}: {e}")
+                # Try XBot 0 as fallback
+                if xbot_id != 0:
+                    try:
+                        xbot_status = bot.get_xbot_status(0)
+                        return self._xbot_state_to_string(xbot_status.xbot_state)
+                    except:
+                        pass
+            return "IDLE"  # Safe fallback
+
+    def _xbot_state_to_string(self, xbot_state) -> str:
+        """Convert XbotState enum to readable string"""
+        try:
+            if hasattr(xbot_state, 'name'):
+                return xbot_state.name
+            else:
+                # Fallback for integer values
+                state_names = {
+                    -2: "XBOT_PREVIEW",
+                    -1: "XBOT_UNKNOWN",
+                    0: "XBOT_UNDETECTED",
+                    1: "XBOT_DISCOVERING",
+                    2: "XBOT_LANDED",
+                    3: "XBOT_IDLE",
+                    4: "XBOT_DISABLED",
+                    5: "XBOT_MOTION",
+                    6: "XBOT_WAIT",
+                    7: "XBOT_STOPPING",
+                    8: "XBOT_OBSTACLE_DETECTED",
+                    9: "XBOT_HOLDPOSITION",
+                    10: "XBOT_STOPPED",
+                    11: "XBOT_RESERVED",
+                    12: "XBOT_RESERVED1",
+                    13: "XBOT_RESERVED2",
+                    14: "XBOT_ERROR",
+                    15: "XBOT_UNINSTALLED"
+                }
+                return state_names.get(int(xbot_state), "UNKNOWN")
+        except:
+            return "UNKNOWN"
 
     def wait_for_motion_completion(self, xbot_id: int, target_position: List[float],
                                    position_tolerance: float, max_wait_time: float = 10.0) -> MotionStatus:
@@ -170,6 +338,120 @@ class PositionUtils:
             f"⚠️ Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s")
         return MotionStatus.TIMEOUT
 
+    def wait_for_motion_completion_robust(self, xbot_id: int, target_position: List[float],
+                                          position_tolerance: float, max_wait_time: float = 10.0) -> MotionStatus:
+        """
+        Robust motion completion waiting that handles real PMCLib quirks.
+        Falls back to alternative XBot IDs if the requested one becomes unavailable.
+        """
+        start_time = time.time()
+        last_log_time = start_time
+        last_known_good_xbot = xbot_id
+
+        # For real PMCLib, first check what XBots are available
+        if not self.is_mock:
+            diagnosis = self.diagnose_xbot_availability()
+            available_xbots = [x['id'] for x in diagnosis['available_xbots'] if x['status'] == 'available']
+            self.node.get_logger().info(f"🔍 Available XBots for motion monitoring: {available_xbots}")
+            
+            if xbot_id not in available_xbots and available_xbots:
+                fallback_xbot = available_xbots[0]
+                self.node.get_logger().warning(
+                    f"⚠️ XBot {xbot_id} not available, using XBot {fallback_xbot} for monitoring")
+                last_known_good_xbot = fallback_xbot
+
+        while time.time() - start_time < max_wait_time:
+            try:
+                # Try requested XBot first
+                state_str = self.get_xbot_state_string(xbot_id)
+                monitoring_xbot = xbot_id
+                
+                # If that fails and we're using real PMCLib, try fallback
+                if not self.is_mock and state_str in ["IDLE", "ERROR"] and last_known_good_xbot != xbot_id:
+                    try:
+                        fallback_state = self.get_xbot_state_string(last_known_good_xbot)
+                        if fallback_state not in ["IDLE", "ERROR"]:
+                            state_str = fallback_state
+                            monitoring_xbot = last_known_good_xbot
+                            self.node.get_logger().debug(
+                                f"🔄 Using XBot {monitoring_xbot} for monitoring (requested: {xbot_id})")
+                    except:
+                        pass
+                
+                elapsed_time = time.time() - start_time
+
+                # Log progress every 1 second
+                if time.time() - last_log_time > 1.0:
+                    self.node.get_logger().info(
+                        f"🔄 Motion monitoring XBot {monitoring_xbot}: {state_str} (t={elapsed_time:.1f}s)")
+                    last_log_time = time.time()
+
+                # Check if motion completed
+                if state_str in ["XBOT_IDLE", "IDLE"]:
+                    self.node.get_logger().info(
+                        f"✅ Motion completed in {elapsed_time:.2f}s (monitored via XBot {monitoring_xbot})")
+                    return MotionStatus.COMPLETED
+
+                # Check for error states
+                elif state_str in ["XBOT_ERROR", "ERROR", "XBOT_STOPPED", "XBOT_OBSTACLE_DETECTED"]:
+                    self.node.get_logger().error(
+                        f"❌ Motion error - State: {state_str} (XBot {monitoring_xbot})")
+                    return MotionStatus.ERROR
+
+                # Continue waiting for motion states
+                time.sleep(0.1)
+
+            except Exception as e:
+                self.node.get_logger().warning(f"⚠️ Error checking motion status: {e}")
+                time.sleep(0.1)
+
+        # Timeout
+        self.node.get_logger().warning(f"⏰ Motion timeout after {max_wait_time}s")
+        return MotionStatus.TIMEOUT
+
+    def wait_for_motion_completion_simple(self, xbot_id: int, target_position: List[float],
+                                          position_tolerance: float, max_wait_time: float = 10.0) -> MotionStatus:
+        """
+        Simple and robust motion completion waiting using string states.
+        """
+        start_time = time.time()
+        last_log_time = start_time
+
+        while time.time() - start_time < max_wait_time:
+            try:
+                # Get current state as string
+                state_str = self.get_xbot_state_string(xbot_id)
+                elapsed_time = time.time() - start_time
+
+                # Log progress every 1 second
+                if time.time() - last_log_time > 1.0:
+                    self.node.get_logger().info(
+                        f"🔄 XBot {xbot_id} motion: {state_str} (t={elapsed_time:.1f}s)")
+                    last_log_time = time.time()
+
+                # Check if motion completed
+                if state_str in ["XBOT_IDLE", "IDLE"]:
+                    self.node.get_logger().info(
+                        f"✅ XBot {xbot_id} motion completed in {elapsed_time:.2f}s")
+                    return MotionStatus.COMPLETED
+
+                # Check for error states
+                elif state_str in ["XBOT_ERROR", "ERROR", "XBOT_STOPPED", "XBOT_OBSTACLE_DETECTED"]:
+                    self.node.get_logger().error(
+                        f"❌ XBot {xbot_id} motion error - State: {state_str}")
+                    return MotionStatus.ERROR
+
+                # Continue waiting for motion states
+                time.sleep(0.1)
+
+            except Exception as e:
+                self.node.get_logger().warning(f"⚠️ Error checking motion status: {e}")
+                time.sleep(0.1)
+
+        # Timeout
+        self.node.get_logger().warning(f"⏰ XBot {xbot_id} motion timeout after {max_wait_time}s")
+        return MotionStatus.TIMEOUT
+
     def _wait_for_motion_start(self, xbot_id: int, max_start_wait: float = 2.0) -> bool:
         """Wait for motion to start (XBot should become MOVING)."""
         start_time = time.time()
@@ -188,20 +470,50 @@ class PositionUtils:
     def _interpret_xbot_state(self, xbot_state) -> MotionStatus:
         """Interpret XBot state enum to motion status."""
         try:
-            # Convert to string if it's an enum
-            state_str = str(xbot_state).upper()
-
-            if 'IDLE' in state_str or 'READY' in state_str:
+            # Handle XbotState enum values
+            if hasattr(XbotState, 'XBOT_IDLE') and xbot_state == XbotState.XBOT_IDLE:
                 return MotionStatus.IDLE
-            elif 'MOVING' in state_str or 'MOTION' in state_str or 'ACTIVE' in state_str:
+            elif hasattr(XbotState, 'XBOT_MOTION') and xbot_state == XbotState.XBOT_MOTION:
                 return MotionStatus.MOVING
-            elif 'ERROR' in state_str or 'FAULT' in state_str or 'ACCIDENT' in state_str:
+            elif hasattr(XbotState, 'XBOT_WAIT') and xbot_state == XbotState.XBOT_WAIT:
+                return MotionStatus.MOVING
+            elif hasattr(XbotState, 'XBOT_STOPPING') and xbot_state == XbotState.XBOT_STOPPING:
+                return MotionStatus.MOVING
+            elif hasattr(XbotState, 'XBOT_ERROR') and xbot_state == XbotState.XBOT_ERROR:
                 return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_STOPPED') and xbot_state == XbotState.XBOT_STOPPED:
+                return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_OBSTACLE_DETECTED') and xbot_state == XbotState.XBOT_OBSTACLE_DETECTED:
+                return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_HOLDPOSITION') and xbot_state == XbotState.XBOT_HOLDPOSITION:
+                return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_DISABLED') and xbot_state == XbotState.XBOT_DISABLED:
+                return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_UNDETECTED') and xbot_state == XbotState.XBOT_UNDETECTED:
+                return MotionStatus.ERROR
+            elif hasattr(XbotState, 'XBOT_LANDED') and xbot_state == XbotState.XBOT_LANDED:
+                return MotionStatus.IDLE
             else:
-                # Log unknown state for debugging
-                self.node.get_logger().debug(
-                    f"🔧 Unknown XBot state: {xbot_state}")
-                return MotionStatus.UNKNOWN
+                # Fallback: try integer comparison
+                state_int = int(xbot_state) if hasattr(xbot_state, '__int__') else xbot_state
+                
+                if state_int == 3:  # XBOT_IDLE
+                    return MotionStatus.IDLE
+                elif state_int == 5:  # XBOT_MOTION
+                    return MotionStatus.MOVING
+                elif state_int == 6:  # XBOT_WAIT
+                    return MotionStatus.MOVING
+                elif state_int == 7:  # XBOT_STOPPING
+                    return MotionStatus.MOVING
+                elif state_int in [2]:  # XBOT_LANDED
+                    return MotionStatus.IDLE
+                elif state_int in [14, 10, 8, 9, 4, 0]:  # ERROR states
+                    return MotionStatus.ERROR
+                else:
+                    # Log unknown state for debugging
+                    self.node.get_logger().debug(
+                        f"🔧 Unknown XBot state: {xbot_state} (value: {state_int})")
+                    return MotionStatus.UNKNOWN
 
         except Exception as e:
             self.node.get_logger().error(
@@ -239,17 +551,23 @@ class PositionUtils:
     def _log_motion_progress(self, xbot_id: int, status_info: dict,
                              target_position: List[float], elapsed_time: float):
         """Log detailed motion progress."""
-        current_pos = status_info['position']
-        xbot_state = status_info['xbot_state']
+        if not status_info:
+            return
+            
+        current_pos = status_info.get('position')
+        if not current_pos or len(current_pos) < 6:
+            return
+            
+        xbot_state_str = status_info.get('xbot_state_string', 'UNKNOWN')
         buffered_count = status_info.get('buffered_motion_count', 0)
 
-        if len(current_pos) >= 6 and len(target_position) >= 6:
+        if len(target_position) >= 6:
             pos_errors = [target_position[i] - current_pos[i]
                           for i in range(6)]
 
             self.node.get_logger().debug(
                 f"🎯 XBot {xbot_id} progress ({elapsed_time:.1f}s):\n"
-                f"  State: {xbot_state}, Buffered: {buffered_count}\n"
+                f"  State: {xbot_state_str}, Buffered: {buffered_count}\n"
                 f"  Position: ({current_pos[0]:.4f}, {current_pos[1]:.4f}, {current_pos[2]:.4f})m\n"
                 f"  Rotation: ({math.degrees(current_pos[3]):.1f}°, {math.degrees(current_pos[4]):.1f}°, {math.degrees(current_pos[5]):.1f}°)\n"
                 f"  Errors: XYZ=({pos_errors[0]*1000:.1f}, {pos_errors[1]*1000:.1f}, {pos_errors[2]*1000:.1f})mm"

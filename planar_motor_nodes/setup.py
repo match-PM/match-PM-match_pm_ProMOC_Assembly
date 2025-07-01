@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             "mover_service_node = planar_motor_nodes.mover_service_node:main",
             "mover_service_client = planar_motor_nodes.mover_service_client:main",
+            "mover_service_node_test = planar_motor_nodes.mover_service_node_test:main",
         ],
     },
 )

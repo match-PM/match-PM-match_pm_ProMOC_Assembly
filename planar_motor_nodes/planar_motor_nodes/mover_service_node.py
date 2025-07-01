@@ -203,12 +203,21 @@ class MoverServiceNode(Node):
         msg = XBotInfo()
         try:
             xbot_data_list = bot.get_all_xbot_info(0)
-            msg.x_pos = float(xbot_data_list[0].x_pos)
-            msg.y_pos = float(xbot_data_list[0].y_pos)
-            msg.z_pos = float(xbot_data_list[0].z_pos)
-            msg.rx_pos = float(xbot_data_list[0].rx_pos)
-            msg.ry_pos = float(xbot_data_list[0].ry_pos)
-            msg.rz_pos = float(xbot_data_list[0].rz_pos)
+            if xbot_data_list and len(xbot_data_list) > 0:
+                msg.x_pos = float(xbot_data_list[0].x_pos)
+                msg.y_pos = float(xbot_data_list[0].y_pos)
+                msg.z_pos = float(xbot_data_list[0].z_pos)
+                msg.rx_pos = float(xbot_data_list[0].rx_pos)
+                msg.ry_pos = float(xbot_data_list[0].ry_pos)
+                msg.rz_pos = float(xbot_data_list[0].rz_pos)
+            else:
+                # Default values if no data available
+                msg.x_pos = 0.0
+                msg.y_pos = 0.0
+                msg.z_pos = 0.0
+                msg.rx_pos = 0.0
+                msg.ry_pos = 0.0
+                msg.rz_pos = 0.0
         except IndexError as e:
             pass
             # self.get_logger().error("Error: xbot_data_list is empty")
@@ -532,11 +541,15 @@ class MoverServiceNode(Node):
     def get_current_position(self) -> list:
         try:
             xbot_data_list = bot.get_all_xbot_info(0)
-            current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
-                                float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
-            return current_position
-        except IndexError:
-            self.get_logger().error("❌ Error: xbot_data_list is empty")
+            if xbot_data_list and len(xbot_data_list) > 0:
+                current_position = [float(xbot_data_list[0].x_pos), float(xbot_data_list[0].y_pos), float(xbot_data_list[0].z_pos),
+                                    float(xbot_data_list[0].rx_pos), float(xbot_data_list[0].ry_pos), float(xbot_data_list[0].rz_pos)]
+                return current_position
+            else:
+                self.get_logger().warning("⚠️ No XBot data available, using default position")
+                return [0, 0, 0, 0, 0, 0]
+        except (IndexError, AttributeError) as e:
+            self.get_logger().error(f"❌ Error getting position: {e}")
             return [0, 0, 0, 0, 0, 0]
 
     def check_position_reached(self, target_position: list, current_position: list, tolerance: float = 0.1, max_wait_time: float = 2.0) -> bool:

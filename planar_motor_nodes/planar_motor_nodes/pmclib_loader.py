@@ -114,6 +114,38 @@ class PMCLibLoader:
 _pmclib_loader = PMCLibLoader()
 bot, sys_cmd, pmc_types = _pmclib_loader.load_pmclib()
 
+# Export XbotState and other enums for easy access
+try:
+    if _pmclib_loader.use_mock:
+        from .mock_pmclib import XbotState, XbotType, FeedbackType, LevitateOptions
+    else:
+        # Try to import from the real PMCLib
+        try:
+            if hasattr(pmc_types, 'XbotState'):
+                XbotState = pmc_types.XbotState
+            else:
+                from .mock_pmclib import XbotState
+            
+            if hasattr(pmc_types, 'XbotType'):
+                XbotType = pmc_types.XbotType
+            else:
+                from .mock_pmclib import XbotType
+                
+            if hasattr(pmc_types, 'FeedbackType'):
+                FeedbackType = pmc_types.FeedbackType
+            else:
+                from .mock_pmclib import FeedbackType
+                
+            if hasattr(pmc_types, 'LevitateOptions'):
+                LevitateOptions = pmc_types.LevitateOptions
+            else:
+                from .mock_pmclib import LevitateOptions
+        except:
+            # Fallback to mock if anything fails
+            from .mock_pmclib import XbotState, XbotType, FeedbackType, LevitateOptions
+except ImportError:
+    from .mock_pmclib import XbotState, XbotType, FeedbackType, LevitateOptions
+
 
 def get_pmclib_status() -> dict:
     """Hole Status der geladenen PMCLib"""
