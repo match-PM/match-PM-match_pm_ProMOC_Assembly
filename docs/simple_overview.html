@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProMOC Assembly - Dokumentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2980B9, #27AE60);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        
+        .header p {
+            margin: 0.5rem 0 0 0;
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #2980B9;
+            transition: transform 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        
+        .card h3 {
+            margin-top: 0;
+            color: #2980B9;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card.hardware { border-left-color: #E67E22; }
+        .card.hardware h3 { color: #E67E22; }
+        
+        .card.simulation { border-left-color: #27AE60; }
+        .card.simulation h3 { color: #27AE60; }
+        
+        .card.development { border-left-color: #8E44AD; }
+        .card.development h3 { color: #8E44AD; }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .badge.software { background: #2980B9; }
+        .badge.hardware { background: #E67E22; }
+        .badge.simulation { background: #27AE60; }
+        
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        
+        .file-tree {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .status.ready { background: #d4edda; color: #155724; }
+        .status.development { background: #fff3cd; color: #856404; }
+        
+        ul {
+            padding-left: 1.5rem;
+        }
+        
+        li {
+            margin: 0.5rem 0;
+        }
+        
+        a {
+            color: #2980B9;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .install-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 ProMOC Assembly</h1>
+        <p>Modular ROS2 System für Präzisions-Assembly</p>
+        <div style="margin-top: 1rem;">
+            <span class="status ready">✅ Bereit für Simulation</span>
+            <span class="status development">🔧 Hardware-Integration verfügbar</span>
+        </div>
+    </div>
+
+    <div class="install-section">
+        <h2>🚀 Schnellstart</h2>
+        <p>Führe diese Befehle aus, um das System zu starten:</p>
+        <div class="code-block">
+# 1. System installieren (einmalig)
+cd setup/
+./install_all.sh
+
+# 2. Workspace sourcen
+cd ..
+source install/setup.bash
+
+# 3. Simulation starten
+ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Installation -->
+        <div class="card">
+            <h3>📦 Installation</h3>
+            <p>Komplette Installationsanleitung für das ProMOC Assembly System.</p>
+            <ul>
+                <li><strong>Master-Installer:</strong> <code>./setup/install_all.sh</code></li>
+                <li><strong>System-Dependencies:</strong> .NET, Mono, Build-Tools</li>
+                <li><strong>Python-Dependencies:</strong> pythonnet, pylablib</li>
+                <li><strong>ROS2-Dependencies:</strong> Automatisch via rosdep</li>
+            </ul>
+            <div class="code-block">cd setup/ && ./install_all.sh</div>
+            <span class="badge software">Installation</span>
+        </div>
+
+        <!-- Quick Start -->
+        <div class="card simulation">
+            <h3>⚡ Quick Start</h3>
+            <p>In 5 Minuten zur funktionsfähigen Simulation.</p>
+            <ul>
+                <li><strong>Dual LTS300:</strong> Vollständiges X/Z-System</li>
+                <li><strong>Einzelachsen-Test:</strong> X oder Z separat testen</li>
+                <li><strong>Service-Calls:</strong> Bewegungskommandos</li>
+                <li><strong>Validierung:</strong> System-Checks</li>
+            </ul>
+            <div class="code-block">ros2 launch promoc_bringup dual_lts300_gazebo.launch.py</div>
+            <span class="badge simulation">Simulation</span>
+        </div>
+
+        <!-- Hardware -->
+        <div class="card hardware">
+            <h3>🔧 Hardware</h3>
+            <p>Setup und Konfiguration der physischen Hardware.</p>
+            <ul>
+                <li><strong>Thorlabs LTS300:</strong> Lineare Präzisionsachsen</li>
+                <li><strong>PMCLib:</strong> Planar Motor Integration</li>
+                <li><strong>Safety-Systeme:</strong> Kollisionserkennung</li>
+                <li><strong>Kalibrierung:</strong> Homing und Referenzierung</li>
+            </ul>
+            <span class="badge hardware">Hardware</span>
+        </div>
+
+        <!-- API -->
+        <div class="card development">
+            <h3>🔌 API Reference</h3>
+            <p>Detaillierte API-Dokumentation für Entwickler.</p>
+            <ul>
+                <li><strong>Linear Axis Nodes:</strong> LTS300 Steuerung</li>
+                <li><strong>Planar Motor Nodes:</strong> 2D-Positionierung</li>
+                <li><strong>ROS2 Services:</strong> Move, Home, Position</li>
+                <li><strong>Custom Messages:</strong> Interfaces</li>
+            </ul>
+            <span class="badge development">API</span>
+        </div>
+
+        <!-- Architecture -->
+        <div class="card">
+            <h3>🏗️ Architektur</h3>
+            <p>System-Design und modularer Aufbau.</p>
+            <ul>
+                <li><strong>Modular Design:</strong> Lose gekoppelte Komponenten</li>
+                <li><strong>Hardware Abstraction:</strong> Treiber-Layer</li>
+                <li><strong>ROS2 Integration:</strong> Services und Topics</li>
+                <li><strong>Safety by Design:</strong> Sicherheitssysteme</li>
+            </ul>
+            <span class="badge software">Architektur</span>
+        </div>
+
+        <!-- Testing -->
+        <div class="card simulation">
+            <h3>🧪 Testing</h3>
+            <p>Validierung und Qualitätssicherung.</p>
+            <ul>
+                <li><strong>System-Validation:</strong> Vollständige Checks</li>
+                <li><strong>Funktions-Tests:</strong> Bewegung und Services</li>
+                <li><strong>Hardware-Tests:</strong> Echte vs. simulierte Hardware</li>
+                <li><strong>Performance:</strong> Latenz und Präzision</li>
+            </ul>
+            <div class="code-block">cd setup/ && ./validate_setup_enhanced.sh</div>
+            <span class="badge simulation">Testing</span>
+        </div>
+    </div>
+
+    <div class="install-section">
+        <h2>📁 Projekt-Struktur</h2>
+        <div class="file-tree">
+ProMOC_Assembly/
+├── linear_axis_nodes/          # Thorlabs LTS300 Steuerung
+│   ├── drivers/               # Hardware-Treiber (Real/Sim/Mock)
+│   └── lts300_service_node.py # ROS2 Service Node
+├── planar_motor_nodes/        # Planar Motor Steuerung
+│   ├── mover_service_node.py  # Hauptservice
+│   ├── pmclib_loader.py       # Smart PMCLib Loading
+│   └── mock_pmclib.py         # Mock-Implementation
+├── promoc_assembly_interfaces/ # Custom ROS2 Messages/Services
+├── promoc_bringup/            # Launch-Files und Konfiguration
+│   ├── launch/                # Gazebo-Launch-Files
+│   ├── config/                # Controller-Konfigurationen
+│   └── urdf/                  # Modulare Robot-Beschreibungen
+├── setup/                     # Installation und Validation
+│   ├── install_all.sh         # Master-Installer
+│   └── validate_setup_enhanced.sh # System-Validation
+├── docs/                      # Diese Dokumentation
+└── local_libs/               # Proprietary Libraries (PMCLib)
+        </div>
+    </div>
+
+    <div class="install-section">
+        <h2>🎮 Verwendung</h2>
+        
+        <h3>System-Validation</h3>
+        <div class="code-block">
+# Vollständige System-Prüfung
+cd setup/
+./validate_setup_enhanced.sh
+
+# Zeigt detaillierten Report in VALIDATION_REPORT.md
+        </div>
+
+        <h3>Simulation starten</h3>
+        <div class="code-block">
+# Workspace sourcen
+source install/setup.bash
+
+# Dual LTS300 System
+ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+
+# Einzelachsen-Test
+ros2 launch promoc_bringup test_single_lts300.launch.py test_axis:=x
+        </div>
+
+        <h3>Bewegungskommandos</h3>
+        <div class="code-block">
+# X-Achse zu 50mm bewegen
+ros2 service call /promoc_assembly/x_axis/move_absolute \
+  promoc_assembly_interfaces/srv/linear_axis/MoveAbsolute \
+  "{target_position: 0.05, velocity: 0.01}"
+
+# Position abfragen
+ros2 service call /promoc_assembly/x_axis/get_position \
+  promoc_assembly_interfaces/srv/linear_axis/GetPosition
+
+# Achse homen
+ros2 service call /promoc_assembly/x_axis/home \
+  promoc_assembly_interfaces/srv/linear_axis/Home
+        </div>
+
+        <h3>Status überwachen</h3>
+        <div class="code-block">
+# Verfügbare Topics anzeigen
+ros2 topic list
+
+# Achsen-Status live verfolgen
+ros2 topic echo /promoc_assembly/x_axis/linear_axis_info
+        </div>
+    </div>
+
+    <div class="install-section">
+        <h2>📋 Verfügbare Dokumentation</h2>
+        <p>Nach der Installation von Sphinx können Sie die vollständige Dokumentation generieren:</p>
+        <div class="code-block">
+# Sphinx installieren (für Ubuntu 24.04)
+sudo apt install python3-sphinx python3-sphinx-rtd-theme
+
+# Oder mit pip (--break-system-packages erforderlich)
+pip install --break-system-packages sphinx sphinx-rtd-theme myst-parser
+
+# Dokumentation generieren
+cd docs/
+make html
+
+# In Browser öffnen
+make view
+        </div>
+    </div>
+
+    <div class="install-section">
+        <h2>🆘 Troubleshooting</h2>
+        <ul>
+            <li><strong>ROS2 nicht gefunden:</strong> <code>source /opt/ros/humble/setup.bash</code></li>
+            <li><strong>Package nicht gefunden:</strong> <code>source install/setup.bash</code></li>
+            <li><strong>Build-Fehler:</strong> <code>rm -rf build install log && cd setup && ./install_all.sh</code></li>
+            <li><strong>Permissions:</strong> <code>chmod +x setup/*.sh</code></li>
+            <li><strong>Dependencies:</strong> <code>cd setup && ./validate_setup_enhanced.sh</code></li>
+        </ul>
+    </div>
+
+    <footer style="text-align: center; margin-top: 3rem; padding: 2rem; border-top: 1px solid #e2e8f0; color: #666;">
+        <p>ProMOC Assembly Documentation - Generiert am $(date)</p>
+        <p>Für detaillierte Sphinx-basierte Dokumentation: <code>cd docs && make html</code></p>
+    </footer>
+</body>
+</html>

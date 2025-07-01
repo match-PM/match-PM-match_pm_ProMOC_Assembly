@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Linear Axis Nodes API &mdash; ProMOC Assembly 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=86f27845" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=276fb2b3" />
+
+  
+  
+        <script src="../_static/jquery.js?v=8dae8fb0"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=8d563738"></script>
+        <script src="../_static/doctools.js?v=888ff710"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Planar Motor Nodes API" href="planar_motor_nodes.html" />
+    <link rel="prev" title="Simulation: Testing" href="../simulation/testing.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ProMOC Assembly
+          </a>
+              <div class="version">
+                1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/index.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/index.html">Tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">System Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/interfaces.html">Interfaces</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/safety.html">Safety</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_bringup.html">Package: promoc_bringup</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/testing.html">Simulation: Testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Linear Axis Nodes API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#core-components">Core Components</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#module-linear_axis_nodes.lts300_service_node">Service Node</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode"><code class="docutils literal notranslate"><span class="pre">LTS300ServiceNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#linear_axis_nodes.lts300_service_node.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#drivers">Drivers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#module-linear_axis_nodes.drivers.linear_axis_driver">Base Driver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-linear_axis_nodes.drivers.thorlabs_lts300_driver">Thorlabs LTS300 Driver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#module-linear_axis_nodes.drivers.simulated_linear_axis_driver">Simulation Driver</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#gazebo-driver">Gazebo Driver</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#ros2-interfaces">ROS2 Interfaces</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#services">Services</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#move-absolute">Move Absolute</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#move-relative">Move Relative</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#get-position">Get Position</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#home">Home</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#shutdown">Shutdown</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#topics">Topics</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#status-information">Status Information</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#python-client-example">Python Client Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#command-line-usage">Command Line Usage</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#node-parameters">Node Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hardware-configuration">Hardware Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#safety-features">Safety Features</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="planar_motor_nodes.html">Planar Motor Nodes API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utilities.html">API: Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/debugging.html">Debugging</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/changelog.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ProMOC Assembly</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Linear Axis Nodes API</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/linear_axis_nodes.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="linear-axis-nodes-api">
+<h1>Linear Axis Nodes API<a class="headerlink" href="#linear-axis-nodes-api" title="Link to this heading"></a></h1>
+<p>This module provides control for Thorlabs LTS300 linear positioning stages.</p>
+<section id="core-components">
+<span id="module-linear_axis_nodes"></span><h2>Core Components<a class="headerlink" href="#core-components" title="Link to this heading"></a></h2>
+<section id="module-linear_axis_nodes.lts300_service_node">
+<span id="service-node"></span><h3>Service Node<a class="headerlink" href="#module-linear_axis_nodes.lts300_service_node" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">linear_axis_nodes.lts300_service_node.</span></span><span class="sig-name descname"><span class="pre">LTS300ServiceNode</span></span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.ros2.org/latest/api/rclpy/api/node.html#rclpy.node.Node" title="(in rclpy)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Node</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the LTS300ServiceNode.</p>
+<p>This constructor initializes the ROS2 node for controlling a Thorlabs LTS300 linear stage.
+It performs the following steps:
+1. Creates a temporary node
+2. Initializes parameters and connects to the physical device
+3. Reinitializes the node with the proper name based on the detected axis type
+4. Sets up services, publishers, and subscribers</p>
+<p>The node is first created with a temporary name because the actual nod0e name
+depends on the detected axis type (X or Z), which is determined during the
+connection process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>The constructor initializes the node but does not return any values.</dt><dd><p>Sets up the node’s internal state and ROS2 communication interfaces.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.initialize_parameters">
+<span class="sig-name descname"><span class="pre">initialize_parameters</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.initialize_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.initialize_parameters" title="Link to this definition"></a></dt>
+<dd><p>Initialize parameters and member variables for the node.</p>
+<p>This method declares and retrieves ROS parameters and initializes
+member variables used throughout the node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services">
+<span class="sig-name descname"><span class="pre">setup_services</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.setup_services"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services" title="Link to this definition"></a></dt>
+<dd><p>Set up ROS2 services for controlling the LTS300 linear stage.</p>
+<p>This function creates and registers all the service endpoints that allow
+external nodes to interact with the linear stage. Services include
+movement control (absolute and relative), homing operations, parameter
+configuration, position queries, and shutdown functionality.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>The function registers service handlers with the ROS2 node</dt><dd><p>but does not return any values.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_publishers">
+<span class="sig-name descname"><span class="pre">setup_publishers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.setup_publishers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_publishers" title="Link to this definition"></a></dt>
+<dd><p>Set up ROS2 publishers for the node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.publish_position">
+<span class="sig-name descname"><span class="pre">publish_position</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.publish_position"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.publish_position" title="Link to this definition"></a></dt>
+<dd><p>Publish the current position of the axis.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_subscribers">
+<span class="sig-name descname"><span class="pre">setup_subscribers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.setup_subscribers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_subscribers" title="Link to this definition"></a></dt>
+<dd><p>Set up ROS2 subscribers for the node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.other_axis_position_callback">
+<span class="sig-name descname"><span class="pre">other_axis_position_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.other_axis_position_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.other_axis_position_callback" title="Link to this definition"></a></dt>
+<dd><p>Store the position of the other axis when received.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback">
+<span class="sig-name descname"><span class="pre">move_absolute_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.move_absolute_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback" title="Link to this definition"></a></dt>
+<dd><p>Handle absolute movement requests.</p>
+<p>This callback moves the linear stage to an absolute position specified in mm.
+It performs collision checking before executing the movement.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> – The service request containing the target position</p></li>
+<li><p><strong>response</strong> – The service response to be filled</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The filled service response with success status and message</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>response</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback">
+<span class="sig-name descname"><span class="pre">move_relative_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.move_relative_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback" title="Link to this definition"></a></dt>
+<dd><p>Handle relative movement requests.</p>
+<p>This callback moves the linear stage by a relative distance specified in mm.
+It performs collision checking before executing the movement.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> – The service request containing the relative movement distance</p></li>
+<li><p><strong>response</strong> – The service response to be filled</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The filled service response with success status and message</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>response</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback">
+<span class="sig-name descname"><span class="pre">home_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.home_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback" title="Link to this definition"></a></dt>
+<dd><p>Handle homing requests.</p>
+<p>This callback initiates the homing procedure for the linear stage.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> – The service request (empty)</p></li>
+<li><p><strong>response</strong> – The service response to be filled</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The filled service response with success status and message</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>response</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback">
+<span class="sig-name descname"><span class="pre">shutdown_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.shutdown_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback" title="Link to this definition"></a></dt>
+<dd><p>Handle shutdown requests.</p>
+<p>This callback properly shuts down the device connection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> – The service request (empty)</p></li>
+<li><p><strong>response</strong> – The service response to be filled</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The filled service response with success status and message</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>response</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.get_position_callback">
+<span class="sig-name descname"><span class="pre">get_position_callback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.get_position_callback"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.get_position_callback" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown">
+<span class="sig-name descname"><span class="pre">shutdown</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#LTS300ServiceNode.shutdown"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown" title="Link to this definition"></a></dt>
+<dd><p>Properly shutdown the device connection.</p>
+<p>This ensures the device is left in a good state and resources are released.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="linear_axis_nodes.lts300_service_node.main">
+<span class="sig-prename descclassname"><span class="pre">linear_axis_nodes.lts300_service_node.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/lts300_service_node.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.lts300_service_node.main" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="drivers">
+<h3>Drivers<a class="headerlink" href="#drivers" title="Link to this heading"></a></h3>
+<section id="module-linear_axis_nodes.drivers.linear_axis_driver">
+<span id="base-driver"></span><h4>Base Driver<a class="headerlink" href="#module-linear_axis_nodes.drivers.linear_axis_driver" title="Link to this heading"></a></h4>
+<dl class="py class">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">linear_axis_nodes.drivers.linear_axis_driver.</span></span><span class="sig-name descname"><span class="pre">LinearAxisDriver</span></span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.connect">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">serial_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.connect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.connect" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>serial_port</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>x_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>z_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>debug_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.disconnect">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">disconnect</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.disconnect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.disconnect" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_absolute">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">move_absolute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.move_absolute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_absolute" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>position</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_relative">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">move_relative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">distance</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.move_relative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_relative" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>distance</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.home">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">home</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.home"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.home" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_position">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_position</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.get_position"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_position" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.is_moving">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_moving</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.is_moving"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.is_moving" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_serial_number">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_serial_number</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.get_serial_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_serial_number" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_axis_type">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_axis_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/linear_axis_driver.html#LinearAxisDriver.get_axis_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_axis_type" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-linear_axis_nodes.drivers.thorlabs_lts300_driver">
+<span id="thorlabs-lts300-driver"></span><h4>Thorlabs LTS300 Driver<a class="headerlink" href="#module-linear_axis_nodes.drivers.thorlabs_lts300_driver" title="Link to this heading"></a></h4>
+<dl class="py class">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">linear_axis_nodes.drivers.thorlabs_lts300_driver.</span></span><span class="sig-name descname"><span class="pre">ThorlabsLTS300Driver</span></span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver" title="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver"><code class="xref py py-class docutils literal notranslate"><span class="pre">LinearAxisDriver</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.connect">
+<span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">serial_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.connect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.connect" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>serial_port</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>x_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>z_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>debug_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.disconnect">
+<span class="sig-name descname"><span class="pre">disconnect</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.disconnect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.disconnect" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_absolute">
+<span class="sig-name descname"><span class="pre">move_absolute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.move_absolute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_absolute" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>position</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_relative">
+<span class="sig-name descname"><span class="pre">move_relative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">distance</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.move_relative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_relative" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>distance</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.home">
+<span class="sig-name descname"><span class="pre">home</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.home"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.home" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_position">
+<span class="sig-name descname"><span class="pre">get_position</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.get_position"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_position" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.is_moving">
+<span class="sig-name descname"><span class="pre">is_moving</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.is_moving"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.is_moving" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_serial_number">
+<span class="sig-name descname"><span class="pre">get_serial_number</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.get_serial_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_serial_number" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_axis_type">
+<span class="sig-name descname"><span class="pre">get_axis_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.get_axis_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_axis_type" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.determine_axis">
+<span class="sig-name descname"><span class="pre">determine_axis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">serial_number</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.determine_axis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.determine_axis" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>serial_number</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.update_position">
+<span class="sig-name descname"><span class="pre">update_position</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/thorlabs_lts300_driver.html#ThorlabsLTS300Driver.update_position"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.update_position" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-linear_axis_nodes.drivers.simulated_linear_axis_driver">
+<span id="simulation-driver"></span><h4>Simulation Driver<a class="headerlink" href="#module-linear_axis_nodes.drivers.simulated_linear_axis_driver" title="Link to this heading"></a></h4>
+<dl class="py class">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">linear_axis_nodes.drivers.simulated_linear_axis_driver.</span></span><span class="sig-name descname"><span class="pre">SimulatedLinearAxisDriver</span></span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver" title="linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver"><code class="xref py py-class docutils literal notranslate"><span class="pre">LinearAxisDriver</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.connect">
+<span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">serial_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z_axis_serial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.connect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.connect" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>serial_port</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>x_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>z_axis_serial</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – </p></li>
+<li><p><strong>debug_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.disconnect">
+<span class="sig-name descname"><span class="pre">disconnect</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.disconnect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.disconnect" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_absolute">
+<span class="sig-name descname"><span class="pre">move_absolute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.move_absolute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_absolute" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>position</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_relative">
+<span class="sig-name descname"><span class="pre">move_relative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">distance</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.move_relative"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_relative" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>distance</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.home">
+<span class="sig-name descname"><span class="pre">home</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.home"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.home" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_position">
+<span class="sig-name descname"><span class="pre">get_position</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.get_position"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_position" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.is_moving">
+<span class="sig-name descname"><span class="pre">is_moving</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.is_moving"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.is_moving" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_serial_number">
+<span class="sig-name descname"><span class="pre">get_serial_number</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.get_serial_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_serial_number" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_axis_type">
+<span class="sig-name descname"><span class="pre">get_axis_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/linear_axis_nodes/drivers/simulated_linear_axis_driver.html#SimulatedLinearAxisDriver.get_axis_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_axis_type" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="gazebo-driver">
+<h4>Gazebo Driver<a class="headerlink" href="#gazebo-driver" title="Link to this heading"></a></h4>
+</section>
+</section>
+</section>
+<section id="ros2-interfaces">
+<h2>ROS2 Interfaces<a class="headerlink" href="#ros2-interfaces" title="Link to this heading"></a></h2>
+<section id="services">
+<h3>Services<a class="headerlink" href="#services" title="Link to this heading"></a></h3>
+<p>The linear axis nodes provide the following ROS2 services:</p>
+<section id="move-absolute">
+<h4>Move Absolute<a class="headerlink" href="#move-absolute" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Service Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/srv/linear_axis/MoveAbsolute</span></code></p></li>
+<li><p><strong>Description</strong>: Move to an absolute position</p></li>
+<li><p><strong>Parameters</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_position</span></code> (float64): Target position in meters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">velocity</span></code> (float64): Movement velocity in m/s</p></li>
+</ul>
+</li>
+<li><p><strong>Response</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">success</span></code> (bool): Operation success</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">message</span></code> (string): Status message</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="move-relative">
+<h4>Move Relative<a class="headerlink" href="#move-relative" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Service Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/srv/linear_axis/MoveRelative</span></code></p></li>
+<li><p><strong>Description</strong>: Move relative to current position</p></li>
+<li><p><strong>Parameters</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">distance</span></code> (float64): Distance to move in meters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">velocity</span></code> (float64): Movement velocity in m/s</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="get-position">
+<h4>Get Position<a class="headerlink" href="#get-position" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Service Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/srv/linear_axis/GetPosition</span></code></p></li>
+<li><p><strong>Description</strong>: Get current position and status</p></li>
+<li><p><strong>Response</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">position</span></code> (float64): Current position in meters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">status</span></code> (string): Movement status (IDLE, MOVING, ERROR)</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="home">
+<h4>Home<a class="headerlink" href="#home" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Service Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/srv/linear_axis/Home</span></code></p></li>
+<li><p><strong>Description</strong>: Home the axis to reference position</p></li>
+</ul>
+</section>
+<section id="shutdown">
+<h4>Shutdown<a class="headerlink" href="#shutdown" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Service Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/srv/linear_axis/Shutdown</span></code></p></li>
+<li><p><strong>Description</strong>: Safely shutdown the axis</p></li>
+</ul>
+</section>
+</section>
+<section id="topics">
+<h3>Topics<a class="headerlink" href="#topics" title="Link to this heading"></a></h3>
+<section id="status-information">
+<h4>Status Information<a class="headerlink" href="#status-information" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><strong>Topic</strong>: <code class="docutils literal notranslate"><span class="pre">linear_axis_info</span></code></p></li>
+<li><p><strong>Message Type</strong>: <code class="docutils literal notranslate"><span class="pre">promoc_assembly_interfaces/msg/linear_axis/LinearAxisInfo</span></code></p></li>
+<li><p><strong>Description</strong>: Continuous status updates</p></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="usage-examples">
+<h2>Usage Examples<a class="headerlink" href="#usage-examples" title="Link to this heading"></a></h2>
+<section id="python-client-example">
+<h3>Python Client Example<a class="headerlink" href="#python-client-example" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">rclpy</span>
+<span class="kn">from</span> <span class="nn">rclpy.node</span> <span class="kn">import</span> <span class="n">Node</span>
+<span class="kn">from</span> <span class="nn">promoc_assembly_interfaces.srv.linear_axis</span> <span class="kn">import</span> <span class="n">MoveAbsolute</span>
+
+<span class="k">class</span> <span class="nc">LinearAxisClient</span><span class="p">(</span><span class="n">Node</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s1">&#39;linear_axis_client&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_client</span><span class="p">(</span><span class="n">MoveAbsolute</span><span class="p">,</span> <span class="s1">&#39;x_axis/move_absolute&#39;</span><span class="p">)</span>
+        
+    <span class="k">def</span> <span class="nf">move_to_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">request</span> <span class="o">=</span> <span class="n">MoveAbsolute</span><span class="o">.</span><span class="n">Request</span><span class="p">()</span>
+        <span class="n">request</span><span class="o">.</span><span class="n">target_position</span> <span class="o">=</span> <span class="n">position</span>
+        <span class="n">request</span><span class="o">.</span><span class="n">velocity</span> <span class="o">=</span> <span class="mf">0.01</span>  <span class="c1"># 10 mm/s</span>
+        
+        <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">call_async</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">future</span>
+</pre></div>
+</div>
+</section>
+<section id="command-line-usage">
+<h3>Command Line Usage<a class="headerlink" href="#command-line-usage" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Move X-axis to 100mm position</span>
+ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/promoc_assembly/x_axis/move_absolute<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>promoc_assembly_interfaces/srv/linear_axis/MoveAbsolute<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;{target_position: 0.1, velocity: 0.01}&quot;</span>
+
+<span class="c1"># Get current position</span>
+ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/promoc_assembly/x_axis/get_position<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>promoc_assembly_interfaces/srv/linear_axis/GetPosition
+
+<span class="c1"># Home the axis</span>
+ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/promoc_assembly/x_axis/home<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>promoc_assembly_interfaces/srv/linear_axis/Home
+</pre></div>
+</div>
+</section>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h2>
+<section id="node-parameters">
+<h3>Node Parameters<a class="headerlink" href="#node-parameters" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">use_sim_time</span></code> (bool): Use simulation time</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_gazebo</span></code> (bool): Enable Gazebo integration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">debug_mode</span></code> (bool): Enable debug output</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">x_axis_serial</span></code> (string): X-axis serial number</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">z_axis_serial</span></code> (string): Z-axis serial number</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">serial_port</span></code> (string): Serial port for communication</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collision_threshold</span></code> (float): Collision detection threshold</p></li>
+</ul>
+</section>
+<section id="hardware-configuration">
+<h3>Hardware Configuration<a class="headerlink" href="#hardware-configuration" title="Link to this heading"></a></h3>
+<p>For real hardware, configure in your launch file:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">parameters</span><span class="o">=</span><span class="p">[{</span>
+    <span class="s1">&#39;use_sim_time&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s1">&#39;use_gazebo&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s1">&#39;debug_mode&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;x_axis_serial&#39;</span><span class="p">:</span> <span class="s1">&#39;12345678&#39;</span><span class="p">,</span>  <span class="c1"># Your LTS300 serial</span>
+    <span class="s1">&#39;z_axis_serial&#39;</span><span class="p">:</span> <span class="s1">&#39;87654321&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;collision_threshold&#39;</span><span class="p">:</span> <span class="mf">300.0</span><span class="p">,</span>
+<span class="p">}]</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="safety-features">
+<h2>Safety Features<a class="headerlink" href="#safety-features" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Collision Detection</strong>: Monitors force feedback</p></li>
+<li><p><strong>Soft Limits</strong>: Configurable position limits</p></li>
+<li><p><strong>Emergency Stop</strong>: Immediate motion halt</p></li>
+<li><p><strong>Homing Required</strong>: Ensures reference position</p></li>
+<li><p><strong>Status Monitoring</strong>: Continuous health checks</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../simulation/testing.html" class="btn btn-neutral float-left" title="Simulation: Testing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="planar_motor_nodes.html" class="btn btn-neutral float-right" title="Planar Motor Nodes API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, ProMOC Assembly Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

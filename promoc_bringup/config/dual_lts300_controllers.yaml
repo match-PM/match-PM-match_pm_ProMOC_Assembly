@@ -1,0 +1,22 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    lts300_x_position_controller:
+      type: position_controllers/JointPositionController
+      
+    lts300_z_position_controller:
+      type: position_controllers/JointPositionController
+
+lts300_x_position_controller:
+  ros__parameters:
+    joint: lts300_x_joint
+    interface_name: position
+
+lts300_z_position_controller:
+  ros__parameters:
+    joint: lts300_z_joint
+    interface_name: position

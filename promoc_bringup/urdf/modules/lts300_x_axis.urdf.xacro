@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Include dependencies -->
+  <xacro:include filename="$(find promoc_bringup)/urdf/properties/lts300_properties.xacro"/>
+  <xacro:include filename="$(find promoc_bringup)/urdf/properties/materials.xacro"/>
+
+  <!-- LTS300 X-Axis Macro -->
+  <xacro:macro name="lts300_x_axis" params="prefix parent_link 
+                                            mount_x:=0 mount_y:=0 mount_z:=0 
+                                            mount_roll:=0 mount_pitch:=0 mount_yaw:=0
+                                            enable_ros2_control:=true">
+
+    <!-- X-Axis Housing (stationary) -->
+    <link name="${prefix}_x_housing">
+      <visual>
+        <geometry>
+          <box size="${lts300_housing_length} ${lts300_housing_width} ${lts300_housing_height}"/>
+        </geometry>
+        <material name="lts300_housing"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="${lts300_housing_length} ${lts300_housing_width} ${lts300_housing_height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${lts300_housing_mass}"/>
+        <origin xyz="0 0 0"/>
+        <inertia ixx="${(lts300_housing_mass/12) * (lts300_housing_width*lts300_housing_width + lts300_housing_height*lts300_housing_height)}"
+                 ixy="0.0" ixz="0.0"
+                 iyy="${(lts300_housing_mass/12) * (lts300_housing_length*lts300_housing_length + lts300_housing_height*lts300_housing_height)}"
+                 iyz="0.0"
+                 izz="${(lts300_housing_mass/12) * (lts300_housing_length*lts300_housing_length + lts300_housing_width*lts300_housing_width)}"/>
+      </inertial>
+    </link>
+
+    <!-- X-Axis Carriage (moving) -->
+    <link name="${prefix}_x_carriage">
+      <visual>
+        <geometry>
+          <box size="${lts300_carriage_length} ${lts300_carriage_width} ${lts300_carriage_height}"/>
+        </geometry>
+        <material name="x_axis_color"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="${lts300_carriage_length} ${lts300_carriage_width} ${lts300_carriage_height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${lts300_carriage_mass}"/>
+        <origin xyz="0 0 0"/>
+        <inertia ixx="${(lts300_carriage_mass/12) * (lts300_carriage_width*lts300_carriage_width + lts300_carriage_height*lts300_carriage_height)}"
+                 ixy="0.0" ixz="0.0"
+                 iyy="${(lts300_carriage_mass/12) * (lts300_carriage_length*lts300_carriage_length + lts300_carriage_height*lts300_carriage_height)}"
+                 iyz="0.0"
+                 izz="${(lts300_carriage_mass/12) * (lts300_carriage_length*lts300_carriage_length + lts300_carriage_width*lts300_carriage_width)}"/>
+      </inertial>
+    </link>
+
+    <!-- Mount housing to parent -->
+    <joint name="${prefix}_x_housing_mount" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="${prefix}_x_housing"/>
+      <origin xyz="${mount_x} ${mount_y} ${mount_z}" 
+              rpy="${mount_roll} ${mount_pitch} ${mount_yaw}"/>
+    </joint>
+
+    <!-- X-Axis Prismatic Joint -->
+    <joint name="${prefix}_x_joint" type="prismatic">
+      <parent link="${prefix}_x_housing"/>
+      <child link="${prefix}_x_carriage"/>
+      <origin xyz="0 0 ${lts300_housing_height/2 + lts300_carriage_height/2}" rpy="0 0 0"/>
+      <axis xyz="1 0 0"/>  <!-- X-direction -->
+      <limit lower="${-lts300_safe_travel/2}" 
+             upper="${lts300_safe_travel/2}" 
+             effort="${lts300_max_effort}" 
+             velocity="${lts300_safe_velocity}"/>
+      <dynamics damping="0.2" friction="0.1"/>
+    </joint>
+
+    <!-- ros2_control interface (conditional) -->
+    <xacro:if value="${enable_ros2_control}">
+      <ros2_control name="${prefix}_x_lts300_system" type="system">
+        <hardware>
+          <plugin>gz_ros2_control/GazeboSystem</plugin>
+        </hardware>
+        <joint name="${prefix}_x_joint">
+          <command_interface name="position">
+            <param name="min">${-lts300_safe_travel/2}</param>
+            <param name="max">${lts300_safe_travel/2}</param>
+          </command_interface>
+          <state_interface name="position"/>
+          <state_interface name="velocity"/>
+          <state_interface name="effort"/>
+        </joint>
+      </ros2_control>
+    </xacro:if>
+
+  </xacro:macro>
+
+</robot>

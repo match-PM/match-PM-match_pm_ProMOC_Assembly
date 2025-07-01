@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="dual_lts300_system">
+
+  <!-- Include modules -->
+  <xacro:include filename="$(find promoc_bringup)/urdf/modules/lts300_x_axis.urdf.xacro"/>
+  <xacro:include filename="$(find promoc_bringup)/urdf/modules/lts300_z_axis.urdf.xacro"/>
+  <xacro:include filename="$(find promoc_bringup)/urdf/properties/materials.xacro"/>
+
+  <!-- Base platform -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.8 0.6 0.05"/>
+      </geometry>
+      <material name="base_platform"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.8 0.6 0.05"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="5.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.15" ixy="0.0" ixz="0.0" iyy="0.27" iyz="0.0" izz="0.41"/>
+    </inertial>
+  </link>
+
+  <!-- X-Axis LTS300 (horizontal, on base) -->
+  <xacro:lts300_x_axis prefix="lts300" 
+                       parent_link="base_link"
+                       mount_x="0" mount_y="0" mount_z="0.075"
+                       mount_roll="0" mount_pitch="0" mount_yaw="0"
+                       enable_ros2_control="true"/>
+
+  <!-- Z-Axis LTS300 (vertical, on X carriage) -->
+  <xacro:lts300_z_axis prefix="lts300" 
+                       parent_link="lts300_x_carriage"
+                       mount_x="0" mount_y="0" mount_z="0.05"
+                       mount_roll="0" mount_pitch="0" mount_yaw="0"
+                       enable_ros2_control="true"/>
+
+  <!-- Gazebo Plugin -->
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find promoc_bringup)/config/dual_lts300_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>

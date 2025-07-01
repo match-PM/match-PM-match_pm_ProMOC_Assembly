@@ -1,12 +1,5 @@
 import sys
 import time
-import warnings
-
-# Try to import Thorlabs library
-try:
-    from pylablib.devices import Thorlabs
-except ImportError as e:
-    print(f"Error importing Thorlabs: {e}")
 
 # ROS 2 imports
 import rclpy  # type:ignore
@@ -19,9 +12,11 @@ from promoc_assembly_interfaces.srv import (
     ShutdownLinearAxis,
     GetPosition
 )
-# Unterdrücke Pylablib Warnings beim Import
-warnings.filterwarnings("ignore", message="can't recognize the stage name*")
-warnings.filterwarnings("ignore", message="can't recognize motor model*")
+
+from .drivers.linear_axis_driver import LinearAxisDriver
+from .drivers.thorlabs_lts300_driver import ThorlabsLTS300Driver
+from .drivers.simulated_linear_axis_driver import SimulatedLinearAxisDriver
+from .drivers.gazebo_linear_axis_driver import GazeboLinearAxisDriver
 
 
 class LTS300ServiceNode(Node):
@@ -53,13 +48,36 @@ class LTS300ServiceNode(Node):
         # Initialize core parameters and member variables
         self.initialize_parameters()
 
-        # Connect to the physical LTS300 device
-        self.connect()
+        # Initialize the driver based on the use_sim_time parameter
+        if self.use_sim_time:
+            # Check if we should use Gazebo integration
+            self.declare_parameter('use_gazebo', True)
+            use_gazebo = self.get_parameter('use_gazebo').value
+
+            if use_gazebo:
+                self.driver: LinearAxisDriver = GazeboLinearAxisDriver(self)
+                self.get_logger().info("🚀 Using Gazebo-integrated simulation driver")
+            else:
+                self.driver: LinearAxisDriver = SimulatedLinearAxisDriver()
+                self.get_logger().info("🔧 Using basic simulation driver")
+        else:
+            self.driver: LinearAxisDriver = ThorlabsLTS300Driver()
+            self.get_logger().info("🔌 Using Thorlabs LTS300 hardware driver")
+
+        # Connect to the physical LTS300 device or simulated device
+        connected = self.driver.connect(
+            self.serial_port,
+            self.x_axis_serial,
+            self.z_axis_serial,
+            self.debug_mode
+        )
 
         # Change the node name after connection
-        if self.connected:
+        if connected:
+            self.node_name = f'lts300_{self.driver.get_axis_type()}_axis'
             if self.debug_mode:
-                self.get_logger().info(f'Changing node name to {self.node_name}')
+                self.get_logger().info(
+                    f'Changing node name to {self.node_name}')
             self.get_node_names_and_namespaces()  # This is required to update the node name
             rclpy.shutdown()
             rclpy.init()
@@ -73,7 +91,7 @@ class LTS300ServiceNode(Node):
         self.setup_subscribers()
 
         # Log initialization status
-        if self.connected:
+        if connected:
             self.get_logger().info(f'✅ {self.node_name} initialized')
         else:
             self.get_logger().error(f'❌ Error initializing {self.node_name}')
@@ -86,24 +104,23 @@ class LTS300ServiceNode(Node):
         member variables used throughout the node.
         """
         # Initialize member variables
-        self.connected: bool = False
-        self.device: Thorlabs.KinesisMotor = None
-        self.serial_no: str = None
-        self.axis_type: str = None
-        self.node_name: str = None
         self.client_connected: bool = False
         self.other_axis_position: float = None
         self.other_axis: str = None
+        self.driver: LinearAxisDriver = None  # Will be initialized in __init__
 
         self.declare_parameter('debug_mode', False)
-        
-        self.debug_mode = self.get_parameter('debug_mode').get_parameter_value().bool_value
-        
+        self.declare_parameter('use_sim_time', False)
+
+        self.debug_mode = self.get_parameter(
+            'debug_mode').get_parameter_value().bool_value
+        self.use_sim_time = self.get_parameter(
+            'use_sim_time').get_parameter_value().bool_value
+
         # Declare parameters with default values
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('x_axis_serial', '45456044')
         self.declare_parameter('z_axis_serial', '45407924')
-        self.declare_parameter('device_units_per_mm', 409600.0)
         self.declare_parameter('collision_threshold', 300.0)
         self.declare_parameter('node_name', 'lts300_x_axis_node')
         self.declare_parameter('namespace', 'promoc_assembly')
@@ -112,62 +129,9 @@ class LTS300ServiceNode(Node):
         self.serial_port: str = self.get_parameter('serial_port').value
         self.x_axis_serial: str = self.get_parameter('x_axis_serial').value
         self.z_axis_serial: str = self.get_parameter('z_axis_serial').value
-        self.device_units_per_mm: float = self.get_parameter(
-            'device_units_per_mm').value
         self.collision_threshold: float = self.get_parameter(
             'collision_threshold').value
         self.namespace: str = self.get_parameter('namespace').value
-
-    def connect(self):
-        """
-        Establish a connection to the LTS300 linear stage device.
-
-        This method initializes the connection to the Thorlabs LTS300 linear stage
-        using the configured serial port. It retrieves the device's serial number,
-        determines the axis type (X or Z), sets the node name accordingly, and
-        performs an initial homing operation to calibrate the device.
-
-        Parameters:
-            None
-
-        Returns:
-            None: The method updates instance variables to reflect the connection
-                  status and device information, but does not return any values.
-                  Sets self.connected to True on success, False on failure.
-        """
-        try:
-            self.get_logger().info(
-                f'🔗 Connecting to LTS300 on port {self.serial_port}...')
-
-            self.device = Thorlabs.KinesisMotor(self.serial_port, scale="m")
-
-            # Read the serial number
-            self.serial_no = str(self.device.get_device_info()[0])
-            if self.debug_mode:
-                if self.debug_mode:
-                    self.get_logger().info(f'🔧 Detected serial number: {self.serial_no}')
-
-            # Determine the axis type
-            self.axis_type = self.determine_axis(self.serial_no)
-            self.other_axis = 'z' if self.axis_type == 'x' else 'x'
-
-            # Set the node name based on the axis type
-            self.node_name = f'lts300_{self.axis_type}_axis'
-            if self.debug_mode:
-                self.get_logger().info(
-                f'🔧 Connected to {self.axis_type.upper()}-axis (SN: {self.serial_no})')
-
-            self.connected = True
-
-            # Home the device
-            self.device.home()
-            while self.device.is_moving():
-                time.sleep(0.1)
-            self.update_position()
-
-        except Exception as e:
-            self.get_logger().error(f'Error connecting: {e}')
-            self.connected = False
 
     def setup_services(self):
         """
@@ -209,7 +173,8 @@ class LTS300ServiceNode(Node):
         # Use absolute topic name to ensure correct namespace
         topic_name = f'/{self.namespace}/{self.node_name}/position'
         if self.debug_mode:
-            self.get_logger().debug(f"🔧 Setting up publisher for topic: {topic_name}")
+            self.get_logger().debug(
+                f"🔧 Setting up publisher for topic: {topic_name}")
 
         self.position_publisher = self.create_publisher(
             LinearAxisInfo, topic_name, 10)
@@ -219,11 +184,11 @@ class LTS300ServiceNode(Node):
 
     def publish_position(self):
         """Publish the current position of the axis."""
-        if not self.connected or not self.device:
+        if not self.driver:
             return
 
         msg = LinearAxisInfo()
-        position = self.update_position()
+        position = self.driver.get_position()
 
         # Debug logging
         if self.debug_mode:
@@ -234,12 +199,12 @@ class LTS300ServiceNode(Node):
             msg.axis_position = position
         else:
             # Use the last known position or default to 0.0
-            msg.axis_position = getattr(self, 'position', 0.0)
+            msg.axis_position = 0.0  # Fallback to 0.0 if driver returns None or error
             self.get_logger().warn("Using fallback position value")
 
-        msg.axis_type = self.axis_type
-        msg.is_moving = self.device.is_moving()
-        msg.serial_number = self.serial_no
+        msg.axis_type = self.driver.get_axis_type()
+        msg.is_moving = self.driver.is_moving()
+        msg.serial_number = self.driver.get_serial_number()
 
         self.position_publisher.publish(msg)
 
@@ -261,7 +226,7 @@ class LTS300ServiceNode(Node):
         if self.other_axis_position is None:
             if self.debug_mode:
                 self.get_logger().debug(
-                f"🔧 Received first position update from {self.other_axis}-axis: {msg.axis_position} mm")
+                    f"🔧 Received first position update from {self.other_axis}-axis: {msg.axis_position} mm")
         self.other_axis_position = msg.axis_position
 
     # Callback functions for ROS services
@@ -291,15 +256,11 @@ class LTS300ServiceNode(Node):
                 self.get_logger().warn(response.status_message)
                 return response
             if self.debug_mode:
-                self.get_logger().debug(f'🔧 Moving to position: {target_position} mm')
-            self.device.move_to(
-                target_position*self.device_units_per_mm, scale=False)
-            while self.device.is_moving():
-                time.sleep(0.1)
-            # Update the position after movement
-            self.update_position()
+                self.get_logger().debug(
+                    f'🔧 Moving to position: {target_position} mm')
+            self.driver.move_absolute(target_position)
             response.success = True
-            response.status_message = f"✅ Successfully moved to position {self.position} mm"
+            response.status_message = f"✅ Successfully moved to position {self.driver.get_position()} mm"
         except Exception as e:
             self.get_logger().error(f'❌ Error moving to position: {e}')
             response.success = False
@@ -322,10 +283,6 @@ class LTS300ServiceNode(Node):
             response: The filled service response with success status and message
         """
         try:
-            relative_position = request.axis_position * self.device_units_per_mm
-            current_position = self.device.get_position()
-            target_position = current_position + relative_position
-
             # Collision Check
             if self.other_axis_position is not None and self.other_axis_position > self.collision_threshold:
                 response.success = False
@@ -333,15 +290,11 @@ class LTS300ServiceNode(Node):
                 self.get_logger().warn(response.status_message)
                 return response
             if self.debug_mode:
-             self.get_logger().debug(
-                f'🔧 Moving relatively by: {request.axis_position} mm')
-            self.device.move_to(target_position, scale=False)
-            while self.device.is_moving():
-                time.sleep(0.1)
-            # Update the position after movement
-            self.update_position()
+                self.get_logger().debug(
+                    f'🔧 Moving relatively by: {request.axis_position} mm')
+            self.driver.move_relative(request.axis_position)
             response.success = True
-            response.status_message = f"✅ Successfully moved to position {self.position} mm"
+            response.status_message = f"✅ Successfully moved to position {self.driver.get_position()} mm"
 
         except Exception as e:
             self.get_logger().error(f'❌ Error moving to position: {e}')
@@ -366,8 +319,7 @@ class LTS300ServiceNode(Node):
         try:
             self.get_logger().info('Homing device...')
 
-            self.device.home(force=True, timeout=60)
-            self.update_position()
+            self.driver.home()
 
             response.success = True
             response.status_message = "✅ Homing completed successfully"
@@ -405,7 +357,7 @@ class LTS300ServiceNode(Node):
 
     def get_position_callback(self, request, response):
         try:
-            response.axis_position = self.update_position()
+            response.axis_position = self.driver.get_position()
             response.success = True
             response.status_message = "✅ Successfully retrieved position"
             return response
@@ -422,57 +374,12 @@ class LTS300ServiceNode(Node):
 
         This ensures the device is left in a good state and resources are released.
         """
-        if self.connected and self.device:
+        if self.driver:
             try:
-                self.device.close()
-
-                # Update connection state
-                self.connected = False
+                self.driver.disconnect()
                 self.get_logger().info('✅ Device disconnected')
             except Exception as e:
                 self.get_logger().error(f'❌ Error during shutdown: {e}')
-
-    def determine_axis(self, serial_number: str):
-        """
-        Determine the axis type based on the device serial number.
-
-        Parameters:
-            serial_number (str): The serial number of the connected device
-
-        Returns:
-            str: 'x' for X-axis, 'z' for Z-axis, or 'unknown' if the serial number is not recognized
-        """
-        if serial_number == self.x_axis_serial:
-            if self.debug_mode:
-                self.get_logger().debug(
-                    f"Recognized X-axis with serial number: {serial_number}")
-            return 'x'
-        elif serial_number == self.z_axis_serial:
-            if self.debug_mode:
-                self.get_logger().debug(
-                    f"Recognized Z-axis with serial number: {serial_number}")
-            return 'z'
-        else:
-            self.get_logger().warning(
-                f"⚠️ Unknown serial number: {serial_number}. Defaulting to 'unknown' axis.")
-            return 'unknown'
-
-    def update_position(self):
-        """
-        Update the internal position tracking variable with the current device position.
-
-        This method queries the device for its current position and updates the internal
-        tracking variable. It should be called after any movement operation completes.
-
-        Returns:
-            float: The updated position in mm
-        """
-        try:
-            self.position = self.device.get_position()/self.device_units_per_mm
-            return self.position
-        except Exception as e:
-            self.get_logger().error(f'⚠️ Error updating position: {e}')
-            return None
 
 
 def main(args=None):
@@ -485,11 +392,10 @@ def main(args=None):
         node.get_logger().info('Received keyboard interrupt, shutting down...')
     finally:
         node.get_logger().info('Preparing for shutdown...')
-        if node.connected and node.device:
+        if node.driver:
             try:
                 node.get_logger().info('Homing device before shutdown...')
-                node.device.home(force=True, timeout=60)  # 60 second timeout
-                node.update_position()  # Update position to the final home position
+                node.driver.home()
                 node.get_logger().info('Homing completed successfully')
             except Exception as e:
                 node.get_logger().error(

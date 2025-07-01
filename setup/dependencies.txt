@@ -1,46 +1,84 @@
 # ProMOC Assembly System Dependencies
-# This file lists all Python and system dependencies required for the ProMOC Assembly ROS2 packages
+# This file lists all dependencies required for the ProMOC Assembly ROS2 packages
+# 
+# USAGE:
+#   pip install -r dependencies.txt
+#   OR use the master installer: ./install_all.sh
 
-# === SYSTEM DEPENDENCIES (install via apt) ===
-# For PMCLib (.NET integration):
-# Option 1 (preferred): .NET Core/SDK 8.0
-# sudo apt-get update
-# sudo apt-get install -y dotnet-sdk-8.0 aspnetcore-runtime-8.0
+# ================================================================
+# SYSTEM DEPENDENCIES (handled by install_system_deps.sh)
+# ================================================================
+# 
+# .NET Runtime (for PMCLib integration):
+#   - dotnet-sdk-8.0 aspnetcore-runtime-8.0 (preferred)
+#   - mono-complete mono-devel (fallback)
 #
-# Option 2 (fallback): Mono runtime  
-# sudo apt-get install -y mono-complete mono-devel
+# Build Dependencies:
+#   - build-essential pkg-config
+#   - python3-dev python3-pip python3-venv
+#   - zlib1g clang libglib2.0-dev
 #
-# Additional build dependencies:
-# sudo apt-get install -y zlib1g
-# sudo apt-get install -y clang libglib2.0-dev
+# ROS2 Dependencies (handled by rosdep):
+#   - Automatically resolved from package.xml files
 
-# === PYTHON DEPENDENCIES ===
+# ================================================================
+# PYTHON DEPENDENCIES
+# ================================================================
 
-# Core Python dependencies for hardware integration
-pythonnet>=3.0.0  # Required for PMCLib integration with .NET libraries (planar_motor_nodes)
-pylablib>=1.4.0   # Required for Thorlabs hardware control (linear_axis_nodes)
+# --- Hardware Integration (REQUIRED) ---
+pythonnet>=3.0.0,<4.0.0     # .NET integration for PMCLib (planar_motor_nodes)
+pylablib>=1.4.0              # Thorlabs hardware control (linear_axis_nodes)
 
-# Additional dependencies for pylablib
-pyserial>=3.4      # Serial communication for Thorlabs devices
-pyusb>=1.0.0       # USB communication support
-numpy>=1.20.0      # Required by pylablib
+# --- Hardware Communication ---
+pyserial>=3.4                # Serial communication for Thorlabs devices
+pyusb>=1.0.0                 # USB communication support
+numpy>=1.20.0,<2.0.0         # Required by pylablib and scientific computing
 
-# ROS2 Python dependencies (typically installed with ROS2)
-rclpy  # ROS2 Python client library
-std_msgs  # Standard ROS2 message types
-geometry_msgs  # Geometry-related message types
-sensor_msgs  # Sensor-related message types
+# --- ROS2 Python (usually pre-installed with ROS2) ---
+# rclpy                      # ROS2 Python client library
+# std_msgs                   # Standard ROS2 message types  
+# geometry_msgs              # Geometry-related message types
+# sensor_msgs                # Sensor-related message types
 
-# Build tools for pythonnet (if build from source is needed)
-wheel>=0.36.0      # Required for building pythonnet
+# --- Build and Installation ---
+wheel>=0.36.0                # Required for building pythonnet from source
+setuptools>=45.0.0           # Modern setuptools for package building
 
-# Development and testing dependencies
-pytest>=6.0.0     # Testing framework
-flake8>=3.8.0     # Code linting
-pep257>=0.7.0     # Docstring style checker
+# --- Development and Testing ---
+pytest>=6.0.0               # Testing framework
+pytest-cov>=2.12.0          # Test coverage reporting
+flake8>=3.8.0               # Code linting and style checking
+black>=21.0.0               # Code formatting
+isort>=5.0.0                # Import sorting
 
-# Optional dependencies for enhanced functionality
-scipy>=1.7.0      # Scientific computing (if needed for advanced motion planning)
+# --- Documentation ---
+sphinx>=4.0.0               # Documentation generation
+sphinx-rtd-theme>=1.0.0     # Read the Docs theme
+myst-parser>=0.15.0         # Markdown parser for Sphinx
+sphinx-autobuild>=2021.3.14 # Live rebuilding for development
+sphinxcontrib-spelling>=7.3.0 # Spell checking (optional)
 
-# Note: ROS2 dependencies are typically managed through rosdep and package.xml files
-# This file is primarily for Python-specific dependencies not covered by ROS2 package management
+# --- Optional Scientific Computing ---
+scipy>=1.7.0                # Scientific computing (for advanced motion planning)
+matplotlib>=3.3.0           # Plotting (for data visualization and debugging)
+
+# ================================================================
+# PACKAGE-SPECIFIC NOTES
+# ================================================================
+#
+# 1. PMCLib (proprietary):
+#    - Must be obtained separately from Match/IEMCA
+#    - Install with: pip install local_libs/pmclib-*.whl
+#    - For development without hardware: uses mock_pmclib.py
+#
+# 2. ROS2 dependencies:
+#    - Managed through package.xml and rosdep
+#    - Install with: rosdep install --from-paths . --ignore-src -y
+#
+# 3. System dependencies:
+#    - Install with: ./install_system_deps.sh
+#    - Includes .NET SDK/Mono, build tools, Python dev headers
+#
+# 4. Ubuntu 24.04 PEP 668:
+#    - Requires virtual environment or --break-system-packages
+#    - Handled automatically by install_python_deps.sh

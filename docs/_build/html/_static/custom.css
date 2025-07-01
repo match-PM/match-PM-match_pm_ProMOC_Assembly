@@ -1,0 +1,144 @@
+/* Custom CSS for ProMOC Assembly Documentation */
+
+/* Brand Colors */
+:root {
+    --promoc-blue: #2980B9;
+    --promoc-green: #27AE60;
+    --promoc-orange: #E67E22;
+    --promoc-red: #E74C3C;
+    --promoc-gray: #34495E;
+}
+
+/* Header customization */
+.wy-nav-top {
+    background: var(--promoc-blue) !important;
+}
+
+/* Sidebar customization */
+.wy-nav-side {
+    background: #f8f9fa !important;
+}
+
+.wy-menu-vertical li.current a {
+    background: var(--promoc-blue) !important;
+    border-right: 5px solid var(--promoc-green) !important;
+}
+
+/* Code blocks */
+.highlight {
+    background: #f8f9fa !important;
+    border-left: 4px solid var(--promoc-blue) !important;
+    padding-left: 1em !important;
+}
+
+/* Admonitions (notes, warnings, etc.) */
+.admonition.note {
+    border-left: 4px solid var(--promoc-blue) !important;
+}
+
+.admonition.warning {
+    border-left: 4px solid var(--promoc-orange) !important;
+}
+
+.admonition.important {
+    border-left: 4px solid var(--promoc-red) !important;
+}
+
+.admonition.tip {
+    border-left: 4px solid var(--promoc-green) !important;
+}
+
+/* Links */
+a {
+    color: var(--promoc-blue) !important;
+}
+
+a:hover {
+    color: var(--promoc-green) !important;
+}
+
+/* Table styling */
+.wy-table-responsive table td, .wy-table-responsive table th {
+    white-space: normal !important;
+}
+
+/* Code inline */
+code {
+    background: #f1f2f3 !important;
+    color: var(--promoc-gray) !important;
+    border: 1px solid #e1e4e5 !important;
+}
+
+/* Navigation breadcrumbs */
+.wy-breadcrumbs li a {
+    color: var(--promoc-blue) !important;
+}
+
+/* Version selector */
+.rst-versions {
+    border-top: 5px solid var(--promoc-blue) !important;
+}
+
+/* Custom badges for different content types */
+.badge-hardware {
+    background-color: var(--promoc-orange) !important;
+    color: white !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    font-size: 0.8em !important;
+}
+
+.badge-software {
+    background-color: var(--promoc-blue) !important;
+    color: white !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    font-size: 0.8em !important;
+}
+
+.badge-simulation {
+    background-color: var(--promoc-green) !important;
+    color: white !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    font-size: 0.8em !important;
+}
+
+/* ROS2 specific styling */
+.ros2-node {
+    background: #e8f4fd !important;
+    border: 1px solid var(--promoc-blue) !important;
+    border-radius: 5px !important;
+    padding: 10px !important;
+    margin: 10px 0 !important;
+}
+
+.ros2-topic {
+    font-family: monospace !important;
+    background: #f1f2f3 !important;
+    padding: 2px 4px !important;
+    border-radius: 2px !important;
+}
+
+.ros2-service {
+    font-family: monospace !important;
+    background: #fff3cd !important;
+    padding: 2px 4px !important;
+    border-radius: 2px !important;
+}
+
+/* Status indicators */
+.status-ready {
+    color: var(--promoc-green) !important;
+    font-weight: bold !important;
+}
+
+.status-warning {
+    color: var(--promoc-orange) !important;
+    font-weight: bold !important;
+}
+
+.status-error {
+    color: var(--promoc-red) !important;
+    font-weight: bold !important;
+}

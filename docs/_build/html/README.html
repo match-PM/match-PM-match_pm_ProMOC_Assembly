@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProMOC Assembly Documentation &mdash; ProMOC Assembly 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=86f27845" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=276fb2b3" />
+
+  
+  
+        <script src="_static/jquery.js?v=8dae8fb0"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=8d563738"></script>
+        <script src="_static/doctools.js?v=888ff710"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            ProMOC Assembly
+          </a>
+              <div class="version">
+                1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">ProMOC Assembly Documentation</a><ul>
+<li><a class="reference internal" href="#documentation-structure">📖 Documentation Structure</a></li>
+<li><a class="reference internal" href="#quick-start">🚀 Quick Start</a><ul>
+<li><a class="reference internal" href="#install-dependencies">1. Install Dependencies</a></li>
+<li><a class="reference internal" href="#build-documentation">2. Build Documentation</a></li>
+<li><a class="reference internal" href="#view-documentation">3. View Documentation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#development-workflow">🛠️ Development Workflow</a><ul>
+<li><a class="reference internal" href="#live-preview-recommended">Live Preview (Recommended)</a></li>
+<li><a class="reference internal" href="#manual-building">Manual Building</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#writing-documentation">📝 Writing Documentation</a><ul>
+<li><a class="reference internal" href="#file-formats">File Formats</a></li>
+<li><a class="reference internal" href="#style-guide">Style Guide</a><ul>
+<li><a class="reference internal" href="#headings">Headings</a></li>
+<li><a class="reference internal" href="#code-blocks">Code Blocks</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#bash-commands">Bash commands</a><ul>
+<li><a class="reference internal" href="#adding-new-documentation">Adding New Documentation</a></li>
+<li><a class="reference internal" href="#documentation-types">📚 Documentation Types</a><ul>
+<li><a class="reference internal" href="#user-documentation">User Documentation</a></li>
+<li><a class="reference internal" href="#developer-documentation">Developer Documentation</a></li>
+<li><a class="reference internal" href="#system-documentation">System Documentation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#advanced-features">🔧 Advanced Features</a><ul>
+<li><a class="reference internal" href="#api-documentation-generation">API Documentation Generation</a></li>
+<li><a class="reference internal" href="#quality-checks">Quality Checks</a></li>
+<li><a class="reference internal" href="#deployment">Deployment</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#customization">🎨 Customization</a><ul>
+<li><a class="reference internal" href="#theme-configuration">Theme Configuration</a></li>
+<li><a class="reference internal" href="#custom-css">Custom CSS</a></li>
+<li><a class="reference internal" href="#extensions">Extensions</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#troubleshooting">🔍 Troubleshooting</a><ul>
+<li><a class="reference internal" href="#build-errors">Build Errors</a></li>
+<li><a class="reference internal" href="#missing-dependencies">Missing Dependencies</a></li>
+<li><a class="reference internal" href="#api-generation-issues">API Generation Issues</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#makefile-commands">📋 Makefile Commands</a></li>
+<li><a class="reference internal" href="#hosting-options">🌐 Hosting Options</a><ul>
+<li><a class="reference internal" href="#github-pages">GitHub Pages</a></li>
+<li><a class="reference internal" href="#read-the-docs">Read the Docs</a></li>
+<li><a class="reference internal" href="#local-server">Local Server</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">ProMOC Assembly</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ProMOC Assembly Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/README.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="promoc-assembly-documentation">
+<h1>ProMOC Assembly Documentation<a class="headerlink" href="#promoc-assembly-documentation" title="Link to this heading"></a></h1>
+<p>This directory contains the complete documentation for the ProMOC Assembly system, built with <strong>Sphinx</strong> and hosted with <strong>Read the Docs</strong> theme.</p>
+<section id="documentation-structure">
+<h2>📖 Documentation Structure<a class="headerlink" href="#documentation-structure" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>docs/
+├── index.rst                    # Main documentation index
+├── conf.py                      # Sphinx configuration
+├── Makefile                     # Build automation
+├── _static/                     # Custom CSS and assets
+├── installation/                # Installation guides
+├── quickstart/                  # Quick start tutorial
+├── architecture/                # System architecture
+├── api/                         # Auto-generated API docs
+├── hardware/                    # Hardware documentation
+├── simulation/                  # Simulation guides
+├── tutorials/                   # Step-by-step tutorials
+├── development/                 # Developer guides
+└── appendix/                    # Troubleshooting, FAQ, etc.
+</pre></div>
+</div>
+</section>
+<section id="quick-start">
+<h2>🚀 Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h2>
+<section id="install-dependencies">
+<h3>1. Install Dependencies<a class="headerlink" href="#install-dependencies" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>docs/
+make<span class="w"> </span>install
+<span class="c1"># or manually:</span>
+<span class="c1"># pip install sphinx sphinx-rtd-theme myst-parser sphinx-autobuild</span>
+</pre></div>
+</div>
+</section>
+<section id="build-documentation">
+<h3>2. Build Documentation<a class="headerlink" href="#build-documentation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Quick development build</span>
+make<span class="w"> </span>dev
+
+<span class="c1"># Production build with checks</span>
+make<span class="w"> </span>prod
+
+<span class="c1"># Auto-rebuilding server (recommended for development)</span>
+make<span class="w"> </span>live
+</pre></div>
+</div>
+</section>
+<section id="view-documentation">
+<h3>3. View Documentation<a class="headerlink" href="#view-documentation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Build and open in browser</span>
+make<span class="w"> </span>view
+
+<span class="c1"># Or manually open:</span>
+<span class="c1"># firefox _build/html/index.html</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="development-workflow">
+<h2>🛠️ Development Workflow<a class="headerlink" href="#development-workflow" title="Link to this heading"></a></h2>
+<section id="live-preview-recommended">
+<h3>Live Preview (Recommended)<a class="headerlink" href="#live-preview-recommended" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>live
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Starts server at <a class="reference external" href="http://localhost:8000">http://localhost:8000</a></p></li>
+<li><p>Auto-rebuilds on file changes</p></li>
+<li><p>Watches Python source files for API changes</p></li>
+</ul>
+</section>
+<section id="manual-building">
+<h3>Manual Building<a class="headerlink" href="#manual-building" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Quick build for development</span>
+make<span class="w"> </span>dev
+
+<span class="c1"># Full production build</span>
+make<span class="w"> </span>prod
+
+<span class="c1"># Generate API docs from source</span>
+make<span class="w"> </span>api
+
+<span class="c1"># Check for broken links</span>
+make<span class="w"> </span>linkcheck
+</pre></div>
+</div>
+</section>
+</section>
+<section id="writing-documentation">
+<h2>📝 Writing Documentation<a class="headerlink" href="#writing-documentation" title="Link to this heading"></a></h2>
+<section id="file-formats">
+<h3>File Formats<a class="headerlink" href="#file-formats" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ReStructuredText (.rst)</strong>: Main format for Sphinx</p></li>
+<li><p><strong>Markdown (.md)</strong>: Supported via MyST parser</p></li>
+<li><p><strong>Python Docstrings</strong>: Auto-extracted for API docs</p></li>
+</ul>
+</section>
+<section id="style-guide">
+<h3>Style Guide<a class="headerlink" href="#style-guide" title="Link to this heading"></a></h3>
+<section id="headings">
+<h4>Headings<a class="headerlink" href="#headings" title="Link to this heading"></a></h4>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh"># Main Title (H1)</span>
+<span class="gu">## Section (H2)  </span>
+<span class="gu">### Subsection (H3)</span>
+<span class="gu">#### Sub-subsection (H4)</span>
+</pre></div>
+</div>
+</section>
+<section id="code-blocks">
+<h4>Code Blocks<a class="headerlink" href="#code-blocks" title="Link to this heading"></a></h4>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh"># Code with syntax highlighting</span>
+```python
+def example_function():
+    return &quot;Hello, World!&quot;
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+</section>
+<section id="bash-commands">
+<h1>Bash commands<a class="headerlink" href="#bash-commands" title="Link to this heading"></a></h1>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ros2<span class="w"> </span>launch<span class="w"> </span>promoc_bringup<span class="w"> </span>dual_lts300_gazebo.launch.py
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+#### Admonitions
+```markdown
+```{note}
+This is an informational note.
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This is a warning message.</p>
+</div>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>This is important information.</p>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+#### Cross-References
+```markdown
+# Link to other docs
+{doc}`installation/index`
+
+# Link to sections
+{ref}`system-architecture`
+
+# Link to API
+{py:class}`linear_axis_nodes.LinearAxisDriver`
+</pre></div>
+</div>
+<section id="adding-new-documentation">
+<h2>Adding New Documentation<a class="headerlink" href="#adding-new-documentation" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Create new .md or .rst file</strong> in appropriate directory</p></li>
+<li><p><strong>Add to toctree</strong> in parent index file</p></li>
+<li><p><strong>Build and test</strong> with <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">dev</span></code></p></li>
+<li><p><strong>Check links</strong> with <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">linkcheck</span></code></p></li>
+</ol>
+</section>
+<section id="documentation-types">
+<h2>📚 Documentation Types<a class="headerlink" href="#documentation-types" title="Link to this heading"></a></h2>
+<section id="user-documentation">
+<h3>User Documentation<a class="headerlink" href="#user-documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Installation</strong>: Step-by-step setup guides</p></li>
+<li><p><strong>Quick Start</strong>: Get running in 5 minutes</p></li>
+<li><p><strong>Tutorials</strong>: Task-oriented guides</p></li>
+<li><p><strong>Hardware</strong>: Physical setup and configuration</p></li>
+</ul>
+</section>
+<section id="developer-documentation">
+<h3>Developer Documentation<a class="headerlink" href="#developer-documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>API Reference</strong>: Auto-generated from docstrings</p></li>
+<li><p><strong>Architecture</strong>: System design and principles</p></li>
+<li><p><strong>Contributing</strong>: Development workflow</p></li>
+<li><p><strong>Testing</strong>: Test procedures and standards</p></li>
+</ul>
+</section>
+<section id="system-documentation">
+<h3>System Documentation<a class="headerlink" href="#system-documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Configuration</strong>: Parameter references</p></li>
+<li><p><strong>Troubleshooting</strong>: Common problems and solutions</p></li>
+<li><p><strong>FAQ</strong>: Frequently asked questions</p></li>
+<li><p><strong>Changelog</strong>: Version history</p></li>
+</ul>
+</section>
+</section>
+<section id="advanced-features">
+<h2>🔧 Advanced Features<a class="headerlink" href="#advanced-features" title="Link to this heading"></a></h2>
+<section id="api-documentation-generation">
+<h3>API Documentation Generation<a class="headerlink" href="#api-documentation-generation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Generate API docs from Python source</span>
+make<span class="w"> </span>api
+
+<span class="c1"># Include in main documentation</span>
+<span class="c1"># (automatically included in build)</span>
+</pre></div>
+</div>
+</section>
+<section id="quality-checks">
+<h3>Quality Checks<a class="headerlink" href="#quality-checks" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check for broken links</span>
+make<span class="w"> </span>linkcheck
+
+<span class="c1"># Spell checking (requires sphinxcontrib-spelling)</span>
+make<span class="w"> </span>spell
+
+<span class="c1"># Documentation coverage</span>
+make<span class="w"> </span>coverage
+
+<span class="c1"># All quality checks</span>
+make<span class="w"> </span>quality
+</pre></div>
+</div>
+</section>
+<section id="deployment">
+<h3>Deployment<a class="headerlink" href="#deployment" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy to GitHub Pages</span>
+make<span class="w"> </span>deploy
+
+<span class="c1"># Manual deployment</span>
+<span class="c1"># 1. Build: make prod</span>
+<span class="c1"># 2. Copy _build/html/* to web server</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="customization">
+<h2>🎨 Customization<a class="headerlink" href="#customization" title="Link to this heading"></a></h2>
+<section id="theme-configuration">
+<h3>Theme Configuration<a class="headerlink" href="#theme-configuration" title="Link to this heading"></a></h3>
+<p>Edit <code class="docutils literal notranslate"><span class="pre">conf.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">html_theme_options</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;canonical_url&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;analytics_id&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;logo_only&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s1">&#39;display_version&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;prev_next_buttons_location&#39;</span><span class="p">:</span> <span class="s1">&#39;bottom&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;style_external_links&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s1">&#39;vcs_pageview_mode&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;style_nav_header_background&#39;</span><span class="p">:</span> <span class="s1">&#39;#2980B9&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;collapse_navigation&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;sticky_navigation&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;navigation_depth&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="s1">&#39;includehidden&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s1">&#39;titles_only&#39;</span><span class="p">:</span> <span class="kc">False</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="custom-css">
+<h3>Custom CSS<a class="headerlink" href="#custom-css" title="Link to this heading"></a></h3>
+<p>Add styles to <code class="docutils literal notranslate"><span class="pre">_static/custom.css</span></code>:</p>
+<div class="highlight-css notranslate"><div class="highlight"><pre><span></span><span class="c">/* Custom ProMOC styling */</span>
+<span class="p">.</span><span class="nc">wy-nav-top</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">background</span><span class="p">:</span><span class="w"> </span><span class="mh">#2980B9</span><span class="w"> </span><span class="cp">!important</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="extensions">
+<h3>Extensions<a class="headerlink" href="#extensions" title="Link to this heading"></a></h3>
+<p>Add to <code class="docutils literal notranslate"><span class="pre">conf.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">extensions</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;sphinx.ext.autodoc&#39;</span><span class="p">,</span>      <span class="c1"># Auto-generate docs</span>
+    <span class="s1">&#39;sphinx.ext.viewcode&#39;</span><span class="p">,</span>     <span class="c1"># Source code links</span>
+    <span class="s1">&#39;sphinx.ext.napoleon&#39;</span><span class="p">,</span>     <span class="c1"># Google/NumPy docstrings</span>
+    <span class="s1">&#39;sphinx.ext.intersphinx&#39;</span><span class="p">,</span>  <span class="c1"># Link to other projects</span>
+    <span class="s1">&#39;myst_parser&#39;</span><span class="p">,</span>             <span class="c1"># Markdown support</span>
+    <span class="s1">&#39;sphinx_rtd_theme&#39;</span><span class="p">,</span>        <span class="c1"># Theme</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="troubleshooting">
+<h2>🔍 Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
+<section id="build-errors">
+<h3>Build Errors<a class="headerlink" href="#build-errors" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clean and rebuild</span>
+make<span class="w"> </span>clean
+make<span class="w"> </span>dev
+
+<span class="c1"># Check for syntax errors</span>
+make<span class="w"> </span>html<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>error
+</pre></div>
+</div>
+</section>
+<section id="missing-dependencies">
+<h3>Missing Dependencies<a class="headerlink" href="#missing-dependencies" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install all documentation dependencies</span>
+make<span class="w"> </span>install
+
+<span class="c1"># Or install specific packages</span>
+pip<span class="w"> </span>install<span class="w"> </span>sphinx<span class="w"> </span>sphinx-rtd-theme<span class="w"> </span>myst-parser
+</pre></div>
+</div>
+</section>
+<section id="api-generation-issues">
+<h3>API Generation Issues<a class="headerlink" href="#api-generation-issues" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Manually regenerate API docs</span>
+sphinx-apidoc<span class="w"> </span>-f<span class="w"> </span>-o<span class="w"> </span>api/<span class="w"> </span>../linear_axis_nodes/
+sphinx-apidoc<span class="w"> </span>-f<span class="w"> </span>-o<span class="w"> </span>api/<span class="w"> </span>../planar_motor_nodes/
+</pre></div>
+</div>
+</section>
+</section>
+<section id="makefile-commands">
+<h2>📋 Makefile Commands<a class="headerlink" href="#makefile-commands" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code></p></td>
+<td><p>Build HTML documentation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">dev</span></code></p></td>
+<td><p>Quick development build</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">live</span></code></p></td>
+<td><p>Auto-rebuilding server</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">view</span></code></p></td>
+<td><p>Build and open in browser</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">api</span></code></p></td>
+<td><p>Generate API docs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">linkcheck</span></code></p></td>
+<td><p>Check for broken links</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">clean</span></code></p></td>
+<td><p>Clean build files</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">install</span></code></p></td>
+<td><p>Install dependencies</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">deploy</span></code></p></td>
+<td><p>Deploy to GitHub Pages</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">quality</span></code></p></td>
+<td><p>Run all quality checks</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="hosting-options">
+<h2>🌐 Hosting Options<a class="headerlink" href="#hosting-options" title="Link to this heading"></a></h2>
+<section id="github-pages">
+<h3>GitHub Pages<a class="headerlink" href="#github-pages" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Automatic deployment</span>
+make<span class="w"> </span>deploy
+
+<span class="c1"># Manual setup:</span>
+<span class="c1"># 1. Enable GitHub Pages in repository settings</span>
+<span class="c1"># 2. Set source to gh-pages branch</span>
+<span class="c1"># 3. Run make deploy</span>
+</pre></div>
+</div>
+</section>
+<section id="read-the-docs">
+<h3>Read the Docs<a class="headerlink" href="#read-the-docs" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Connect repository to <a class="reference external" href="http://readthedocs.org">readthedocs.org</a></p></li>
+<li><p>Configure build settings</p></li>
+<li><p>Automatic builds on push</p></li>
+</ol>
+</section>
+<section id="local-server">
+<h3>Local Server<a class="headerlink" href="#local-server" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Simple HTTP server</span>
+<span class="nb">cd</span><span class="w"> </span>_build/html
+python<span class="w"> </span>-m<span class="w"> </span>http.server<span class="w"> </span><span class="m">8080</span>
+
+<span class="c1"># Or use live server</span>
+make<span class="w"> </span>live
+</pre></div>
+</div>
+<hr class="docutils" />
+<p><strong>For questions or issues with documentation, please check the troubleshooting section or create an issue in the project repository.</strong></p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, ProMOC Assembly Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

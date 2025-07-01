@@ -1,0 +1,17 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    linear_axis_joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    linear_axis_position_controller:
+      type: position_controllers/JointPositionController
+
+      linear_axis_position_controller:
+        ros__parameters:
+          joint: linear_axis_joint
+          pid:
+            p: 100.0
+            i: 0.01
+            d: 10.0

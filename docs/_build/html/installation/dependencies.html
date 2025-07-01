@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dependencies &mdash; ProMOC Assembly 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=86f27845" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=276fb2b3" />
+
+  
+  
+        <script src="../_static/jquery.js?v=8dae8fb0"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=8d563738"></script>
+        <script src="../_static/doctools.js?v=888ff710"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Building the Project" href="building.html" />
+    <link rel="prev" title="ROS2 Installation" href="ros2_installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ProMOC Assembly
+          </a>
+              <div class="version">
+                1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Installation Guide</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="system_setup.html">System Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ros2_installation.html">ROS2 Installation</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#project-dependencies-overview">Project Dependencies Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#automated-installation">Automated Installation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#quick-install-recommended">Quick Install (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#manual-installation-steps">Manual Installation Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#system-dependencies">System Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#core-system-packages">Core System Packages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#hardware-interface-dependencies">Hardware Interface Dependencies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#documentation-and-development-tools">Documentation and Development Tools</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#python-dependencies">Python Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#core-python-packages">Core Python Packages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#hardware-control-libraries">Hardware Control Libraries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ros2-python-utilities">ROS2 Python Utilities</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#documentation-dependencies">Documentation Dependencies</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#ros2-package-dependencies">ROS2 Package Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#core-ros2-packages">Core ROS2 Packages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#simulation-and-visualization">Simulation and Visualization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#testing-and-quality-assurance">Testing and Quality Assurance</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#proprietary-dependencies">Proprietary Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pmclib-planar-motor-control">PMCLib (Planar Motor Control)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#thorlabs-software-optional">Thorlabs Software (Optional)</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#development-dependencies-optional">Development Dependencies (Optional)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#code-quality-tools">Code Quality Tools</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#performance-profiling">Performance Profiling</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dependency-verification">Dependency Verification</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#check-installation-status">Check Installation Status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#manual-verification-commands">Manual Verification Commands</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#troubleshooting-dependencies">Troubleshooting Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#common-issues">Common Issues</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dependency-conflicts">Dependency Conflicts</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="building.html">Building the Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="validation.html">Installation Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#quick-installation">Quick Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#step-by-step-installation">Step-by-Step Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#installation-modes">Installation Modes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/index.html">Tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">System Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/interfaces.html">Interfaces</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/safety.html">Safety</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_bringup.html">Package: promoc_bringup</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/testing.html">Simulation: Testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/linear_axis_nodes.html">Linear Axis Nodes API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/planar_motor_nodes.html">Planar Motor Nodes API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/utilities.html">API: Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/debugging.html">Debugging</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/changelog.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ProMOC Assembly</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Installation Guide</a></li>
+      <li class="breadcrumb-item active">Dependencies</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/installation/dependencies.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="dependencies">
+<h1>Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h1>
+<section id="project-dependencies-overview">
+<h2>Project Dependencies Overview<a class="headerlink" href="#project-dependencies-overview" title="Link to this heading"></a></h2>
+<p>The ProMOC Assembly system requires several categories of dependencies:</p>
+<ul class="simple">
+<li><p><strong>System packages</strong>: OS-level libraries and tools</p></li>
+<li><p><strong>Python packages</strong>: Python libraries for device control and utilities</p></li>
+<li><p><strong>ROS2 packages</strong>: ROS2-specific dependencies</p></li>
+<li><p><strong>Optional packages</strong>: Additional tools for development and simulation</p></li>
+</ul>
+</section>
+<section id="automated-installation">
+<h2>Automated Installation<a class="headerlink" href="#automated-installation" title="Link to this heading"></a></h2>
+<section id="quick-install-recommended">
+<h3>Quick Install (Recommended)<a class="headerlink" href="#quick-install-recommended" title="Link to this heading"></a></h3>
+<p>Use the provided installation scripts for automatic dependency setup:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Navigate to project setup directory</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws/src/promoc_assembly/setup
+
+<span class="c1"># Run the complete installation script</span>
+chmod<span class="w"> </span>+x<span class="w"> </span>install_all.sh
+./install_all.sh
+</pre></div>
+</div>
+<p>This script will:</p>
+<ol class="arabic simple">
+<li><p>Install system dependencies</p></li>
+<li><p>Install Python dependencies</p></li>
+<li><p>Install ROS2 package dependencies</p></li>
+<li><p>Validate the installation</p></li>
+</ol>
+</section>
+<section id="manual-installation-steps">
+<h3>Manual Installation Steps<a class="headerlink" href="#manual-installation-steps" title="Link to this heading"></a></h3>
+<p>If you prefer manual installation or need to troubleshoot:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install system dependencies</span>
+chmod<span class="w"> </span>+x<span class="w"> </span>install_system_deps.sh
+./install_system_deps.sh
+
+<span class="c1"># Install Python dependencies</span>
+chmod<span class="w"> </span>+x<span class="w"> </span>install_python_deps.sh
+./install_python_deps.sh
+
+<span class="c1"># Validate installation</span>
+chmod<span class="w"> </span>+x<span class="w"> </span>validate_setup_enhanced.sh
+./validate_setup_enhanced.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="system-dependencies">
+<h2>System Dependencies<a class="headerlink" href="#system-dependencies" title="Link to this heading"></a></h2>
+<section id="core-system-packages">
+<h3>Core System Packages<a class="headerlink" href="#core-system-packages" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>update
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>build-essential<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>cmake<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>git<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-pip<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-venv<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>curl<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>wget<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>software-properties-common<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pkg-config<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libudev-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libusb-1.0-0-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libftdi1-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>udev
+</pre></div>
+</div>
+</section>
+<section id="hardware-interface-dependencies">
+<h3>Hardware Interface Dependencies<a class="headerlink" href="#hardware-interface-dependencies" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># For Thorlabs LTS300 support</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libusb-1.0-0-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>libftdi1-dev<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-serial<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-usb
+
+<span class="c1"># For network communications</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>net-tools<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>netplan.io<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>iproute2
+</pre></div>
+</div>
+</section>
+<section id="documentation-and-development-tools">
+<h3>Documentation and Development Tools<a class="headerlink" href="#documentation-and-development-tools" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Documentation tools</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>doxygen<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>graphviz<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-sphinx<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-sphinx-rtd-theme
+
+<span class="c1"># Development tools</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>gdb<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>valgrind<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>clang-format<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-flake8<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-black
+</pre></div>
+</div>
+</section>
+</section>
+<section id="python-dependencies">
+<h2>Python Dependencies<a class="headerlink" href="#python-dependencies" title="Link to this heading"></a></h2>
+<section id="core-python-packages">
+<h3>Core Python Packages<a class="headerlink" href="#core-python-packages" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>numpy&gt;<span class="o">=</span><span class="m">1</span>.21.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>scipy&gt;<span class="o">=</span><span class="m">1</span>.7.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>matplotlib&gt;<span class="o">=</span><span class="m">3</span>.5.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pyyaml&gt;<span class="o">=</span><span class="m">6</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>setuptools&gt;<span class="o">=</span><span class="m">65</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>wheel&gt;<span class="o">=</span><span class="m">0</span>.37.0
+</pre></div>
+</div>
+</section>
+<section id="hardware-control-libraries">
+<h3>Hardware Control Libraries<a class="headerlink" href="#hardware-control-libraries" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Thorlabs device control</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pylablib&gt;<span class="o">=</span><span class="m">1</span>.4.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pyserial&gt;<span class="o">=</span><span class="m">3</span>.5<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pyusb&gt;<span class="o">=</span><span class="m">1</span>.2.0
+
+<span class="c1"># General hardware interfaces</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pymodbus&gt;<span class="o">=</span><span class="m">3</span>.0.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python-can&gt;<span class="o">=</span><span class="m">4</span>.0.0
+</pre></div>
+</div>
+</section>
+<section id="ros2-python-utilities">
+<h3>ROS2 Python Utilities<a class="headerlink" href="#ros2-python-utilities" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>transforms3d&gt;<span class="o">=</span><span class="m">0</span>.4.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python-dotenv&gt;<span class="o">=</span><span class="m">0</span>.19.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>psutil&gt;<span class="o">=</span><span class="m">5</span>.8.0
+</pre></div>
+</div>
+</section>
+<section id="documentation-dependencies">
+<h3>Documentation Dependencies<a class="headerlink" href="#documentation-dependencies" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>sphinx&gt;<span class="o">=</span><span class="m">4</span>.0.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>sphinx-rtd-theme&gt;<span class="o">=</span><span class="m">1</span>.0.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>myst-parser&gt;<span class="o">=</span><span class="m">0</span>.18.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>sphinx-autodoc-typehints&gt;<span class="o">=</span><span class="m">1</span>.12.0
+</pre></div>
+</div>
+</section>
+</section>
+<section id="ros2-package-dependencies">
+<h2>ROS2 Package Dependencies<a class="headerlink" href="#ros2-package-dependencies" title="Link to this heading"></a></h2>
+<section id="core-ros2-packages">
+<h3>Core ROS2 Packages<a class="headerlink" href="#core-ros2-packages" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-control-msgs<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-controller-manager<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-controller-interface<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-hardware-interface<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-pluginlib<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-rclcpp<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-rclpy
+</pre></div>
+</div>
+</section>
+<section id="simulation-and-visualization">
+<h3>Simulation and Visualization<a class="headerlink" href="#simulation-and-visualization" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-gazebo-ros-pkgs<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-gazebo-ros-control<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-joint-state-publisher<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-joint-state-publisher-gui<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-robot-state-publisher<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-rviz2<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-xacro
+</pre></div>
+</div>
+</section>
+<section id="testing-and-quality-assurance">
+<h3>Testing and Quality Assurance<a class="headerlink" href="#testing-and-quality-assurance" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-launch-testing<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-launch-testing-ament-cmake<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-ament-cmake-gtest<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>ros-humble-ament-cmake-pytest<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-pytest<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>python3-pytest-cov
+</pre></div>
+</div>
+</section>
+</section>
+<section id="proprietary-dependencies">
+<h2>Proprietary Dependencies<a class="headerlink" href="#proprietary-dependencies" title="Link to this heading"></a></h2>
+<section id="pmclib-planar-motor-control">
+<h3>PMCLib (Planar Motor Control)<a class="headerlink" href="#pmclib-planar-motor-control" title="Link to this heading"></a></h3>
+<p>The planar motor system requires proprietary libraries:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create directory for proprietary libraries</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span>~/ros2_ws/src/promoc_assembly/local_libs
+
+<span class="c1"># Extract PMCLib (provided separately)</span>
+<span class="c1"># tar -xzf PMCLib.tar.gz -C ~/ros2_ws/src/promoc_assembly/local_libs/</span>
+</pre></div>
+</div>
+<p><strong>Note</strong>: PMCLib must be obtained separately from the planar motor vendor and is not included in this repository.</p>
+</section>
+<section id="thorlabs-software-optional">
+<h3>Thorlabs Software (Optional)<a class="headerlink" href="#thorlabs-software-optional" title="Link to this heading"></a></h3>
+<p>For advanced Thorlabs features:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Download and install Thorlabs APT software</span>
+<span class="c1"># Follow instructions from Thorlabs website</span>
+<span class="c1"># Usually installed to /opt/thorlabs/</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="development-dependencies-optional">
+<h2>Development Dependencies (Optional)<a class="headerlink" href="#development-dependencies-optional" title="Link to this heading"></a></h2>
+<section id="code-quality-tools">
+<h3>Code Quality Tools<a class="headerlink" href="#code-quality-tools" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install additional development tools</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>pre-commit&gt;<span class="o">=</span><span class="m">2</span>.15.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>black&gt;<span class="o">=</span><span class="m">22</span>.0.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>isort&gt;<span class="o">=</span><span class="m">5</span>.10.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>flake8&gt;<span class="o">=</span><span class="m">4</span>.0.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>mypy&gt;<span class="o">=</span><span class="m">0</span>.910
+
+<span class="c1"># Install pre-commit hooks</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws/src/promoc_assembly
+pre-commit<span class="w"> </span>install
+</pre></div>
+</div>
+</section>
+<section id="performance-profiling">
+<h3>Performance Profiling<a class="headerlink" href="#performance-profiling" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install profiling tools</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>cProfile<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>memory-profiler&gt;<span class="o">=</span><span class="m">0</span>.60.0<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>line-profiler&gt;<span class="o">=</span><span class="m">3</span>.3.0
+
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>valgrind<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>perf-tools-unstable
+</pre></div>
+</div>
+</section>
+</section>
+<section id="dependency-verification">
+<h2>Dependency Verification<a class="headerlink" href="#dependency-verification" title="Link to this heading"></a></h2>
+<section id="check-installation-status">
+<h3>Check Installation Status<a class="headerlink" href="#check-installation-status" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run the validation script</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws/src/promoc_assembly/setup
+./validate_setup_enhanced.sh
+</pre></div>
+</div>
+</section>
+<section id="manual-verification-commands">
+<h3>Manual Verification Commands<a class="headerlink" href="#manual-verification-commands" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check Python packages</span>
+python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import numpy, scipy, matplotlib, pylablib; print(&#39;Python packages OK&#39;)&quot;</span>
+
+<span class="c1"># Check ROS2 packages</span>
+ros2<span class="w"> </span>pkg<span class="w"> </span>list<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;(control|gazebo|joint)&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-5
+
+<span class="c1"># Check system tools</span>
+which<span class="w"> </span>cmake<span class="w"> </span>gcc<span class="w"> </span>python3<span class="w"> </span>pip3
+
+<span class="c1"># Check hardware access</span>
+ls<span class="w"> </span>-la<span class="w"> </span>/dev/ttyUSB*<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;No USB devices found&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="troubleshooting-dependencies">
+<h2>Troubleshooting Dependencies<a class="headerlink" href="#troubleshooting-dependencies" title="Link to this heading"></a></h2>
+<section id="common-issues">
+<h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h3>
+<section id="pip-package-installation-failures">
+<h4>PIP Package Installation Failures<a class="headerlink" href="#pip-package-installation-failures" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># If pip install fails, try updating pip</span>
+python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
+
+<span class="c1"># For system packages, use --break-system-packages flag</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span>package_name
+
+<span class="c1"># Alternative: use virtual environment</span>
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>~/promoc_venv
+<span class="nb">source</span><span class="w"> </span>~/promoc_venv/bin/activate
+pip<span class="w"> </span>install<span class="w"> </span>package_name
+</pre></div>
+</div>
+</section>
+<section id="usb-permission-issues">
+<h4>USB Permission Issues<a class="headerlink" href="#usb-permission-issues" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add user to dialout group</span>
+sudo<span class="w"> </span>usermod<span class="w"> </span>-a<span class="w"> </span>-G<span class="w"> </span>dialout<span class="w"> </span><span class="nv">$USER</span>
+
+<span class="c1"># Create udev rules for Thorlabs devices</span>
+sudo<span class="w"> </span>tee<span class="w"> </span>/etc/udev/rules.d/99-thorlabs.rules<span class="w"> </span><span class="s">&lt;&lt; EOF</span>
+<span class="s">SUBSYSTEM==&quot;usb&quot;, ATTRS{idVendor}==&quot;1313&quot;, MODE=&quot;0666&quot;, GROUP=&quot;dialout&quot;</span>
+<span class="s">EOF</span>
+
+sudo<span class="w"> </span>udevadm<span class="w"> </span>control<span class="w"> </span>--reload-rules
+</pre></div>
+</div>
+</section>
+<section id="ros2-package-not-found">
+<h4>ROS2 Package Not Found<a class="headerlink" href="#ros2-package-not-found" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Update package database</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>update
+
+<span class="c1"># Search for available packages</span>
+apt-cache<span class="w"> </span>search<span class="w"> </span>ros-humble-package-name
+
+<span class="c1"># Check ROS2 installation</span>
+<span class="nb">echo</span><span class="w"> </span><span class="nv">$ROS_DISTRO</span>
+<span class="nb">source</span><span class="w"> </span>/opt/ros/humble/setup.bash
+</pre></div>
+</div>
+</section>
+<section id="memory-issues-during-compilation">
+<h4>Memory Issues During Compilation<a class="headerlink" href="#memory-issues-during-compilation" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Limit parallel jobs during build</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">MAKEFLAGS</span><span class="o">=</span>-j2
+colcon<span class="w"> </span>build<span class="w"> </span>--parallel-workers<span class="w"> </span><span class="m">2</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="dependency-conflicts">
+<h3>Dependency Conflicts<a class="headerlink" href="#dependency-conflicts" title="Link to this heading"></a></h3>
+<section id="python-package-conflicts">
+<h4>Python Package Conflicts<a class="headerlink" href="#python-package-conflicts" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check for conflicting packages</span>
+pip3<span class="w"> </span>list<span class="w"> </span>--outdated
+
+<span class="c1"># Force reinstall problematic packages</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--force-reinstall<span class="w"> </span>package_name
+
+<span class="c1"># Use virtual environment to isolate dependencies</span>
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>~/clean_env
+<span class="nb">source</span><span class="w"> </span>~/clean_env/bin/activate
+</pre></div>
+</div>
+</section>
+<section id="version-compatibility">
+<h4>Version Compatibility<a class="headerlink" href="#version-compatibility" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check installed versions</span>
+python3<span class="w"> </span>--version
+ros2<span class="w"> </span>--version
+gcc<span class="w"> </span>--version
+
+<span class="c1"># Check package versions</span>
+pip3<span class="w"> </span>show<span class="w"> </span>package_name
+dpkg<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>ros-humble
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>After installing all dependencies, proceed to <a class="reference internal" href="building.html"><span class="doc">Building the Project</span></a> to build the ProMOC Assembly workspace.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="ros2_installation.html" class="btn btn-neutral float-left" title="ROS2 Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="building.html" class="btn btn-neutral float-right" title="Building the Project" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, ProMOC Assembly Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

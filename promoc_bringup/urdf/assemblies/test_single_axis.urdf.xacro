@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="test_single_axis">
+
+  <!-- Include modules -->
+  <xacro:include filename="$(find promoc_bringup)/urdf/modules/lts300_x_axis.urdf.xacro"/>
+  <xacro:include filename="$(find promoc_bringup)/urdf/modules/lts300_z_axis.urdf.xacro"/>
+  <xacro:include filename="$(find promoc_bringup)/urdf/properties/materials.xacro"/>
+
+  <!-- Test configuration for single axis -->
+  <xacro:arg name="test_axis" default="x"/>
+
+  <!-- Base platform -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.6 0.4 0.05"/>
+      </geometry>
+      <material name="base_platform"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.6 0.4 0.05"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="3.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.08" ixy="0.0" ixz="0.0" iyy="0.18" iyz="0.0" izz="0.25"/>
+    </inertial>
+  </link>
+
+  <!-- Conditional axis inclusion for testing -->
+  <xacro:if value="${'$(arg test_axis)' == 'x'}">
+    <!-- Only X-Axis for testing -->
+    <xacro:lts300_x_axis prefix="test_lts300" 
+                         parent_link="base_link"
+                         mount_x="0" mount_y="0" mount_z="0.075"
+                         mount_roll="0" mount_pitch="0" mount_yaw="0"
+                         enable_ros2_control="true"/>
+  </xacro:if>
+
+  <xacro:if value="${'$(arg test_axis)' == 'z'}">
+    <!-- Only Z-Axis for testing -->
+    <xacro:lts300_z_axis prefix="test_lts300" 
+                         parent_link="base_link"
+                         mount_x="0" mount_y="0" mount_z="0.075"
+                         mount_roll="0" mount_pitch="0" mount_yaw="0"
+                         enable_ros2_control="true"/>
+  </xacro:if>
+
+  <!-- Gazebo Plugin -->
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find promoc_bringup)/config/single_lts300_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>

@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- LTS300 Physical Properties -->
+  <xacro:property name="lts300_travel_range" value="0.300" />       <!-- 300mm travel -->
+  <xacro:property name="lts300_max_velocity" value="0.050" />       <!-- 50mm/s max -->
+  <xacro:property name="lts300_resolution" value="0.0000005" />     <!-- 0.5µm resolution -->
+  <xacro:property name="lts300_repeatability" value="0.000002" />   <!-- ±2µm repeatability -->
+  
+  <!-- LTS300 Dimensions -->
+  <xacro:property name="lts300_housing_length" value="0.450" />     <!-- 450mm housing -->
+  <xacro:property name="lts300_housing_width" value="0.080" />      <!-- 80mm width -->
+  <xacro:property name="lts300_housing_height" value="0.060" />     <!-- 60mm height -->
+  
+  <xacro:property name="lts300_carriage_length" value="0.100" />    <!-- 100mm carriage -->
+  <xacro:property name="lts300_carriage_width" value="0.120" />     <!-- 120mm carriage -->
+  <xacro:property name="lts300_carriage_height" value="0.040" />    <!-- 40mm carriage -->
+  
+  <!-- LTS300 Mass Properties -->
+  <xacro:property name="lts300_housing_mass" value="1.2" />         <!-- 1.2kg housing -->
+  <xacro:property name="lts300_carriage_mass" value="0.3" />        <!-- 0.3kg carriage -->
+  
+  <!-- Safety Limits (conservative) -->
+  <xacro:property name="lts300_safe_travel" value="0.280" />        <!-- 280mm safe travel -->
+  <xacro:property name="lts300_safe_velocity" value="0.040" />      <!-- 40mm/s safe velocity -->
+  <xacro:property name="lts300_max_effort" value="100" />           <!-- 100N max force -->
+
+</robot>

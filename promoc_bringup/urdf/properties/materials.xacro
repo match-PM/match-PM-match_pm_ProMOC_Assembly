@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Thorlabs LTS300 Materials -->
+  <material name="lts300_housing">
+    <color rgba="0.7 0.7 0.7 1.0"/>  <!-- Aluminum gray -->
+  </material>
+  
+  <material name="lts300_carriage">
+    <color rgba="0.2 0.4 0.8 1.0"/>  <!-- Blue carriage -->
+  </material>
+  
+  <!-- Base Platform Materials -->
+  <material name="base_platform">
+    <color rgba="0.3 0.3 0.3 1.0"/>  <!-- Dark gray -->
+  </material>
+  
+  <!-- Axis Identification Colors -->
+  <material name="x_axis_color">
+    <color rgba="1.0 0.2 0.2 1.0"/>  <!-- Red for X -->
+  </material>
+  
+  <material name="z_axis_color">
+    <color rgba="0.2 1.0 0.2 1.0"/>  <!-- Green for Z -->
+  </material>
+  
+  <!-- Future Planar Motor Materials -->
+  <material name="planar_motor_base">
+    <color rgba="0.1 0.1 0.1 1.0"/>  <!-- Black base -->
+  </material>
+  
+  <material name="planar_motor_mover">
+    <color rgba="0.8 0.6 0.2 1.0"/>  <!-- Gold mover -->
+  </material>
+
+</robot>

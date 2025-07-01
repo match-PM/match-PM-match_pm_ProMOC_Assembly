@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Building the Project &mdash; ProMOC Assembly 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=86f27845" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=276fb2b3" />
+
+  
+  
+        <script src="../_static/jquery.js?v=8dae8fb0"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=8d563738"></script>
+        <script src="../_static/doctools.js?v=888ff710"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Installation Validation" href="validation.html" />
+    <link rel="prev" title="Dependencies" href="dependencies.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ProMOC Assembly
+          </a>
+              <div class="version">
+                1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Installation Guide</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="system_setup.html">System Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ros2_installation.html">ROS2 Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dependencies.html">Dependencies</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Building the Project</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#workspace-setup">Workspace Setup</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#clone-the-repository">Clone the Repository</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#install-package-dependencies">Install Package Dependencies</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#building-the-workspace">Building the Workspace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#clean-build-recommended-for-first-build">Clean Build (Recommended for First Build)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#build-with-options">Build with Options</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#incremental-builds">Incremental Builds</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#build-configuration">Build Configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cmake-configuration">CMake Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#python-package-configuration">Python Package Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#testing-the-build">Testing the Build</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#run-package-tests">Run Package Tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#verify-installation">Verify Installation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#build-troubleshooting">Build Troubleshooting</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#common-build-errors">Common Build Errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#advanced-troubleshooting">Advanced Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#build-optimization">Build Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#faster-builds">Faster Builds</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#continuous-integration">Continuous Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#post-build-setup">Post-Build Setup</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#environment-configuration">Environment Configuration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation">Validation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="validation.html">Installation Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#quick-installation">Quick Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#step-by-step-installation">Step-by-Step Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#installation-modes">Installation Modes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/index.html">Tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/overview.html">System Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture/interfaces.html">Interfaces</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/safety.html">Safety</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_bringup.html">Package: promoc_bringup</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/testing.html">Simulation: Testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/linear_axis_nodes.html">Linear Axis Nodes API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/planar_motor_nodes.html">Planar Motor Nodes API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/utilities.html">API: Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/debugging.html">Debugging</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/changelog.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ProMOC Assembly</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Installation Guide</a></li>
+      <li class="breadcrumb-item active">Building the Project</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/installation/building.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="building-the-project">
+<h1>Building the Project<a class="headerlink" href="#building-the-project" title="Link to this heading"></a></h1>
+<section id="workspace-setup">
+<h2>Workspace Setup<a class="headerlink" href="#workspace-setup" title="Link to this heading"></a></h2>
+<section id="clone-the-repository">
+<h3>Clone the Repository<a class="headerlink" href="#clone-the-repository" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Navigate to ROS2 workspace source directory</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws/src
+
+<span class="c1"># Clone the ProMOC Assembly repository</span>
+git<span class="w"> </span>clone<span class="w"> </span>&lt;repository-url&gt;<span class="w"> </span>promoc_assembly
+
+<span class="c1"># Navigate to the workspace root</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws
+</pre></div>
+</div>
+</section>
+<section id="install-package-dependencies">
+<h3>Install Package Dependencies<a class="headerlink" href="#install-package-dependencies" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Use rosdep to install ROS2 package dependencies</span>
+rosdep<span class="w"> </span>install<span class="w"> </span>--from-paths<span class="w"> </span>src<span class="w"> </span>--ignore-src<span class="w"> </span>-r<span class="w"> </span>-y
+
+<span class="c1"># Alternatively, run the automated setup</span>
+<span class="nb">cd</span><span class="w"> </span>src/promoc_assembly/setup
+./install_all.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="building-the-workspace">
+<h2>Building the Workspace<a class="headerlink" href="#building-the-workspace" title="Link to this heading"></a></h2>
+<section id="clean-build-recommended-for-first-build">
+<h3>Clean Build (Recommended for First Build)<a class="headerlink" href="#clean-build-recommended-for-first-build" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Navigate to workspace root</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws
+
+<span class="c1"># Remove any existing build artifacts</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>build<span class="w"> </span>install<span class="w"> </span>log
+
+<span class="c1"># Build all packages</span>
+colcon<span class="w"> </span>build
+
+<span class="c1"># Source the workspace</span>
+<span class="nb">source</span><span class="w"> </span>install/setup.bash
+</pre></div>
+</div>
+</section>
+<section id="build-with-options">
+<h3>Build with Options<a class="headerlink" href="#build-with-options" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Build with debug information</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Debug
+
+<span class="c1"># Build with optimizations</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release
+
+<span class="c1"># Build only specific packages</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--packages-select<span class="w"> </span>linear_axis_nodes<span class="w"> </span>planar_motor_nodes
+
+<span class="c1"># Build with parallel jobs (adjust number based on your system)</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--parallel-workers<span class="w"> </span><span class="m">4</span>
+
+<span class="c1"># Build with verbose output for debugging</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--event-handlers<span class="w"> </span>console_direct+
+</pre></div>
+</div>
+</section>
+<section id="incremental-builds">
+<h3>Incremental Builds<a class="headerlink" href="#incremental-builds" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Build only changed packages</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--packages-up-to<span class="w"> </span>promoc_bringup
+
+<span class="c1"># Build with symbolic links (faster for Python packages)</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--symlink-install
+
+<span class="c1"># Build and install only modified packages</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-clean-cache
+</pre></div>
+</div>
+</section>
+</section>
+<section id="build-configuration">
+<h2>Build Configuration<a class="headerlink" href="#build-configuration" title="Link to this heading"></a></h2>
+<section id="cmake-configuration">
+<h3>CMake Configuration<a class="headerlink" href="#cmake-configuration" title="Link to this heading"></a></h3>
+<p>For C++ packages, you can configure CMake options:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Set specific CMake flags</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>Release<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DCMAKE_EXPORT_COMPILE_COMMANDS<span class="o">=</span>ON<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-DBUILD_TESTING<span class="o">=</span>ON
+</pre></div>
+</div>
+</section>
+<section id="python-package-configuration">
+<h3>Python Package Configuration<a class="headerlink" href="#python-package-configuration" title="Link to this heading"></a></h3>
+<p>For Python packages, ensure proper setup:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Verify Python environment</span>
+python3<span class="w"> </span>--version
+which<span class="w"> </span>python3
+
+<span class="c1"># Install Python dependencies if not already done</span>
+<span class="nb">cd</span><span class="w"> </span>src/promoc_assembly/setup
+./install_python_deps.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="testing-the-build">
+<h2>Testing the Build<a class="headerlink" href="#testing-the-build" title="Link to this heading"></a></h2>
+<section id="run-package-tests">
+<h3>Run Package Tests<a class="headerlink" href="#run-package-tests" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run all tests</span>
+colcon<span class="w"> </span><span class="nb">test</span>
+
+<span class="c1"># Run tests for specific packages</span>
+colcon<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--packages-select<span class="w"> </span>linear_axis_nodes
+
+<span class="c1"># Run tests with verbose output</span>
+colcon<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--event-handlers<span class="w"> </span>console_direct+
+
+<span class="c1"># Get test results</span>
+colcon<span class="w"> </span>test-result<span class="w"> </span>--all
+colcon<span class="w"> </span>test-result<span class="w"> </span>--verbose
+</pre></div>
+</div>
+</section>
+<section id="verify-installation">
+<h3>Verify Installation<a class="headerlink" href="#verify-installation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Source the workspace</span>
+<span class="nb">source</span><span class="w"> </span>install/setup.bash
+
+<span class="c1"># Check if packages are found</span>
+ros2<span class="w"> </span>pkg<span class="w"> </span>list<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>promoc
+
+<span class="c1"># Verify nodes can be found</span>
+ros2<span class="w"> </span>run<span class="w"> </span>linear_axis_nodes<span class="w"> </span>lts300_service_node<span class="w"> </span>--help
+ros2<span class="w"> </span>run<span class="w"> </span>planar_motor_nodes<span class="w"> </span>mover_service_node<span class="w"> </span>--help
+
+<span class="c1"># Check launch files</span>
+ros2<span class="w"> </span>launch<span class="w"> </span>promoc_bringup<span class="w"> </span>--show-launch-file
+</pre></div>
+</div>
+</section>
+</section>
+<section id="build-troubleshooting">
+<h2>Build Troubleshooting<a class="headerlink" href="#build-troubleshooting" title="Link to this heading"></a></h2>
+<section id="common-build-errors">
+<h3>Common Build Errors<a class="headerlink" href="#common-build-errors" title="Link to this heading"></a></h3>
+<section id="missing-dependencies">
+<h4>Missing Dependencies<a class="headerlink" href="#missing-dependencies" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Error: Package &#39;xxx&#39; not found</span>
+<span class="c1"># Solution: Install missing ROS2 packages</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>ros-humble-&lt;package-name&gt;
+
+<span class="c1"># Or install using rosdep</span>
+rosdep<span class="w"> </span>install<span class="w"> </span>--from-paths<span class="w"> </span>src<span class="w"> </span>--ignore-src<span class="w"> </span>-r<span class="w"> </span>-y
+</pre></div>
+</div>
+</section>
+<section id="python-import-errors">
+<h4>Python Import Errors<a class="headerlink" href="#python-import-errors" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Error: ModuleNotFoundError: No module named &#39;xxx&#39;</span>
+<span class="c1"># Solution: Install Python dependencies</span>
+pip3<span class="w"> </span>install<span class="w"> </span>--break-system-packages<span class="w"> </span>&lt;package-name&gt;
+
+<span class="c1"># Or run the dependency installer</span>
+<span class="nb">cd</span><span class="w"> </span>src/promoc_assembly/setup
+./install_python_deps.sh
+</pre></div>
+</div>
+</section>
+<section id="cmake-configuration-errors">
+<h4>CMake Configuration Errors<a class="headerlink" href="#cmake-configuration-errors" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Error: CMake configuration failed</span>
+<span class="c1"># Solution: Clean and rebuild</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>build<span class="w"> </span>install<span class="w"> </span>log
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-clean-cache
+</pre></div>
+</div>
+</section>
+<section id="compilation-errors">
+<h4>Compilation Errors<a class="headerlink" href="#compilation-errors" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Error: Compilation failed</span>
+<span class="c1"># Solution: Check compiler and dependencies</span>
+gcc<span class="w"> </span>--version
+g++<span class="w"> </span>--version
+
+<span class="c1"># Install missing development packages</span>
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>build-essential<span class="w"> </span>cmake
+</pre></div>
+</div>
+</section>
+<section id="memory-issues">
+<h4>Memory Issues<a class="headerlink" href="#memory-issues" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Error: Virtual memory exhausted</span>
+<span class="c1"># Solution: Reduce parallel jobs</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--parallel-workers<span class="w"> </span><span class="m">1</span>
+
+<span class="c1"># Or increase swap space</span>
+sudo<span class="w"> </span>fallocate<span class="w"> </span>-l<span class="w"> </span>2G<span class="w"> </span>/swapfile
+sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/swapfile
+sudo<span class="w"> </span>mkswap<span class="w"> </span>/swapfile
+sudo<span class="w"> </span>swapon<span class="w"> </span>/swapfile
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-troubleshooting">
+<h3>Advanced Troubleshooting<a class="headerlink" href="#advanced-troubleshooting" title="Link to this heading"></a></h3>
+<section id="debug-build-issues">
+<h4>Debug Build Issues<a class="headerlink" href="#debug-build-issues" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Build with maximum verbosity</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--event-handlers<span class="w"> </span>console_direct+<span class="w"> </span>--cmake-args<span class="w"> </span>-DCMAKE_VERBOSE_MAKEFILE<span class="o">=</span>ON
+
+<span class="c1"># Check specific package build</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--packages-select<span class="w"> </span>&lt;package-name&gt;<span class="w"> </span>--event-handlers<span class="w"> </span>console_direct+
+
+<span class="c1"># Manually invoke CMake for debugging</span>
+<span class="nb">cd</span><span class="w"> </span>build/&lt;package-name&gt;
+cmake<span class="w"> </span>--build<span class="w"> </span>.<span class="w"> </span>--verbose
+</pre></div>
+</div>
+</section>
+<section id="package-dependency-issues">
+<h4>Package Dependency Issues<a class="headerlink" href="#package-dependency-issues" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check package dependencies</span>
+rosdep<span class="w"> </span>check<span class="w"> </span>--from-paths<span class="w"> </span>src<span class="w"> </span>--ignore-src
+
+<span class="c1"># Show detailed dependency information</span>
+rosdep<span class="w"> </span>keys<span class="w"> </span>--from-paths<span class="w"> </span>src<span class="w"> </span>--ignore-src
+
+<span class="c1"># Force dependency reinstallation</span>
+rosdep<span class="w"> </span>install<span class="w"> </span>--from-paths<span class="w"> </span>src<span class="w"> </span>--ignore-src<span class="w"> </span>-r<span class="w"> </span>-y<span class="w"> </span>--reinstall
+</pre></div>
+</div>
+</section>
+<section id="workspace-environment-issues">
+<h4>Workspace Environment Issues<a class="headerlink" href="#workspace-environment-issues" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check ROS2 environment</span>
+printenv<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>ROS
+
+<span class="c1"># Verify workspace sourcing</span>
+<span class="nb">echo</span><span class="w"> </span><span class="nv">$AMENT_PREFIX_PATH</span>
+<span class="nb">echo</span><span class="w"> </span><span class="nv">$CMAKE_PREFIX_PATH</span>
+
+<span class="c1"># Re-source environment</span>
+<span class="nb">source</span><span class="w"> </span>/opt/ros/humble/setup.bash
+<span class="nb">source</span><span class="w"> </span>install/setup.bash
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="build-optimization">
+<h2>Build Optimization<a class="headerlink" href="#build-optimization" title="Link to this heading"></a></h2>
+<section id="faster-builds">
+<h3>Faster Builds<a class="headerlink" href="#faster-builds" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Use ninja build system (if available)</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-GNinja
+
+<span class="c1"># Use compiler cache (if ccache is installed)</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-DCMAKE_CXX_COMPILER_LAUNCHER<span class="o">=</span>ccache
+
+<span class="c1"># Build only necessary packages</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--packages-up-to<span class="w"> </span>promoc_bringup
+
+<span class="c1"># Use symbolic links for Python packages</span>
+colcon<span class="w"> </span>build<span class="w"> </span>--symlink-install
+</pre></div>
+</div>
+</section>
+<section id="continuous-integration">
+<h3>Continuous Integration<a class="headerlink" href="#continuous-integration" title="Link to this heading"></a></h3>
+<p>For automated builds:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create build script</span>
+cat<span class="w"> </span>&gt;<span class="w"> </span>build.sh<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
+<span class="s">#!/bin/bash</span>
+<span class="s">set -e</span>
+
+<span class="s"># Clean previous build</span>
+<span class="s">rm -rf build install log</span>
+
+<span class="s"># Install dependencies</span>
+<span class="s">rosdep install --from-paths src --ignore-src -r -y</span>
+
+<span class="s"># Build workspace</span>
+<span class="s">colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release</span>
+
+<span class="s"># Run tests</span>
+<span class="s">colcon test</span>
+
+<span class="s"># Check test results</span>
+<span class="s">colcon test-result --all</span>
+<span class="s">EOF</span>
+
+chmod<span class="w"> </span>+x<span class="w"> </span>build.sh
+./build.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="post-build-setup">
+<h2>Post-Build Setup<a class="headerlink" href="#post-build-setup" title="Link to this heading"></a></h2>
+<section id="environment-configuration">
+<h3>Environment Configuration<a class="headerlink" href="#environment-configuration" title="Link to this heading"></a></h3>
+<p>Add to your <code class="docutils literal notranslate"><span class="pre">~/.bashrc</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># ProMOC Assembly workspace</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PROMOC_WS</span><span class="o">=</span>~/ros2_ws
+<span class="nb">source</span><span class="w"> </span><span class="nv">$PROMOC_WS</span>/install/setup.bash
+
+<span class="c1"># Convenience aliases</span>
+<span class="nb">alias</span><span class="w"> </span><span class="nv">promoc_ws</span><span class="o">=</span><span class="s1">&#39;cd $PROMOC_WS&#39;</span>
+<span class="nb">alias</span><span class="w"> </span><span class="nv">promoc_build</span><span class="o">=</span><span class="s1">&#39;cd $PROMOC_WS &amp;&amp; colcon build&#39;</span>
+<span class="nb">alias</span><span class="w"> </span><span class="nv">promoc_test</span><span class="o">=</span><span class="s1">&#39;cd $PROMOC_WS &amp;&amp; colcon test&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="validation">
+<h3>Validation<a class="headerlink" href="#validation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run the complete validation script</span>
+<span class="nb">cd</span><span class="w"> </span>~/ros2_ws/src/promoc_assembly/setup
+./validate_setup_enhanced.sh
+
+<span class="c1"># Quick validation</span>
+<span class="nb">source</span><span class="w"> </span>install/setup.bash
+ros2<span class="w"> </span>pkg<span class="w"> </span>list<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>promoc
+ros2<span class="w"> </span>launch<span class="w"> </span>promoc_bringup<span class="w"> </span>--show-args
+</pre></div>
+</div>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>After successfully building the project, proceed to <a class="reference internal" href="validation.html"><span class="doc">Installation Validation</span></a> to validate your installation and run system tests.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="dependencies.html" class="btn btn-neutral float-left" title="Dependencies" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="validation.html" class="btn btn-neutral float-right" title="Installation Validation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, ProMOC Assembly Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,53 +1,190 @@
-# ProMOC Assembly ROS2 Package
+# ProMOC Assembly ROS2 System
 
-This repository contains the ProMOC Assembly system ROS2 packages for controlling linear axis and planar motor nodes.
+[![Documentation Status](https://img.shields.io/badge/docs-latest-brightgreen.svg)](./docs/)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble+-blue.svg)](https://docs.ros.org/en/humble/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Repository Setup for ROS2 Workspace
+A modular ROS2 system for high-precision assembly tasks using linear axes (Thorlabs LTS300) and planar motor systems.
 
-This repository is designed to be cloned directly into the `src` folder of an existing ROS2 workspace.
+## 🚀 Quick Start
 
-### Prerequisites
+```bash
+# 1. Clone to ROS2 workspace
+cd ~/ros2_ws/src
+git clone <repository-url> promoc_assembly
 
-- ROS2 Humble installed
-- Python 3.8+
-- Git
-- Ubuntu 20.04 or later
+# 2. One-command installation
+cd promoc_assembly/setup
+./install_all.sh
 
-### Installation
+# 3. Launch simulation
+source ../install/setup.bash
+ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+```
 
-1. **Navigate to your ROS2 workspace src directory:**
-   ```bash
-   cd ~/your_ros2_workspace/src
-   ```
+## 📖 Documentation
 
-2. **Clone this repository:**
-   ```bash
-   git clone <repository-url> promoc_assembly
-   ```
+**Complete documentation is available in the [`docs/`](./docs/) directory.**
 
-3. **Install system dependencies (Ubuntu/Linux only):**
-   ```bash
-   cd promoc_assembly/setup
-   ./install_system_deps.sh
-   ```
+### Quick Links
+- **[Installation Guide](./docs/installation/)** - Complete setup instructions
+- **[Quick Start](./docs/quickstart/)** - Get running in 5 minutes  
+- **[API Reference](./docs/api/)** - Detailed API documentation
+- **[Architecture](./docs/architecture/)** - System design overview
+- **[Tutorials](./docs/tutorials/)** - Step-by-step guides
 
-4. **Install Python dependencies:**
-   ```bash
-   ./install_python_deps.sh
-   ```
-   This script will:
-   - Install all Python packages from `dependencies.txt`
-   - Test .NET runtime compatibility (.NET Core preferred, Mono as fallback)
-   - Configure PMCLib for the best available runtime
+### Build Documentation Locally
+```bash
+cd docs/
+make install    # Install documentation dependencies
+make live       # Start auto-rebuilding server at http://localhost:8000
+```
 
-### Quick Start Alternative
+## 🏗️ System Architecture
 
-For experienced users, see `setup/QUICKSTART.md` for abbreviated instructions.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                        │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ Assembly Tasks  │  │ Motion Planning │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     ROS2 Service Layer                      │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ Linear Axis     │  │ Planar Motor    │                  │
+│  │ Service Nodes   │  │ Service Nodes   │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                  Hardware Abstraction Layer                 │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ LTS300 Drivers  │  │ PMCLib Drivers  │                  │
+│  │ (Real/Sim/Mock) │  │ (Real/Mock)     │                  │
+│  └─────────────────┘  └─────────────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Manual Installation (Advanced)
+## 📦 Package Overview
 
-If using automated installation (`setup/install_python_deps.sh`), simply extract the PMCLib directory to `local_libs/` before running the script:
-   ```bash
+### Core Packages
+- **[`linear_axis_nodes`](./linear_axis_nodes/)** - Thorlabs LTS300 linear positioning
+- **[`planar_motor_nodes`](./planar_motor_nodes/)** - 2D planar motor control  
+- **[`promoc_assembly_interfaces`](./promoc_assembly_interfaces/)** - Custom ROS2 messages/services
+- **[`promoc_bringup`](./promoc_bringup/)** - System integration and launch files
+
+### Support Directories
+- **[`setup/`](./setup/)** - Installation and validation scripts
+- **[`docs/`](./docs/)** - Comprehensive documentation
+- **[`local_libs/`](./local_libs/)** - Proprietary libraries (PMCLib)
+
+## 🎯 Key Features
+
+- ✅ **Modular Architecture** - Easy to extend and maintain
+- ✅ **Hardware Abstraction** - Seamless sim-to-real transfer  
+- ✅ **Safety Systems** - Collision detection and limits
+- ✅ **High Precision** - Sub-micrometer positioning
+- ✅ **ROS2 Native** - Standard interfaces and tools
+- ✅ **Simulation Ready** - Full Gazebo integration
+
+## 🔧 System Requirements
+
+- **OS**: Ubuntu 20.04/22.04/24.04 LTS
+- **ROS2**: Humble Hawksbill or newer
+- **Python**: 3.8+  
+- **Hardware**: Thorlabs LTS300, PMCLib-compatible planar motor (optional)
+
+## 📋 Installation Options
+
+### Option 1: Automated Installation (Recommended)
+```bash
+cd setup/
+./install_all.sh
+```
+
+### Option 2: Manual Step-by-Step
+```bash
+./install_system_deps.sh    # System dependencies
+./install_python_deps.sh    # Python packages
+cd .. && rosdep install --from-paths . --ignore-src -y  # ROS2 deps
+colcon build --symlink-install  # Build workspace
+```
+
+### Option 3: Development Setup
+```bash
+cd docs/
+make dev-setup  # Documentation + development tools
+```
+
+## 🧪 Testing & Validation
+
+### System Validation
+```bash
+cd setup/
+./validate_setup_enhanced.sh
+```
+
+### Basic Functionality Test
+```bash
+python3 setup/test_basic_functionality.py
+```
+
+### Simulation Tests
+```bash
+# Dual axis system
+ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+
+# Single axis test
+ros2 launch promoc_bringup test_single_lts300.launch.py test_axis:=x
+```
+
+## 🔌 Hardware Integration
+
+### For PMCLib (Planar Motor)
+```bash
+# 1. Obtain PMCLib wheel from Match/IEMCA
+# 2. Copy to local_libs/
+cp /path/to/pmclib-*.whl local_libs/
+
+# 3. Install
+pip install local_libs/pmclib-*.whl
+```
+
+### For Thorlabs LTS300
+- Configure serial numbers in launch files
+- Set appropriate permissions for serial ports
+- See [Hardware Documentation](./docs/hardware/) for details
+
+## 🛠️ Development
+
+### Contributing
+See [Development Guide](./docs/development/) for:
+- Coding standards
+- Testing procedures  
+- Pull request process
+- Architecture guidelines
+
+### Adding New Hardware
+1. Implement driver interface
+2. Create ROS2 service node
+3. Add URDF description
+4. Create launch files
+5. Update documentation
+
+## 📞 Support
+
+- 📖 **Documentation**: [`docs/`](./docs/) directory
+- 🐛 **Issues**: GitHub Issues
+- 💬 **Discussions**: GitHub Discussions  
+- 📧 **Contact**: ProMOC Assembly Team
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**For detailed instructions, please refer to the [complete documentation](./docs/).**
    # Extract PMCLib to local_libs directory
    unzip /path/to/pmclib.zip -d local_libs/
    # or copy PMCLib directory manually
