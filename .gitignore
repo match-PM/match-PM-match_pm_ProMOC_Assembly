@@ -35,3 +35,4 @@ src/match-PM-match_pm_ProMOC_Assembly/planar_motor_nodes/planar_motor_nodes/matc
 ehthumbs.db
 Thumbs.db
 setup/pmclib/xbot_commands.py
+setup/local_libraries/match_pm_xBot
