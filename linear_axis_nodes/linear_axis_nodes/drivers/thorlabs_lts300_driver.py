@@ -1,6 +1,7 @@
 import time
 import warnings
-from typing import Optional
+from typing import Optional, Tuple
+import struct
 
 # Try to import Thorlabs library
 try:
@@ -98,7 +99,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         if not self.connected or not self.device:
             raise ConnectionError("Device not connected.")
         if self.debug_mode:
-            print('Homing device...')
+            print('🔧 Homing device...')
         self.device.home(force=True, timeout=60)
         while self.device.is_moving():
             time.sleep(0.1)
@@ -137,3 +138,85 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         # This method is called internally by the driver after movements
         # The actual position is retrieved by get_position()
         pass
+
+    # New velocity control methods
+    def get_velocity_parameters(self) -> Tuple[float, float, float]:
+        """
+        Get current velocity parameters (min_velocity, acceleration, max_velocity)
+        Returns values in mm/s and mm/s^2
+        """
+        if not self.connected or not self.device:
+            raise ConnectionError("Device not connected.")
+        
+        try:
+            # Get velocity parameters from device (returns in device units)
+            params = self.device.get_velocity_parameters(scale=False)
+            
+            # Convert from device units to mm/s and mm/s^2
+            min_velocity = params.min_velocity / self.device_units_per_mm
+            acceleration = params.acceleration / self.device_units_per_mm
+            max_velocity = params.max_velocity / self.device_units_per_mm
+            
+            if self.debug_mode:
+                print(f'🔧 Current velocity parameters:')
+                print(f'   Min velocity: {min_velocity:.3f} mm/s')
+                print(f'   Acceleration: {acceleration:.3f} mm/s²')
+                print(f'   Max velocity: {max_velocity:.3f} mm/s')
+            
+            return (min_velocity, acceleration, max_velocity)
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f'❌ Error getting velocity parameters: {e}')
+            # Return default safe values in case of error
+            return (0.0, 1.0, 5.0)
+
+    def set_velocity_parameters(self, min_velocity=None, acceleration=None, max_velocity=None) -> Tuple[float, float, float]:
+        """
+        Set velocity parameters. If any parameter is None, use current value.
+        Parameters should be in mm/s and mm/s^2
+        Returns the actual set parameters
+        """
+        if not self.connected or not self.device:
+            raise ConnectionError("Device not connected.")
+        
+        try:
+            # Get current parameters if some are not specified
+            current_params = self.get_velocity_parameters()
+            
+            # Use current values for unspecified parameters
+            if min_velocity is None:
+                min_velocity = current_params[0]
+            if acceleration is None:
+                acceleration = current_params[1]
+            if max_velocity is None:
+                max_velocity = current_params[2]
+            
+            if self.debug_mode:
+                print(f'🔧 Setting velocity parameters:')
+                print(f'   Min velocity: {min_velocity:.3f} mm/s')
+                print(f'   Acceleration: {acceleration:.3f} mm/s²')
+                print(f'   Max velocity: {max_velocity:.3f} mm/s')
+            
+            # Convert to device units
+            min_vel_device = int(min_velocity * self.device_units_per_mm)
+            accel_device = int(acceleration * self.device_units_per_mm)
+            max_vel_device = int(max_velocity * self.device_units_per_mm)
+            
+            # Set the parameters (scale=False means we're providing device units)
+            self.device.setup_velocity(
+                min_velocity=min_vel_device,
+                acceleration=accel_device,
+                max_velocity=max_vel_device,
+                scale=False
+            )
+            
+            if self.debug_mode:
+                print('✅ Velocity parameters updated successfully')
+                
+            return self.get_velocity_parameters()
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f'❌ Error setting velocity parameters: {e}')
+            raise

@@ -237,35 +237,21 @@ class ServiceCallbacks:
         return response
 
     def callback_levitation_xbot(self, request, response):
-        """Handle levitation control for all XBots."""
+        """Handle XBot activation/deactivation."""
         try:
-            # Import the LevitateOptions enum from PMCLib
-            from .pmclib_loader import pmc_types
-            
-            # This service controls levitation for ALL XBots, not a specific one
-            # Use xbot_id = 0 to indicate all XBots
-            xbot_id = 0  # All XBots
-            
-            # Use the proper enum if available, otherwise fallback to int
-            if hasattr(pmc_types, 'LevitateOptions'):
-                lev_mode = pmc_types.LevitateOptions.LEVITATE if request.levitation else pmc_types.LevitateOptions.LAND
+            if request.levitation:
+                bot.levitation_command(0, 1)
+                response.status_message = "XBots successfully levitated"
             else:
-                lev_mode = 1 if request.levitation else 0
-            
-            # Apply levitation command to all XBots
-            bot.levitation_command(xbot_id, lev_mode)
+                bot.levitation_command(0, 0)
+                response.status_message = "XBots successfully grounded"
 
             response.success = True
             response.levitation = request.levitation
-            status = "levitated" if request.levitation else "landed"
-            response.status_message = f"All XBots {status} successfully"
-
-            self.node.get_logger().info(
-                f"✅ All XBots {status} successfully")
 
         except Exception as e:
             self._handle_service_error(e, response)
-            response.levitation = False
+            response.status_message = "Levitation command failed"
 
         return response
 

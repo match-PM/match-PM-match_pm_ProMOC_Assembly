@@ -1,0 +1,9 @@
+float32 min_velocity    
+float32 acceleration   
+float32 max_velocity   
+---
+bool success
+string status_message
+float32 actual_min_velocity   
+float32 actual_acceleration 
+float32 actual_max_velocity  
