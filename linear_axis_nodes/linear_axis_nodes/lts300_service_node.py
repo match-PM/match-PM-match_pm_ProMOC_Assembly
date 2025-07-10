@@ -1,5 +1,6 @@
 import sys
 import time
+from typing import Tuple, Optional
 
 # ROS 2 imports
 import rclpy  # type:ignore
@@ -10,7 +11,9 @@ from promoc_assembly_interfaces.srv import (
     MoveRelativ,
     Home,
     ShutdownLinearAxis,
-    GetPosition
+    GetPosition,
+    SetVelocityParameters,
+    GetVelocityParameters
 )
 
 from .drivers.linear_axis_driver import LinearAxisDriver
@@ -110,7 +113,12 @@ class LTS300ServiceNode(Node):
         self.driver: LinearAxisDriver = None  # Will be initialized in __init__
 
         self.declare_parameter('debug_mode', False)
-        self.declare_parameter('use_sim_time', False)
+        
+        # use_sim_time might already be declared by ROS2 globally
+        try:
+            self.declare_parameter('use_sim_time', False)
+        except Exception:
+            pass
 
         self.debug_mode = self.get_parameter(
             'debug_mode').get_parameter_value().bool_value
@@ -124,6 +132,7 @@ class LTS300ServiceNode(Node):
         self.declare_parameter('collision_threshold', 300.0)
         self.declare_parameter('node_name', 'lts300_x_axis_node')
         self.declare_parameter('namespace', 'promoc_assembly')
+        self.declare_parameter('standard_velocity', (0.0, 0.2, 536.5))  # mm/s
 
         # Get parameter values
         self.serial_port: str = self.get_parameter('serial_port').value
@@ -165,6 +174,12 @@ class LTS300ServiceNode(Node):
 
         self.get_position_service = self.create_service(
             GetPosition, f'{self.node_name}/get_position', self.get_position_callback)
+        
+        self.set_velocity_service = self.create_service(
+            SetVelocityParameters, f'{self.node_name}/set_velocity_parameters', self.set_velocity_callback)
+        
+        self.get_velocity_service = self.create_service(
+            GetVelocityParameters, f'{self.node_name}/get_velocity_parameters',self.get_velocity_callback)
 
     def setup_publishers(self):
         """Set up ROS2 publishers for the node."""
@@ -366,6 +381,54 @@ class LTS300ServiceNode(Node):
             response.success = False
             response.status_message = f"❌ Error getting position: {str(e)}"
             return response
+    def set_velocity_callback(self, request, response):
+        """Handle velocity parameter setting requests."""
+        try:
+            min_vel = None if request.min_velocity < 0 else request.min_velocity
+            accel = None if request.acceleration < 0 else request.acceleration
+            max_vel = None if request.max_velocity < 0 else request.max_velocity
+            
+            if self.debug_mode:
+                self.get_logger().info(f'🔧 Setting velocity parameters: min={min_vel}, accel={accel}, max={max_vel}')
+            
+            result = self.driver.set_velocity_parameters(min_vel, accel, max_vel)
+            
+            response.success = True
+            response.status_message = "✅ Velocity parameters updated successfully"
+            response.actual_min_velocity = result[0]
+            response.actual_acceleration = result[1] 
+            response.actual_max_velocity = result[2]
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ Error setting velocity parameters: {e}')
+            response.success = False
+            response.status_message = f"❌ Error: {str(e)}"
+            response.actual_min_velocity = 0.0
+            response.actual_acceleration = 0.0
+            response.actual_max_velocity = 0.0
+            
+        return response
+
+    def get_velocity_callback(self, request, response):
+        """Handle velocity parameter query requests."""
+        try:
+            params = self.driver.get_velocity_parameters()
+            
+            response.success = True
+            response.status_message = "✅ Velocity parameters retrieved successfully"
+            response.min_velocity = params[0]
+            response.acceleration = params[1]
+            response.max_velocity = params[2]
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ Error getting velocity parameters: {e}')
+            response.success = False
+            response.status_message = f"❌ Error: {str(e)}"
+            response.min_velocity = 0.0
+            response.acceleration = 0.0
+            response.max_velocity = 0.0
+            
+        return response
 
     # Helper functions
     def shutdown(self):

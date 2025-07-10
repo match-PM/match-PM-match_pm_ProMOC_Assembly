@@ -40,7 +40,8 @@ set(INTERFACE_FILES
   "srv/linear_axis/ShutdownLinearAxis.srv"
   "srv/linear_axis/GetPosition.srv"
   "srv/linear_axis/GetSetHomingParams.srv"
-  "srv/linear_axis/GetSetVelocityParams.srv"
+  "srv/linear_axis/SetVelocityParameters.srv"
+  "srv/linear_axis/GetVelocityParameters.srv"
 )
 
 if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")

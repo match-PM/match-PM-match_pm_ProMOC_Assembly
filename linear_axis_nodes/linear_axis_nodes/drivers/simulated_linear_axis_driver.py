@@ -1,5 +1,5 @@
 import time
-from typing import Optional
+from typing import Optional, Tuple
 from .linear_axis_driver import LinearAxisDriver
 
 class SimulatedLinearAxisDriver(LinearAxisDriver):
@@ -78,3 +78,23 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
 
     def get_axis_type(self) -> str:
         return self._axis_type if self._axis_type else "unknown"
+    def get_velocity_parameters(self) -> Tuple[float, float, float]:
+        """Get current velocity parameters (min_velocity, acceleration, max_velocity)"""
+        return (self._min_velocity, self._acceleration, self._max_velocity)
+
+    def set_velocity_parameters(self, min_velocity=None, acceleration=None, max_velocity=None):
+        """Set velocity parameters. If any parameter is None, use current value."""
+        if min_velocity is not None:
+            self._min_velocity = max(0.0, min_velocity)
+        if acceleration is not None:
+            self._acceleration = max(0.1, acceleration)  # Minimum 0.1 mm/s^2
+        if max_velocity is not None:
+            self._max_velocity = max(0.1, max_velocity)  # Minimum 0.1 mm/s
+            
+        if self.debug_mode:
+            print(f"🔧 Simulated velocity parameters updated:")
+            print(f"   Min velocity: {self._min_velocity:.3f} mm/s")
+            print(f"   Acceleration: {self._acceleration:.3f} mm/s²")
+            print(f"   Max velocity: {self._max_velocity:.3f} mm/s")
+            
+        return self.get_velocity_parameters()
