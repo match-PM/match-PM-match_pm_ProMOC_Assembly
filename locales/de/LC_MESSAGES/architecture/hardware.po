@@ -1,0 +1,86 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../architecture/hardware.md:1
+msgid "Hardware Architecture"
+msgstr "Hardware-Architektur"
+
+#: ../../architecture/hardware.md:3
+msgid "Supported Hardware"
+msgstr "Unterstützte Hardware"
+
+#: ../../architecture/hardware.md:5
+msgid "**Thorlabs LTS300**: Linear precision axes (X/Z)"
+msgstr "**Thorlabs LTS300**: Lineare Präzisionsachsen (X/Z)"
+
+#: ../../architecture/hardware.md:6
+msgid "**Planar Motor**: 2D positioning system (PMCLib-compatible)"
+msgstr "**Planarmotor**: 2D-Positioniersystem (PMCLib-kompatibel)"
+
+#: ../../architecture/hardware.md:7
+msgid "**Sensors**: Endstops, encoders, safety switches"
+msgstr "**Sensoren**: Endschalter, Encoder, Sicherheitsschalter"
+
+#: ../../architecture/hardware.md:8
+msgid "**Safety Systems**: Collision detection, emergency stop"
+msgstr "**Sicherheitssysteme**: Kollisionserkennung, Not-Halt"
+
+#: ../../architecture/hardware.md:10
+msgid "Hardware Abstraction"
+msgstr "Hardware-Abstraktion"
+
+#: ../../architecture/hardware.md:12
+msgid "Treiber-Layer für Simulation und reale Hardware"
+msgstr "Treiberschicht für Simulation und reale Hardware"
+
+#: ../../architecture/hardware.md:13
+msgid "Austauschbare Treiber für verschiedene Achsentypen"
+msgstr "Austauschbare Treiber für verschiedene Achsentypen"
+
+#: ../../architecture/hardware.md:14
+msgid "Mock- und Simulations-Treiber für Entwicklung"
+msgstr "Mock- und Simulationstreiber für die Entwicklung"
+
+#: ../../architecture/hardware.md:16
+msgid "Verkabelung und Aufbau"
+msgstr "Verkabelung und Aufbau"
+
+#: ../../architecture/hardware.md:18
+msgid "USB-Verbindung für LTS300"
+msgstr "USB-Verbindung für LTS300"
+
+#: ../../architecture/hardware.md:19
+msgid "Ethernet für Planar Motor"
+msgstr "Ethernet für Planarmotor"
+
+#: ../../architecture/hardware.md:20
+msgid "Standardisierte Stecker für Sensorik"
+msgstr "Standardisierte Stecker für die Sensorik"
+
+#: ../../architecture/hardware.md:22
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../architecture/hardware.md:24
+msgid "Details zur Inbetriebnahme siehe Installationsanleitung"
+msgstr "Details zur Inbetriebnahme siehe Installationsanleitung"
+
+#: ../../architecture/hardware.md:25
+msgid "Hardware-Validierung über das Validierungsskript"
+msgstr "Hardware-Validierung über das Validierungsskript"

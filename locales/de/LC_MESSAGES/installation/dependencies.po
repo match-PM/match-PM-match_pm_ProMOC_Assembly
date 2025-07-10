@@ -1,0 +1,230 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../installation/dependencies.md:1
+msgid "Dependencies"
+msgstr "Abhängigkeiten"
+
+#: ../../installation/dependencies.md:3
+msgid "Project Dependencies Overview"
+msgstr "Übersicht über die Projektabhängigkeiten"
+
+#: ../../installation/dependencies.md:5
+msgid "The ProMOC Assembly system requires several categories of dependencies:"
+msgstr "Das ProMOC Assembly-System erfordert mehrere Kategorien von Abhängigkeiten:"
+
+#: ../../installation/dependencies.md:6
+msgid "**System packages**: OS-level libraries and tools"
+msgstr "**Systempakete**: Bibliotheken und Werkzeuge auf Betriebssystemebene"
+
+#: ../../installation/dependencies.md:7
+msgid "**Python packages**: Python libraries for device control and utilities"
+msgstr "**Python-Pakete**: Python-Bibliotheken für die Gerätesteuerung und Hilfsprogramme"
+
+#: ../../installation/dependencies.md:8
+msgid "**ROS2 packages**: ROS2-specific dependencies"
+msgstr "**ROS2-Pakete**: ROS2-spezifische Abhängigkeiten"
+
+#: ../../installation/dependencies.md:9
+msgid "**Optional packages**: Additional tools for development and simulation"
+msgstr "**Optionale Pakete**: Zusätzliche Werkzeuge für Entwicklung und Simulation"
+
+#: ../../installation/dependencies.md:11
+msgid "Automated Installation"
+msgstr "Automatisierte Installation"
+
+#: ../../installation/dependencies.md:13
+msgid "Quick Install (Recommended)"
+msgstr "Schnellinstallation (empfohlen)"
+
+#: ../../installation/dependencies.md:14
+msgid "Use the provided installation scripts for automatic dependency setup:"
+msgstr "Verwenden Sie die bereitgestellten Installationsskripte für die automatische Einrichtung von Abhängigkeiten:"
+
+#: ../../installation/dependencies.md:25
+msgid "This script will:"
+msgstr "Dieses Skript wird:"
+
+#: ../../installation/dependencies.md:26
+msgid "Install system dependencies"
+msgstr "Systemabhängigkeiten installieren"
+
+#: ../../installation/dependencies.md:27
+msgid "Install Python dependencies"
+msgstr "Python-Abhängigkeiten installieren"
+
+#: ../../installation/dependencies.md:28
+msgid "Install ROS2 package dependencies"
+msgstr "ROS2-Paketabhängigkeiten installieren"
+
+#: ../../installation/dependencies.md:29
+msgid "Validate the installation"
+msgstr "Die Installation validieren"
+
+#: ../../installation/dependencies.md:31
+msgid "Manual Installation Steps"
+msgstr "Manuelle Installationsschritte"
+
+#: ../../installation/dependencies.md:33
+msgid "If you prefer manual installation or need to troubleshoot:"
+msgstr "Wenn Sie eine manuelle Installation bevorzugen oder Fehler beheben müssen:"
+
+#: ../../installation/dependencies.md:49
+msgid "System Dependencies"
+msgstr "Systemabhängigkeiten"
+
+#: ../../installation/dependencies.md:51
+msgid "Core System Packages"
+msgstr "Kernsystempakete"
+
+#: ../../installation/dependencies.md:71
+msgid "Hardware Interface Dependencies"
+msgstr "Hardware-Schnittstellen-Abhängigkeiten"
+
+#: ../../installation/dependencies.md:87
+msgid "Documentation and Development Tools"
+msgstr "Dokumentations- und Entwicklungswerkzeuge"
+
+#: ../../installation/dependencies.md:105
+msgid "Python Dependencies"
+msgstr "Python-Abhängigkeiten"
+
+#: ../../installation/dependencies.md:107
+msgid "Core Python Packages"
+msgstr "Kern-Python-Pakete"
+
+#: ../../installation/dependencies.md:118
+msgid "Hardware Control Libraries"
+msgstr "Hardware-Steuerungsbibliotheken"
+
+#: ../../installation/dependencies.md:132
+msgid "ROS2 Python Utilities"
+msgstr "ROS2-Python-Hilfsprogramme"
+
+#: ../../installation/dependencies.md:140
+msgid "Documentation Dependencies"
+msgstr "Dokumentationsabhängigkeiten"
+
+#: ../../installation/dependencies.md:149
+msgid "ROS2 Package Dependencies"
+msgstr "ROS2-Paketabhängigkeiten"
+
+#: ../../installation/dependencies.md:151
+msgid "Core ROS2 Packages"
+msgstr "Kern-ROS2-Pakete"
+
+#: ../../installation/dependencies.md:163
+msgid "Simulation and Visualization"
+msgstr "Simulation und Visualisierung"
+
+#: ../../installation/dependencies.md:175
+msgid "Testing and Quality Assurance"
+msgstr "Testen und Qualitätssicherung"
+
+#: ../../installation/dependencies.md:186
+msgid "Proprietary Dependencies"
+msgstr "Proprietäre Abhängigkeiten"
+
+#: ../../installation/dependencies.md:188
+msgid "PMCLib (Planar Motor Control)"
+msgstr "PMCLib (Planarmotorsteuerung)"
+
+#: ../../installation/dependencies.md:189
+msgid "The planar motor system requires proprietary libraries:"
+msgstr "Das Planarmotorsystem erfordert proprietäre Bibliotheken:"
+
+#: ../../installation/dependencies.md:199
+msgid "**Note**: PMCLib must be obtained separately from the planar motor vendor and is not included in this repository."
+msgstr "**Hinweis**: PMCLib muss separat vom Hersteller des Planarmotors bezogen werden und ist nicht in diesem Repository enthalten."
+
+#: ../../installation/dependencies.md:201
+msgid "Thorlabs Software (Optional)"
+msgstr "Thorlabs-Software (optional)"
+
+#: ../../installation/dependencies.md:202
+msgid "For advanced Thorlabs features:"
+msgstr "Für erweiterte Thorlabs-Funktionen:"
+
+#: ../../installation/dependencies.md:210
+msgid "Development Dependencies (Optional)"
+msgstr "Entwicklungsabhängigkeiten (optional)"
+
+#: ../../installation/dependencies.md:212
+msgid "Code Quality Tools"
+msgstr "Werkzeuge für die Codequalität"
+
+#: ../../installation/dependencies.md:227
+msgid "Performance Profiling"
+msgstr "Leistungsprofilierung"
+
+#: ../../installation/dependencies.md:240
+msgid "Dependency Verification"
+msgstr "Abhängigkeitsüberprüfung"
+
+#: ../../installation/dependencies.md:242
+msgid "Check Installation Status"
+msgstr "Installationsstatus prüfen"
+
+#: ../../installation/dependencies.md:249
+msgid "Manual Verification Commands"
+msgstr "Manuelle Überprüfungsbefehle"
+
+#: ../../installation/dependencies.md:264
+msgid "Troubleshooting Dependencies"
+msgstr "Fehlerbehebung bei Abhängigkeiten"
+
+#: ../../installation/dependencies.md:266
+msgid "Common Issues"
+msgstr "Häufige Probleme"
+
+#: ../../installation/dependencies.md:268
+msgid "PIP Package Installation Failures"
+msgstr "Fehler bei der Installation von PIP-Paketen"
+
+#: ../../installation/dependencies.md:282
+msgid "USB Permission Issues"
+msgstr "Probleme mit USB-Berechtigungen"
+
+#: ../../installation/dependencies.md:295
+msgid "ROS2 Package Not Found"
+msgstr "ROS2-Paket nicht gefunden"
+
+#: ../../installation/dependencies.md:308
+msgid "Memory Issues During Compilation"
+msgstr "Speicherprobleme während der Kompilierung"
+
+#: ../../installation/dependencies.md:315
+msgid "Dependency Conflicts"
+msgstr "Abhängigkeitskonflikte"
+
+#: ../../installation/dependencies.md:317
+msgid "Python Package Conflicts"
+msgstr "Konflikte mit Python-Paketen"
+
+#: ../../installation/dependencies.md:330
+msgid "Version Compatibility"
+msgstr "Versionskompatibilität"
+
+#: ../../installation/dependencies.md:342
+msgid "Next Steps"
+msgstr "Nächste Schritte"
+
+#: ../../installation/dependencies.md:343
+msgid "After installing all dependencies, proceed to {doc}`building` to build the ProMOC Assembly workspace."
+msgstr "Nach der Installation aller Abhängigkeiten fahren Sie mit {doc}`building` fort, um den ProMOC Assembly-Arbeitsbereich zu erstellen."

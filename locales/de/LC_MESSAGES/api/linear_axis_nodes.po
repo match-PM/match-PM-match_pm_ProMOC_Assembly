@@ -1,0 +1,462 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../api/linear_axis_nodes.md:1
+msgid "Linear Axis Nodes API"
+msgstr "API für Linearachsen-Knoten"
+
+#: ../../api/linear_axis_nodes.md:3
+msgid "This module provides control for Thorlabs LTS300 linear positioning stages."
+msgstr "Dieses Modul bietet die Steuerung für Thorlabs LTS300 Linearverstelltische."
+
+#: ../../api/linear_axis_nodes.md:12
+msgid "Core Components"
+msgstr "Kernkomponenten"
+
+#: ../../api/linear_axis_nodes.md:14
+msgid "Service Node"
+msgstr "Dienstknoten"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode:1 of
+msgid "Bases: :py:class:`~rclpy.node.Node`"
+msgstr "Bases: :py:class:`~rclpy.node.Node`"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:1 of
+msgid "Initialize the LTS300ServiceNode."
+msgstr "Initialisiert den LTS300ServiceNode."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:3 of
+msgid "This constructor initializes the ROS2 node for controlling a Thorlabs LTS300 linear stage. It performs the following steps: 1. Creates a temporary node 2. Initializes parameters and connects to the physical device 3. Reinitializes the node with the proper name based on the detected axis type 4. Sets up services, publishers, and subscribers"
+msgstr "Dieser Konstruktor initialisiert den ROS2-Knoten zur Steuerung eines Thorlabs LTS300 Lineartisches. Er führt die folgenden Schritte aus: 1. Erstellt einen temporären Knoten 2. Initialisiert Parameter und verbindet sich mit dem physischen Gerät 3. Reinitialisiert den Knoten mit dem richtigen Namen basierend auf dem erkannten Achsentyp 4. Richtet Dienste, Publisher und Subscriber ein"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:10 of
+msgid "The node is first created with a temporary name because the actual nod0e name depends on the detected axis type (X or Z), which is determined during the connection process."
+msgstr "Der Knoten wird zuerst mit einem temporären Namen erstellt, da der tatsächliche Knotenname vom erkannten Achsentyp (X oder Z) abhängt, der während des Verbindungsvorgangs ermittelt wird."
+
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.connect
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_absolute
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.move_relative
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.connect
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_absolute
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.move_relative
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.connect
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.determine_axis
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_absolute
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.move_relative
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback of
+msgid "Parameters"
+msgstr "Parameter"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback of
+msgid "Returns"
+msgstr "Rückgabewerte"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:16 of
+msgid "The constructor initializes the node but does not return any values.      Sets up the node's internal state and ROS2 communication interfaces."
+msgstr "Der Konstruktor initialisiert den Knoten, gibt aber keine Werte zurück.      Richtet den internen Zustand des Knotens und die ROS2-Kommunikationsschnittstellen ein."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:18 of
+msgid "The constructor initializes the node but does not return any values."
+msgstr "Der Konstruktor initialisiert den Knoten, gibt aber keine Werte zurück."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__:19 of
+msgid "Sets up the node's internal state and ROS2 communication interfaces."
+msgstr "Richtet den internen Zustand des Knotens und die ROS2-Kommunikationsschnittstellen ein."
+
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_axis_type
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_position
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.get_serial_number
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver.is_moving
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_axis_type
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_position
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.get_serial_number
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver.is_moving
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_axis_type
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_position
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.get_serial_number
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver.is_moving
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.__init__
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback of
+msgid "Return type"
+msgstr "Rückgabetyp"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.initialize_parameters:1 of
+msgid "Initialize parameters and member variables for the node."
+msgstr "Initialisiert Parameter und Mitgliedsvariablen für den Knoten."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.initialize_parameters:3 of
+msgid "This method declares and retrieves ROS parameters and initializes member variables used throughout the node."
+msgstr "Diese Methode deklariert und ruft ROS-Parameter ab und initialisiert Mitgliedsvariablen, die im gesamten Knoten verwendet werden."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services:1 of
+msgid "Set up ROS2 services for controlling the LTS300 linear stage."
+msgstr "Richtet ROS2-Dienste zur Steuerung des LTS300-Lineartisches ein."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services:3 of
+msgid "This function creates and registers all the service endpoints that allow external nodes to interact with the linear stage. Services include movement control (absolute and relative), homing operations, parameter configuration, position queries, and shutdown functionality."
+msgstr "Diese Funktion erstellt und registriert alle Dienstendpunkte, die es externen Knoten ermöglichen, mit dem Lineartisch zu interagieren. Die Dienste umfassen Bewegungssteuerung (absolut und relativ), Referenzfahrten, Parameterkonfiguration, Positionsabfragen und Abschaltfunktionen."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services:10 of
+msgid "The function registers service handlers with the ROS2 node      but does not return any values."
+msgstr "Die Funktion registriert Dienst-Handler beim ROS2-Knoten, gibt aber keine Werte zurück."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services:12 of
+msgid "The function registers service handlers with the ROS2 node"
+msgstr "Die Funktion registriert Dienst-Handler beim ROS2-Knoten"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_services:13 of
+msgid "but does not return any values."
+msgstr "gibt aber keine Werte zurück."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_publishers:1 of
+msgid "Set up ROS2 publishers for the node."
+msgstr "Richtet ROS2-Publisher für den Knoten ein."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.publish_position:1 of
+msgid "Publish the current position of the axis."
+msgstr "Veröffentlicht die aktuelle Position der Achse."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.setup_subscribers:1 of
+msgid "Set up ROS2 subscribers for the node."
+msgstr "Richtet ROS2-Subscriber für den Knoten ein."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.other_axis_position_callback:1 of
+msgid "Store the position of the other axis when received."
+msgstr "Speichert die Position der anderen Achse, wenn sie empfangen wird."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback:1 of
+msgid "Handle absolute movement requests."
+msgstr "Behandelt absolute Bewegungsanforderungen."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback:3 of
+msgid "This callback moves the linear stage to an absolute position specified in mm. It performs collision checking before executing the movement."
+msgstr "Dieser Callback bewegt den Lineartisch auf eine in mm angegebene absolute Position. Er führt vor der Ausführung der Bewegung eine Kollisionsprüfung durch."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback:6 of
+msgid "The service request containing the target position"
+msgstr "Die Dienstanforderung, die die Zielposition enthält"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback:6
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback:7
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback:7
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback:6 of
+msgid "The service response to be filled"
+msgstr "Die auszufüllende Dienstantwort"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback:8
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_absolute_callback:9
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback:9
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback:8 of
+msgid "The filled service response with success status and message"
+msgstr "Die ausgefüllte Dienstantwort mit Erfolgsstatus und Nachricht"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback:1 of
+msgid "Handle relative movement requests."
+msgstr "Behandelt relative Bewegungsanforderungen."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback:3 of
+msgid "This callback moves the linear stage by a relative distance specified in mm. It performs collision checking before executing the movement."
+msgstr "Dieser Callback bewegt den Lineartisch um eine in mm angegebene relative Distanz. Er führt vor der Ausführung der Bewegung eine Kollisionsprüfung durch."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.move_relative_callback:6 of
+msgid "The service request containing the relative movement distance"
+msgstr "Die Dienstanforderung, die die relative Bewegungsdistanz enthält"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback:1 of
+msgid "Handle homing requests."
+msgstr "Behandelt Referenzfahrt-Anforderungen."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback:3 of
+msgid "This callback initiates the homing procedure for the linear stage."
+msgstr "Dieser Callback initiiert den Referenzfahrtvorgang für den Lineartisch."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.home_callback:5
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback:5 of
+msgid "The service request (empty)"
+msgstr "Die Dienstanforderung (leer)"
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback:1 of
+msgid "Handle shutdown requests."
+msgstr "Behandelt Abschaltanforderungen."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown_callback:3 of
+msgid "This callback properly shuts down the device connection."
+msgstr "Dieser Callback fährt die Geräteverbindung ordnungsgemäß herunter."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown:1 of
+msgid "Properly shutdown the device connection."
+msgstr "Fährt die Geräteverbindung ordnungsgemäß herunter."
+
+#: linear_axis_nodes.lts300_service_node.LTS300ServiceNode.shutdown:3 of
+msgid "This ensures the device is left in a good state and resources are released."
+msgstr "Dies stellt sicher, dass das Gerät in einem guten Zustand hinterlassen und Ressourcen freigegeben werden."
+
+#: ../../api/linear_axis_nodes.md:23
+msgid "Drivers"
+msgstr "Treiber"
+
+#: ../../api/linear_axis_nodes.md:25
+msgid "Base Driver"
+msgstr "Basistreiber"
+
+#: linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver:1 of
+msgid "Bases: :py:class:`~abc.ABC`"
+msgstr "Bases: :py:class:`~abc.ABC`"
+
+#: ../../api/linear_axis_nodes.md:34
+msgid "Thorlabs LTS300 Driver"
+msgstr "Thorlabs LTS300 Treiber"
+
+#: linear_axis_nodes.drivers.simulated_linear_axis_driver.SimulatedLinearAxisDriver:1
+#: linear_axis_nodes.drivers.thorlabs_lts300_driver.ThorlabsLTS300Driver:1 of
+msgid "Bases: :py:class:`~linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver`"
+msgstr "Bases: :py:class:`~linear_axis_nodes.drivers.linear_axis_driver.LinearAxisDriver`"
+
+#: ../../api/linear_axis_nodes.md:43
+msgid "Simulation Driver"
+msgstr "Simulationstreiber"
+
+#: ../../api/linear_axis_nodes.md:52
+msgid "Gazebo Driver"
+msgstr "Gazebo-Treiber"
+
+#: ../../api/linear_axis_nodes.md:61
+msgid "ROS2 Interfaces"
+msgstr "ROS2-Schnittstellen"
+
+#: ../../api/linear_axis_nodes.md:63
+msgid "Services"
+msgstr "Dienste"
+
+#: ../../api/linear_axis_nodes.md:65
+msgid "The linear axis nodes provide the following ROS2 services:"
+msgstr "Die Linearachsen-Knoten bieten die folgenden ROS2-Dienste:"
+
+#: ../../api/linear_axis_nodes.md:67
+msgid "Move Absolute"
+msgstr "Absolute Bewegung"
+
+#: ../../api/linear_axis_nodes.md:68
+msgid "**Service Type**: `promoc_assembly_interfaces/srv/linear_axis/MoveAbsolute`"
+msgstr "**Diensttyp**: `promoc_assembly_interfaces/srv/linear_axis/MoveAbsolute`"
+
+#: ../../api/linear_axis_nodes.md:69
+msgid "**Description**: Move to an absolute position"
+msgstr "**Beschreibung**: Bewegung zu einer absoluten Position"
+
+#: ../../api/linear_axis_nodes.md:70 ../../api/linear_axis_nodes.md:80
+msgid "**Parameters**:"
+msgstr "**Parameter**:"
+
+#: ../../api/linear_axis_nodes.md:71
+msgid "`target_position` (float64): Target position in meters"
+msgstr "`target_position` (float64): Zielposition in Metern"
+
+#: ../../api/linear_axis_nodes.md:72 ../../api/linear_axis_nodes.md:82
+msgid "`velocity` (float64): Movement velocity in m/s"
+msgstr "`velocity` (float64): Bewegungsgeschwindigkeit in m/s"
+
+#: ../../api/linear_axis_nodes.md:73 ../../api/linear_axis_nodes.md:87
+msgid "**Response**:"
+msgstr "**Antwort**:"
+
+#: ../../api/linear_axis_nodes.md:74
+msgid "`success` (bool): Operation success"
+msgstr "`success` (bool): Erfolg der Operation"
+
+#: ../../api/linear_axis_nodes.md:75
+msgid "`message` (string): Status message"
+msgstr "`message` (string): Statusnachricht"
+
+#: ../../api/linear_axis_nodes.md:77
+msgid "Move Relative"
+msgstr "Relative Bewegung"
+
+#: ../../api/linear_axis_nodes.md:78
+msgid "**Service Type**: `promoc_assembly_interfaces/srv/linear_axis/MoveRelative`"
+msgstr "**Diensttyp**: `promoc_assembly_interfaces/srv/linear_axis/MoveRelative`"
+
+#: ../../api/linear_axis_nodes.md:79
+msgid "**Description**: Move relative to current position"
+msgstr "**Beschreibung**: Bewegung relativ zur aktuellen Position"
+
+#: ../../api/linear_axis_nodes.md:81
+msgid "`distance` (float64): Distance to move in meters"
+msgstr "`distance` (float64): Zu bewegende Distanz in Metern"
+
+#: ../../api/linear_axis_nodes.md:84
+msgid "Get Position"
+msgstr "Position abfragen"
+
+#: ../../api/linear_axis_nodes.md:85
+msgid "**Service Type**: `promoc_assembly_interfaces/srv/linear_axis/GetPosition`"
+msgstr "**Diensttyp**: `promoc_assembly_interfaces/srv/linear_axis/GetPosition`"
+
+#: ../../api/linear_axis_nodes.md:86
+msgid "**Description**: Get current position and status"
+msgstr "**Beschreibung**: Aktuelle Position und Status abfragen"
+
+#: ../../api/linear_axis_nodes.md:88
+msgid "`position` (float64): Current position in meters"
+msgstr "`position` (float64): Aktuelle Position in Metern"
+
+#: ../../api/linear_axis_nodes.md:89
+msgid "`status` (string): Movement status (IDLE, MOVING, ERROR)"
+msgstr "`status` (string): Bewegungsstatus (IDLE, MOVING, ERROR)"
+
+#: ../../api/linear_axis_nodes.md:91
+msgid "Home"
+msgstr "Referenzfahrt"
+
+#: ../../api/linear_axis_nodes.md:92
+msgid "**Service Type**: `promoc_assembly_interfaces/srv/linear_axis/Home`"
+msgstr "**Diensttyp**: `promoc_assembly_interfaces/srv/linear_axis/Home`"
+
+#: ../../api/linear_axis_nodes.md:93
+msgid "**Description**: Home the axis to reference position"
+msgstr "**Beschreibung**: Achse auf Referenzposition fahren"
+
+#: ../../api/linear_axis_nodes.md:95
+msgid "Shutdown"
+msgstr "Herunterfahren"
+
+#: ../../api/linear_axis_nodes.md:96
+msgid "**Service Type**: `promoc_assembly_interfaces/srv/linear_axis/Shutdown`"
+msgstr "**Diensttyp**: `promoc_assembly_interfaces/srv/linear_axis/Shutdown`"
+
+#: ../../api/linear_axis_nodes.md:97
+msgid "**Description**: Safely shutdown the axis"
+msgstr "**Beschreibung**: Achse sicher herunterfahren"
+
+#: ../../api/linear_axis_nodes.md:99
+msgid "Topics"
+msgstr "Topics"
+
+#: ../../api/linear_axis_nodes.md:101
+msgid "Status Information"
+msgstr "Statusinformationen"
+
+#: ../../api/linear_axis_nodes.md:102
+msgid "**Topic**: `linear_axis_info`"
+msgstr "**Topic**: `linear_axis_info`"
+
+#: ../../api/linear_axis_nodes.md:103
+msgid "**Message Type**: `promoc_assembly_interfaces/msg/linear_axis/LinearAxisInfo`"
+msgstr "**Nachrichtentyp**: `promoc_assembly_interfaces/msg/linear_axis/LinearAxisInfo`"
+
+#: ../../api/linear_axis_nodes.md:104
+msgid "**Description**: Continuous status updates"
+msgstr "**Beschreibung**: Kontinuierliche Status-Updates"
+
+#: ../../api/linear_axis_nodes.md:106
+msgid "Usage Examples"
+msgstr "Anwendungsbeispiele"
+
+#: ../../api/linear_axis_nodes.md:108
+msgid "Python Client Example"
+msgstr "Python-Client-Beispiel"
+
+#: ../../api/linear_axis_nodes.md:129
+msgid "Command Line Usage"
+msgstr "Kommandozeilenverwendung"
+
+#: ../../api/linear_axis_nodes.md:146
+msgid "Configuration"
+msgstr "Konfiguration"
+
+#: ../../api/linear_axis_nodes.md:148
+msgid "Node Parameters"
+msgstr "Knotenparameter"
+
+#: ../../api/linear_axis_nodes.md:150
+msgid "`use_sim_time` (bool): Use simulation time"
+msgstr "`use_sim_time` (bool): Simulationszeit verwenden"
+
+#: ../../api/linear_axis_nodes.md:151
+msgid "`use_gazebo` (bool): Enable Gazebo integration"
+msgstr "`use_gazebo` (bool): Gazebo-Integration aktivieren"
+
+#: ../../api/linear_axis_nodes.md:152
+msgid "`debug_mode` (bool): Enable debug output"
+msgstr "`debug_mode` (bool): Debug-Ausgabe aktivieren"
+
+#: ../../api/linear_axis_nodes.md:153
+msgid "`x_axis_serial` (string): X-axis serial number"
+msgstr "`x_axis_serial` (string): Seriennummer der X-Achse"
+
+#: ../../api/linear_axis_nodes.md:154
+msgid "`z_axis_serial` (string): Z-axis serial number"
+msgstr "`z_axis_serial` (string): Seriennummer der Z-Achse"
+
+#: ../../api/linear_axis_nodes.md:155
+msgid "`serial_port` (string): Serial port for communication"
+msgstr "`serial_port` (string): Serielle Schnittstelle für die Kommunikation"
+
+#: ../../api/linear_axis_nodes.md:156
+msgid "`collision_threshold` (float): Collision detection threshold"
+msgstr "`collision_threshold` (float): Schwellenwert für die Kollisionserkennung"
+
+#: ../../api/linear_axis_nodes.md:158
+msgid "Hardware Configuration"
+msgstr "Hardware-Konfiguration"
+
+#: ../../api/linear_axis_nodes.md:160
+msgid "For real hardware, configure in your launch file:"
+msgstr "Für echte Hardware in Ihrer Startdatei konfigurieren:"
+
+#: ../../api/linear_axis_nodes.md:173
+msgid "Safety Features"
+msgstr "Sicherheitsmerkmale"
+
+#: ../../api/linear_axis_nodes.md:175
+msgid "**Collision Detection**: Monitors force feedback"
+msgstr "**Kollisionserkennung**: Überwacht die Kraftrückkopplung"
+
+#: ../../api/linear_axis_nodes.md:176
+msgid "**Soft Limits**: Configurable position limits"
+msgstr "**Software-Endschalter**: Konfigurierbare Positionsgrenzen"
+
+#: ../../api/linear_axis_nodes.md:177
+msgid "**Emergency Stop**: Immediate motion halt"
+msgstr "**Not-Halt**: Sofortiger Bewegungsstopp"
+
+#: ../../api/linear_axis_nodes.md:178
+msgid "**Homing Required**: Ensures reference position"
+msgstr "**Referenzfahrt erforderlich**: Stellt die Referenzposition sicher"
+
+#: ../../api/linear_axis_nodes.md:179
+msgid "**Status Monitoring**: Continuous health checks"
+msgstr "**Statusüberwachung**: Kontinuierliche Zustandsprüfungen"

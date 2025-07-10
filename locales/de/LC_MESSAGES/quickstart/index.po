@@ -1,0 +1,230 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../quickstart/index.md:1
+msgid "Quick Start Guide"
+msgstr "Schnellstart-Anleitung"
+
+#: ../../quickstart/index.md:3
+msgid "Get the ProMOC Assembly system running in 5 minutes!"
+msgstr "Bringen Sie das ProMOC Assembly-System in 5 Minuten zum Laufen!"
+
+#: ../../quickstart/index.md:5
+msgid "Prerequisites"
+msgstr "Voraussetzungen"
+
+#: ../../quickstart/index.md:7
+msgid "Ubuntu 20.04/22.04/24.04 LTS"
+msgstr "Ubuntu 20.04/22.04/24.04 LTS"
+
+#: ../../quickstart/index.md:8
+msgid "ROS2 Humble or newer installed and sourced"
+msgstr "ROS2 Humble oder neuer installiert und gesourct"
+
+#: ../../quickstart/index.md:16
+msgid "1. One-Command Installation"
+msgstr "1. Ein-Befehl-Installation"
+
+#: ../../quickstart/index.md:23
+msgid "This installs everything automatically:"
+msgstr "Dies installiert alles automatisch:"
+
+#: ../../quickstart/index.md:24
+msgid "✅ System dependencies (.NET, build tools)"
+msgstr "✅ Systemabhängigkeiten (.NET, Build-Tools)"
+
+#: ../../quickstart/index.md:25
+msgid "✅ Python dependencies (pythonnet, pylablib)"
+msgstr "✅ Python-Abhängigkeiten (pythonnet, pylablib)"
+
+#: ../../quickstart/index.md:26
+msgid "✅ ROS2 dependencies (via rosdep)"
+msgstr "✅ ROS2-Abhängigkeiten (über rosdep)"
+
+#: ../../quickstart/index.md:27
+msgid "✅ Builds the workspace"
+msgstr "✅ Erstellt den Arbeitsbereich"
+
+#: ../../quickstart/index.md:28
+msgid "✅ Validates the installation"
+msgstr "✅ Validiert die Installation"
+
+#: ../../quickstart/index.md:30
+msgid "2. Source the Workspace"
+msgstr "2. Arbeitsbereich sourcen"
+
+#: ../../quickstart/index.md:36
+msgid "3. Launch Simulation"
+msgstr "3. Simulation starten"
+
+#: ../../quickstart/index.md:38
+msgid "Dual LTS300 System"
+msgstr "Duales LTS300-System"
+
+#: ../../quickstart/index.md:43
+msgid "Single Axis Test"
+msgstr "Einzelachsentest"
+
+#: ../../quickstart/index.md:52
+msgid "4. Basic Testing"
+msgstr "4. Grundlegende Tests"
+
+#: ../../quickstart/index.md:54
+msgid "Check ROS2 Topics"
+msgstr "ROS2-Themen prüfen"
+
+#: ../../quickstart/index.md:63
+msgid "Move the Axes"
+msgstr "Achsen bewegen"
+
+#: ../../quickstart/index.md:76
+msgid "Check Position"
+msgstr "Position prüfen"
+
+#: ../../quickstart/index.md:87
+msgid "5. Validation"
+msgstr "5. Validierung"
+
+#: ../../quickstart/index.md:94
+msgid "This performs comprehensive checks and generates a detailed report."
+msgstr "Dies führt umfassende Prüfungen durch und erstellt einen detaillierten Bericht."
+
+#: ../../quickstart/index.md:96
+msgid "What's Running?"
+msgstr "Was läuft?"
+
+#: ../../quickstart/index.md:98
+msgid "After launching, you'll have:"
+msgstr "Nach dem Start haben Sie:"
+
+#: ../../quickstart/index.md:100
+msgid "**Gazebo Simulation** - Visual 3D environment"
+msgstr "**Gazebo-Simulation** - Visuelle 3D-Umgebung"
+
+#: ../../quickstart/index.md:101
+msgid "**Robot State Publisher** - Publishes robot model"
+msgstr "**Robot State Publisher** - Veröffentlicht das Robotermodell"
+
+#: ../../quickstart/index.md:102
+msgid "**Joint Controllers** - Position control for both axes"
+msgstr "**Gelenk-Controller** - Positionssteuerung für beide Achsen"
+
+#: ../../quickstart/index.md:103
+msgid "**Linear Axis Nodes** - High-level motion services"
+msgstr "**Linearachsen-Knoten** - Übergeordnete Bewegungsdienste"
+
+#: ../../quickstart/index.md:104
+msgid "**Custom Interfaces** - ProMOC-specific messages/services"
+msgstr "**Benutzerdefinierte Schnittstellen** - ProMOC-spezifische Nachrichten/Dienste"
+
+#: ../../quickstart/index.md:106
+msgid "Next Steps"
+msgstr "Nächste Schritte"
+
+#: ../../quickstart/index.md:108
+msgid "📖 Read the {doc}`../tutorials/index` for detailed usage"
+msgstr "📖 Lesen Sie die {doc}`../tutorials/index` für eine detaillierte Verwendung"
+
+#: ../../quickstart/index.md:109
+msgid "🔧 Explore the {doc}`../api/linear_axis_nodes` for API details"
+msgstr "🔧 Erkunden Sie die {doc}`../api/linear_axis_nodes` für API-Details"
+
+#: ../../quickstart/index.md:110
+msgid "🎯 Check {doc}`../hardware/linear_axes` for real hardware setup"
+msgstr "🎯 Überprüfen Sie {doc}`../hardware/linear_axes` für die Einrichtung der realen Hardware"
+
+#: ../../quickstart/index.md:111
+msgid "🚀 Try {doc}`../simulation/testing` for advanced testing"
+msgstr "🚀 Probieren Sie {doc}`../simulation/testing` für erweiterte Tests aus"
+
+#: ../../quickstart/index.md:113
+msgid "Troubleshooting"
+msgstr "Fehlerbehebung"
+
+#: ../../quickstart/index.md:115
+msgid "Installation Issues"
+msgstr "Installationsprobleme"
+
+#: ../../quickstart/index.md:124
+msgid "Launch Issues"
+msgstr "Probleme beim Start"
+
+#: ../../quickstart/index.md:136
+msgid "Common Problems"
+msgstr "Häufige Probleme"
+
+#: ../../quickstart/index.md:138
+msgid "**ROS_DISTRO not set**: `source /opt/ros/humble/setup.bash`"
+msgstr "**ROS_DISTRO nicht gesetzt**: `source /opt/ros/humble/setup.bash`"
+
+#: ../../quickstart/index.md:139
+msgid "**Package not found**: `source install/setup.bash`"
+msgstr "**Paket nicht gefunden**: `source install/setup.bash`"
+
+#: ../../quickstart/index.md:140
+msgid "**Permission denied**: `chmod +x setup/*.sh`"
+msgstr "**Berechtigung verweigert**: `chmod +x setup/*.sh`"
+
+#: ../../quickstart/index.md:141
+msgid "**Build errors**: `rm -rf build install log && ./setup/install_all.sh`"
+msgstr "**Build-Fehler**: `rm -rf build install log && ./setup/install_all.sh`"
+
+#: ../../quickstart/index.md:143
+msgid "Hardware Mode"
+msgstr "Hardware-Modus"
+
+#: ../../quickstart/index.md:145
+msgid "For real hardware (when available):"
+msgstr "Für echte Hardware (sofern verfügbar):"
+
+#: ../../quickstart/index.md:156
+msgid "The system automatically detects available hardware and switches between simulation and real drivers."
+msgstr "Das System erkennt automatisch die verfügbare Hardware und wechselt zwischen Simulations- und realen Treibern."
+
+#: ../../quickstart/index.md:159
+msgid "Success Indicators"
+msgstr "Erfolgsindikatoren"
+
+#: ../../quickstart/index.md:161
+msgid "You know it's working when:"
+msgstr "Sie wissen, dass es funktioniert, wenn:"
+
+#: ../../quickstart/index.md:163
+msgid "✅ Gazebo opens with the dual LTS300 system"
+msgstr "✅ Gazebo öffnet sich mit dem dualen LTS300-System"
+
+#: ../../quickstart/index.md:164
+msgid "✅ RViz shows the robot model (optional)"
+msgstr "✅ RViz zeigt das Robotermodell (optional)"
+
+#: ../../quickstart/index.md:165
+msgid "✅ Service calls move the simulated axes"
+msgstr "✅ Dienstaufrufe bewegen die simulierten Achsen"
+
+#: ../../quickstart/index.md:166
+msgid "✅ Topics publish position updates"
+msgstr "✅ Themen veröffentlichen Positionsaktualisierungen"
+
+#: ../../quickstart/index.md:167
+msgid "✅ No error messages in the terminal"
+msgstr "✅ Keine Fehlermeldungen im Terminal"
+
+#: ../../quickstart/index.md:169
+msgid "**Congratulations! Your ProMOC Assembly system is ready!** 🎉"
+msgstr "**Herzlichen Glückwunsch! Ihr ProMOC Assembly-System ist bereit!** 🎉"}

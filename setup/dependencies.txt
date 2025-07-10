@@ -82,3 +82,4 @@ matplotlib>=3.3.0           # Plotting (for data visualization and debugging)
 # 4. Ubuntu 24.04 PEP 668:
 #    - Requires virtual environment or --break-system-packages
 #    - Handled automatically by install_python_deps.sh
+sphinx-intl

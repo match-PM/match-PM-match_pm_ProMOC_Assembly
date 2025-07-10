@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>6DOF Motion Service Usage &mdash; ProMOC Assembly 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=86f27845" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=d7f0cbf0" />
+
+  
+  
+        <script src="_static/jquery.js?v=8dae8fb0"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=8d563738"></script>
+        <script src="_static/doctools.js?v=888ff710"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            ProMOC Assembly
+          </a>
+              <div class="version">
+                1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation/index.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/index.html">Tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html">System Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/interfaces.html">Interfaces</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/safety.html">Safety</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/promoc_bringup.html">Package: promoc_bringup</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simulation/testing.html">Simulation: Testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/utilities.html">API: Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/debugging.html">Debugging</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/changelog.html">Changelog</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">ProMOC Assembly</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">6DOF Motion Service Usage</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/6DOF_Motion_Service_Usage.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="dof-motion-service-usage">
+<h1>6DOF Motion Service Usage<a class="headerlink" href="#dof-motion-service-usage" title="Link to this heading"></a></h1>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>The 6DOF Motion Service allows precise control of XBot position and rotation in 6 degrees of freedom.</p>
+</section>
+<section id="input-parameters">
+<h2>Input Parameters<a class="headerlink" href="#input-parameters" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>x_pos, y_pos, z_pos</strong>: Position in millimeters</p></li>
+<li><p><strong>rx_pos, ry_pos, rz_pos</strong>: Rotation in degrees</p></li>
+<li><p><strong>xbot_id</strong>: Target XBot ID (use 0 for single XBot systems)</p></li>
+</ul>
+</section>
+<section id="special-value-for-no-change">
+<h2>Special Value for “No Change”<a class="headerlink" href="#special-value-for-no-change" title="Link to this heading"></a></h2>
+<p>Use <strong>-999999</strong> to keep a parameter unchanged from its current value.</p>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<section id="example-1-move-to-specific-position-with-0-rotation">
+<h3>Example 1: Move to specific position with 0° rotation<a class="headerlink" href="#example-1-move-to-specific-position-with-0-rotation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/mover_node/six_d_mover_motion<span class="w"> </span>promoc_assembly_interfaces/srv/SixDofMotion<span class="w"> </span><span class="s2">&quot;{</span>
+<span class="s2">  xbot_id: 0,</span>
+<span class="s2">  x_pos: 120.0,</span>
+<span class="s2">  y_pos: 100.0,</span>
+<span class="s2">  z_pos: 1.0,</span>
+<span class="s2">  rx_pos: 0.0,</span>
+<span class="s2">  ry_pos: 0.0,</span>
+<span class="s2">  rz_pos: 0.0</span>
+<span class="s2">}&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="example-2-keep-current-position-only-rotate-rz-to-45">
+<h3>Example 2: Keep current position, only rotate RZ to 45°<a class="headerlink" href="#example-2-keep-current-position-only-rotate-rz-to-45" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/mover_node/six_d_mover_motion<span class="w"> </span>promoc_assembly_interfaces/srv/SixDofMotion<span class="w"> </span><span class="s2">&quot;{</span>
+<span class="s2">  xbot_id: 0,</span>
+<span class="s2">  x_pos: -999999,</span>
+<span class="s2">  y_pos: -999999,</span>
+<span class="s2">  z_pos: -999999,</span>
+<span class="s2">  rx_pos: -999999,</span>
+<span class="s2">  ry_pos: -999999,</span>
+<span class="s2">  rz_pos: 45.0</span>
+<span class="s2">}&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="example-3-return-all-rotations-to-0-keep-position-unchanged">
+<h3>Example 3: Return all rotations to 0° (keep position unchanged)<a class="headerlink" href="#example-3-return-all-rotations-to-0-keep-position-unchanged" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/mover_node/six_d_mover_motion<span class="w"> </span>promoc_assembly_interfaces/srv/SixDofMotion<span class="w"> </span><span class="s2">&quot;{</span>
+<span class="s2">  xbot_id: 0,</span>
+<span class="s2">  x_pos: -999999,</span>
+<span class="s2">  y_pos: -999999,</span>
+<span class="s2">  z_pos: -999999,</span>
+<span class="s2">  rx_pos: 0.0,</span>
+<span class="s2">  ry_pos: 0.0,</span>
+<span class="s2">  rz_pos: 0.0</span>
+<span class="s2">}&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="example-4-move-to-position-200mm-150mm-and-set-rx-to-10-keep-others-unchanged">
+<h3>Example 4: Move to position (200mm, 150mm) and set RX to 10°, keep others unchanged<a class="headerlink" href="#example-4-move-to-position-200mm-150mm-and-set-rx-to-10-keep-others-unchanged" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ros2<span class="w"> </span>service<span class="w"> </span>call<span class="w"> </span>/mover_node/six_d_mover_motion<span class="w"> </span>promoc_assembly_interfaces/srv/SixDofMotion<span class="w"> </span><span class="s2">&quot;{</span>
+<span class="s2">  xbot_id: 0,</span>
+<span class="s2">  x_pos: 200.0,</span>
+<span class="s2">  y_pos: 150.0,</span>
+<span class="s2">  z_pos: -999999,</span>
+<span class="s2">  rx_pos: 10.0,</span>
+<span class="s2">  ry_pos: -999999,</span>
+<span class="s2">  rz_pos: -999999</span>
+<span class="s2">}&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="important-notes">
+<h2>Important Notes<a class="headerlink" href="#important-notes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>All position values are in <strong>millimeters</strong></p></li>
+<li><p>All rotation values are in <strong>degrees</strong></p></li>
+<li><p>The system will automatically validate bounds and apply safety constraints</p></li>
+<li><p>Use XBot ID 0 for single-XBot systems</p></li>
+<li><p>The service will wait for motion completion and report success/failure</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, ProMOC Assembly Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

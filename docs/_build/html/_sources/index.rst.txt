@@ -51,10 +51,7 @@ Welcome to the **ProMOC Assembly** documentation! This project provides a modula
    :maxdepth: 2
    :caption: API Reference
 
-   api/linear_axis_nodes
-   api/planar_motor_nodes
-   api/interfaces
-   api/utilities
+   api/index
 
 .. toctree::
    :maxdepth: 2
@@ -73,6 +70,8 @@ Welcome to the **ProMOC Assembly** documentation! This project provides a modula
    appendix/faq
    appendix/glossary
    appendix/changelog
+   6DOF_Motion_Service_Usage
+   README
 
 ```
 
@@ -88,8 +87,8 @@ Quick Navigation
 
 **🔧 Developers**
 
-- Linear axis API: :doc:`api/linear_axis_nodes`
-- Planar motor API: :doc:`api/planar_motor_nodes`
+- Linear axis API: :doc:`api/index`
+- Planar motor API: :doc:`api/index`
 - Contributing: :doc:`development/contributing`
 
 **🎯 System Integrators**

@@ -1,0 +1,81 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../development/contributing.md:1
+msgid "Contributing"
+msgstr "Beitragen"
+
+#: ../../development/contributing.md:3
+msgid "Wie du beitragen kannst"
+msgstr "Wie du beitragen kannst"
+
+#: ../../development/contributing.md:5
+msgid "Fehler melden: GitHub Issues nutzen"
+msgstr "Fehler melden: GitHub Issues nutzen"
+
+#: ../../development/contributing.md:6
+msgid "Feature-Requests: GitHub Discussions oder Issues"
+msgstr "Funktionswünsche: GitHub Discussions oder Issues"
+
+#: ../../development/contributing.md:7
+msgid "Pull Requests: Fork, Branch, PR"
+msgstr "Pull-Requests: Fork, Branch, PR"
+
+#: ../../development/contributing.md:8
+msgid "Code Style: PEP8, ROS2 Python Style Guide"
+msgstr "Code-Stil: PEP8, ROS2 Python Style Guide"
+
+#: ../../development/contributing.md:9
+msgid "Tests: Neue Features mit Tests abdecken"
+msgstr "Tests: Neue Funktionen mit Tests abdecken"
+
+#: ../../development/contributing.md:11
+msgid "Entwicklungs-Workflow"
+msgstr "Entwicklungs-Workflow"
+
+#: ../../development/contributing.md:13
+msgid "Fork & Branch erstellen"
+msgstr "Fork & Branch erstellen"
+
+#: ../../development/contributing.md:14
+msgid "Änderungen vornehmen"
+msgstr "Änderungen vornehmen"
+
+#: ../../development/contributing.md:15
+msgid "Tests ausführen"
+msgstr "Tests ausführen"
+
+#: ../../development/contributing.md:16
+msgid "Pull Request stellen"
+msgstr "Pull-Request stellen"
+
+#: ../../development/contributing.md:18
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../development/contributing.md:19
+msgid "Siehe `test/`-Verzeichnis für Beispiele"
+msgstr "Siehe `test/`-Verzeichnis für Beispiele"
+
+#: ../../development/contributing.md:20
+msgid "Dokumentation zu neuen Features ergänzen"
+msgstr "Dokumentation zu neuen Funktionen ergänzen"

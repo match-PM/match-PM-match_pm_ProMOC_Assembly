@@ -1,0 +1,385 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../README.md:1
+msgid "ProMOC Assembly Documentation"
+msgstr "ProMOC Assembly Dokumentation"
+
+#: ../../README.md:3
+msgid "This directory contains the complete documentation for the ProMOC Assembly system, built with **Sphinx** and hosted with **Read the Docs** theme."
+msgstr "Dieses Verzeichnis enthält die vollständige Dokumentation für das ProMOC Assembly-System, das mit **Sphinx** erstellt und mit dem **Read the Docs**-Theme gehostet wird."
+
+#: ../../README.md:5
+msgid "📖 Documentation Structure"
+msgstr "📖 Dokumentationsstruktur"
+
+#: ../../README.md:24
+msgid "🚀 Quick Start"
+msgstr "🚀 Schnellstart"
+
+#: ../../README.md:26
+msgid "1. Install Dependencies"
+msgstr "1. Abhängigkeiten installieren"
+
+#: ../../README.md:34
+msgid "2. Build Documentation"
+msgstr "2. Dokumentation erstellen"
+
+#: ../../README.md:46
+msgid "3. View Documentation"
+msgstr "3. Dokumentation anzeigen"
+
+#: ../../README.md:55
+msgid "🛠️ Development Workflow"
+msgstr "🛠️ Entwicklungs-Workflow"
+
+#: ../../README.md:57
+msgid "Live Preview (Recommended)"
+msgstr "Live-Vorschau (empfohlen)"
+
+#: ../../README.md:61
+msgid "Starts server at http://localhost:8000"
+msgstr "Startet den Server unter http://localhost:8000"
+
+#: ../../README.md:62
+msgid "Auto-rebuilds on file changes"
+msgstr "Automatische Neuerstellung bei Dateiänderungen"
+
+#: ../../README.md:63
+msgid "Watches Python source files for API changes"
+msgstr "Überwacht Python-Quelldateien auf API-Änderungen"
+
+#: ../../README.md:65
+msgid "Manual Building"
+msgstr "Manuelles Erstellen"
+
+#: ../../README.md:80
+msgid "📝 Writing Documentation"
+msgstr "📝 Dokumentation schreiben"
+
+#: ../../README.md:82
+msgid "File Formats"
+msgstr "Dateiformate"
+
+#: ../../README.md:84
+msgid "**ReStructuredText (.rst)**: Main format for Sphinx"
+msgstr "**ReStructuredText (.rst)**: Hauptformat für Sphinx"
+
+#: ../../README.md:85
+msgid "**Markdown (.md)**: Supported via MyST parser"
+msgstr "**Markdown (.md)**: Unterstützt durch MyST-Parser"
+
+#: ../../README.md:86
+msgid "**Python Docstrings**: Auto-extracted for API docs"
+msgstr "**Python-Docstrings**: Automatisch für API-Dokumente extrahiert"
+
+#: ../../README.md:88
+msgid "Style Guide"
+msgstr "Stilrichtlinie"
+
+#: ../../README.md:90
+msgid "Headings"
+msgstr "Überschriften"
+
+#: ../../README.md:98
+msgid "Code Blocks"
+msgstr "Codeblöcke"
+
+#: ../../README.md:106
+msgid "Bash commands"
+msgstr "Bash-Befehle"
+
+#: ../../README.md:119
+msgid "This is a warning message."
+msgstr "Dies ist eine Warnmeldung."
+
+#: ../../README.md:123
+msgid "This is important information."
+msgstr "Dies ist eine wichtige Information."
+
+#: ../../README.md:139
+msgid "Adding New Documentation"
+msgstr "Neue Dokumentation hinzufügen"
+
+#: ../../README.md:141
+msgid "**Create new .md or .rst file** in appropriate directory"
+msgstr "**Neue .md- oder .rst-Datei erstellen** im entsprechenden Verzeichnis"
+
+#: ../../README.md:142
+msgid "**Add to toctree** in parent index file"
+msgstr "**Zu toctree hinzufügen** in der übergeordneten Indexdatei"
+
+#: ../../README.md:143
+msgid "**Build and test** with `make dev`"
+msgstr "**Erstellen und testen** mit `make dev`"
+
+#: ../../README.md:144
+msgid "**Check links** with `make linkcheck`"
+msgstr "**Links prüfen** mit `make linkcheck`"
+
+#: ../../README.md:146
+msgid "📚 Documentation Types"
+msgstr "📚 Dokumentationstypen"
+
+#: ../../README.md:148
+msgid "User Documentation"
+msgstr "Benutzerdokumentation"
+
+#: ../../README.md:149
+msgid "**Installation**: Step-by-step setup guides"
+msgstr "**Installation**: Schritt-für-Schritt-Anleitungen zur Einrichtung"
+
+#: ../../README.md:150
+msgid "**Quick Start**: Get running in 5 minutes"
+msgstr "**Schnellstart**: In 5 Minuten einsatzbereit"
+
+#: ../../README.md:151
+msgid "**Tutorials**: Task-oriented guides"
+msgstr "**Tutorials**: Aufgabenorientierte Anleitungen"
+
+#: ../../README.md:152
+msgid "**Hardware**: Physical setup and configuration"
+msgstr "**Hardware**: Physische Einrichtung und Konfiguration"
+
+#: ../../README.md:154
+msgid "Developer Documentation"
+msgstr "Entwicklerdokumentation"
+
+#: ../../README.md:155
+msgid "**API Reference**: Auto-generated from docstrings"
+msgstr "**API-Referenz**: Automatisch aus Docstrings generiert"
+
+#: ../../README.md:156
+msgid "**Architecture**: System design and principles"
+msgstr "**Architektur**: Systemdesign und -prinzipien"
+
+#: ../../README.md:157
+msgid "**Contributing**: Development workflow"
+msgstr "**Beitragen**: Entwicklungs-Workflow"
+
+#: ../../README.md:158
+msgid "**Testing**: Test procedures and standards"
+msgstr "**Testen**: Testverfahren und -standards"
+
+#: ../../README.md:160
+msgid "System Documentation"
+msgstr "Systemdokumentation"
+
+#: ../../README.md:161
+msgid "**Configuration**: Parameter references"
+msgstr "**Konfiguration**: Parameterreferenzen"
+
+#: ../../README.md:162
+msgid "**Troubleshooting**: Common problems and solutions"
+msgstr "**Fehlerbehebung**: Häufige Probleme und Lösungen"
+
+#: ../../README.md:163
+msgid "**FAQ**: Häufig gestellte Fragen"
+msgstr "**FAQ**: Häufig gestellte Fragen"
+
+#: ../../README.md:164
+msgid "**Changelog**: Version history"
+msgstr "**Änderungsprotokoll**: Versionsverlauf"
+
+#: ../../README.md:166
+msgid "🔧 Advanced Features"
+msgstr "🔧 Erweiterte Funktionen"
+
+#: ../../README.md:168
+msgid "API Documentation Generation"
+msgstr "Generierung der API-Dokumentation"
+
+#: ../../README.md:177
+msgid "Quality Checks"
+msgstr "Qualitätsprüfungen"
+
+#: ../../README.md:192
+msgid "Deployment"
+msgstr "Bereitstellung"
+
+#: ../../README.md:202
+msgid "🎨 Customization"
+msgstr "🎨 Anpassung"
+
+#: ../../README.md:204
+msgid "Theme Configuration"
+msgstr "Theme-Konfiguration"
+
+#: ../../README.md:205
+msgid "Edit `conf.py`:"
+msgstr "`conf.py` bearbeiten:"
+
+#: ../../README.md:224
+msgid "Custom CSS"
+msgstr "Benutzerdefiniertes CSS"
+
+#: ../../README.md:225
+msgid "Add styles to `_static/custom.css`:"
+msgstr "Stile zu `_static/custom.css` hinzufügen:"
+
+#: ../../README.md:233
+msgid "Extensions"
+msgstr "Erweiterungen"
+
+#: ../../README.md:234
+msgid "Add to `conf.py`:"
+msgstr "Zu `conf.py` hinzufügen:"
+
+#: ../../README.md:246
+msgid "🔍 Troubleshooting"
+msgstr "🔍 Fehlerbehebung"
+
+#: ../../README.md:248
+msgid "Build Errors"
+msgstr "Build-Fehler"
+
+#: ../../README.md:258
+msgid "Missing Dependencies"
+msgstr "Fehlende Abhängigkeiten"
+
+#: ../../README.md:267
+msgid "API Generation Issues"
+msgstr "Probleme bei der API-Generierung"
+
+#: ../../README.md:274
+msgid "📋 Makefile Commands"
+msgstr "📋 Makefile-Befehle"
+
+#: ../../README.md:122
+msgid "Command"
+msgstr "Befehl"
+
+#: ../../README.md:122
+msgid "Description"
+msgstr "Beschreibung"
+
+#: ../../README.md:122
+msgid "`make html`"
+msgstr "`make html`"
+
+#: ../../README.md:122
+msgid "Build HTML documentation"
+msgstr "HTML-Dokumentation erstellen"
+
+#: ../../README.md:122
+msgid "`make dev`"
+msgstr "`make dev`"
+
+#: ../../README.md:122
+msgid "Quick development build"
+msgstr "Schneller Entwicklungs-Build"
+
+#: ../../README.md:122
+msgid "`make live`"
+msgstr "`make live`"
+
+#: ../../README.md:122
+msgid "Auto-rebuilding server"
+msgstr "Server mit automatischer Neuerstellung"
+
+#: ../../README.md:122
+msgid "`make view`"
+msgstr "`make view`"
+
+#: ../../README.md:122
+msgid "Build and open in browser"
+msgstr "Erstellen und im Browser öffnen"
+
+#: ../../README.md:122
+msgid "`make api`"
+msgstr "`make api`"
+
+#: ../../README.md:122
+msgid "Generate API docs"
+msgstr "API-Dokumente generieren"
+
+#: ../../README.md:122
+msgid "`make linkcheck`"
+msgstr "`make linkcheck`"
+
+#: ../../README.md:122
+msgid "Check for broken links"
+msgstr "Auf defekte Links prüfen"
+
+#: ../../README.md:122
+msgid "`make clean`"
+msgstr "`make clean`"
+
+#: ../../README.md:122
+msgid "Clean build files"
+msgstr "Build-Dateien bereinigen"
+
+#: ../../README.md:122
+msgid "`make install`"
+msgstr "`make install`"
+
+#: ../../README.md:122
+msgid "Install dependencies"
+msgstr "Abhängigkeiten installieren"
+
+#: ../../README.md:122
+msgid "`make deploy`"
+msgstr "`make deploy`"
+
+#: ../../README.md:122
+msgid "Deploy to GitHub Pages"
+msgstr "Auf GitHub Pages bereitstellen"
+
+#: ../../README.md:122
+msgid "`make quality`"
+msgstr "`make quality`"
+
+#: ../../README.md:122
+msgid "Run all quality checks"
+msgstr "Alle Qualitätsprüfungen ausführen"
+
+#: ../../README.md:289
+msgid "🌐 Hosting Options"
+msgstr "🌐 Hosting-Optionen"
+
+#: ../../README.md:291
+msgid "GitHub Pages"
+msgstr "GitHub Pages"
+
+#: ../../README.md:302
+msgid "Read the Docs"
+msgstr "Read the Docs"
+
+#: ../../README.md:303
+msgid "Connect repository to readthedocs.org"
+msgstr "Repository mit readthedocs.org verbinden"
+
+#: ../../README.md:304
+msgid "Configure build settings"
+msgstr "Build-Einstellungen konfigurieren"
+
+#: ../../README.md:305
+msgid "Automatic builds on push"
+msgstr "Automatische Builds bei Push"
+
+#: ../../README.md:307
+msgid "Local Server"
+msgstr "Lokaler Server"
+
+#: ../../README.md:319
+msgid "**For questions or issues with documentation, please check the troubleshooting section or create an issue in the project repository.**"
+msgstr "**Bei Fragen oder Problemen mit der Dokumentation lesen Sie bitte den Abschnitt zur Fehlerbehebung oder erstellen Sie ein Issue im Projekt-Repository.**"}

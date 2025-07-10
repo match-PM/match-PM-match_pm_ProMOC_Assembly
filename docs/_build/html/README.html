@@ -7,7 +7,7 @@
   <title>ProMOC Assembly Documentation &mdash; ProMOC Assembly 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=86f27845" />
-      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=276fb2b3" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=d7f0cbf0" />
 
   
   
@@ -43,69 +43,59 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <!-- Local TOC -->
-              <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">ProMOC Assembly Documentation</a><ul>
-<li><a class="reference internal" href="#documentation-structure">📖 Documentation Structure</a></li>
-<li><a class="reference internal" href="#quick-start">🚀 Quick Start</a><ul>
-<li><a class="reference internal" href="#install-dependencies">1. Install Dependencies</a></li>
-<li><a class="reference internal" href="#build-documentation">2. Build Documentation</a></li>
-<li><a class="reference internal" href="#view-documentation">3. View Documentation</a></li>
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation/index.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/index.html">Tutorials</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#development-workflow">🛠️ Development Workflow</a><ul>
-<li><a class="reference internal" href="#live-preview-recommended">Live Preview (Recommended)</a></li>
-<li><a class="reference internal" href="#manual-building">Manual Building</a></li>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="architecture/overview.html">System Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture/interfaces.html">Interfaces</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#writing-documentation">📝 Writing Documentation</a><ul>
-<li><a class="reference internal" href="#file-formats">File Formats</a></li>
-<li><a class="reference internal" href="#style-guide">Style Guide</a><ul>
-<li><a class="reference internal" href="#headings">Headings</a></li>
-<li><a class="reference internal" href="#code-blocks">Code Blocks</a></li>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/safety.html">Safety</a></li>
 </ul>
-</li>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="packages/promoc_bringup.html">Package: promoc_bringup</a></li>
 </ul>
-</li>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="simulation/testing.html">Simulation: Testing</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#bash-commands">Bash commands</a><ul>
-<li><a class="reference internal" href="#adding-new-documentation">Adding New Documentation</a></li>
-<li><a class="reference internal" href="#documentation-types">📚 Documentation Types</a><ul>
-<li><a class="reference internal" href="#user-documentation">User Documentation</a></li>
-<li><a class="reference internal" href="#developer-documentation">Developer Documentation</a></li>
-<li><a class="reference internal" href="#system-documentation">System Documentation</a></li>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/utilities.html">API: Utilities</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#advanced-features">🔧 Advanced Features</a><ul>
-<li><a class="reference internal" href="#api-documentation-generation">API Documentation Generation</a></li>
-<li><a class="reference internal" href="#quality-checks">Quality Checks</a></li>
-<li><a class="reference internal" href="#deployment">Deployment</a></li>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/debugging.html">Debugging</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#customization">🎨 Customization</a><ul>
-<li><a class="reference internal" href="#theme-configuration">Theme Configuration</a></li>
-<li><a class="reference internal" href="#custom-css">Custom CSS</a></li>
-<li><a class="reference internal" href="#extensions">Extensions</a></li>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/changelog.html">Changelog</a></li>
 </ul>
-</li>
-<li><a class="reference internal" href="#troubleshooting">🔍 Troubleshooting</a><ul>
-<li><a class="reference internal" href="#build-errors">Build Errors</a></li>
-<li><a class="reference internal" href="#missing-dependencies">Missing Dependencies</a></li>
-<li><a class="reference internal" href="#api-generation-issues">API Generation Issues</a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#makefile-commands">📋 Makefile Commands</a></li>
-<li><a class="reference internal" href="#hosting-options">🌐 Hosting Options</a><ul>
-<li><a class="reference internal" href="#github-pages">GitHub Pages</a></li>
-<li><a class="reference internal" href="#read-the-docs">Read the Docs</a></li>
-<li><a class="reference internal" href="#local-server">Local Server</a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
+
         </div>
       </div>
     </nav>

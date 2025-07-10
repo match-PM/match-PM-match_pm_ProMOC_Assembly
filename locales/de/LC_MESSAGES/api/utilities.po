@@ -1,0 +1,61 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../api/utilities.md:1
+msgid "API: Utilities"
+msgstr "API: Hilfsprogramme"
+
+#: ../../api/utilities.md:3
+msgid "Hilfsfunktionen und Tools"
+msgstr "Hilfsfunktionen und Werkzeuge"
+
+#: ../../api/utilities.md:5
+msgid "linear_axis_nodes/utils.py"
+msgstr "linear_axis_nodes/utils.py"
+
+#: ../../api/utilities.md:6
+msgid "Hilfsfunktionen für Achsensteuerung, z.B. Umrechnung Einheiten, Fehlerbehandlung"
+msgstr "Hilfsfunktionen für die Achsensteuerung, z.B. Einheitenumrechnung, Fehlerbehandlung"
+
+#: ../../api/utilities.md:8
+msgid "planar_motor_nodes/position_utils.py"
+msgstr "planar_motor_nodes/position_utils.py"
+
+#: ../../api/utilities.md:9
+msgid "Umrechnung von Koordinaten, Validierung von Zielpositionen"
+msgstr "Umrechnung von Koordinaten, Validierung von Zielpositionen"
+
+#: ../../api/utilities.md:11
+msgid "setup/validate_setup_enhanced.sh"
+msgstr "setup/validate_setup_enhanced.sh"
+
+#: ../../api/utilities.md:12
+msgid "Automatisiertes Validierungsskript für System- und Software-Checks"
+msgstr "Automatisiertes Validierungsskript für System- und Software-Prüfungen"
+
+#: ../../api/utilities.md:14
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../api/utilities.md:15
+msgid "Für Details siehe Quellcode und Funktionsdokumentation"
+msgstr "Für Details siehe Quellcode und Funktionsdokumentation"

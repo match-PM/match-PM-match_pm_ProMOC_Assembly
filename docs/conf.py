@@ -5,7 +5,8 @@ import os
 import sys
 
 # -- Path setup --------------------------------------------------------------
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../../src/linear_axis_nodes'))
+sys.path.insert(0, os.path.abspath('../../src/planar_motor_nodes'))
 
 # -- Project information -----------------------------------------------------
 project = 'ProMOC Assembly'
@@ -33,6 +34,9 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+
+
+
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = 'sphinx_rtd_theme'

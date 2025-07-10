@@ -1,0 +1,53 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../simulation/gazebo.md:1
+msgid "Simulation: Gazebo"
+msgstr "Simulation: Gazebo"
+
+#: ../../simulation/gazebo.md:3
+msgid "Gazebo-Integration"
+msgstr "Gazebo-Integration"
+
+#: ../../simulation/gazebo.md:4
+msgid "Simulation der LTS300-Achsen und Planar Motor"
+msgstr "Simulation der LTS300-Achsen und des Planarmotors"
+
+#: ../../simulation/gazebo.md:5
+msgid "Launchfiles für Gazebo im Verzeichnis `launch/`"
+msgstr "Startdateien für Gazebo im Verzeichnis `launch/`"
+
+#: ../../simulation/gazebo.md:7
+msgid "Starten der Simulation"
+msgstr "Starten der Simulation"
+
+#: ../../simulation/gazebo.md:12
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../simulation/gazebo.md:13
+msgid "URDF/Xacro-Modelle werden automatisch geladen"
+msgstr "URDF/Xacro-Modelle werden automatisch geladen"
+
+#: ../../simulation/gazebo.md:14
+msgid "Controller-Konfigurationen in `config/`"
+msgstr "Controller-Konfigurationen in `config/`"

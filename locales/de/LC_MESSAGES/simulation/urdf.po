@@ -1,0 +1,61 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../simulation/urdf.md:1
+msgid "Simulation: URDF"
+msgstr "Simulation: URDF"
+
+#: ../../simulation/urdf.md:3
+msgid "URDF/Xacro-Modelle"
+msgstr "URDF/Xacro-Modelle"
+
+#: ../../simulation/urdf.md:4
+msgid "Modulare Beschreibung der Achsen und des Gesamtsystems"
+msgstr "Modulare Beschreibung der Achsen und des Gesamtsystems"
+
+#: ../../simulation/urdf.md:5
+msgid "Dateien im Verzeichnis `urdf/`"
+msgstr "Dateien im Verzeichnis `urdf/`"
+
+#: ../../simulation/urdf.md:7
+msgid "Hauptdateien"
+msgstr "Hauptdateien"
+
+#: ../../simulation/urdf.md:8
+msgid "`modules/lts300_x_axis.urdf.xacro`"
+msgstr "`modules/lts300_x_axis.urdf.xacro`"
+
+#: ../../simulation/urdf.md:9
+msgid "`modules/lts300_z_axis.urdf.xacro`"
+msgstr "`modules/lts300_z_axis.urdf.xacro`"
+
+#: ../../simulation/urdf.md:10
+msgid "`assemblies/dual_lts300_system.urdf.xacro`"
+msgstr "`assemblies/dual_lts300_system.urdf.xacro`"
+
+#: ../../simulation/urdf.md:12
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../simulation/urdf.md:13
+msgid "Xacro-Dateien können mit `ros2 run xacro xacro ...` verarbeitet werden"
+msgstr "Xacro-Dateien können mit `ros2 run xacro xacro ...` verarbeitet werden"}

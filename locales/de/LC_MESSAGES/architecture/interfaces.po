@@ -1,0 +1,78 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../architecture/interfaces.md:1
+msgid "Interfaces"
+msgstr "Schnittstellen"
+
+#: ../../architecture/interfaces.md:3
+msgid "ROS2 Nachrichten und Services"
+msgstr "ROS2-Nachrichten und -Dienste"
+
+#: ../../architecture/interfaces.md:5
+msgid "Linear Axis Interfaces"
+msgstr "Schnittstellen für die Linearachse"
+
+#: ../../architecture/interfaces.md:6
+msgid "`MoveAbsolute` (Service): Absolutpositionierung"
+msgstr "`MoveAbsolute` (Dienst): Absolute Positionierung"
+
+#: ../../architecture/interfaces.md:7
+msgid "`GetPosition` (Service): Abfrage der aktuellen Position"
+msgstr "`GetPosition` (Dienst): Abfrage der aktuellen Position"
+
+#: ../../architecture/interfaces.md:8 ../../architecture/interfaces.md:14
+msgid "`Home` (Service): Referenzfahrt"
+msgstr "`Home` (Dienst): Referenzfahrt"
+
+#: ../../architecture/interfaces.md:9
+msgid "`LinearAxisInfo` (Message): Statusinformationen"
+msgstr "`LinearAxisInfo` (Nachricht): Statusinformationen"
+
+#: ../../architecture/interfaces.md:11
+msgid "Planar Motor Interfaces"
+msgstr "Schnittstellen für den Planarmotor"
+
+#: ../../architecture/interfaces.md:12
+msgid "`MoveTo` (Service): 2D-Positionierung"
+msgstr "`MoveTo` (Dienst): 2D-Positionierung"
+
+#: ../../architecture/interfaces.md:13
+msgid "`GetPosition` (Service): Abfrage der aktuellen 2D-Position"
+msgstr "`GetPosition` (Dienst): Abfrage der aktuellen 2D-Position"
+
+#: ../../architecture/interfaces.md:15
+msgid "`PlanarMotorInfo` (Message): Statusinformationen"
+msgstr "`PlanarMotorInfo` (Nachricht): Statusinformationen"
+
+#: ../../architecture/interfaces.md:17
+msgid "Custom Messages"
+msgstr "Benutzerdefinierte Nachrichten"
+
+#: ../../architecture/interfaces.md:18
+msgid "Definiert in `promoc_assembly_interfaces/msg/` und `promoc_assembly_interfaces/srv/`"
+msgstr "Definiert in `promoc_assembly_interfaces/msg/` und `promoc_assembly_interfaces/srv/`"
+
+#: ../../architecture/interfaces.md:20
+msgid "Hinweise"
+msgstr "Hinweise"
+
+#: ../../architecture/interfaces.md:21
+msgid "Details siehe API-Referenz und Quellcode"
+msgstr "Details siehe API-Referenz und Quellcode"

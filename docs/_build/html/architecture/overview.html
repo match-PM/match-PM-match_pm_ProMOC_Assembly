@@ -7,7 +7,7 @@
   <title>System Architecture Overview &mdash; ProMOC Assembly 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=86f27845" />
-      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=276fb2b3" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=d7f0cbf0" />
 
   
   
@@ -18,7 +18,9 @@
         <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" /> 
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Hardware Architecture" href="hardware.html" />
+    <link rel="prev" title="Tutorials" href="../tutorials/index.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -43,52 +45,100 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <!-- Local TOC -->
-              <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">System Architecture Overview</a><ul>
-<li><a class="reference internal" href="#high-level-architecture">High-Level Architecture</a></li>
-<li><a class="reference internal" href="#core-design-principles">Core Design Principles</a><ul>
-<li><a class="reference internal" href="#modular-architecture">1. <strong>Modular Architecture</strong></a></li>
-<li><a class="reference internal" href="#hardware-abstraction">2. <strong>Hardware Abstraction</strong></a></li>
-<li><a class="reference internal" href="#ros2-native">3. <strong>ROS2 Native</strong></a></li>
-<li><a class="reference internal" href="#safety-by-design">4. <strong>Safety by Design</strong></a></li>
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/index.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/index.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/index.html">Tutorials</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">System Architecture Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#high-level-architecture">High-Level Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core-design-principles">Core Design Principles</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#modular-architecture">1. <strong>Modular Architecture</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hardware-abstraction">2. <strong>Hardware Abstraction</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ros2-native">3. <strong>ROS2 Native</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#safety-by-design">4. <strong>Safety by Design</strong></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#package-structure">Package Structure</a></li>
-<li><a class="reference internal" href="#communication-architecture">Communication Architecture</a><ul>
-<li><a class="reference internal" href="#ros2-topics">ROS2 Topics</a></li>
-<li><a class="reference internal" href="#ros2-services">ROS2 Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#package-structure">Package Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#communication-architecture">Communication Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ros2-topics">ROS2 Topics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ros2-services">ROS2 Services</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#driver-architecture">Driver Architecture</a><ul>
-<li><a class="reference internal" href="#linear-axis-drivers">Linear Axis Drivers</a></li>
-<li><a class="reference internal" href="#driver-selection-logic">Driver Selection Logic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#driver-architecture">Driver Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#linear-axis-drivers">Linear Axis Drivers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#driver-selection-logic">Driver Selection Logic</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#configuration-management">Configuration Management</a><ul>
-<li><a class="reference internal" href="#hierarchical-configuration">Hierarchical Configuration</a></li>
-<li><a class="reference internal" href="#configuration-files">Configuration Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-management">Configuration Management</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#hierarchical-configuration">Hierarchical Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-files">Configuration Files</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#simulation-architecture">Simulation Architecture</a><ul>
-<li><a class="reference internal" href="#urdf-xacro-modularity">URDF/Xacro Modularity</a></li>
-<li><a class="reference internal" href="#simulation-stack">Simulation Stack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simulation-architecture">Simulation Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#urdf-xacro-modularity">URDF/Xacro Modularity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#simulation-stack">Simulation Stack</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#security-and-safety">Security and Safety</a><ul>
-<li><a class="reference internal" href="#safety-systems">Safety Systems</a></li>
-<li><a class="reference internal" href="#access-control">Access Control</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#security-and-safety">Security and Safety</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#safety-systems">Safety Systems</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#access-control">Access Control</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#extensibility">Extensibility</a><ul>
-<li><a class="reference internal" href="#adding-new-hardware">Adding New Hardware</a></li>
-<li><a class="reference internal" href="#adding-new-capabilities">Adding New Capabilities</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#extensibility">Extensibility</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#adding-new-hardware">Adding New Hardware</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-new-capabilities">Adding New Capabilities</a></li>
 </ul>
 </li>
 </ul>
-</div>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="hardware.html">Hardware Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="software.html">Software Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interfaces.html">Interfaces</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware Components</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/linear_axes.html">Linear Axes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/planar_motor.html">Planar Motor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/sensors.html">Sensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/safety.html">Safety</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">ROS2 Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../packages/linear_axis_nodes.html">Package: linear_axis_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/planar_motor_nodes.html">Package: planar_motor_nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_assembly_interfaces.html">Package: promoc_assembly_interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/promoc_bringup.html">Package: promoc_bringup</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Simulation &amp; Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/gazebo.html">Simulation: Gazebo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/urdf.html">Simulation: URDF</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../simulation/testing.html">Simulation: Testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/interfaces.html">API: Interfaces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/utilities.html">API: Utilities</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/coding_standards.html">Coding Standards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/debugging.html">Debugging</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Appendix</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/troubleshooting.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/glossary.html">Glossary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/changelog.html">Changelog</a></li>
+</ul>
+
         </div>
       </div>
     </nav>
@@ -384,7 +434,10 @@
 
            </div>
           </div>
-          <footer>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../tutorials/index.html" class="btn btn-neutral float-left" title="Tutorials" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="hardware.html" class="btn btn-neutral float-right" title="Hardware Architecture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
 
   <hr/>
 

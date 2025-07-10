@@ -1,0 +1,65 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, ProMOC Assembly Team
+# This file is distributed under the same license as the ProMOC Assembly
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: ProMOC Assembly 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-07-03 21:44+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: ../../appendix/glossary.md:1
+msgid "Glossary"
+msgstr "Glossar"
+
+#: ../../appendix/glossary.md:3
+msgid "**ROS2**: Robot Operating System 2, Middleware für Robotik"
+msgstr "**ROS2**: Robot Operating System 2, Middleware für die Robotik"
+
+#: ../../appendix/glossary.md:4
+msgid "**LTS300**: Thorlabs Linear Stage, Präzisionsachse"
+msgstr "**LTS300**: Thorlabs Linear Stage, Präzisionsachse"
+
+#: ../../appendix/glossary.md:5
+msgid "**PMCLib**: Bibliothek für Planar Motor Steuerung"
+msgstr "**PMCLib**: Bibliothek für die Steuerung von Planarmotoren"
+
+#: ../../appendix/glossary.md:6
+msgid "**URDF**: Unified Robot Description Format"
+msgstr "**URDF**: Unified Robot Description Format"
+
+#: ../../appendix/glossary.md:7
+msgid "**Xacro**: XML Macro Language für URDF"
+msgstr "**Xacro**: XML-Makrosprache für URDF"
+
+#: ../../appendix/glossary.md:8
+msgid "**Gazebo**: Simulationsumgebung für Robotik"
+msgstr "**Gazebo**: Simulationsumgebung für die Robotik"
+
+#: ../../appendix/glossary.md:9
+msgid "**colcon**: Build-Tool für ROS2"
+msgstr "**colcon**: Build-Tool für ROS2"
+
+#: ../../appendix/glossary.md:10
+msgid "**Service**: ROS2-Kommunikationsmechanismus für Anfragen"
+msgstr "**Dienst**: ROS2-Kommunikationsmechanismus für Anfragen"
+
+#: ../../appendix/glossary.md:11
+msgid "**Node**: Ausführbare Einheit in ROS2"
+msgstr "**Knoten**: Ausführbare Einheit in ROS2"
+
+#: ../../appendix/glossary.md:12
+msgid "**Topic**: Publish/Subscribe-Kommunikation in ROS2"
+msgstr "**Thema**: Publish/Subscribe-Kommunikation in ROS2"
