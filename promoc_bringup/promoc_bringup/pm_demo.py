@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 import time
@@ -14,10 +16,10 @@ from promoc_assembly_interfaces.srv import (
 )
 
 
-class DemoController(Node):
+class PMDemoController(Node):
     def __init__(self):
-        super().__init__('demo_controller')
-        self.get_logger().info('🚀 Demo Controller started!')
+        super().__init__('pm_demo_controller')
+        self.get_logger().info('🚀 PM Demo Controller started!')
 
         self.declare_parameter('xbot_id', 1)
         self.xbot_id = self.get_parameter(
@@ -375,8 +377,10 @@ class DemoController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    demo_controller = DemoController()
+    
 
+    demo_controller = PMDemoController()
+    
     try:
         rclpy.spin(demo_controller)
     except KeyboardInterrupt:
@@ -384,7 +388,6 @@ def main(args=None):
     finally:
         demo_controller.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 import os
 from glob import glob
 
@@ -7,7 +7,7 @@ package_name = 'promoc_bringup'
 setup(
     name=package_name,
     version='0.1.0',
-    packages=find_packages(exclude=['test']),
+    packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'demo_controller = promoc_bringup.demo_controller:main',
+            'pm_demo = promoc_bringup.pm_demo:main',
         ],
     },
 )

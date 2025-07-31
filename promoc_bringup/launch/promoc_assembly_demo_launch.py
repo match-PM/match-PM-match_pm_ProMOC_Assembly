@@ -21,21 +21,21 @@ def generate_launch_description():
         output='screen'
     )
 
-    lts300_z_axis_node = Node(
-        package='linear_axis_nodes',
-        executable='lts300_service_node',
-        name='lts300_z_axis',
-        parameters=[params_file],
-        output='screen'
-    )
+    # lts300_z_axis_node = Node(
+    #     package='linear_axis_nodes',
+    #     executable='lts300_service_node',
+    #     name='lts300_z_axis',
+    #     parameters=[params_file],
+    #     output='screen'
+    # )
 
-    lts300_x_axis_node = Node(
-        package='linear_axis_nodes',
-        executable='lts300_service_node',
-        name='lts300_x_axis',
-        parameters=[params_file],
-        output='screen'
-    )
+    # lts300_x_axis_node = Node(
+    #     package='linear_axis_nodes',
+    #     executable='lts300_service_node',
+    #     name='lts300_x_axis',
+    #     parameters=[params_file],
+    #     output='screen'
+    # )
 
     # Demo Controller Node
     demo_controller = Node(
@@ -53,7 +53,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         mover_node,
-        lts300_z_axis_node,
-        lts300_x_axis_node,
+        # lts300_z_axis_node,
+        # lts300_x_axis_node,
         demo_delayed
     ])

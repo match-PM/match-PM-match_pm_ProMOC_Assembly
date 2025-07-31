@@ -21,13 +21,14 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Demo Controller Node
     demo_controller = Node(
         package='promoc_bringup',
-        executable='demo_controller.py',
+        executable='pm_demo', 
         name='demo_controller',
+        parameters=[{'xbot_id': 1}],
         output='screen'
     )
+
 
     # Starte Demo Controller mit Verzögerung (5 Sekunden)
     demo_delayed = TimerAction(
