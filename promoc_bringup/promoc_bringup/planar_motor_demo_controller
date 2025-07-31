@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 import time
 import threading
+import math
 
 # Import service interfaces
 from promoc_assembly_interfaces.srv import (
@@ -9,11 +10,8 @@ from promoc_assembly_interfaces.srv import (
     LevitationXbots,
     LinearMotionSi,
     SixDofMotion,
-    RotaryMotion,
-    Home,
-    MoveAbsolute
+    RotaryMotion
 )
-from promoc_assembly_interfaces.msg import LinearAxisInfo
 
 
 class DemoController(Node):
@@ -28,18 +26,9 @@ class DemoController(Node):
 
         self.cycle_delay = 5.0  # Delay between demo cycles in seconds
 
-        # Status tracking für LTS300 Achsen
-        self.x_axis_homed = False
-        self.z_axis_homed = False
-        self.x_axis_position = None
-        self.z_axis_position = None
-
         # Create Service Clients
         self.create_service_clients()
         self.get_logger().info('✅ Service clients created!')
-
-        self.create_positon_subscribers()
-        self.get_logger().info('✅ Subscribers created!')
 
         # Warte auf Services UND PMC Connection
         self.get_logger().info('⏳ Waiting for services and PMC connection...')
@@ -67,32 +56,6 @@ class DemoController(Node):
         self.rotary_motion_client = self.create_client(
             RotaryMotion, '/mover_node/rotary_motion')
 
-        # LTS300 Clients
-        self.lts300_x_client = self.create_client(
-            MoveAbsolute, '/lts300_x_axis/move_absolute')
-        self.lts300_z_client = self.create_client(
-            MoveAbsolute, '/lts300_z_axis/move_absolute')
-
-        # Home services für LTS300
-        self.lts300_x_home_client = self.create_client(
-            Home, '/lts300_x_axis/home')
-        self.lts300_z_home_client = self.create_client(
-            Home, '/lts300_z_axis/home')
-
-    def create_positon_subscribers(self):
-        """Create subscribers for LTS300 axis positions"""
-        self.x_axis_subscription = self.create_subscription(
-            LinearAxisInfo,
-            '/promoc_assembly/lts300_x_axis/position',
-            self.x_axis_position_callback,
-            10)
-
-        self.z_axis_subscription = self.create_subscription(
-            LinearAxisInfo,
-            '/promoc_assembly/lts300_z_axis/position',
-            self.z_axis_position_callback,
-            10)
-
     def wait_for_services(self):
         """Wait for all required services to be available"""
         # Mover Services
@@ -104,103 +67,11 @@ class DemoController(Node):
             self.get_logger().error('❌ Some services not available, exiting...')
             rclpy.shutdown()
 
-        # LTS300 Services (optional)
-        try:
-            self.lts300_x_client.wait_for_service(timeout_sec=5.0)
-            self.lts300_z_client.wait_for_service(timeout_sec=5.0)
-            self.lts300_x_home_client.wait_for_service(timeout_sec=5.0)
-            self.lts300_z_home_client.wait_for_service(timeout_sec=5.0)
-        except:
-            self.get_logger().warn('⚠️ Some LTS300 services not available')
-
-    def x_axis_position_callback(self, msg):
-        """Callback für X-Achse Position"""
-        self.x_axis_position = msg.axis_position
-        # Prüfe ob gehomed (Position nahe 0)
-        if not self.x_axis_homed and abs(msg.axis_position) < 1.0:
-            self.x_axis_homed = True
-            self.get_logger().info('✅ X-Axis is homed')
-
-    def z_axis_position_callback(self, msg):
-        """Callback für Z-Achse Position"""
-        self.z_axis_position = msg.axis_position
-        # Prüfe ob gehomed (Position nahe 0)
-        if not self.z_axis_homed and abs(msg.axis_position) < 1.0:
-            self.z_axis_homed = True
-            self.get_logger().info('✅ Z-Axis is homed')
-
-    def wait_for_homing(self):
-        """Warte bis beide LTS300 Achsen gehomed sind - nur wenn nötig"""
-        self.get_logger().info('🏠 Checking which axes need homing...')
-
-        # Sende nur Home-Kommandos an nicht-gehomte Achsen
-        if not self.x_axis_homed:
-            self.get_logger().info('🏠 X-Axis needs homing...')
-            self.call_lts300_home('x')
-        else:
-            self.get_logger().info('✅ X-Axis already homed')
-
-        if not self.z_axis_homed:
-            self.get_logger().info('🏠 Z-Axis needs homing...')
-            self.call_lts300_home('z')
-        else:
-            self.get_logger().info('✅ Z-Axis already homed')
-
-        # Warte bis beide gehomed sind (falls noch nötig)
-        timeout = 120.0
-        start_time = time.time()
-
-        while not (self.x_axis_homed and self.z_axis_homed):
-            if time.time() - start_time > timeout:
-                self.get_logger().error('❌ Homing timeout reached!')
-                return False
-
-            self.get_logger().info(
-                f'🏠 Waiting for homing - X: {self.x_axis_homed}, Z: {self.z_axis_homed}')
-            time.sleep(2.0)
-
-        self.get_logger().info('✅ Both LTS300 axes are homed and ready!')
-        return True
-
-    def call_lts300_home(self, axis):
-        """Home eine LTS300 Achse"""
-        try:
-            if axis == 'x':
-                client = self.lts300_x_home_client
-            else:
-                client = self.lts300_z_home_client
-
-            request = Home.Request()
-            future = client.call_async(request)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
-
-            if future.result() and future.result().success:
-                self.get_logger().info(
-                    f'✅ {axis.upper()}-Axis homing initiated')
-            else:
-                self.get_logger().error(
-                    f'❌ Failed to home {axis.upper()}-Axis')
-        except Exception as e:
-            self.get_logger().error(f'❌ Error homing {axis.upper()}-Axis: {e}')
-
     def run_endless_demo(self):
-        """Endlose Demo-Sequenz"""
+        """Endlose Demo-Sequenz für Planar Motor"""
         time.sleep(2.0)  # Kurz warten
 
-        # Einfache Logik: Prüfe Status und handle entsprechend
-        if self.x_axis_homed and self.z_axis_homed:
-            self.get_logger().info('✅ Both axes are homed, starting demo...')
-        else:
-            self.get_logger().warn('⚠️ Some axes are not homed!')
-            self.get_logger().info('🏠 Waiting for axes to be homed...')
-
-            # Warte bis gehomed (ohne aktives Homing zu starten)
-            if not self.wait_for_homing_status():
-                self.get_logger().error('❌ Axes not homed, stopping demo')
-                return
-
-            else:
-                self.get_logger().info('🏠 LTS300 homing disabled, skipping...')
+        self.get_logger().info('🚀 Starting Planar Motor demo...')
 
         cycle_count = 0
 
@@ -225,7 +96,7 @@ class DemoController(Node):
         self.get_logger().info('🏁 Demo finished')
 
     def run_single_demo_cycle(self):
-        """Demo-Zyklus mit Millimeter-Eingaben"""
+        """Demo-Zyklus mit systematischen Eckfahrten und sinusförmigen Verkippungen"""
         try:
             # 1. XBots aktivieren
             self.get_logger().info('🔧 Step 1: Activating XBots...')
@@ -238,48 +109,95 @@ class DemoController(Node):
             self.call_levitation(True)
             time.sleep(1.0)
 
-            # 3. Startposition (in MILLIMETERN für Mover Node)
+            # 3. Startposition (Zentrum)
             self.get_logger().info(
-                f'📍 Step 3: Moving XBot {self.xbot_id} to start position...')
-            self.call_six_dof_motion(
-                self.xbot_id, 120.0, 120.0, 3, 0, 0, 0)  # 2
+                f'📍 Step 3: Moving XBot {self.xbot_id} to center position...')
+            self.call_six_dof_motion(self.xbot_id, 120.0, 120.0, 2.5, 0, 0, 0)
+            time.sleep(2.0)
 
+            # 4. Systematische Eckfahrt mit sinusförmigen Verkippungen
             self.get_logger().info(
-                f'📍 Step 5: Starting systematic 6DOF demo for XBot {self.xbot_id}...')
+                f'� Step 4: Corner pattern with sinusoidal tilting for XBot {self.xbot_id}...')
+            
+            # Definiere Eckpunkte (X, Y in mm)
+            corners = [
+                (60, 60),    # Unten links
+                (180, 60),   # Unten rechts  
+                (180, 180),  # Oben rechts
+                (60, 180),   # Oben links
+            ]
+            
+            # Parameter für sinusförmige Bewegung
+            max_tilt_at_max_z = 25.0  # Maximale Neigung bei Z=4mm in mrad
+            max_z = 4.0              # Maximale Z-Position in mm
+            min_z = 1.0              # Minimale Z-Position in mm
+            steps_per_corner = 12    # Anzahl Schritte pro Ecke
+            
+            for cycle in range(3):  # 3 komplette Durchläufe
+                self.get_logger().info(f'🔄 Starting corner cycle #{cycle + 1}/3')
+                
+                for corner_idx, (x, y) in enumerate(corners):
+                    self.get_logger().info(f'📍 Moving to corner {corner_idx + 1}: ({x}, {y})mm')
+                    
+                    # Fahre zu Ecke mit sinusförmigen Verkippungen
+                    for step in range(steps_per_corner):
+                        # Sinusförmige Verkippung berechnen
+                        angle = (step / steps_per_corner) * 2 * math.pi
+                        
+                        # Z-Position variieren (1-4mm)
+                        z = min_z + (max_z - min_z) * (0.5 + 0.5 * math.sin(angle * 2))
+                        
+                        # Neigung skaliert mit Z-Position (bei Z=4mm max 25mrad, bei Z=1mm entsprechend weniger)
+                        tilt_factor = (z / max_z)  # Skalierungsfaktor basierend auf Z-Position
+                        max_tilt_current = max_tilt_at_max_z * tilt_factor
+                        
+                        rx = max_tilt_current * math.sin(angle)
+                        ry = max_tilt_current * math.cos(angle)
+                        
+                        self.get_logger().info(f'  Z={z:.1f}mm, max_tilt={max_tilt_current:.1f}mrad')
+                        self.call_six_dof_motion(self.xbot_id, x, y, z, rx, ry, 0)
+                        time.sleep(0.3)  # Kurze Pause zwischen Schritten
+                
+                # Zurück zum Zentrum mit neutraler Position
+                self.get_logger().info('🏠 Returning to center...')
+                self.call_six_dof_motion(self.xbot_id, 120, 120, 2.5, 0, 0, 0)
+                time.sleep(1.0)
 
-            # Basis-Position
-
-            for i in range(0, 4, 1):
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 25, 0, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 25, 25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 0, 25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, -25, 25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, -25, 0, 0)
+            # 5. Zusätzliche sinusförmige Bewegung im Zentrum
+            self.get_logger().info('🌊 Step 5: Sinusoidal motion in center...')
+            center_steps = 20
+            for step in range(center_steps):
+                angle = (step / center_steps) * 4 * math.pi  # 2 komplette Zyklen
+                
+                # Z-Position variieren (1-4mm)
+                z = min_z + (max_z - min_z) * (0.5 + 0.5 * math.sin(angle * 0.7))
+                
+                # Neigung skaliert mit Z-Position
+                tilt_factor = (z / max_z)
+                max_tilt_current = max_tilt_at_max_z * tilt_factor
+                
+                # Sinusförmige Verkippungen
+                rx = max_tilt_current * math.sin(angle)
+                ry = max_tilt_current * math.cos(angle * 1.5)  # Verschiedene Frequenz für komplexere Bewegung
+                rz = 10.0 * math.sin(angle * 2)   # Rotation um Z-Achse
+                
+                # Kleine XY-Variation
+                x_offset = 10.0 * math.sin(angle * 0.5)
+                y_offset = 10.0 * math.cos(angle * 0.5)
+                
                 self.call_six_dof_motion(
-                    self.xbot_id, 120, 120, 4, -25, -25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 0, -25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 25, -25, 0)
-                self.call_six_dof_motion(self.xbot_id, 120, 120, 4, 25, 0, 0)
+                    self.xbot_id, 
+                    120 + x_offset, 
+                    120 + y_offset, 
+                    z, 
+                    rx, ry, rz
+                )
+                time.sleep(0.4)
 
-            self.get_logger().info('🔄 Phase 5: Returning to center position')
-            self.call_six_dof_motion(self.xbot_id, 60, 60, 2, 0, 0, 0)
-            self.call_six_dof_motion(self.xbot_id, 180, 180, 1, 0, 0, 0)
-            self.call_six_dof_motion(self.xbot_id, 180, 60, 3, 0, 0, 0)
-            self.call_six_dof_motion(self.xbot_id, 60, 180, 4, 0, 0, 0)
-
-            self.call_six_dof_motion(self.xbot_id, 110, 180, 4, 0, 0, 0)
-            time.sleep(10.0)
-
-            self.call_lts300_x_motion(250.0)
-            time.sleep(5.0)
-            self.call_lts300_x_motion(10.0)
-            time.sleep(5.0)
-
-            self.call_lts300_z_motion(300.0)
-            time.sleep(5.0)
-
-            self.call_lts300_z_motion(0.0)
-            time.sleep(5.0)
+            # 6. Finale Position
+            self.get_logger().info('🏁 Final position...')
+            self.call_six_dof_motion(self.xbot_id, 120, 120, 2.5, 0, 0, 0)
+            time.sleep(2.0)
 
             self.get_logger().info('✅ Demo cycle completed successfully!')
             return True
@@ -402,40 +320,6 @@ class DemoController(Node):
             self.call_activate_xbots(False)
         except:
             pass
-
-    def call_lts300_x_motion(self, position):
-        """LTS300 X-Achse bewegen"""
-        try:
-            request = MoveAbsolute.Request()
-            request.axis_position = float(position)
-
-            future = self.lts300_x_client.call_async(request)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
-
-            if future.result() and future.result().success:
-                self.get_logger().info(f'✅ X-Axis moved to {position}mm')
-            else:
-                self.get_logger().error(
-                    f'❌ Failed to move X-Axis to {position}mm')
-        except Exception as e:
-            self.get_logger().warn(f'⚠️ X-Axis service error: {e}')
-
-    def call_lts300_z_motion(self, position):
-        """LTS300 Z-Achse bewegen"""
-        try:
-            request = MoveAbsolute.Request()
-            request.axis_position = float(position)
-
-            future = self.lts300_z_client.call_async(request)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=15.0)
-
-            if future.result() and future.result().success:
-                self.get_logger().info(f'✅ Z-Axis moved to {position}mm')
-            else:
-                self.get_logger().error(
-                    f'❌ Failed to move Z-Axis to {position}mm')
-        except Exception as e:
-            self.get_logger().warn(f'⚠️ Z-Axis service error: {e}')
 
     def test_mover_connection(self):
         """Teste ob Mover wirklich mit PMC connected ist"""
