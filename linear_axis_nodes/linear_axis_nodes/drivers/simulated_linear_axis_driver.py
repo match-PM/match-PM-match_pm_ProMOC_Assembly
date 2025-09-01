@@ -1,3 +1,5 @@
+# Simulated linear axis driver for testing and development without hardware
+
 import time
 from typing import Optional, Tuple
 from .linear_axis_driver import LinearAxisDriver

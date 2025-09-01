@@ -13,6 +13,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
+    include_package_data=True,
     maintainer='pmlab_mover',
     maintainer_email='pmlab_mover@todo.todo',
     description='TODO: Package description',
@@ -20,9 +21,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "mover_service_node = planar_motor_nodes.mover_service_node:main",
-            "mover_service_client = planar_motor_nodes.mover_service_client:main",
-            "mover_service_node_test = planar_motor_nodes.mover_service_node_test:main",
+            "mover_node = planar_motor_nodes.mover_node:main",
+
         ],
     },
 )

@@ -1,3 +1,5 @@
+# abstract base class for linear axis drivers with all necessary methods
+
 from abc import ABC, abstractmethod
 
 class LinearAxisDriver(ABC):

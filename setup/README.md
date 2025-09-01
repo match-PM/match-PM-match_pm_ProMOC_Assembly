@@ -26,7 +26,8 @@ cd setup/
 
 ### Documentation
 - **`QUICKSTART.md`** - Quick installation guide for experienced users
-- **`README.md`** - This file
+- **`README.md`** - This file (comprehensive setup documentation)
+- **`local_libraries/match_pm_xBot/README.md`** - PMCLib installation and configuration guide
 - **Auto-generated files:**
   - **`INSTALLATION_SUMMARY.md`** - Generated after successful installation
   - **`VALIDATION_REPORT.md`** - Generated after validation
@@ -70,15 +71,32 @@ cd setup && ./validate_setup_enhanced.sh  # Validate
 For actual planar motor hardware control:
 
 ```bash
-# 1. Obtain PMCLib wheel from Match/IEMCA
+# 1. Obtain PMCLib wheel from Match/IEMCA (version 117.1.1 or newer)
 # 2. Copy to local_libs directory
-cp /path/to/pmclib-*.whl ../local_libs/
+cp /path/to/pmclib-*.whl local_libraries/
 
 # 3. Install PMCLib
-pip install ../local_libs/pmclib-*.whl
+pip install local_libraries/pmclib-*.whl
 
-# 4. Validate
+# 4. Copy additional Python modules (required for full functionality)
+# Note: The setup scripts handle this automatically
+cp local_libraries/match_pm_xBot/xbot_commands.py [python_site_packages]/pmclib/
+cp local_libraries/match_pm_xBot/pmc_types.py [python_site_packages]/pmclib/
+
+# 5. Validate
 ./validate_setup_enhanced.sh
+```
+
+**PMCLib Prerequisites:**
+- **.NET Runtime**: .NET 8.0 SDK (automatically installed by `install_system_deps.sh`)
+- **Python Packages**: `pythonnet>=3.0.0`, `wheel` (automatically installed)
+- **Hardware**: PMC controller connected via network (IP: 192.168.10.100)
+
+**Alternative for Mock Development:**
+```bash
+# Use built-in mock implementation (no PMCLib needed)
+export USE_MOCK_PMC=true
+ros2 launch promoc_bringup promoc_assembly_launch.py
 ```
 
 ## ✅ Validation and Testing
@@ -106,11 +124,25 @@ python3 test_basic_functionality.py
 # Source workspace first
 source ../install/setup.bash
 
-# Test dual LTS300 simulation
-ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+# Test complete system (planar motor + linear axes)
+ros2 launch promoc_bringup promoc_assembly_launch.py
 
-# Test single axis
-ros2 launch promoc_bringup test_single_lts300.launch.py test_axis:=x
+# Test with demo controller
+ros2 launch promoc_bringup promoc_assembly_demo_launch.py
+
+# Test individual components
+ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
+ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true
+```
+
+### Hardware Integration Test
+```bash
+# Test hardware detection (requires connected devices)
+./validate_setup_enhanced.sh
+
+# Test hardware services
+ros2 service call /mover_node/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"
+ros2 service call /lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
 
 ## 🐛 Troubleshooting
@@ -158,12 +190,29 @@ rm -rf build install log
 
 ```
 ProMOC_Assembly/
-├── linear_axis_nodes/          # Thorlabs LTS300 control
-├── planar_motor_nodes/         # Planar motor with PMCLib  
-├── promoc_assembly_interfaces/ # Custom ROS2 messages/services
-├── promoc_bringup/            # Launch files and configurations
+├── linear_axis_nodes/          # Thorlabs LTS300 control (README.md)
+├── planar_motor_nodes/         # Planar motor with PMCLib (README.md)
+├── promoc_assembly_interfaces/ # Custom ROS2 messages/services (README.md)
+├── promoc_bringup/            # Launch files and configurations (README.md)
 ├── setup/ (this directory)    # Installation and validation
-└── local_libs/               # Proprietary libraries (PMCLib)
+└── local_libraries/           # Proprietary libraries (PMCLib + docs)
+    └── match_pm_xBot/         # PMCLib Python modules and documentation
+```
+
+## 🌐 Network Configuration
+
+**For Hardware Operation:**
+- **PMC Controller**: Must be accessible at `192.168.10.100`
+- **Linear Axes**: Connected via USB (auto-detected at `/dev/serial/by-id/`)
+- **Firewall**: Ensure ports are open for PMC communication
+
+**Network Test:**
+```bash
+# Test PMC connectivity
+ping 192.168.10.100
+
+# Test USB device detection  
+ls -la /dev/serial/by-id/usb-Thorlabs*
 ```
 
 ## 📝 Notes

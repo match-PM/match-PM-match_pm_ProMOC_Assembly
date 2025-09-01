@@ -1,0 +1,14 @@
+lts300_z_axis:
+  ros__parameters:
+    debug_mode: false
+    serial_number: '45407924'
+    collision_threshold: 200.0
+    device_units_per_mm: 409600.0
+
+# LTS300 X-Axis Parameters
+lts300_x_axis:
+  ros__parameters:
+    debug_mode: false
+    serial_number: '45456044'
+    collision_threshold: 200.0
+    device_units_per_mm: 409600.0

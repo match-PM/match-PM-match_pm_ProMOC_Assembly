@@ -1,0 +1,4 @@
+demo_controller:
+  ros__parameters:
+    xbot_id: 1
+    axes: ['lts300_x_axis', 'lts300_z_axis']

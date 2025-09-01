@@ -1,3 +1,5 @@
+# real Hardware drive neccesary for hardware connection 
+
 import time
 import warnings
 from typing import Optional, Tuple
@@ -18,7 +20,7 @@ warnings.filterwarnings("ignore", message="can't recognize motor model*")
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
     def __init__(self):
-        self.device: Optional[Thorlabs.KinesisMotor] = None
+        self.device: Optional[Thorlabs.KinesisMotor] = None # type: ignore
         self.connected: bool = False
         self.serial_no: Optional[str] = None
         self.axis_type: Optional[str] = None
