@@ -1,4 +1,5 @@
 import rclpy
+import traceback
 from rclpy.node import Node
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
@@ -56,6 +57,7 @@ class LTS300Node(Node):
         self.declare_parameter('min_position', 0.0)
         self.declare_parameter('max_single_move', 300.0)
         self.declare_parameter('homing_timeout', 180.0)
+        self.declare_parameter('velocity_unit_factor', 0.0185)
 
 
         return Lts300Config(
@@ -68,7 +70,8 @@ class LTS300Node(Node):
             max_position=self.get_parameter('max_position').value,
             min_position=self.get_parameter('min_position').value,
             max_single_move=self.get_parameter('max_single_move').value,
-            homing_timeout=self.get_parameter('homing_timeout').value
+            homing_timeout=self.get_parameter('homing_timeout').value,
+            velocity_unit_factor=self.get_parameter('velocity_unit_factor').value
         )
 
     def _setup_ros_communication(self):
@@ -112,17 +115,19 @@ class LTS300Node(Node):
             raise e  # Re-raise to be caught by main try-catch
 
     def publish_position(self):
-        """Veröffentlicht die aktuelle Position der Achse."""
+        """Publishes the current axis position."""
         if not self.interface.is_connected:
-            return # Nicht publishen, wenn keine Verbindung besteht
-            
-        msg = LinearAxisInfo()
-        driver = self.interface.driver
-        msg.axis_position = driver.get_position()
-        msg.axis_type = driver.get_axis_type()
-        msg.is_moving = driver.is_moving()
-        msg.serial_number = driver.get_serial_number()
-        self.position_publisher.publish(msg)
+            return
+        try:
+            msg = LinearAxisInfo()
+            driver = self.interface.driver
+            msg.axis_position = driver.get_position()
+            msg.axis_type = driver.get_axis_type()
+            msg.is_moving = driver.is_moving()
+            msg.serial_number = driver.get_serial_number()
+            self.position_publisher.publish(msg)
+        except Exception as e:
+            self.get_logger().error(f"Error publishing position: {e}\n{traceback.format_exc()}")
 
     def other_axis_position_callback(self, msg):
         """Speichert die Position der anderen Achse."""

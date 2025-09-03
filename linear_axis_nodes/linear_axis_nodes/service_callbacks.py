@@ -36,6 +36,16 @@ class ServiceCallbacks:
         self.operation_lock = threading.Lock()
         self.last_operation_message = ""
 
+
+    def _device_units_to_mm_per_s(self, device_units: float) -> float:
+        """Convert device velocity units to mm/s."""
+        return device_units * self.config.velocity_conversion_factor
+
+    def _mm_per_s_to_device_units(self, mm_per_s: float) -> float:
+        """Convert mm/s to device velocity units."""
+        return mm_per_s / self.config.velocity_conversion_factor
+
+
     def _collision_check(self, other_axis_position: float) -> bool:
         """
         Checks for a potential collision using the current position of the other axis.
@@ -374,6 +384,9 @@ class ServiceCallbacks:
             response.success = True
             response.status_message = "✅ Velocity parameters retrieved"
             response.min_velocity, response.acceleration, response.max_velocity = params
+
+            if params is not None:
+                response.actual_min_velocity, response.actual_acceleration, response.actual_max_velocity = params
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error getting velocity: {str(e)}"
