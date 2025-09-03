@@ -12,3 +12,7 @@ class Lts300Config:
     serial_number: str
     collision_threshold: float
     namespace: str
+    max_position: float 
+    min_position: float 
+    max_single_move: float
+    homing_timeout: float

@@ -1,5 +1,15 @@
 from .lts300_interface import Lts300Interface
-from .node_config import Lts300Config
+from .lts300_node_config import Lts300Config
+import threading
+import time
+from enum import Enum
+
+class OperationStatus(Enum):
+    """Status enumeration for long-running operations."""
+    IDLE = "idle"
+    HOMING = "homing"
+    MOVING = "moving"
+    ERROR = "error"
 
 class ServiceCallbacks:
     """
@@ -20,6 +30,11 @@ class ServiceCallbacks:
         self.interface = interface
         self.config = config
         self.driver = self.interface.driver  # Direct access to the driver instance
+        
+        # Status tracking for long operations
+        self.operation_status = OperationStatus.IDLE
+        self.operation_lock = threading.Lock()
+        self.last_operation_message = ""
 
     def _collision_check(self, other_axis_position: float) -> bool:
         """
@@ -33,10 +48,178 @@ class ServiceCallbacks:
             return True
         return False
 
+    def _validate_position(self, position: float) -> tuple[bool, str]:
+        """
+        Validates if a position is within the configured safety limits.
+        
+        Args:
+            position (float): The target position to validate in mm.
+            
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        if position < self.config.min_position:
+            return False, f"Position {position:.2f}mm below minimum limit {self.config.min_position:.2f}mm"
+        if position > self.config.max_position:
+            return False, f"Position {position:.2f}mm exceeds maximum limit {self.config.max_position:.2f}mm"
+        return True, ""
+
+    def _validate_distance(self, distance: float) -> tuple[bool, str]:
+        """
+        Validates if a relative movement distance is within the configured safety limits.
+        
+        Args:
+            distance (float): The movement distance to validate in mm.
+            
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        abs_distance = abs(distance)
+        if abs_distance > self.config.max_single_move:
+            return False, f"Movement distance {abs_distance:.2f}mm exceeds maximum single move limit {self.config.max_single_move:.2f}mm"
+        return True, ""
+
+    def _validate_target_position(self, current_pos: float, distance: float) -> tuple[bool, str]:
+        """
+        Validates if a relative movement would result in a valid target position.
+        
+        Args:
+            current_pos (float): Current position in mm.
+            distance (float): Movement distance in mm.
+            
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        target_pos = current_pos + distance
+        return self._validate_position(target_pos)
+
+    def _async_move_operation(self, move_type: str, position: float):
+        """
+        Performs movement operation in a separate thread.
+        
+        Args:
+            move_type: "absolute" or "relative"
+            position: Target position or movement distance
+        """
+        try:
+            with self.operation_lock:
+                self.operation_status = OperationStatus.MOVING
+                self.last_operation_message = f"Moving {move_type} to {position:.2f}mm..."
+            
+            self.logger.info(f"🎯 Starting {move_type} movement to {position:.2f}mm...")
+            
+            if move_type == "absolute":
+                self.driver.move_absolute(position)
+            else:  # relative
+                self.driver.move_relative(position)
+            
+            self.logger.info(f"🎯 Hardware {move_type} movement command completed")
+            
+            # Get final position for confirmation
+            try:
+                final_pos = self.driver.get_position()
+                self.logger.info(f"📍 Final position after {move_type} movement: {final_pos:.2f}mm")
+            except Exception as pos_e:
+                self.logger.warn(f"⚠️ Could not read position after movement: {pos_e}")
+                final_pos = "unknown"
+            
+            with self.operation_lock:
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = f"✅ Movement completed - final position: {final_pos}mm"
+            
+            self.logger.info(f"✅ {move_type.capitalize()} movement completed successfully")
+            
+        except Exception as e:
+            error_msg = str(e) if str(e).strip() else f"Unknown error during {move_type} movement"
+            with self.operation_lock:
+                self.operation_status = OperationStatus.ERROR
+                self.last_operation_message = f"❌ Movement failed: {error_msg}"
+            
+            self.logger.error(f"❌ {move_type.capitalize()} movement failed: {error_msg}")
+            
+            # Additional debug information
+            import traceback
+            self.logger.error(f"❌ Movement traceback: {traceback.format_exc()}")
+
+    def _async_home_operation(self):
+        """
+        Performs homing operation in a separate thread.
+        Updates operation status and handles errors.
+        """
+        try:
+            with self.operation_lock:
+                self.operation_status = OperationStatus.HOMING
+                self.last_operation_message = "Homing in progress..."
+            
+            self.logger.info("🏠 Starting homing operation...")
+            
+            # Call the actual homing operation (now with configurable timeout)
+            self.driver.home(timeout=self.config.homing_timeout)
+            self.logger.info("🏠 Hardware homing command completed")
+            
+            # Get final position for confirmation
+            try:
+                final_pos = self.driver.get_position()
+                self.logger.info(f"📍 Post-homing position: {final_pos:.2f}mm")
+            except Exception as pos_e:
+                self.logger.warn(f"⚠️ Could not read position after homing: {pos_e}")
+                final_pos = "unknown"
+            
+            with self.operation_lock:
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = f"✅ Homing completed successfully (position: {final_pos}mm)"
+            
+            self.logger.info("✅ Homing operation completed successfully")
+            
+        except Exception as e:
+            # Handle specific timeout errors
+            if "ThorlabsTimeoutError" in str(type(e)) or "timeout" in str(e).lower():
+                error_msg = "Homing timeout - operation may still be in progress on hardware"
+                self.logger.warn(f"⏰ {error_msg}")
+            else:
+                error_msg = str(e) if str(e).strip() else "Unknown error during homing"
+                self.logger.error(f"❌ Homing operation failed: {error_msg}")
+            
+            with self.operation_lock:
+                self.operation_status = OperationStatus.ERROR
+                self.last_operation_message = f"❌ Homing failed: {error_msg}"
+            
+            # Additional debug information for non-timeout errors
+            if "timeout" not in error_msg.lower():
+                import traceback
+                self.logger.error(f"❌ Homing traceback: {traceback.format_exc()}")
+
+    def get_operation_status(self) -> tuple[OperationStatus, str]:
+        """
+        Returns the current operation status and message.
+        
+        Returns:
+            tuple[OperationStatus, str]: (status, message)
+        """
+        with self.operation_lock:
+            return self.operation_status, self.last_operation_message
+
     # --- Service Callback Implementations ---
 
     def callback_move_absolute(self, request, response, other_axis_position: float):
         """Handle absolute movement, receiving the other axis position as an argument."""
+        # Check if another operation is already running
+        with self.operation_lock:
+            if self.operation_status != OperationStatus.IDLE:
+                response.success = False
+                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                self.logger.warn(response.status_message)
+                return response
+
+        # Safety validation for position limits
+        is_valid_pos, pos_error = self._validate_position(request.axis_position)
+        if not is_valid_pos:
+            response.success = False
+            response.status_message = f"🚫 Safety violation: {pos_error}"
+            self.logger.warn(response.status_message)
+            return response
+
+        # Collision check
         if self._collision_check(other_axis_position):
             response.success = False
             response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
@@ -44,18 +227,57 @@ class ServiceCallbacks:
             return response
 
         try:
-            self.logger.info(f'Moving to absolute position: {request.axis_position} mm')
-            self.driver.move_absolute(request.axis_position)
+            # Start movement in background thread
+            self.logger.info(f'Starting asynchronous absolute movement to: {request.axis_position} mm')
+            move_thread = threading.Thread(
+                target=self._async_move_operation, 
+                args=("absolute", request.axis_position), 
+                daemon=True
+            )
+            move_thread.start()
+            
             response.success = True
-            response.status_message = f"✅ Moved to {self.driver.get_position():.2f} mm"
+            response.status_message = f"🎯 Absolute movement to {request.axis_position:.2f}mm started - check status with get_operation_status"
         except Exception as e:
             response.success = False
-            response.status_message = f"❌ Error in move_absolute: {str(e)}"
+            response.status_message = f"❌ Error starting move_absolute: {str(e)}"
             self.logger.error(response.status_message)
         return response
 
     def callback_move_relative(self, request, response, other_axis_position: float):
         """Handle relative movement requests."""
+        # Check if another operation is already running
+        with self.operation_lock:
+            if self.operation_status != OperationStatus.IDLE:
+                response.success = False
+                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                self.logger.warn(response.status_message)
+                return response
+
+        # Safety validation for movement distance
+        is_valid_dist, dist_error = self._validate_distance(request.axis_position)
+        if not is_valid_dist:
+            response.success = False
+            response.status_message = f"🚫 Safety violation: {dist_error}"
+            self.logger.warn(response.status_message)
+            return response
+
+        # Safety validation for target position
+        try:
+            current_pos = self.driver.get_position()
+            is_valid_target, target_error = self._validate_target_position(current_pos, request.axis_position)
+            if not is_valid_target:
+                response.success = False
+                response.status_message = f"🚫 Safety violation: {target_error}"
+                self.logger.warn(response.status_message)
+                return response
+        except Exception as e:
+            response.success = False
+            response.status_message = f"❌ Error getting current position for safety check: {str(e)}"
+            self.logger.error(response.status_message)
+            return response
+
+        # Collision check
         if self._collision_check(other_axis_position):
             response.success = False
             response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
@@ -63,35 +285,63 @@ class ServiceCallbacks:
             return response
             
         try:
-            self.logger.info(f'Moving by relative distance: {request.axis_position} mm')
-            self.driver.move_relative(request.axis_position)
+            # Start movement in background thread
+            self.logger.info(f'Starting asynchronous relative movement by: {request.axis_position} mm')
+            move_thread = threading.Thread(
+                target=self._async_move_operation, 
+                args=("relative", request.axis_position), 
+                daemon=True
+            )
+            move_thread.start()
+            
             response.success = True
-            response.status_message = f"✅ Moved to {self.driver.get_position():.2f} mm"
+            response.status_message = f"🎯 Relative movement by {request.axis_position:.2f}mm started - check status with get_operation_status"
         except Exception as e:
             response.success = False
-            response.status_message = f"❌ Error in move_relative: {str(e)}"
+            response.status_message = f"❌ Error starting move_relative: {str(e)}"
             self.logger.error(response.status_message)
         return response
 
     def callback_home(self, request, response):
-        """Handle homing requests."""
+        """Handle homing requests asynchronously."""
+        # Check if another operation is already running
+        with self.operation_lock:
+            if self.operation_status != OperationStatus.IDLE:
+                response.success = False
+                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                self.logger.warn(response.status_message)
+                return response
+        
         try:
-            self.logger.info('Homing device...')
-            self.driver.home()
+            # Start homing in background thread
+            self.logger.info('Starting asynchronous homing operation...')
+            homing_thread = threading.Thread(target=self._async_home_operation, daemon=True)
+            homing_thread.start()
+            
+            # Return immediately with status
             response.success = True
-            response.status_message = "✅ Homing completed"
+            response.status_message = "🏠 Homing started - check status with get_position service"
+            self.logger.info("✅ Homing operation initiated successfully")
+            
         except Exception as e:
             response.success = False
-            response.status_message = f"❌ Error during homing: {str(e)}"
+            response.status_message = f"❌ Error starting homing: {str(e)}"
             self.logger.error(response.status_message)
         return response
 
     def callback_get_position(self, request, response):
-        """Handle get position requests."""
+        """Handle get position requests with operation status."""
         try:
             response.axis_position = self.driver.get_position()
             response.success = True
-            response.status_message = "✅ Position retrieved"
+            
+            # Include operation status in the message
+            status, status_msg = self.get_operation_status()
+            if status != OperationStatus.IDLE:
+                response.status_message = f"📍 Position: {response.axis_position:.2f}mm | Status: {status_msg}"
+            else:
+                response.status_message = "✅ Position retrieved"
+                
         except Exception as e:
             response.axis_position = -1.0
             response.success = False
@@ -141,6 +391,24 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error during shutdown: {str(e)}"
+            self.logger.error(response.status_message)
+        return response
+
+    def callback_get_operation_status(self, request, response):
+        """Handle operation status requests."""
+        try:
+            status, status_msg = self.get_operation_status()
+            
+            response.success = True
+            response.operation_status = status.value
+            response.status_message = status_msg
+            response.is_busy = (status != OperationStatus.IDLE)
+            
+        except Exception as e:
+            response.success = False
+            response.operation_status = "error"
+            response.status_message = f"❌ Error getting operation status: {str(e)}"
+            response.is_busy = False
             self.logger.error(response.status_message)
         return response
 

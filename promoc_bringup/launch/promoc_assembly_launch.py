@@ -28,7 +28,7 @@ def load_mover_config(bringup_pkg_share):
 
 def load_axes_config():
     """
-    Loads the axes configuration from the 'linear_axes.yaml' file located in the 'config' directory
+    Loads the axes configuration from the 'linear_axes_params.yaml' file located in the 'config' directory
     of the 'promoc_bringup' package.
     Returns:
         tuple:
@@ -40,7 +40,7 @@ def load_axes_config():
 
     try:
         pkg_share = get_package_share_directory('promoc_bringup') # Adjust the package name if necessary
-        config_file_path = os.path.join(pkg_share, 'config', 'linear_axes.yaml')
+        config_file_path = os.path.join(pkg_share, 'config', 'linear_axes_params.yaml')
         with open(config_file_path, 'r') as file:
             # Load the entire content of the YAML file
             config = yaml.safe_load(file)

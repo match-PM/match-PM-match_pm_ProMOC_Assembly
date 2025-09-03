@@ -11,7 +11,7 @@ linear_axis_nodes/
 ├── lts300_node.py         # Main ROS2 node (orchestrator)
 ├── lts300_interface.py    # Hardware communication layer
 ├── service_callbacks.py   # ROS service implementations
-├── node_config.py         # Configuration management
+├── lts300_node_config.py  # Configuration management
 └── drivers/
     ├── linear_axis_driver.py           # Abstract base interface
     ├── thorlabs_lts300_driver.py       # Hardware driver

@@ -18,6 +18,8 @@ from .linear_axis_driver import LinearAxisDriver
 warnings.filterwarnings("ignore", message="can't recognize the stage name*")
 warnings.filterwarnings("ignore", message="can't recognize motor model*")
 
+ABSOLUTE_MAX_POSITION =300.0
+
 class ThorlabsLTS300Driver(LinearAxisDriver):
     def __init__(self):
         self.device: Optional[Thorlabs.KinesisMotor] = None # type: ignore
@@ -29,40 +31,58 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self.z_axis_serial: Optional[str] = None
         self.debug_mode: bool = False
 
-    def connect(self, serial_port: str, x_axis_serial: str, z_axis_serial: str, debug_mode: bool):
-        self.x_axis_serial = x_axis_serial
-        self.z_axis_serial = z_axis_serial
-        self.debug_mode = debug_mode
+    def connect(self, port: str = None) -> bool:
+        """Connect to the Thorlabs LTS300 device"""
+        if Thorlabs is None:
+            print("❌ Thorlabs library not available")
+            return False
+            
         try:
-            if self.debug_mode:
-                print(f'🔗 Connecting to LTS300 on port {serial_port}...')
-
-            self.device = Thorlabs.KinesisMotor(serial_port)
-
-            # Read the serial number
-            self.serial_no = str(self.device.get_device_info()[0])
-            if self.debug_mode:
-                print(f'🔧 Detected serial number: {self.serial_no}')
-
-            # Determine the axis type
-            self.axis_type = self.determine_axis(self.serial_no)
-
-            if self.debug_mode:
-                print(f'🔧 Connected to {self.axis_type.upper()}-axis (SN: {self.serial_no})')
-
+            if not port:
+                print("❌ No port specified")
+                return False
+                
+            print(f"🔗 Connecting to LTS300 on port {port}...")
+            
+            # Convert /dev/serial/by-id/... to /dev/ttyUSB* if needed
+            actual_port = port
+            if '/dev/serial/by-id/' in port:
+                try:
+                    import os
+                    actual_port = os.readlink(port)
+                    if not actual_port.startswith('/dev/'):
+                        actual_port = '/dev/' + os.path.basename(actual_port)
+                    print(f"🔄 Converted {port} to {actual_port}")
+                except Exception as e:
+                    print(f"⚠️ Could not resolve symlink: {e}")
+                    # Fallback: try to find ttyUSB device
+                    import glob
+                    usb_devices = glob.glob('/dev/ttyUSB*')
+                    if usb_devices:
+                        actual_port = usb_devices[0]  # Take first available
+                        print(f"🔄 Using fallback port: {actual_port}")
+            
+            # Now connect using the actual ttyUSB port
+            self.device = Thorlabs.KinesisMotor(actual_port, scale="m")
+            
+            # Read the serial number from device
+            device_info = self.device.get_device_info()
+            self.serial_no = str(device_info[0])
+            print(f"✅ Detected serial number: {self.serial_no}")
+            
             self.connected = True
-
-            # Home the device
-            self.device.home()
-            while self.device.is_moving():
-                time.sleep(0.1)
-            self.update_position()
+            print(f"✅ Connected to Thorlabs LTS300 (S/N: {self.serial_no}) on port {actual_port}")
+            
             return True
-
+            
         except Exception as e:
-            print(f'Error connecting: {e}')
+            print(f"❌ Connection failed: {e}")
+            print(f"Exception type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
             self.connected = False
             return False
+            
 
     def disconnect(self):
         if self.connected and self.device:
@@ -97,12 +117,21 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             time.sleep(0.1)
         self.update_position()
 
-    def home(self):
+    def home(self, timeout: float = 180.0):
+        """
+        Home the device with configurable timeout.
+        
+        Args:
+            timeout (float): Homing timeout in seconds (default: 180s)
+        """
         if not self.connected or not self.device:
             raise ConnectionError("Device not connected.")
         if self.debug_mode:
-            print('🔧 Homing device...')
-        self.device.home(force=True, timeout=60)
+            print(f'🔧 Homing device with {timeout}s timeout...')
+        
+        # Use configurable timeout for homing operations
+        # LTS300 can take up to 2+ minutes for full-range homing
+        self.device.home(force=True, timeout=timeout)
         while self.device.is_moving():
             time.sleep(0.1)
         self.update_position()
@@ -222,3 +251,18 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             if self.debug_mode:
                 print(f'❌ Error setting velocity parameters: {e}')
             raise
+
+
+    def validate_position(self, position: float) -> bool:
+        # Config-basierte Limits
+        config_max = getattr(self.config, 'max_position', 300.0)
+        config_min = getattr(self.config, 'min_position', 0.0)
+        
+        # Hardware-basierte absolute Limits (nicht überschreibbar)
+        hardware_max = min(config_max, ABSOLUTE_MAX_POSITION)
+        hardware_min = max(config_min, 0.0)
+        
+        if position < hardware_min or position > hardware_max:
+            print(f"❌ Position {position}mm outside limits [{hardware_min}, {hardware_max}]mm")
+            return False
+        return True

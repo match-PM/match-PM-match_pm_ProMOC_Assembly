@@ -39,6 +39,7 @@ set(INTERFACE_FILES
   "srv/linear_axis/Home.srv"
   "srv/linear_axis/ShutdownLinearAxis.srv"
   "srv/linear_axis/GetPosition.srv"
+  "srv/linear_axis/GetOperationStatus.srv"
   "srv/linear_axis/GetSetHomingParams.srv"
   "srv/linear_axis/SetVelocityParameters.srv"
   "srv/linear_axis/GetVelocityParameters.srv"

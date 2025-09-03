@@ -4,6 +4,10 @@ lts300_z_axis:
     serial_number: '45407924'
     collision_threshold: 200.0
     device_units_per_mm: 409600.0
+    max_position: 300.0 
+    min_position: 0.0 
+    max_single_move: 300.0
+    homing_timeout: 180.0  # 3 minutes for long homing operations
 
 # LTS300 X-Axis Parameters
 lts300_x_axis:
@@ -12,3 +16,7 @@ lts300_x_axis:
     serial_number: '45456044'
     collision_threshold: 200.0
     device_units_per_mm: 409600.0
+    max_position: 300.0
+    min_position: 0.0
+    max_single_move: 300.0
+    homing_timeout: 180.0  # 3 minutes for long homing operations
