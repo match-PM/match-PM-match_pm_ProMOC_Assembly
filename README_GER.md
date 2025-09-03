@@ -12,18 +12,19 @@ cd promoc_assembly/setup
 
 # 3. Simulation starten
 source ../install/setup.bash
-ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+ros2 launch promoc_bringup promoc_assembly_launch.py
+
+# Für Demo mit automatisierten Sequenzen
+ros2 launch promoc_bringup promoc_assembly_demo_launch.py
 
 📖 Dokumentation
-Die vollständige Dokumentation befindet sich im docs/ Verzeichnis.
+Umfassende Dokumentation für jedes Package:
 
-Dort findest du detaillierte Anleitungen, Tutorials und die API-Referenz.
-
-Installationsanleitung – Vollständige Setup-Anweisungen
-
-Architekturübersicht – Details zum Systemdesign
-
-Tutorials – Schritt-für-Schritt-Anleitungen
+- **[Setup & Installation](setup/README.md)** – Vollständige Setup-Anweisungen mit Hardware-Integration
+- **[Planar Motor Nodes](planar_motor_nodes/README.md)** – XBot-Steuerung und PMCLib-Integration
+- **[Linear Axis Nodes](linear_axis_nodes/README.md)** – Thorlabs LTS300-Steuerung mit Kollisionserkennung
+- **[Interface Definitionen](promoc_assembly_interfaces/README.md)** – ROS2 Messages und Services
+- **[Launch & Konfiguration](promoc_bringup/README.md)** – System-Start und Parameter-Management
 
 
 🎯 Key Features
@@ -81,37 +82,69 @@ colcon build --symlink-install
 
 🔌 Hardware-Integration
 Planarmotor (PMCLib)
-Die proprietäre PMCLib muss manuell zum Projekt hinzugefügt werden.
+Die PMCLib ist im Package integriert, Hardware-spezifische Installation:
 
-# 1. Erhalte sie die angepasste PMCLIB vom match-Repo
+```bash
+# 1. PMCLib wheel von Match/IEMCA erhalten (Version 117.1.1+)
+# 2. In local_libraries/ kopieren
+cp /pfad/zu/pmclib-*.whl local_libraries/
 
-# 2. Kopiere die Bibliothek in das `planar_motor_nodes/` Verzeichnis
-cd /pfad/zum/promoc_assembly_repo//planar_motor_notes/planar_motor_nodes/
-git clone <repository-url>
+# 3. Python wheel installieren
+pip install local_libraries/pmclib-*.whl
+
+# 4. Validierung
+./setup/validate_setup_enhanced.sh
+```
+
+**PMC-Hardware Anforderungen:**
+- PMC Controller erreichbar unter `192.168.10.100`
+- .NET 8.0 SDK (automatisch installiert)
+- Netzwerk-Konnektivität
+
+**Mock-Entwicklung (ohne Hardware):**
+```bash
+export USE_MOCK_PMC=true
+ros2 launch promoc_bringup promoc_assembly_launch.py
+```
 
 Linearachsen (Thorlabs LTS300)
-Stelle sicher, dass der Nutzer die nötigen Rechte für den Zugriff auf die serielle Schnittstelle hat.
+**Hardware Auto-Discovery:** Das System erkennt automatisch angeschlossene Thorlabs-Geräte.
 
-# Gebe dem aktuellen Nutzer dauerhaft Zugriff auf serielle Geräte
+```bash
+# Benutzerrechte für USB-Zugriff
 sudo usermod -a -G dialout $USER
 
-# Überprüfe die Berechtigungen (nach Neuanmeldung oder Neustart)
-ls -l /dev/ttyUSB*
+# Hardware-Erkennung testen
+ls -la /dev/serial/by-id/usb-Thorlabs*
 
-Die Seriennummern der Achsen können in den entsprechenden Launch-Dateien konfiguriert werden.
+# Launch zeigt erkannte Geräte an:
+# 🛰️ Detected device: usb-Thorlabs_APT_Stepper_Motor_Controller_45407924
+```
+
+Seriennummern werden in `promoc_bringup/config/linear_axes_params.yaml` konfiguriert.
 
 🧪 Tests und Validierung
-Ein Satz von Skripten und Launch-Dateien steht zur Verfügung, um die korrekte Einrichtung und Funktionalität zu überprüfen.
+Umfassende Testmöglichkeiten für alle Systemkomponenten:
 
-# 1. Umfassende Validierung der gesamten Einrichtung
+```bash
+# 1. Umfassende System-Validierung
 ./setup/validate_setup_enhanced.sh
 
-# 2. Test der Gazebo-Simulation mit zwei Achsen
+# 2. Komplettsystem testen (Simulation)
 source install/setup.bash
-ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+ros2 launch promoc_bringup promoc_assembly_launch.py
 
-# 3. Test einer einzelnen Achse
-ros2 launch promoc_bringup test_single_lts300.launch.py test_axis:=x
+# 3. Demo mit automatisierten Sequenzen
+ros2 launch promoc_bringup promoc_assembly_demo_launch.py
+
+# 4. Einzelkomponenten testen
+ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
+ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true
+
+# 5. Service-Tests
+ros2 service call /mover_node/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"
+ros2 service call /lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
+```
 
 🐛 Troubleshooting
 Sollten Probleme bei der Installation oder Ausführung auftreten, lies bitte unsere detaillierte Anleitung zur Fehlerbehebung:
@@ -124,7 +157,11 @@ Häufige Probleme:
 
 Permission denied für /dev/ttyUSB*: Überprüfe die Nutzerrechte (siehe Abschnitt Hardware-Integration).
 
-PMCLib import error: Stelle sicher, dass die Bibliothek korrekt in local_libs/ platziert und installiert wurde.
+PMCLib import error: Stelle sicher, dass die Bibliothek korrekt in `local_libraries/` platziert und installiert wurde.
+
+Hardware nicht erkannt: Überprüfe USB-Verbindungen und führe `lsusb | grep Thorlabs` aus.
+
+Service-Aufrufe schlagen fehl: Stelle sicher, dass alle Nodes laufen mit `ros2 node list`.
 
 🛠️ Entwicklung und Beitrag
 Beiträge zur Verbesserung des Projekts sind willkommen! Bitte beachte unsere Richtlinien für die Entwicklung.

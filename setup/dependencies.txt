@@ -51,12 +51,6 @@ flake8>=3.8.0               # Code linting and style checking
 black>=21.0.0               # Code formatting
 isort>=5.0.0                # Import sorting
 
-# --- Documentation ---
-sphinx>=4.0.0               # Documentation generation
-sphinx-rtd-theme>=1.0.0     # Read the Docs theme
-myst-parser>=0.15.0         # Markdown parser for Sphinx
-sphinx-autobuild>=2021.3.14 # Live rebuilding for development
-sphinxcontrib-spelling>=7.3.0 # Spell checking (optional)
 
 # --- Optional Scientific Computing ---
 scipy>=1.7.0                # Scientific computing (for advanced motion planning)
