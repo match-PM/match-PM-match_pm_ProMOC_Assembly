@@ -8,7 +8,7 @@ The package follows a clean, modular architecture with separated concerns:
 
 ```
 linear_axis_nodes/
-├── lts300_node.py         # Main ROS2 node (orchestrator)
+├── lts300_node.py         # Main ROS2 node
 ├── lts300_interface.py    # Hardware communication layer
 ├── service_callbacks.py   # ROS service implementations
 ├── lts300_node_config.py  # Configuration management

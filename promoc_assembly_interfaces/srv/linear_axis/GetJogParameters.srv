@@ -1,0 +1,6 @@
+
+---
+bool success
+string status_message
+float64 step_size    # Current jog step size in mm (-1.0 if error)
+float64 speed        # Current jog speed in mm/s (-1.0 if not set or error)
