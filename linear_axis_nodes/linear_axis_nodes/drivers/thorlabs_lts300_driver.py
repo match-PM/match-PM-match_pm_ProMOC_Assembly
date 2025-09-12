@@ -19,6 +19,7 @@ warnings.filterwarnings("ignore", message="can't recognize the stage name*")
 warnings.filterwarnings("ignore", message="can't recognize motor model*")
 
 ABSOLUTE_MAX_POSITION = 300.0
+THORLABS_STEPS_PER_MM = 409600.0  # LTS300 default
 
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
@@ -27,7 +28,8 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self.connected: bool = False
         self.serial_no: Optional[str] = None
         self.axis_type: Optional[str] = None
-        self.device_units_per_mm: float = 409600.0  # Default value, can be overridden
+        # Default value, can be overridden
+        self.device_units_per_mm: float = THORLABS_STEPS_PER_MM
         self.x_axis_serial: Optional[str] = None
         self.z_axis_serial: Optional[str] = None
         self.debug_mode: bool = False

@@ -12,6 +12,7 @@ from .lts300_interface import Lts300Interface
 # Umbenannt für Konsistenz
 from .service_callbacks import ServiceCallbacks
 
+
 class LTS300Node(Node):
     def __init__(self):
         super().__init__('lts300_node')
@@ -21,8 +22,9 @@ class LTS300Node(Node):
 
         # 2. Create core components and connect
         self.interface = Lts300Interface(self.get_logger(), self.config)
-        
-        self.callbacks = ServiceCallbacks(self.get_logger(), self.interface, self.config)
+
+        self.callbacks = ServiceCallbacks(
+            self.get_logger(), self.interface, self.config)
 
         try:
             # 3. Connection
@@ -34,17 +36,16 @@ class LTS300Node(Node):
             # 4. ROS-Schnittstellen einrichten
             self.other_axis_position = None
             self._setup_ros_communication()
-            
-            self.get_logger().info(f"✅ {self.get_name()} with S/N {self.config.serial_number} is running.")
+
+            self.get_logger().info(
+                f"✅ {self.get_name()} with S/N {self.config.serial_number} is running.")
             self.get_logger().info("✅ Node initialization complete!")
-        
+
         except Exception as e:
             self.get_logger().error(f"❌ Exception during initialization: {e}")
             self.get_logger().error("Node initialization failed, exiting...")
             import traceback
             traceback.print_exc()
-
-
 
     def _load_config(self) -> Lts300Config:
         """Loads all ROS parameters into a clean configuration object."""
@@ -59,29 +60,32 @@ class LTS300Node(Node):
         self.declare_parameter('homing_timeout', 180.0)
         self.declare_parameter('velocity_unit_factor', 0.0185)
 
-
         return Lts300Config(
             debug_mode=self.get_parameter('debug_mode').value,
             use_sim_time=self.get_parameter('use_sim_time').value,
             serial_port=self.get_parameter('serial_port').value,
             serial_number=self.get_parameter('serial_number').value,
-            collision_threshold=self.get_parameter('collision_threshold').value,
+            collision_threshold=self.get_parameter(
+                'collision_threshold').value,
             namespace=self.get_parameter('namespace').value,
             max_position=self.get_parameter('max_position').value,
             min_position=self.get_parameter('min_position').value,
             max_single_move=self.get_parameter('max_single_move').value,
             homing_timeout=self.get_parameter('homing_timeout').value,
-            velocity_unit_factor=self.get_parameter('velocity_unit_factor').value
+            velocity_unit_factor=self.get_parameter(
+                'velocity_unit_factor').value
         )
 
     def _setup_ros_communication(self):
         """Erstellt alle ROS-Publisher, -Subscriber und -Services."""
         try:
             node_name = self.get_name()
-            self.get_logger().info(f"🔧 Setting up ROS communication for {node_name}...")
-            
+            self.get_logger().info(
+                f"🔧 Setting up ROS communication for {node_name}...")
+
             # Publisher & Timer
-            self.position_publisher = self.create_publisher(LinearAxisInfo, f"/{self.config.namespace}/{node_name}/position", 10)
+            self.position_publisher = self.create_publisher(
+                LinearAxisInfo, f"/{self.config.namespace}/{node_name}/position", 10)
             self.create_timer(0.1, self.publish_position)
             self.get_logger().info("✅ Publisher and timer created")
 
@@ -93,23 +97,31 @@ class LTS300Node(Node):
                 f"/{self.config.namespace}/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
                 10)
-            self.get_logger().info(f"✅ Subscriber created for {other_axis}-axis")
-                
+            self.get_logger().info(
+                f"✅ Subscriber created for {other_axis}-axis")
+
             # Services (jetzt mit lambdas und korrekten Callback-Namen)
-            self.create_service(MoveAbsolute, f'{node_name}/move_absolute', 
-                lambda req, res: self.callbacks.callback_move_absolute(req, res, self.other_axis_position))
+            self.create_service(MoveAbsolute, f'{node_name}/move_absolute',
+                                lambda req, res: self.callbacks.callback_move_absolute(req, res, self.other_axis_position))
             self.create_service(MoveRelativ, f'{node_name}/move_relative',
-                lambda req, res: self.callbacks.callback_move_relative(req, res, self.other_axis_position))
-            self.create_service(Home, f'{node_name}/home', self.callbacks.callback_home)
-            self.create_service(GetPosition, f'{node_name}/get_position', self.callbacks.callback_get_position)
-            self.create_service(GetOperationStatus, f'{node_name}/get_operation_status', self.callbacks.callback_get_operation_status)
-            self.create_service(SetVelocityParameters, f'{node_name}/set_velocity_parameters', self.callbacks.callback_set_velocity_parameters)
-            self.create_service(GetVelocityParameters, f'{node_name}/get_velocity_parameters', self.callbacks.callback_get_velocity_parameters)
-            self.create_service(ShutdownLinearAxis, f'{node_name}/shutdown', self.callbacks.callback_shutdown)
+                                lambda req, res: self.callbacks.callback_move_relative(req, res, self.other_axis_position))
+            self.create_service(
+                Home, f'{node_name}/home', self.callbacks.callback_home)
+            self.create_service(
+                GetPosition, f'{node_name}/get_position', self.callbacks.callback_get_position)
+            self.create_service(
+                GetOperationStatus, f'{node_name}/get_operation_status', self.callbacks.callback_get_operation_status)
+            self.create_service(
+                SetVelocityParameters, f'{node_name}/set_velocity_parameters', self.callbacks.callback_set_velocity_parameters)
+            self.create_service(
+                GetVelocityParameters, f'{node_name}/get_velocity_parameters', self.callbacks.callback_get_velocity_parameters)
+            self.create_service(
+                ShutdownLinearAxis, f'{node_name}/shutdown', self.callbacks.callback_shutdown)
             self.get_logger().info("✅ All services created")
-            
+
         except Exception as e:
-            self.get_logger().error(f"❌ Error in _setup_ros_communication: {e}")
+            self.get_logger().error(
+                f"❌ Error in _setup_ros_communication: {e}")
             import traceback
             traceback.print_exc()
             raise e  # Re-raise to be caught by main try-catch
@@ -127,12 +139,13 @@ class LTS300Node(Node):
             msg.serial_number = driver.get_serial_number()
             self.position_publisher.publish(msg)
         except Exception as e:
-            self.get_logger().error(f"Error publishing position: {e}\n{traceback.format_exc()}")
+            self.get_logger().error(
+                f"Error publishing position: {e}\n{traceback.format_exc()}")
 
     def other_axis_position_callback(self, msg):
         """Speichert die Position der anderen Achse."""
         self.other_axis_position = msg.axis_position
-        
+
     def shutdown_device(self):
         """Fährt das Gerät sauber herunter."""
         self.get_logger().info("Homing device before shutdown...")
@@ -142,6 +155,7 @@ class LTS300Node(Node):
             self.get_logger().error(f"Error during homing on shutdown: {e}")
         finally:
             self.interface.disconnect()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -174,6 +188,7 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

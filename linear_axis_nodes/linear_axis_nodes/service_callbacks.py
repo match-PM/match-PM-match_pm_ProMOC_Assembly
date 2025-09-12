@@ -253,55 +253,6 @@ class ServiceCallbacks:
                 import traceback
                 self.logger.error(
                     f"❌ Homing traceback: {traceback.format_exc()}")
-        """
-        Performs homing operation in a separate thread.
-        Updates operation status and handles errors.
-        """
-        try:
-            with self.operation_lock:
-                self.operation_status = OperationStatus.HOMING
-                self.last_operation_message = "Homing in progress..."
-
-            self.logger.info("🏠 Starting homing operation...")
-
-            # Call the actual homing operation (now with configurable timeout)
-            self.driver.home(timeout=self.config.homing_timeout)
-            self.logger.info("🏠 Hardware homing command completed")
-
-            # Get final position for confirmation
-            try:
-                final_pos = self.driver.get_position()
-                self.logger.info(f"📍 Post-homing position: {final_pos:.2f}mm")
-            except Exception as pos_e:
-                self.logger.warn(
-                    f"⚠️ Could not read position after homing: {pos_e}")
-                final_pos = "unknown"
-
-            with self.operation_lock:
-                self.operation_status = OperationStatus.IDLE
-                self.last_operation_message = f"✅ Homing completed successfully (position: {final_pos}mm)"
-
-            self.logger.info("✅ Homing operation completed successfully")
-
-        except Exception as e:
-            # Handle specific timeout errors
-            if "ThorlabsTimeoutError" in str(type(e)) or "timeout" in str(e).lower():
-                error_msg = "Homing timeout - operation may still be in progress on hardware"
-                self.logger.warn(f"⏰ {error_msg}")
-            else:
-                error_msg = str(e) if str(e).strip(
-                ) else "Unknown error during homing"
-                self.logger.error(f"❌ Homing operation failed: {error_msg}")
-
-            with self.operation_lock:
-                self.operation_status = OperationStatus.ERROR
-                self.last_operation_message = f"❌ Homing failed: {error_msg}"
-
-            # Additional debug information for non-timeout errors
-            if "timeout" not in error_msg.lower():
-                import traceback
-                self.logger.error(
-                    f"❌ Homing traceback: {traceback.format_exc()}")
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
         """
