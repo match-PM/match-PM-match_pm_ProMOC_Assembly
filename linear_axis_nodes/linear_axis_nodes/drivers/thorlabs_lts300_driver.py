@@ -30,6 +30,12 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self.x_axis_serial: Optional[str] = None
         self.z_axis_serial: Optional[str] = None
         self.debug_mode: bool = False
+        
+        # Communication lock to prevent concurrent hardware access
+        import threading
+        self._comm_lock = threading.Lock()
+        self._last_position_cache = 0.0
+        self._last_position_time = 0.0
 
     def connect(self, port: str = None) -> bool:
         """Connect to the Thorlabs LTS300 device"""
@@ -100,22 +106,77 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             raise ConnectionError("Device not connected.")
         if self.debug_mode:
             print(f'🔧 Moving to position: {position} mm')
-        self.device.move_to(position * self.device_units_per_mm, scale=False)
-        while self.device.is_moving():
-            time.sleep(0.1)
-        self.update_position()
+        
+        with self._comm_lock:
+            # Start the movement
+            self.device.move_to(position * self.device_units_per_mm, scale=False)
+            
+            # Wait for movement completion with robust error handling
+            import time
+            max_wait_time = 300.0  # 5 minutes maximum wait
+            start_time = time.time()
+            check_interval = 0.5   # Check every 500ms instead of 100ms
+            
+            while time.time() - start_time < max_wait_time:
+                try:
+                    if not self.device.is_moving():
+                        break
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f'⚠️ Error checking movement status, continuing: {e}')
+                    # If we can't check status, wait a bit and try again
+                    time.sleep(check_interval * 2)
+                
+                time.sleep(check_interval)
+            
+            # Update position cache
+            try:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+                self._last_position_cache = current_pos
+                self._last_position_time = time.time()
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'⚠️ Error updating position cache: {e}')
 
     def move_relative(self, distance: float):
         if not self.connected or not self.device:
             raise ConnectionError("Device not connected.")
         if self.debug_mode:
             print(f'🔧 Moving relatively by: {distance} mm')
-        current_position = self.device.get_position()
-        target_position = current_position + (distance * self.device_units_per_mm)
-        self.device.move_to(target_position, scale=False)
-        while self.device.is_moving():
-            time.sleep(0.1)
-        self.update_position()
+        
+        with self._comm_lock:
+            current_position = self.device.get_position()
+            target_position = current_position + (distance * self.device_units_per_mm)
+            
+            # Start the movement
+            self.device.move_to(target_position, scale=False)
+            
+            # Wait for movement completion with robust error handling
+            import time
+            max_wait_time = 300.0  # 5 minutes maximum wait
+            start_time = time.time()
+            check_interval = 0.5   # Check every 500ms instead of 100ms
+            
+            while time.time() - start_time < max_wait_time:
+                try:
+                    if not self.device.is_moving():
+                        break
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f'⚠️ Error checking movement status, continuing: {e}')
+                    # If we can't check status, wait a bit and try again
+                    time.sleep(check_interval * 2)
+                
+                time.sleep(check_interval)
+            
+            # Update position cache
+            try:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+                self._last_position_cache = current_pos
+                self._last_position_time = time.time()
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'⚠️ Error updating position cache: {e}')
 
     def home(self, timeout: float = 180.0):
         """
@@ -129,27 +190,108 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         if self.debug_mode:
             print(f'🔧 Homing device with {timeout}s timeout...')
         
-        # Use configurable timeout for homing operations
-        # LTS300 can take up to 2+ minutes for full-range homing
-        self.device.home(force=True, timeout=timeout)
-        while self.device.is_moving():
-            time.sleep(0.1)
-        self.update_position()
+        with self._comm_lock:
+            # Use configurable timeout for homing operations
+            # LTS300 can take up to 2+ minutes for full-range homing
+            self.device.home(force=True, timeout=timeout)
+            
+            # Wait for homing completion with robust error handling
+            import time
+            max_wait_time = timeout + 30.0  # Add 30s buffer to device timeout
+            start_time = time.time()
+            check_interval = 1.0   # Check every 1s for homing
+            
+            while time.time() - start_time < max_wait_time:
+                try:
+                    if not self.device.is_moving():
+                        break
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f'⚠️ Error checking homing status, continuing: {e}')
+                    # If we can't check status, wait a bit and try again
+                    time.sleep(check_interval * 2)
+                
+                time.sleep(check_interval)
+            
+            # Update position cache
+            try:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+                self._last_position_cache = current_pos
+                self._last_position_time = time.time()
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'⚠️ Error updating position cache: {e}')
 
     def get_position(self) -> float:
         if not self.connected or not self.device:
             raise ConnectionError("Device not connected.")
-        try:
-            return self.device.get_position() / self.device_units_per_mm
-        except Exception as e:
-            if self.debug_mode:
-                print(f'⚠️ Error getting position: {e}')
-            return -1.0 # Or raise an exception, depending on desired error handling
+        
+        # Use cached position during operations to reduce hardware communication
+        import time
+        current_time = time.time()
+        
+        # Try to get lock without blocking for position queries
+        if self._comm_lock.acquire(blocking=False):
+            try:
+                position = self.device.get_position() / self.device_units_per_mm
+                self._last_position_cache = position
+                self._last_position_time = current_time
+                return position
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'⚠️ Error getting position: {e}')
+                # Return cached position if available
+                if hasattr(self, '_last_position_cache'):
+                    return self._last_position_cache
+                return -1.0
+            finally:
+                self._comm_lock.release()
+        else:
+            # Communication busy, return cached position if recent enough (< 2 seconds)
+            if (hasattr(self, '_last_position_cache') and 
+                hasattr(self, '_last_position_time') and
+                current_time - self._last_position_time < 2.0):
+                if self.debug_mode:
+                    print(f'🔄 Using cached position: {self._last_position_cache:.2f}mm')
+                return self._last_position_cache
+            
+            # No recent cache, wait briefly for lock
+            if self._comm_lock.acquire(timeout=0.5):
+                try:
+                    position = self.device.get_position() / self.device_units_per_mm
+                    self._last_position_cache = position
+                    self._last_position_time = current_time
+                    return position
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f'⚠️ Error getting position: {e}')
+                    return self._last_position_cache if hasattr(self, '_last_position_cache') else -1.0
+                finally:
+                    self._comm_lock.release()
+            else:
+                # Still can't get lock, return cached value or error
+                return self._last_position_cache if hasattr(self, '_last_position_cache') else -1.0
 
     def is_moving(self) -> bool:
         if not self.connected or not self.device:
             return False
-        return self.device.is_moving()
+        
+        # Use timeout to avoid blocking indefinitely
+        if self._comm_lock.acquire(timeout=0.3):
+            try:
+                moving_status = self.device.is_moving()
+                return moving_status
+            except Exception as e:
+                # Handle Thorlabs communication errors gracefully
+                if self.debug_mode:
+                    print(f'⚠️ Error checking movement status: {e}')
+                # Return False as safe default when we can't check status
+                return False
+            finally:
+                self._comm_lock.release()
+        else:
+            # Can't acquire lock, assume still moving if we were recently
+            return True
 
     def get_serial_number(self) -> str:
         return self.serial_no if self.serial_no else ""
@@ -252,17 +394,117 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 print(f'❌ Error setting velocity parameters: {e}')
             raise
 
+    def stop(self):
+        """
+        Immediately stop any ongoing movement.
+        This is an emergency stop function that halts all motion.
+        """
+        if not self.connected or not self.device:
+            raise ConnectionError("Device not connected.")
+        
+        # For emergency stop, try to acquire lock with timeout
+        # If we can't get it quickly, force the stop anyway
+        if self._comm_lock.acquire(timeout=0.1):
+            try:
+                if self.debug_mode:
+                    print('🛑 Emergency stop requested - stopping all movement immediately')
+                
+                # Use pylablib's stop method for immediate halt
+                # For KinesisMotor, the correct method is stop() not stop_motion()
+                self.device.stop()
+                
+                if self.debug_mode:
+                    print('✅ Movement stopped successfully')
+                    
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'❌ Error during emergency stop: {e}')
+                raise
+            finally:
+                self._comm_lock.release()
+        else:
+            # Emergency case - force stop even if lock is busy
+            try:
+                if self.debug_mode:
+                    print('🛑 EMERGENCY STOP - forcing stop without lock')
+                self.device.stop()
+            except Exception as e:
+                if self.debug_mode:
+                    print(f'❌ Error during force stop: {e}')
+                raise
+
+    def jog_positive(self, step_size: float = 1.0):
+        """
+        Jog the axis in positive direction by the specified step size.
+        
+        Args:
+            step_size (float): Distance to jog in mm (default: 1.0mm)
+        """
+        if not self.connected or not self.device:
+            raise ConnectionError("Device not connected.")
+        
+        try:
+            if self.debug_mode:
+                print(f'🔧 Jogging positive by {step_size} mm')
+            
+            # Get current position and calculate target
+            current_pos = self.get_position()
+            target_pos = current_pos + step_size
+            
+            # Validate target position
+            if not self.validate_position(target_pos):
+                raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+            
+            # Use relative move for jogging
+            self.move_relative(step_size)
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f'❌ Error during positive jog: {e}')
+            raise
+
+    def jog_negative(self, step_size: float = 1.0):
+        """
+        Jog the axis in negative direction by the specified step size.
+        
+        Args:
+            step_size (float): Distance to jog in mm (default: 1.0mm)
+        """
+        if not self.connected or not self.device:
+            raise ConnectionError("Device not connected.")
+        
+        try:
+            if self.debug_mode:
+                print(f'🔧 Jogging negative by {step_size} mm')
+            
+            # Get current position and calculate target
+            current_pos = self.get_position()
+            target_pos = current_pos - step_size
+            
+            # Validate target position
+            if not self.validate_position(target_pos):
+                raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+            
+            # Use relative move for jogging (negative distance)
+            self.move_relative(-step_size)
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f'❌ Error during negative jog: {e}')
+            raise
+
 
     def validate_position(self, position: float) -> bool:
-        # Config-basierte Limits
-        config_max = getattr(self.config, 'max_position', 300.0)
-        config_min = getattr(self.config, 'min_position', 0.0)
+        """
+        Validate if position is within safe hardware limits.
+        Uses conservative defaults to ensure safety.
+        """
+        # Use conservative safety limits
+        min_position = 0.0
+        max_position = min(300.0, ABSOLUTE_MAX_POSITION)
         
-        # Hardware-basierte absolute Limits (nicht überschreibbar)
-        hardware_max = min(config_max, ABSOLUTE_MAX_POSITION)
-        hardware_min = max(config_min, 0.0)
-        
-        if position < hardware_min or position > hardware_max:
-            print(f"❌ Position {position}mm outside limits [{hardware_min}, {hardware_max}]mm")
+        if position < min_position or position > max_position:
+            if self.debug_mode:
+                print(f"❌ Position {position}mm outside limits [{min_position}, {max_position}]mm")
             return False
         return True

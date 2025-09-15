@@ -15,3 +15,7 @@ class Lts300Config:
     min_position: float 
     max_single_move: float
     homing_timeout: float
+    # Velocity conversion factor (from device units to mm/s)
+    # Based on measurements: 500 device units ≈ 9.0 mm/s, 100 device units ≈ 1.85 mm/s
+    # Therefore: conversion factor ≈ 0.018 mm/s per device unit
+    velocity_conversion_factor: float = 0.018

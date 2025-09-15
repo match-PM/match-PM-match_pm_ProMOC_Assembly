@@ -9,10 +9,10 @@ from promoc_assembly_interfaces.srv import (
 )
 
 # Importiere unsere neuen, sauberen Bausteine
-from .pmc_interface import PmcInterface
-from .position_utils import PositionUtils
-from .service_callbacks import ServiceCallbacks
-from .node_config import NodeConfig
+from .mover_pmc_interface import PmcInterface
+from .mover_position_utils import PositionUtils
+from .mover_service_callbacks import ServiceCallbacks
+from .mover_node_config import NodeConfig
 
 
 class MoverServiceNode(Node):

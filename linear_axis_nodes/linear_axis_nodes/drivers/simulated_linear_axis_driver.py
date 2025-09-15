@@ -14,24 +14,29 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
         self._serial_number: Optional[str] = None
         self._axis_type: Optional[str] = None
         self.debug_mode: bool = False
+        
+        # Default velocity parameters for simulation
+        self._min_velocity: float = 0.1    # mm/s
+        self._acceleration: float = 10.0   # mm/s^2
+        self._max_velocity: float = 50.0   # mm/s
 
-    def connect(self, serial_port: str, x_axis_serial: str, z_axis_serial: str, debug_mode: bool):
-        self.debug_mode = debug_mode
-        # In a simulated environment, we can just assign a serial number and axis type
-        # based on the provided x_axis_serial or z_axis_serial for demonstration.
-        # For a real simulation, you might want to make this more sophisticated.
-        if x_axis_serial == "SIM_X": # Example for a simulated X-axis
-            self._serial_number = x_axis_serial
+    def connect(self, port: str = None) -> bool:
+        """Connect to simulated device - compatible with real driver interface."""
+        self.debug_mode = True  # Enable debug for simulation
+        
+        # Simulate serial numbers based on port or use defaults
+        if port and "x" in port.lower():
+            self._serial_number = "SIM_X_45456044"
             self._axis_type = 'x'
-        elif z_axis_serial == "SIM_Z": # Example for a simulated Z-axis
-            self._serial_number = z_axis_serial
+        elif port and "z" in port.lower():
+            self._serial_number = "SIM_Z_45407924"
             self._axis_type = 'z'
         else:
             self._serial_number = "SIM_UNKNOWN"
             self._axis_type = 'unknown'
 
         if self.debug_mode:
-            print(f"Simulated driver connected. Axis Type: {self._axis_type}, Serial: {self._serial_number}")
+            print(f"✅ Simulated driver connected. Axis Type: {self._axis_type}, Serial: {self._serial_number}")
         return True
 
     def disconnect(self):
@@ -67,7 +72,9 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
             else:
                 # Linear interpolation for position during movement
                 progress = elapsed_time / self._move_duration
-                self._position = self._position + (self._target_position - self._position) * progress
+                start_pos = self._position if hasattr(self, '_start_position') else 0.0
+                self._position = start_pos + (self._target_position - start_pos) * progress
+        
         return self._position
 
     def is_moving(self) -> bool:
@@ -100,3 +107,35 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
             print(f"   Max velocity: {self._max_velocity:.3f} mm/s")
             
         return self.get_velocity_parameters()
+
+    def stop(self):
+        """Immediately stop any ongoing movement."""
+        if self.debug_mode:
+            print('🛑 Simulated emergency stop - halting all movement')
+        
+        self._is_moving = False
+        self._target_position = self._position  # Stay at current position
+        
+    def jog_positive(self, step_size: float = 1.0):
+        """Jog the axis in positive direction by the specified step size."""
+        if self.debug_mode:
+            print(f'🔧 Simulated jog positive by {step_size} mm')
+        
+        # Validate position
+        target_pos = self._position + step_size
+        if target_pos > 300.0:  # Assume 300mm max limit
+            raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+        
+        self.move_relative(step_size)
+        
+    def jog_negative(self, step_size: float = 1.0):
+        """Jog the axis in negative direction by the specified step size."""
+        if self.debug_mode:
+            print(f'🔧 Simulated jog negative by {step_size} mm')
+        
+        # Validate position
+        target_pos = self._position - step_size
+        if target_pos < 0.0:  # Assume 0mm min limit
+            raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+        
+        self.move_relative(-step_size)

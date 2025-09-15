@@ -46,17 +46,18 @@ class Lts300Interface:
                         self.logger.warning(f"⚠️ Expected S/N {self.config.serial_number}, but device reports {device_serial}")
                     self.logger.info(f"🔌 Connected to Thorlabs LTS300 (S/N: {device_serial})")
                     
-            self._is_connected = connected
+            self.is_connected = connected
             return connected
             
         except Exception as e:
             self.logger.error(f"❌ Connection failed: {e}")
-            self._is_connected = False
+            self.is_connected = False
             return False
             
     def disconnect(self):
         """Disconnects from the device."""
         if self.driver and self.is_connected:
             self.driver.disconnect()
+            self.is_connected = False
             self.is_connected = False
             self.logger.info("✅ Device disconnected.")

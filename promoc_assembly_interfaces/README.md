@@ -59,8 +59,8 @@ Status information for linear translation stages.
 ```
 float64 axis_position   # Current position in mm
 string axis_type        # 'x' or 'z'
-bool is_moving          # Whether the axis is currently in motion
 string serial_number    # Device serial number
+string operation_status # Current operation: idle, homing, moving, jogging, error, emergency_stop
 ```
 
 **Usage Example:**

@@ -4,13 +4,14 @@ from rclpy.node import Node
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
     MoveAbsolute, MoveRelativ, Home, ShutdownLinearAxis, GetPosition,
-    SetVelocityParameters, GetVelocityParameters, GetOperationStatus
+    SetVelocityParameters, GetVelocityParameters, GetOperationStatus,
+    EmergencyStop, JogAxis
 )
 
 from .lts300_node_config import Lts300Config
 from .lts300_interface import Lts300Interface
 # Umbenannt für Konsistenz
-from .service_callbacks import ServiceCallbacks
+from .lts300_service_callbacks import ServiceCallbacks
 
 class LTS300Node(Node):
     def __init__(self):
@@ -56,7 +57,7 @@ class LTS300Node(Node):
         self.declare_parameter('min_position', 0.0)
         self.declare_parameter('max_single_move', 300.0)
         self.declare_parameter('homing_timeout', 180.0)
-        self.declare_parameter('velocity_unit_factor', 0.0185)
+        self.declare_parameter('velocity_unit_factor', 0.018)
 
 
         return Lts300Config(
@@ -69,7 +70,7 @@ class LTS300Node(Node):
             min_position=self.get_parameter('min_position').value,
             max_single_move=self.get_parameter('max_single_move').value,
             homing_timeout=self.get_parameter('homing_timeout').value,
-            velocity_unit_factor=self.get_parameter('velocity_unit_factor').value
+            velocity_conversion_factor=self.get_parameter('velocity_unit_factor').value
         )
 
     def _setup_ros_communication(self):
@@ -104,6 +105,8 @@ class LTS300Node(Node):
             self.create_service(SetVelocityParameters, f'{node_name}/set_velocity_parameters', self.callbacks.callback_set_velocity_parameters)
             self.create_service(GetVelocityParameters, f'{node_name}/get_velocity_parameters', self.callbacks.callback_get_velocity_parameters)
             self.create_service(ShutdownLinearAxis, f'{node_name}/shutdown', self.callbacks.callback_shutdown)
+            self.create_service(EmergencyStop, f'{node_name}/emergency_stop', self.callbacks.callback_emergency_stop)
+            self.create_service(JogAxis, f'{node_name}/jog_axis', self.callbacks.callback_jog_axis)
             self.get_logger().info("✅ All services created")
             
         except Exception as e:
@@ -115,17 +118,44 @@ class LTS300Node(Node):
     def publish_position(self):
         """Publishes the current axis position."""
         if not self.interface.is_connected:
+            self.get_logger().debug("Skipping position publish - interface not connected")
             return
         try:
             msg = LinearAxisInfo()
             driver = self.interface.driver
+            
+            # Get position (this is usually reliable)
             msg.axis_position = driver.get_position()
-            msg.axis_type = driver.get_axis_type()
-            msg.is_moving = driver.is_moving()
             msg.serial_number = driver.get_serial_number()
+            
+            # Set axis_type based on node name instead of unreliable driver method
+            node_name = self.get_name()
+            if 'x_axis' in node_name:
+                msg.axis_type = 'x'
+            elif 'z_axis' in node_name:
+                msg.axis_type = 'z'
+            else:
+                msg.axis_type = 'unknown'
+            
+            # Use our operation status instead of unreliable hardware is_moving()
+            operation_status, _ = self.callbacks.get_operation_status()
+            msg.operation_status = operation_status.value
+            
             self.position_publisher.publish(msg)
+            self.get_logger().debug(f"Published position: {msg.axis_position:.2f}mm, status: {operation_status.value}")
+            
         except Exception as e:
-            self.get_logger().error(f"Error publishing position: {e}\n{traceback.format_exc()}")
+            # Reduce error logging frequency to avoid spam
+            if not hasattr(self, '_last_publish_error_time'):
+                self._last_publish_error_time = 0
+            
+            import time
+            current_time = time.time()
+            if current_time - self._last_publish_error_time > 5.0:  # Log error only every 5 seconds
+                self.get_logger().error(f"Error publishing position: {e}")
+                self._last_publish_error_time = current_time
+            else:
+                self.get_logger().debug(f"Position publish error (suppressed): {e}")
 
     def other_axis_position_callback(self, msg):
         """Speichert die Position der anderen Achse."""

@@ -8,6 +8,7 @@ lts300_z_axis:
     min_position: 0.0 
     max_single_move: 300.0
     homing_timeout: 180.0  # 3 minutes for long homing operations
+    velocity_unit_factor: 0.018  # mm/s per device velocity unit (experimentally determined)
 
 # LTS300 X-Axis Parameters
 lts300_x_axis:
@@ -20,3 +21,4 @@ lts300_x_axis:
     min_position: 0.0
     max_single_move: 300.0
     homing_timeout: 180.0  # 3 minutes for long homing operations
+    velocity_unit_factor: 0.018  # mm/s per device velocity unit (experimentally determined)
