@@ -48,7 +48,6 @@ class LTS300Node(Node):
 
     def _load_config(self) -> Lts300Config:
         """Loads all ROS parameters into a clean configuration object."""
-        self.declare_parameter('debug_mode', False)
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('serial_number', '00000000')
         self.declare_parameter('collision_threshold', 300.0)
@@ -61,7 +60,6 @@ class LTS300Node(Node):
 
 
         return Lts300Config(
-            debug_mode=self.get_parameter('debug_mode').value,
             use_sim_time=self.get_parameter('use_sim_time').value,
             serial_port=self.get_parameter('serial_port').value,
             serial_number=self.get_parameter('serial_number').value,

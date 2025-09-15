@@ -76,8 +76,8 @@ class PositionUtils:
             except Exception as e:
                 if not self.is_mock:
                     self.logger.warning(f"⚠️ Could not get status for XBot {xbot_id}: {e}")
-                xbot_state_enum = XbotState.XBOT_IDLE
-                xbot_state_str = "IDLE"
+                xbot_state_enum = XbotState.XBOT_UNKNOWN
+                xbot_state_str = "UNKNOWN"
 
             return {
                 'position': current_pos,

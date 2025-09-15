@@ -3,9 +3,9 @@
 <package format="3">
   <name>planar_motor_nodes</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>A ROS2 package for controlling planar motor systems with XBot robots.</description>
   <maintainer email="pmlab_mover@todo.todo">pmlab_mover</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
  
   <buildtool_depend>ament_python</buildtool_depend>   <!-- Use ament_python for Python packages -->
   <build_depend>setuptools</build_depend>             <!-- Required for building Python packages -->
