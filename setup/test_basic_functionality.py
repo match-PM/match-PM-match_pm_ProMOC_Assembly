@@ -75,6 +75,40 @@ def test_response_formats():
         return False
 
 
+def test_camera_integration():
+    """Test camera integration package and external dependencies"""
+    print("Testing camera integration package...")
+    
+    try:
+        # Test if camera_aravis2 is available in workspace
+        import subprocess
+        import os
+        
+        workspace_root = os.path.expanduser("~/ros2_ws")
+        camera_aravis2_path = os.path.join(workspace_root, "src", "camera_aravis2")
+        
+        if os.path.exists(camera_aravis2_path):
+            print("✓ camera_aravis2 repository found in workspace")
+        else:
+            print("⚠ camera_aravis2 repository not found")
+            print("  Run: cd ~/ros2_ws/src && git clone https://github.com/FraunhoferIOSB/camera_aravis2.git")
+            return False
+        
+        # Test if our camera_nodes package can be imported (after build)
+        try:
+            from camera_nodes.camera_manager import CameraManager
+            print("✓ Camera nodes package available")
+        except ImportError:
+            print("⚠ Camera nodes package not yet built")
+            print("  Run: colcon build --packages-select camera_nodes")
+            
+        return True
+        
+    except Exception as e:
+        print(f"✗ Camera integration test failed: {e}")
+        return False
+
+
 def main():
     """Run all tests"""
     print("ProMOC Assembly System - Basic Functionality Test")
@@ -83,7 +117,8 @@ def main():
     tests = [
         test_service_interfaces,
         test_mock_pmclib,
-        test_response_formats
+        test_response_formats,
+        test_camera_integration,  # Add camera test
     ]
 
     passed = 0

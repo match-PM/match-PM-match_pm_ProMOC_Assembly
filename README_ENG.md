@@ -6,11 +6,15 @@ A modular ROS2 system for high-precision assembly tasks using linear axes (Thorl
 cd ~/ros2_ws/src
 git clone <repository-url> promoc_assembly
 
-# 2. Run the automated installation
-cd promoc_assembly/setup
+# 2. Install external dependencies
+cd promoc_assembly
+vcs import ~/ros2_ws/src < dependencies.repos
+
+# 3. Run the automated installation
+cd setup
 ./install_all.sh
 
-# 3. Launch the simulation
+# 4. Launch the simulation
 source ../install/setup.bash
 ros2 launch promoc_bringup promoc_assembly_launch.py
 
@@ -23,6 +27,7 @@ Comprehensive documentation for each package:
 - **[Setup & Installation](setup/README.md)** – Complete setup instructions with hardware integration
 - **[Planar Motor Nodes](planar_motor_nodes/README.md)** – XBot control and PMCLib integration
 - **[Linear Axis Nodes](linear_axis_nodes/README.md)** – Thorlabs LTS300 control with collision detection
+- **[Camera Integration](camera_integration/README.md)** – IDS camera integration using camera_aravis2
 - **[Interface Definitions](promoc_assembly_interfaces/README.md)** – ROS2 messages and services
 - **[Launch & Configuration](promoc_bringup/README.md)** – System startup and parameter management
 
@@ -34,6 +39,8 @@ Comprehensive documentation for each package:
 ✅ Safety Systems – Software limits and collision detection.
 
 ✅ High Precision – Sub-micrometer positioning.
+
+✅ Camera Integration – IDS industrial cameras via GenICam/Aravis.
 
 ✅ ROS2 Native – Utilizes standard ROS2 interfaces and tools.
 
@@ -49,6 +56,8 @@ Python: 3.8+
 Hardware (Optional):
 
 Thorlabs LTS300 linear axes
+IDS industrial cameras (GigEVision/USB3Vision)
+PMC planar motor controller
 
 PMCLib-compatible planar motor
 

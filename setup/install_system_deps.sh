@@ -36,6 +36,14 @@ sudo apt-get install -y build-essential pkg-config
 echo "Installing Python development headers and pip..."
 sudo apt-get install -y python3-dev python3-pip python3-venv
 
+# Install Aravis camera library for camera_aravis2
+echo "Installing Aravis camera library..."
+sudo apt-get install -y libaravis-dev aravis-tools
+
+# Install OpenCV and image processing dependencies
+echo "Installing OpenCV and image processing dependencies..."
+sudo apt-get install -y python3-opencv libopencv-dev
+
 # Verify .NET installation
 echo "Verifying .NET installation..."
 if command -v dotnet &> /dev/null; then

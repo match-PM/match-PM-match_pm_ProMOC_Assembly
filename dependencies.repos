@@ -1,0 +1,5 @@
+repositories:
+  camera_aravis2:
+    type: git
+    url: https://github.com/FraunhoferIOSB/camera_aravis2.git
+    version: main
