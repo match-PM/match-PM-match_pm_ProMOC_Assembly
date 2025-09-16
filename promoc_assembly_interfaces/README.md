@@ -37,7 +37,7 @@ promoc_assembly_interfaces/
         ├── LinearMotionSi.srv     # Linear motion in SI units
         ├── RotaryMotion.srv       # Rotational motion
         ├── SetVelocityAcceleration.srv # Set motion dynamics
-        ├── ArcMotionTargetRadius.srv   # Arc motion control
+        ├── ArcMotionSi.srv        # Arc motion control in SI units
         └── StopMotion.srv         # Emergency stop
 ```
 

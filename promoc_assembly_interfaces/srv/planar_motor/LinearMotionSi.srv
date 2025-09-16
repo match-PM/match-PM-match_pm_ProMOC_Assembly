@@ -1,6 +1,6 @@
 int32 xbot_id
-float64 x_pos
-float64 y_pos
+float64 x_pos      # Target X position in mm
+float64 y_pos      # Target Y position in mm
 ---
 bool success
 string status_message

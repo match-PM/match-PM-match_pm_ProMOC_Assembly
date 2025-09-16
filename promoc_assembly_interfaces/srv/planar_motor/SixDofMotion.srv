@@ -1,10 +1,10 @@
 int32   xbot_id
-float64 x_pos
-float64 y_pos
-float64 z_pos
-float64 rx_pos
-float64 ry_pos
-float64 rz_pos
+float64 x_pos      # X position in mm 
+float64 y_pos      # Y position in mm 
+float64 z_pos      # Z position in mm 
+float64 rx_pos     # RX rotation in degrees 
+float64 ry_pos     # RY rotation in degrees 
+float64 rz_pos     # RZ rotation in degrees 
 ---
 bool success
 string status_message

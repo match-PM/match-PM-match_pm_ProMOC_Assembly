@@ -20,7 +20,7 @@ def test_service_interfaces():
             # Planar motor services
             ActivateXbots, LevitationXbots, LinearMotionSi,
             RotaryMotion, SixDofMotion, StopMotion, SetVelocityAcceleration,
-            ArcMotionTargetRadius,
+            ArcMotionSi,
             # Linear axis services
             MoveAbsolute, MoveRelativ, Home, ShutdownLinearAxis,
             GetPosition, GetSetHomingParams, GetSetVelocityParams

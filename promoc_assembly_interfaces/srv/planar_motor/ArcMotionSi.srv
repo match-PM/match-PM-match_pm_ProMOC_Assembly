@@ -1,0 +1,15 @@
+int32   xbot_id
+float64 target_x        # Target X position in mm (or center X for CENTER_WITH_ANGLE mode)
+float64 target_y        # Target Y position in mm (or center Y for CENTER_WITH_ANGLE mode)
+float64 radius          # Arc radius in mm
+float64 max_speed       # Maximum speed in mm/s
+float64 max_accel       # Maximum acceleration in mm/s²
+int32   arc_mode        # Arc mode: 0=TARGET_WITH_RADIUS, 1=CENTER_WITH_ANGLE, 2=TARGET_WITH_CENTER
+int32   arc_type        # Arc type: 0=MINORARC (<180°), 1=MAJORARC (>180°)
+int32   arc_direction   # Arc direction: 0=CLOCKWISE, 1=COUNTERCLOCKWISE
+int32   pos_mode        # Position mode: 0=ABSOLUTE, 1=RELATIVE
+float64 final_speed     # Final speed in mm/s
+float64 angle_degrees   # Angle in degrees (only used for CENTER_WITH_ANGLE mode)
+---
+bool success
+string status_message

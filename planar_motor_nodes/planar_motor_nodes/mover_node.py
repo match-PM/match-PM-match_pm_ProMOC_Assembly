@@ -1,9 +1,10 @@
 import rclpy
 import time
+import math
 from rclpy.node import Node
 from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import (
-    ActivateXbots, ArcMotionTargetRadius, LevitationXbots,
+    ActivateXbots, ArcMotionSi, LevitationXbots,
     LinearMotionSi, RotaryMotion, SetVelocityAcceleration,
     SixDofMotion, StopMotion
 )
@@ -41,7 +42,7 @@ class MoverServiceNode(Node):
         # 4. Start connection attempts
         self.get_logger().info(f"🔗 Connecting to PMC at {self.config.pmc_ip}...")
         # Wir versuchen die Verbindung schneller, um einen freien Port zu finden.
-        self.connection_timer = self.create_timer(0.2, self._try_connect) # 5 Versuche pro Sekunde
+        self.connection_timer = self.create_timer(0.1, self._try_connect) # 10 Versuche pro Sekunde
 
         self.get_logger().info("✅ Mover Service Node initialized. Waiting for PMC connection...")
         
@@ -115,7 +116,7 @@ class MoverServiceNode(Node):
             ('six_dof_motion', SixDofMotion, self.callbacks.callback_six_d_motion),
             ('activate_xbots', ActivateXbots, self.callbacks.callback_activate_xbot),
             ('levitation_xbots', LevitationXbots, self.callbacks.callback_levitation_xbot),
-            ('arc_motion_target_radius', ArcMotionTargetRadius, self.callbacks.callback_arc_motion_target_radius),
+            ('arc_motion_si', ArcMotionSi, self.callbacks.callback_arc_motion_si),
             ('stop_motion', StopMotion, self.callbacks.callback_stop_motion),
             ('rotary_motion', RotaryMotion, self.callbacks.callback_rotary_motion),
             ('set_velocity_acceleration', SetVelocityAcceleration, self.callbacks.callback_set_velocity_acceleration)
@@ -132,8 +133,16 @@ class MoverServiceNode(Node):
             self.xbot_diagnosis_timer = self.create_timer(5.0, self.pos_utils.diagnose_xbot_availability)
         self.get_logger().info("✅ Timers started.")
 
+    def _m_to_mm(self, value_m: float) -> float:
+        """Convert meters to millimeters."""
+        return value_m * 1000.0
+    
+    def _rad_to_deg(self, value_rad: float) -> float:
+        """Convert radians to degrees."""
+        return math.degrees(value_rad)
+
     def _publish_xbot_position(self):
-        """Publiziert die aktuelle XBot-Position, aber nur wenn verbunden."""
+        """Publiziert die aktuelle XBot-Position in mm und Grad."""
         if not self.is_connected:
             return
 
@@ -141,7 +150,13 @@ class MoverServiceNode(Node):
         try:
             current_pos = self.pos_utils.get_current_position(0)
             if current_pos:
-                msg.x_pos, msg.y_pos, msg.z_pos, msg.rx_pos, msg.ry_pos, msg.rz_pos = current_pos
+                # Konvertiere Positionen: m -> mm, rad -> deg
+                msg.x_pos = self._m_to_mm(current_pos[0])
+                msg.y_pos = self._m_to_mm(current_pos[1])
+                msg.z_pos = self._m_to_mm(current_pos[2])
+                msg.rx_pos = self._rad_to_deg(current_pos[3])
+                msg.ry_pos = self._rad_to_deg(current_pos[4])
+                msg.rz_pos = self._rad_to_deg(current_pos[5])
             
             msg.xbot_state = self.pos_utils.get_xbot_state_string(0)
             self.xbot_pos_publisher.publish(msg)
