@@ -11,7 +11,7 @@ from promoc_assembly_interfaces.srv import (
 
 # Importiere unsere neuen, sauberen Bausteine
 from .mover_pmc_interface import PmcInterface
-from .mover_position_utils import PositionUtils
+from .mover_utils import MoverUtils
 from .mover_service_callbacks import ServiceCallbacks
 from .mover_node_config import NodeConfig
 
@@ -32,8 +32,8 @@ class MoverServiceNode(Node):
         
         # 2. Create the core components and inject dependencies
         self.pmc = PmcInterface(self.get_logger(), use_mock=self.config.use_mock)
-        self.pos_utils = PositionUtils(self.get_logger(), self.pmc, self.config)
-        self.callbacks = ServiceCallbacks(self.get_logger(), self.pmc, self.pos_utils, self.config)
+        self.mover_utils = MoverUtils(self.get_logger(), self.pmc, self.config)
+        self.callbacks = ServiceCallbacks(self.get_logger(), self.pmc, self.mover_utils, self.config)
         self.xbot_pos_publisher = self.create_publisher(XBotInfo, "xbot_info", 10)
         
         # 3. Setup ROS interfaces using the components
@@ -130,7 +130,7 @@ class MoverServiceNode(Node):
         publish_interval = 1.0 / self.config.publish_rate
         self.xbot_position_timer = self.create_timer(publish_interval, self._publish_xbot_position)
         if not self.pmc.status['is_mock']:
-            self.xbot_diagnosis_timer = self.create_timer(5.0, self.pos_utils.diagnose_xbot_availability)
+            self.xbot_diagnosis_timer = self.create_timer(5.0, self.mover_utils.diagnose_xbot_availability)
         self.get_logger().info("✅ Timers started.")
 
     def _m_to_mm(self, value_m: float) -> float:
@@ -148,7 +148,7 @@ class MoverServiceNode(Node):
 
         msg = XBotInfo()
         try:
-            current_pos = self.pos_utils.get_current_position(0)
+            current_pos = self.mover_utils.get_current_position(0)
             if current_pos:
                 # Konvertiere Positionen: m -> mm, rad -> deg
                 msg.x_pos = self._m_to_mm(current_pos[0])
@@ -158,7 +158,7 @@ class MoverServiceNode(Node):
                 msg.ry_pos = self._rad_to_deg(current_pos[4])
                 msg.rz_pos = self._rad_to_deg(current_pos[5])
             
-            msg.xbot_state = self.pos_utils.get_xbot_state_string(0)
+            msg.xbot_state = self.mover_utils.get_xbot_state_string(0)
             self.xbot_pos_publisher.publish(msg)
         except Exception as e:
             self.get_logger().error(f"Position publishing error: {e}")

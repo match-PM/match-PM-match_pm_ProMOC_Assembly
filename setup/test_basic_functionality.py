@@ -37,7 +37,7 @@ def test_mock_pmclib():
     print("Testing mock PMCLib...")
 
     try:
-        from planar_motor_nodes.mock_pmclib import MockPMCLib
+        from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib
         mock_lib = MockPMCLib()
         print("✓ MockPMCLib imported and instantiated successfully")
         return True

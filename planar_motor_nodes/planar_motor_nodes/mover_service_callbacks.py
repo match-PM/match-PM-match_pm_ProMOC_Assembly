@@ -1,6 +1,6 @@
 import math
 from .mover_pmc_interface import PmcInterface
-from .mover_position_utils import PositionUtils, MotionStatus
+from .mover_utils import MoverUtils, MotionStatus
 from .mover_node_config import NodeConfig
 
 
@@ -13,56 +13,23 @@ class ServiceCallbacks:
     # Constants
     NO_CHANGE = -999999  # Special value indicating "keep current position"
 
-    def __init__(self, logger, pmc_interface: PmcInterface, pos_utils: PositionUtils, config: NodeConfig):
+    def __init__(self, logger, pmc_interface: PmcInterface, mover_utils: MoverUtils, config: NodeConfig):
         """
         Initializes the callbacks with explicit dependencies.
 
         Args:
             logger: The ROS 2 logger instance.
             pmc_interface: The interface to the hardware library.
-            pos_utils: The utility class for position calculations.
+            mover_utils: The utility class for position calculations and general utilities.
             config: The dataclass holding all node parameters.
         """
         self.logger = logger
         self.pmc = pmc_interface
-        self.pos_utils = pos_utils
+        self.mover_utils = mover_utils
         self.config = config
 
-        # Velocity parameters are now managed here, not in the node.
-        self.velocity_params = {}
-        self.standard_velocity_params = {
-            'xy_vel': 1.00, 'z_vel': 0.10, 'rx_vel': 0.10, 'ry_vel': 0.10,
-            'rz_vel': 0.10, 'xy_max_accel': 5.00, 'z_max_accel': 1.00
-        }
         self.logger.info(f"🔧 ServiceCallbacks initialized. Using PMCLib: {self.pmc.status['source']}")
 
-    def _get_speed_params(self, xbot_id: int) -> dict:
-        """Helper to get speed parameters for a specific XBot."""
-        return self.velocity_params.get(xbot_id, self.standard_velocity_params)
-
-    def _handle_service_error(self, error: Exception, response):
-        """Handles service errors consistently."""
-        error_msg = f"Service error: {str(error)}"
-        self.logger.error(f"❌ {error_msg}")
-        response.success = False
-        response.status_message = error_msg
-    
-    def _mm_to_m(self, value_mm: float) -> float:
-        """Convert millimeters to meters."""
-        return value_mm / 1000.0
-    
-    def _m_to_mm(self, value_m: float) -> float:
-        """Convert meters to millimeters."""
-        return value_m * 1000.0
-    
-    def _deg_to_rad(self, value_deg: float) -> float:
-        """Convert degrees to radians."""
-        return math.radians(value_deg)
-    
-    def _rad_to_deg(self, value_rad: float) -> float:
-        """Convert radians to degrees."""
-        return math.degrees(value_rad)
-        
     def _process_motion_input(self, request, current_position: list = None, motion_type: str = "6dof") -> list:
         """
         Universal motion input processor with integrated validation for different motion types.
@@ -111,7 +78,7 @@ class ServiceCallbacks:
         # === PROCESSING ===
         # Get current position if not provided
         if current_position is None and hasattr(request, 'xbot_id'):
-            current_position = self.pos_utils.get_current_position(request.xbot_id)
+            current_position = self.mover_utils.get_current_position(request.xbot_id)
             if current_position is None:
                 current_position = [0.1, 0.1, 0.001, 0.0, 0.0, 0.0]  # Safe default
                 self.logger.warning("Could not get current position, using safe default.")
@@ -124,32 +91,32 @@ class ServiceCallbacks:
         # Process based on motion type
         if motion_type == "linear":
             # Linear motion: only X, Y change, keep Z at levitation height
-            target_pos[0] = self._mm_to_m(request.x_pos)
-            target_pos[1] = self._mm_to_m(request.y_pos)
+            target_pos[0] = self.mover_utils.mm_to_m(request.x_pos)
+            target_pos[1] = self.mover_utils.mm_to_m(request.y_pos)
             target_pos[2] = 0.001  # Standard levitation height
             
         elif motion_type == "6dof":
             # 6DOF motion: process all axes with NO_CHANGE support
-            target_pos[0] = self._mm_to_m(request.x_pos) if request.x_pos != self.NO_CHANGE else current_position[0]
-            target_pos[1] = self._mm_to_m(request.y_pos) if request.y_pos != self.NO_CHANGE else current_position[1]
-            target_pos[2] = self._mm_to_m(request.z_pos) if request.z_pos != self.NO_CHANGE else current_position[2]
-            target_pos[3] = self._deg_to_rad(request.rx_pos) if request.rx_pos != self.NO_CHANGE else current_position[3]
-            target_pos[4] = self._deg_to_rad(request.ry_pos) if request.ry_pos != self.NO_CHANGE else current_position[4]
-            target_pos[5] = self._deg_to_rad(request.rz_pos) if request.rz_pos != self.NO_CHANGE else current_position[5]
+            target_pos[0] = self.mover_utils.mm_to_m(request.x_pos) if request.x_pos != self.NO_CHANGE else current_position[0]
+            target_pos[1] = self.mover_utils.mm_to_m(request.y_pos) if request.y_pos != self.NO_CHANGE else current_position[1]
+            target_pos[2] = self.mover_utils.mm_to_m(request.z_pos) if request.z_pos != self.NO_CHANGE else current_position[2]
+            target_pos[3] = self.mover_utils.deg_to_rad(request.rx_pos) if request.rx_pos != self.NO_CHANGE else current_position[3]
+            target_pos[4] = self.mover_utils.deg_to_rad(request.ry_pos) if request.ry_pos != self.NO_CHANGE else current_position[4]
+            target_pos[5] = self.mover_utils.deg_to_rad(request.rz_pos) if request.rz_pos != self.NO_CHANGE else current_position[5]
             
         elif motion_type == "rotary":
             # Rotary motion: only RZ changes
-            target_pos[5] = self._deg_to_rad(request.target_rz)
+            target_pos[5] = self.mover_utils.deg_to_rad(request.target_rz)
             
         elif motion_type == "arc":
             # Arc motion: X, Y target, keep Z and rotations
-            target_pos[0] = self._mm_to_m(request.x_pos)
-            target_pos[1] = self._mm_to_m(request.y_pos)
+            target_pos[0] = self.mover_utils.mm_to_m(request.x_pos)
+            target_pos[1] = self.mover_utils.mm_to_m(request.y_pos)
             
         elif motion_type == "arc_si":
             # Arc motion SI: X, Y target, keep Z and rotations
-            target_pos[0] = self._mm_to_m(request.target_x)
-            target_pos[1] = self._mm_to_m(request.target_y)
+            target_pos[0] = self.mover_utils.mm_to_m(request.target_x)
+            target_pos[1] = self.mover_utils.mm_to_m(request.target_y)
             
         else:
             raise ValueError(f"Unknown motion type: {motion_type}")
@@ -164,26 +131,26 @@ class ServiceCallbacks:
             # Use universal motion processor
             target_pos = self._process_motion_input(request, motion_type="linear")
 
-            if not self.pos_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
+            if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
                 response.success = False
                 response.status_message = "Position outside valid bounds."
                 return response
 
-            speed_params = self._get_speed_params(request.xbot_id)
+            speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.linear_motion_si(
                 request.xbot_id, target_pos[0], target_pos[1],
                 speed_params['xy_vel'], speed_params['xy_max_accel']
             )
 
             timeout = max((travel_time * 1.5 + 3.0) if travel_time else 5.0, 5.0)
-            motion_result = self.pos_utils.wait_for_motion_completion(
+            motion_result = self.mover_utils.wait_for_motion_completion(
                 request.xbot_id, target_pos, self.config.xy_tolerance, timeout
             )
             
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_six_d_motion(self, request, response):
@@ -192,12 +159,12 @@ class ServiceCallbacks:
             # Use universal motion processor
             target_pos = self._process_motion_input(request, motion_type="6dof")
             
-            if not self.pos_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
+            if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
                  response.success = False
                  response.status_message = "Position outside valid bounds."
                  return response
 
-            speed_params = self._get_speed_params(request.xbot_id)
+            speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.six_d_of_motion_si(
                 request.xbot_id,
                 target_pos[0], target_pos[1], target_pos[2],
@@ -208,14 +175,14 @@ class ServiceCallbacks:
             )
 
             timeout = max(travel_time * 1.5 + 5.0, 8.0) if travel_time else 10.0
-            motion_result = self.pos_utils.wait_for_motion_completion(
+            motion_result = self.mover_utils.wait_for_motion_completion(
                 request.xbot_id, target_pos, self.config.six_d_tolerance, timeout
             )
             
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_activate_xbot(self, request, response):
@@ -229,7 +196,7 @@ class ServiceCallbacks:
                 response.status_message = "XBots successfully deactivated"
             response.success = True
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_levitation_xbot(self, request, response):
@@ -245,7 +212,7 @@ class ServiceCallbacks:
             self.logger.info(f"✅ Levitation {'enabled' if request.levitation else 'disabled'} globally")
             
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_rotary_motion(self, request, response):
@@ -267,7 +234,7 @@ class ServiceCallbacks:
             )
             
             timeout = max((travel_time * 1.5 + 2.0) if travel_time else 4.0, 4.0)
-            motion_result = self.pos_utils.wait_for_motion_completion(
+            motion_result = self.mover_utils.wait_for_motion_completion(
                 request.xbot_id, target_pos, self.config.six_d_tolerance, timeout)
 
             # Create descriptive status message
@@ -280,10 +247,10 @@ class ServiceCallbacks:
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Rotary motion status: {motion_result.value} (mode: {rot_mode_names.get(rot_mode, 'unknown')})"
             
-            self.logger.info(f"🔄 Rotary motion completed: target={self._rad_to_deg(target_pos[5]):.1f}°, mode={rot_mode_names.get(rot_mode)}, travel_time={travel_time:.2f}s")
+            self.logger.info(f"🔄 Rotary motion completed: target={self.mover_utils.rad_to_deg(target_pos[5]):.1f}°, mode={rot_mode_names.get(rot_mode)}, travel_time={travel_time:.2f}s")
             
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
     
 
@@ -296,14 +263,14 @@ class ServiceCallbacks:
             response.success = True
             response.status_message = f"Stop command sent to XBot {request.xbot_id}."
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_set_velocity_acceleration(self, request, response):
         """Handle velocity/acceleration parameter setting."""
         try:
             # You could add validation here to ensure values are positive etc.
-            self.velocity_params[request.xbot_id] = {
+            self.mover_utils.velocity_params[request.xbot_id] = {
                 'xy_vel': request.xy_vel, 'z_vel': request.z_vel,
                 'rx_vel': request.rx_vel, 'ry_vel': request.ry_vel,
                 'rz_vel': request.rz_vel, 'xy_max_accel': request.xy_max_accel,
@@ -313,20 +280,20 @@ class ServiceCallbacks:
             response.success = True
             response.status_message = "Parameters set successfully"
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
 
     def callback_arc_motion_si(self, request, response):
         """Handle arc motion requests with SI units and comprehensive parameters."""
         try:
             # Convert units: mm -> m, degrees -> radians, mm/s -> m/s
-            target_x_m = self._mm_to_m(request.target_x)
-            target_y_m = self._mm_to_m(request.target_y)
-            radius_m = self._mm_to_m(request.radius)
-            max_speed_ms = self._mm_to_m(request.max_speed) / 1000.0  # mm/s -> m/s
-            max_accel_ms2 = self._mm_to_m(request.max_accel) / 1000.0  # mm/s² -> m/s²
-            final_speed_ms = self._mm_to_m(request.final_speed) / 1000.0  # mm/s -> m/s
-            angle_rad = self._deg_to_rad(request.angle_degrees)
+            target_x_m = self.mover_utils.mm_to_m(request.target_x)
+            target_y_m = self.mover_utils.mm_to_m(request.target_y)
+            radius_m = self.mover_utils.mm_to_m(request.radius)
+            max_speed_ms = self.mover_utils.mm_to_m(request.max_speed)  # mm/s -> m/s 
+            max_accel_ms2 = self.mover_utils.mm_to_m(request.max_accel)  # mm/s² -> m/s²
+            final_speed_ms = self.mover_utils.mm_to_m(request.final_speed)  # mm/s -> m/s
+            angle_rad = self.mover_utils.deg_to_rad(request.angle_degrees)
             
             # Call the arc_motion_si function
             travel_time = self.pmc.bot.arc_motion_si(
@@ -350,13 +317,13 @@ class ServiceCallbacks:
             
             # Wait for completion with extended timeout for arc motions
             timeout = max((travel_time * 1.8 + 5.0) if travel_time else 8.0, 8.0)
-            motion_result = self.pos_utils.wait_for_motion_completion(
+            motion_result = self.mover_utils.wait_for_motion_completion(
                 request.xbot_id, target_pos, self.config.xy_tolerance, timeout
             )
             
             # Create descriptive status message
             arc_mode_names = {
-                0: "TARGET_WITH_RADIUS", 1: "CENTER_WITH_ANGLE", 2: "TARGET_WITH_CENTER"
+                0: "TARGETRADIUS", 1: "CENTERANGLE"
             }
             arc_type_names = {0: "MINOR_ARC", 1: "MAJOR_ARC"}
             arc_dir_names = {0: "CLOCKWISE", 1: "COUNTERCLOCKWISE"}
@@ -371,11 +338,11 @@ class ServiceCallbacks:
                 f"pos: {pos_mode_names.get(request.pos_mode, 'unknown')})"
             )
             
-            self.logger.info(f"🌀 Arc motion completed: "
+            self.logger.info(f"Arc motion completed: "
                            f"target=({request.target_x:.1f}, {request.target_y:.1f})mm, "
                            f"radius={request.radius:.1f}mm, "
                            f"travel_time={travel_time:.2f}s")
             
         except Exception as e:
-            self._handle_service_error(e, response)
+            self.mover_utils.handle_service_error(e, response)
         return response
