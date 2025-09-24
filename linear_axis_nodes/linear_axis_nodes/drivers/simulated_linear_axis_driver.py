@@ -19,8 +19,12 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
         self._min_velocity: float = 0.1    # mm/s
         self._acceleration: float = 10.0   # mm/s^2
         self._max_velocity: float = 50.0   # mm/s
+        
+        # Dummy jog parameters
+        self._jog_step_size: float = 1.0
+        self._jog_speed: float = 10.0
 
-    def connect(self, port: str = None) -> bool:
+    def connect(self, port: str = None, x_axis_serial: str = None, z_axis_serial: str = None, debug_mode: bool = False) -> bool:
         """Connect to simulated device - compatible with real driver interface."""
         self.debug_mode = True  # Enable debug for simulation
         
@@ -139,3 +143,29 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
             raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
         
         self.move_relative(-step_size)
+
+    # --- Dummy implementations for abstract methods ---
+
+    def set_jog_parameters(self, step_size: float, speed: float = None) -> tuple:
+        if self.debug_mode:
+            print(f"[DUMMY] Setting jog parameters: step_size={step_size}, speed={speed}")
+        self._jog_step_size = step_size
+        if speed is not None:
+            self._jog_speed = speed
+        return (self._jog_step_size, self._jog_speed)
+
+    def get_jog_parameters(self) -> tuple:
+        if self.debug_mode:
+            print(f"[DUMMY] Getting jog parameters: step_size={self._jog_step_size}, speed={self._jog_speed}")
+        return (self._jog_step_size, self._jog_speed)
+
+    def get_jog_step_size(self) -> float:
+        if self.debug_mode:
+            print(f"[DUMMY] Getting jog step size: {self._jog_step_size}")
+        return self._jog_step_size
+
+    def jog_step(self, direction: int):
+        if self.debug_mode:
+            print(f"[DUMMY] Jogging step with direction: {direction}")
+        step = self._jog_step_size if direction > 0 else -self._jog_step_size
+        self.move_relative(step)

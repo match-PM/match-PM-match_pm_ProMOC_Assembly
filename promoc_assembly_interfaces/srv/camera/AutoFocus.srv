@@ -1,0 +1,23 @@
+# Request: Define the search range for autofocus
+
+# Start position for the scan (in mm)
+float32 start_position
+
+# End position for the scan (in mm)
+float32 end_position
+
+# Step size for each move (in mm)
+float32 step_size
+
+---
+
+# Response: Result of the autofocus operation
+
+# True if autofocus was successful, false otherwise
+bool success
+
+# A message indicating the result
+string message
+
+# Best focus position found (in mm)
+float32 best_focus_position

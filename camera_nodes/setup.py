@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'camera_manager = camera_nodes.camera_manager:main'
+            'camera_node = camera_nodes.camera_node:main',
+            'camera_simulator = camera_nodes.camera_simulator:main'
         ],
     },
 )

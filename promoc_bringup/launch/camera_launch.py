@@ -1,16 +1,26 @@
-#!/usr/bin/env python3
-
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
+    """Launch file to run the camera controller with the real camera driver."""
+
+    config_file = os.path.join(
+        get_package_share_directory('promoc_bringup'),
+        'config',
+        'camera_node_params.yaml'
+    )
+
     return LaunchDescription([
-        # Your camera manager (subscribes to camera_aravis2 topics)
+        # Your camera controller, loading parameters from YAML
         Node(
             package='camera_nodes',
-            executable='camera_manager',
-            name='camera_manager',
+            executable='camera_node',
+            name='camera_node',
             output='screen',
+            # Load parameters from YAML and override 'use_simulator' to be False
+            parameters=[config_file, {'use_simulator': False}],
         ),
         
         # Assembly Camera (via camera_aravis2) - EXTERNAL PACKAGE
@@ -37,19 +47,4 @@ def generate_launch_description():
                 ('camera_info', 'assembly_camera/camera_info'),
             ]
         ),
-        
-        # Inspection Camera (if you have a second camera)
-        # Node(
-        #     package='camera_aravis2',
-        #     executable='camera_driver_gv',
-        #     name='inspection_camera',
-        #     parameters=[{
-        #         'guid': 'YOUR_INSPECTION_CAMERA_SERIAL',
-        #         'frame_id': 'inspection_camera_frame',
-        #     }],
-        #     remappings=[
-        #         ('image', 'inspection_camera/image_raw'),
-        #         ('camera_info', 'inspection_camera/camera_info'),
-        #     ]
-        # ),
     ])

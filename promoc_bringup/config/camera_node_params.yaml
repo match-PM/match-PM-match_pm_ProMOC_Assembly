@@ -1,0 +1,8 @@
+camera_node:
+  ros__parameters:
+    # In simulation mode, the node will not try to connect to the real camera driver
+    use_simulator: True
+
+    # Default path for the MTF results CSV file.
+    # This can be an absolute path.
+    mtf_csv_path: "/home/soc/Documents/Development/Ros2/promoc_assembly/mtf_results.csv"

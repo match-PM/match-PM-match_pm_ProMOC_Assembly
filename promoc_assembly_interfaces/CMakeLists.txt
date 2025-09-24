@@ -45,19 +45,25 @@ set(INTERFACE_FILES
   "srv/linear_axis/GetVelocityParameters.srv"
   "srv/linear_axis/EmergencyStop.srv"
   "srv/linear_axis/JogAxis.srv"
+  "srv/linear_axis/Stop.srv"
+  "srv/linear_axis/SetJogParameters.srv"
+  "srv/linear_axis/GetJogParameters.srv"
+  "srv/camera/SetExposure.srv"
+  "srv/camera/AutoFocus.srv"
 )
 
-if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
-  rosidl_generate_interfaces(${PROJECT_NAME}
-    ${INTERFACE_FILES}
-    DEPENDENCIES ${ADDITIONAL_DEPENDENCIES}
-  )
-else()
-  rosidl_generate_interfaces(${PROJECT_NAME}
-    ${INTERFACE_FILES}
-  )
-endif()
+# CRITICAL: Generate the interfaces (this was missing!)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${INTERFACE_FILES}
+  DEPENDENCIES ${ADDITIONAL_DEPENDENCIES}
+)
 
+# Export dependencies for downstream packages
 ament_export_dependencies(rosidl_default_runtime)
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
 ament_package()

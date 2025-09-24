@@ -55,6 +55,7 @@ isort>=5.0.0                # Import sorting
 # --- Optional Scientific Computing ---
 scipy>=1.7.0                # Scientific computing (for advanced motion planning)
 matplotlib>=3.3.0           # Plotting (for data visualization and debugging)
+pandas>=1.0.0               # Data manipulation and analysis
 
 # ================================================================
 # PACKAGE-SPECIFIC NOTES
