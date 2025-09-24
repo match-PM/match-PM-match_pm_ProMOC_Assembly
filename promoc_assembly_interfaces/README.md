@@ -37,7 +37,7 @@ promoc_assembly_interfaces/
         ├── LinearMotionSi.srv     # Linear motion in SI units
         ├── RotaryMotion.srv       # Rotational motion
         ├── SetVelocityAcceleration.srv # Set motion dynamics
-        ├── ArcMotionTargetRadius.srv   # Arc motion control
+        ├── ArcMotionSi.srv        # Arc motion control in SI units
         └── StopMotion.srv         # Emergency stop
 ```
 
@@ -59,8 +59,8 @@ Status information for linear translation stages.
 ```
 float64 axis_position   # Current position in mm
 string axis_type        # 'x' or 'z'
-bool is_moving          # Whether the axis is currently in motion
 string serial_number    # Device serial number
+string operation_status # Current operation: idle, homing, moving, jogging, error, emergency_stop
 ```
 
 **Usage Example:**

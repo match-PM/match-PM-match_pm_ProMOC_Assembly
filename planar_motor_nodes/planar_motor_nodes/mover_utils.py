@@ -4,8 +4,8 @@ from typing import List, Optional
 from enum import Enum
 
 # Explizite Importe für eine saubere Architektur
-from .pmc_interface import PmcInterface
-from .node_config import NodeConfig
+from .mover_pmc_interface import PmcInterface
+from .mover_node_config import NodeConfig
 # Wir importieren die Enums sicherheitshalber aus dem Mock, da sie dort garantiert vorhanden sind.
 from .drivers.mock_pmclib import XbotState
 
@@ -20,8 +20,8 @@ class MotionStatus(Enum):
     TIMEOUT = "timeout"
 
 
-class PositionUtils:
-    """Utility class for position management, decoupled from the ROS node."""
+class MoverUtils:
+    """Utility class for mover functionality including position management and general utilities, decoupled from the ROS node."""
 
     def __init__(self, logger, pmc_interface: PmcInterface, config: NodeConfig):
         """Initializes the class with explicit dependencies."""
@@ -30,6 +30,40 @@ class PositionUtils:
         self.config = config
         self.is_mock = self.pmc.status['is_mock']
         self._logged_warnings = set()
+        
+        # Velocity parameters management
+        self.velocity_params = {}
+        self.standard_velocity_params = {
+            'xy_vel': 1.00, 'z_vel': 0.10, 'rx_vel': 0.10, 'ry_vel': 0.10,
+            'rz_vel': 0.10, 'xy_max_accel': 5.00, 'z_max_accel': 1.00
+        }
+
+    def get_speed_params(self, xbot_id: int) -> dict:
+        """Helper to get speed parameters for a specific XBot."""
+        return self.velocity_params.get(xbot_id, self.standard_velocity_params)
+
+    def handle_service_error(self, error: Exception, response):
+        """Handles service errors consistently."""
+        error_msg = f"Service error: {str(error)}"
+        self.logger.error(f"❌ {error_msg}")
+        response.success = False
+        response.status_message = error_msg
+    
+    def mm_to_m(self, value_mm: float) -> float:
+        """Convert millimeters to meters."""
+        return value_mm / 1000.0
+    
+    def m_to_mm(self, value_m: float) -> float:
+        """Convert meters to millimeters."""
+        return value_m * 1000.0
+    
+    def deg_to_rad(self, value_deg: float) -> float:
+        """Convert degrees to radians."""
+        return math.radians(value_deg)
+    
+    def rad_to_deg(self, value_rad: float) -> float:
+        """Convert radians to degrees."""
+        return math.degrees(value_rad)
 
     def get_current_position(self, xbot_id: int = 0) -> Optional[List[float]]:
         """Gets the current XBot position via the PmcInterface."""
@@ -76,8 +110,8 @@ class PositionUtils:
             except Exception as e:
                 if not self.is_mock:
                     self.logger.warning(f"⚠️ Could not get status for XBot {xbot_id}: {e}")
-                xbot_state_enum = XbotState.XBOT_IDLE
-                xbot_state_str = "IDLE"
+                xbot_state_enum = XbotState.XBOT_UNKNOWN
+                xbot_state_str = "UNKNOWN"
 
             return {
                 'position': current_pos,

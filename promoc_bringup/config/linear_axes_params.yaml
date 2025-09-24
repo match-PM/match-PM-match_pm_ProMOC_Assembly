@@ -8,10 +8,7 @@ lts300_z_axis:
     min_position: 0.0 
     max_single_move: 300.0
     homing_timeout: 180.0  # 3 minutes for long homing operations
-    jog_step_size: 1.0  # Default jog step size in mm
-    jog_speed: 10.0  # Default jog speed in mm/s
-    max_velocity: 5.0  # Default max velocity in mm/s
-    max_acceleration: 1.0  # Default max acceleration in mm/s^2
+    velocity_unit_factor: 0.018  # mm/s per device velocity unit (experimentally determined)
 
 # LTS300 X-Axis Parameters
 lts300_x_axis:
@@ -24,7 +21,4 @@ lts300_x_axis:
     min_position: 0.0
     max_single_move: 300.0
     homing_timeout: 180.0  # 3 minutes for long homing operations
-    jog_step_size: 1.0  # Default jog step size in mm
-    jog_speed: 10.0  # Default jog speed in mm/s
-    max_velocity: 10.0  # Default max velocity in mm/s
-    max_acceleration: 2.0  # Default max acceleration in mm/s^2
+    velocity_unit_factor: 0.018  # mm/s per device velocity unit (experimentally determined)

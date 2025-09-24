@@ -1,4 +1,10 @@
 
+# Get the current operation status of the linear axis
+# Returns detailed status information about ongoing operations
+
+# Request (no parameters needed)
 ---
-int32 status_code
-string status_message
+# Response
+bool success               # Whether the status retrieval was successful
+string operation_status    # Current operation status (idle, homing, moving, jogging, error, emergency_stop)
+string status_message      # Detailed status message

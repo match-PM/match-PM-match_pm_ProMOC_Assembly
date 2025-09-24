@@ -4,14 +4,14 @@ import threading
 import time
 from enum import Enum
 
-
 class OperationStatus(Enum):
     """Status enumeration for long-running operations."""
     IDLE = "idle"
     HOMING = "homing"
     MOVING = "moving"
+    JOGGING = "jogging"
     ERROR = "error"
-
+    EMERGENCY_STOP = "emergency_stop"
 
 class ServiceCallbacks:
     """
@@ -32,13 +32,12 @@ class ServiceCallbacks:
         self.interface = interface
         self.config = config
         self.driver = self.interface.driver  # Direct access to the driver instance
-
+        
         # Status tracking for long operations
         self.operation_status = OperationStatus.IDLE
         self.operation_lock = threading.Lock()
         self.last_operation_message = ""
 
-    # --- Unit Conversion Methods ---
 
     def _device_units_to_mm_per_s(self, device_units: float) -> float:
         """Convert device velocity units to mm/s."""
@@ -48,12 +47,11 @@ class ServiceCallbacks:
         """Convert mm/s to device velocity units."""
         return mm_per_s / self.config.velocity_conversion_factor
 
-    # --- Safety and Validation Methods ---
 
     def _collision_check(self, other_axis_position: float) -> bool:
         """
         Checks for a potential collision using the current position of the other axis.
-
+        
         Args:
             other_axis_position (float): The current position of the other axis, passed in by the node.
         """
@@ -65,10 +63,10 @@ class ServiceCallbacks:
     def _validate_position(self, position: float) -> tuple[bool, str]:
         """
         Validates if a position is within the configured safety limits.
-
+        
         Args:
             position (float): The target position to validate in mm.
-
+            
         Returns:
             tuple[bool, str]: (is_valid, error_message)
         """
@@ -81,10 +79,10 @@ class ServiceCallbacks:
     def _validate_distance(self, distance: float) -> tuple[bool, str]:
         """
         Validates if a relative movement distance is within the configured safety limits.
-
+        
         Args:
             distance (float): The movement distance to validate in mm.
-
+            
         Returns:
             tuple[bool, str]: (is_valid, error_message)
         """
@@ -96,11 +94,11 @@ class ServiceCallbacks:
     def _validate_target_position(self, current_pos: float, distance: float) -> tuple[bool, str]:
         """
         Validates if a relative movement would result in a valid target position.
-
+        
         Args:
             current_pos (float): Current position in mm.
             distance (float): Movement distance in mm.
-
+            
         Returns:
             tuple[bool, str]: (is_valid, error_message)
         """
@@ -110,154 +108,103 @@ class ServiceCallbacks:
     def _async_move_operation(self, move_type: str, position: float):
         """
         Performs movement operation in a separate thread.
-        Enhanced with stop-awareness.
-
+        
         Args:
             move_type: "absolute" or "relative"
             position: Target position or movement distance
         """
         try:
             with self.operation_lock:
-                # Check if we were stopped before starting
-                if self.operation_status == OperationStatus.IDLE:
-                    self.logger.info(
-                        f"🛑 Movement cancelled before start (stopped)")
-                    return
-
                 self.operation_status = OperationStatus.MOVING
                 self.last_operation_message = f"Moving {move_type} to {position:.2f}mm..."
-
-            self.logger.info(
-                f"🎯 Starting {move_type} movement to {position:.2f}mm...")
-
+            
+            self.logger.info(f"🎯 Starting {move_type} movement to {position:.2f}mm...")
+            
             if move_type == "absolute":
                 self.driver.move_absolute(position)
             else:  # relative
                 self.driver.move_relative(position)
-
-            self.logger.info(
-                f"🎯 Hardware {move_type} movement command completed")
-
+            
+            self.logger.info(f"🎯 Hardware {move_type} movement command completed")
+            
             # Get final position for confirmation
             try:
                 final_pos = self.driver.get_position()
-                self.logger.info(
-                    f"📍 Final position after {move_type} movement: {final_pos:.2f}mm")
+                self.logger.info(f"📍 Final position after {move_type} movement: {final_pos:.2f}mm")
             except Exception as pos_e:
-                self.logger.warn(
-                    f"⚠️ Could not read position after movement: {pos_e}")
+                self.logger.warn(f"⚠️ Could not read position after movement: {pos_e}")
                 final_pos = "unknown"
-
-            # Check if we were stopped during movement
+            
             with self.operation_lock:
-                if self.operation_status == OperationStatus.MOVING:  # Only update if still moving
-                    self.operation_status = OperationStatus.IDLE
-                    self.last_operation_message = f"✅ Movement completed - final position: {final_pos}mm"
-                else:
-                    self.logger.info(
-                        f"🛑 Movement was stopped during execution")
-                    return
-
-            self.logger.info(
-                f"✅ {move_type.capitalize()} movement completed successfully")
-
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = f"✅ Movement completed - final position: {final_pos}mm"
+            
+            self.logger.info(f"✅ {move_type.capitalize()} movement completed successfully")
+            
         except Exception as e:
-            error_msg = str(e) if str(e).strip(
-            ) else f"Unknown error during {move_type} movement"
-
-            # Check if this was a stop-related exception
-            if "stop" in error_msg.lower() or "abort" in error_msg.lower():
-                self.logger.info(f"🛑 Movement stopped: {error_msg}")
-                with self.operation_lock:
-                    if self.operation_status == OperationStatus.MOVING:
-                        self.operation_status = OperationStatus.IDLE
-                        self.last_operation_message = "🛑 Movement stopped"
-            else:
-                with self.operation_lock:
-                    self.operation_status = OperationStatus.ERROR
-                    self.last_operation_message = f"❌ Movement failed: {error_msg}"
-
-                self.logger.error(
-                    f"❌ {move_type.capitalize()} movement failed: {error_msg}")
-
-                # Additional debug information
-                import traceback
-                self.logger.error(
-                    f"❌ Movement traceback: {traceback.format_exc()}")
+            error_msg = str(e) if str(e).strip() else f"Unknown error during {move_type} movement"
+            with self.operation_lock:
+                self.operation_status = OperationStatus.ERROR
+                self.last_operation_message = f"❌ Movement failed: {error_msg}"
+            
+            self.logger.error(f"❌ {move_type.capitalize()} movement failed: {error_msg}")
+            
+            # Additional debug information
+            import traceback
+            self.logger.error(f"❌ Movement traceback: {traceback.format_exc()}")
 
     def _async_home_operation(self):
         """
         Performs homing operation in a separate thread.
-        Enhanced with stop-awareness.
+        Updates operation status and handles errors.
         """
         try:
             with self.operation_lock:
-                # Check if we were stopped before starting
-                if self.operation_status == OperationStatus.IDLE:
-                    self.logger.info(
-                        f"🛑 Homing cancelled before start (stopped)")
-                    return
-
                 self.operation_status = OperationStatus.HOMING
                 self.last_operation_message = "Homing in progress..."
-
+            
             self.logger.info("🏠 Starting homing operation...")
-
-            # Call the actual homing operation
+            
+            # Call the actual homing operation (now with configurable timeout)
             self.driver.home(timeout=self.config.homing_timeout)
             self.logger.info("🏠 Hardware homing command completed")
-
+            
             # Get final position for confirmation
             try:
                 final_pos = self.driver.get_position()
                 self.logger.info(f"📍 Post-homing position: {final_pos:.2f}mm")
             except Exception as pos_e:
-                self.logger.warn(
-                    f"⚠️ Could not read position after homing: {pos_e}")
+                self.logger.warn(f"⚠️ Could not read position after homing: {pos_e}")
                 final_pos = "unknown"
-
-            # Check if we were stopped during homing
+            
             with self.operation_lock:
-                if self.operation_status == OperationStatus.HOMING:  # Only update if still homing
-                    self.operation_status = OperationStatus.IDLE
-                    self.last_operation_message = f"✅ Homing completed successfully (position: {final_pos}mm)"
-                else:
-                    self.logger.info(f"🛑 Homing was stopped during execution")
-                    return
-
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = f"✅ Homing completed successfully (position: {final_pos}mm)"
+            
             self.logger.info("✅ Homing operation completed successfully")
-
+            
         except Exception as e:
-            # Handle specific timeout errors and stop conditions
+            # Handle specific timeout errors
             if "ThorlabsTimeoutError" in str(type(e)) or "timeout" in str(e).lower():
                 error_msg = "Homing timeout - operation may still be in progress on hardware"
                 self.logger.warn(f"⏰ {error_msg}")
-            elif "stop" in str(e).lower() or "abort" in str(e).lower():
-                self.logger.info(f"🛑 Homing stopped: {str(e)}")
-                with self.operation_lock:
-                    if self.operation_status == OperationStatus.HOMING:
-                        self.operation_status = OperationStatus.IDLE
-                        self.last_operation_message = "🛑 Homing stopped"
-                return
             else:
-                error_msg = str(e) if str(e).strip(
-                ) else "Unknown error during homing"
+                error_msg = str(e) if str(e).strip() else "Unknown error during homing"
                 self.logger.error(f"❌ Homing operation failed: {error_msg}")
-
+            
             with self.operation_lock:
                 self.operation_status = OperationStatus.ERROR
                 self.last_operation_message = f"❌ Homing failed: {error_msg}"
-
+            
             # Additional debug information for non-timeout errors
-            if "timeout" not in str(e).lower():
+            if "timeout" not in error_msg.lower():
                 import traceback
-                self.logger.error(
-                    f"❌ Homing traceback: {traceback.format_exc()}")
+                self.logger.error(f"❌ Homing traceback: {traceback.format_exc()}")
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
         """
         Returns the current operation status and message.
-
+        
         Returns:
             tuple[OperationStatus, str]: (status, message)
         """
@@ -277,8 +224,7 @@ class ServiceCallbacks:
                 return response
 
         # Safety validation for position limits
-        is_valid_pos, pos_error = self._validate_position(
-            request.axis_position)
+        is_valid_pos, pos_error = self._validate_position(request.axis_position)
         if not is_valid_pos:
             response.success = False
             response.status_message = f"🚫 Safety violation: {pos_error}"
@@ -294,15 +240,14 @@ class ServiceCallbacks:
 
         try:
             # Start movement in background thread
-            self.logger.info(
-                f'Starting asynchronous absolute movement to: {request.axis_position} mm')
+            self.logger.info(f'Starting asynchronous absolute movement to: {request.axis_position} mm')
             move_thread = threading.Thread(
-                target=self._async_move_operation,
-                args=("absolute", request.axis_position),
+                target=self._async_move_operation, 
+                args=("absolute", request.axis_position), 
                 daemon=True
             )
             move_thread.start()
-
+            
             response.success = True
             response.status_message = f"🎯 Absolute movement to {request.axis_position:.2f}mm started - check status with get_operation_status"
         except Exception as e:
@@ -322,8 +267,7 @@ class ServiceCallbacks:
                 return response
 
         # Safety validation for movement distance
-        is_valid_dist, dist_error = self._validate_distance(
-            request.axis_position)
+        is_valid_dist, dist_error = self._validate_distance(request.axis_position)
         if not is_valid_dist:
             response.success = False
             response.status_message = f"🚫 Safety violation: {dist_error}"
@@ -333,8 +277,7 @@ class ServiceCallbacks:
         # Safety validation for target position
         try:
             current_pos = self.driver.get_position()
-            is_valid_target, target_error = self._validate_target_position(
-                current_pos, request.axis_position)
+            is_valid_target, target_error = self._validate_target_position(current_pos, request.axis_position)
             if not is_valid_target:
                 response.success = False
                 response.status_message = f"🚫 Safety violation: {target_error}"
@@ -352,18 +295,17 @@ class ServiceCallbacks:
             response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
             self.logger.warn(response.status_message)
             return response
-
+            
         try:
             # Start movement in background thread
-            self.logger.info(
-                f'Starting asynchronous relative movement by: {request.axis_position} mm')
+            self.logger.info(f'Starting asynchronous relative movement by: {request.axis_position} mm')
             move_thread = threading.Thread(
-                target=self._async_move_operation,
-                args=("relative", request.axis_position),
+                target=self._async_move_operation, 
+                args=("relative", request.axis_position), 
                 daemon=True
             )
             move_thread.start()
-
+            
             response.success = True
             response.status_message = f"🎯 Relative movement by {request.axis_position:.2f}mm started - check status with get_operation_status"
         except Exception as e:
@@ -373,27 +315,35 @@ class ServiceCallbacks:
         return response
 
     def callback_home(self, request, response):
-        """Handle homing requests asynchronously."""
-        # Check if another operation is already running
+        """Handle homing requests - automatically resets from emergency/error states."""
+        # Check current status and allow homing from recoverable states
         with self.operation_lock:
-            if self.operation_status != OperationStatus.IDLE:
+            current_status = self.operation_status
+            
+            # Allow homing from IDLE, EMERGENCY_STOP, and ERROR states
+            if current_status not in [OperationStatus.IDLE, OperationStatus.EMERGENCY_STOP, OperationStatus.ERROR]:
                 response.success = False
-                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                response.status_message = f"⚠️ Cannot home during {current_status.value}. Stop operation first."
                 self.logger.warn(response.status_message)
                 return response
-
+            
+            # If coming from emergency/error state, log the reset
+            if current_status in [OperationStatus.EMERGENCY_STOP, OperationStatus.ERROR]:
+                self.logger.info(f"🔄 Resetting from {current_status.value} state and homing...")
+                response.status_message = f"🔄 Resetting from {current_status.value} and homing started - check status with get_position service"
+            else:
+                response.status_message = "🏠 Homing started - check status with get_position service"
+        
         try:
-            # Start homing in background thread
+            # Start homing in background thread (this will handle the reset automatically)
             self.logger.info('Starting asynchronous homing operation...')
-            homing_thread = threading.Thread(
-                target=self._async_home_operation, daemon=True)
+            homing_thread = threading.Thread(target=self._async_home_operation, daemon=True)
             homing_thread.start()
-
+            
             # Return immediately with status
             response.success = True
-            response.status_message = "🏠 Homing started - check status with get_position service"
             self.logger.info("✅ Homing operation initiated successfully")
-
+            
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error starting homing: {str(e)}"
@@ -405,34 +355,48 @@ class ServiceCallbacks:
         try:
             response.axis_position = self.driver.get_position()
             response.success = True
-
+            
             # Include operation status in the message
             status, status_msg = self.get_operation_status()
             if status != OperationStatus.IDLE:
                 response.status_message = f"📍 Position: {response.axis_position:.2f}mm | Status: {status_msg}"
             else:
                 response.status_message = "✅ Position retrieved"
-
+                
         except Exception as e:
             response.axis_position = -1.0
             response.success = False
             response.status_message = f"❌ Error getting position: {str(e)}"
             self.logger.error(response.status_message)
         return response
-
+        
     def callback_set_velocity_parameters(self, request, response):
         """Handle velocity parameter setting requests."""
         try:
-            min_vel = None if request.min_velocity < 0 else request.min_velocity
-            accel = None if request.acceleration < 0 else request.acceleration
-            max_vel = None if request.max_velocity < 0 else request.max_velocity
-
-            result = self.driver.set_velocity_parameters(
-                min_vel, accel, max_vel)
-
+            # Convert from mm/s to device units
+            min_vel = None if request.min_velocity < 0 else self._mm_per_s_to_device_units(request.min_velocity)
+            accel = None if request.acceleration < 0 else self._mm_per_s_to_device_units(request.acceleration)
+            max_vel = None if request.max_velocity < 0 else self._mm_per_s_to_device_units(request.max_velocity)
+            
+            self.logger.info(f"Setting velocity parameters: min={min_vel}, accel={accel}, max={max_vel} (device units)")
+            self.logger.info(f"Converted from mm/s: min={request.min_velocity}, accel={request.acceleration}, max={request.max_velocity}")
+            
+            result = self.driver.set_velocity_parameters(min_vel, accel, max_vel)
+            
             response.success = True
             response.status_message = "✅ Velocity parameters updated"
-            response.actual_min_velocity, response.actual_acceleration, response.actual_max_velocity = result
+            
+            # Convert back to mm/s for response
+            if result:
+                response.actual_min_velocity = self._device_units_to_mm_per_s(result[0])
+                response.actual_acceleration = self._device_units_to_mm_per_s(result[1])
+                response.actual_max_velocity = self._device_units_to_mm_per_s(result[2])
+                
+                self.logger.info(f"Actual velocity parameters set: "
+                               f"min={response.actual_min_velocity:.2f}mm/s, "
+                               f"accel={response.actual_acceleration:.2f}mm/s², "
+                               f"max={response.actual_max_velocity:.2f}mm/s")
+            
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error setting velocity: {str(e)}"
@@ -445,10 +409,23 @@ class ServiceCallbacks:
             params = self.driver.get_velocity_parameters()
             response.success = True
             response.status_message = "✅ Velocity parameters retrieved"
-            response.min_velocity, response.acceleration, response.max_velocity = params
-
+            
             if params is not None:
-                response.actual_min_velocity, response.actual_acceleration, response.actual_max_velocity = params
+                # Convert from device units to mm/s
+                response.min_velocity = self._device_units_to_mm_per_s(params[0])
+                response.acceleration = self._device_units_to_mm_per_s(params[1])
+                response.max_velocity = self._device_units_to_mm_per_s(params[2])
+                
+                # Also set actual values (same as regular values for get)
+                response.actual_min_velocity = response.min_velocity
+                response.actual_acceleration = response.acceleration
+                response.actual_max_velocity = response.max_velocity
+                
+                self.logger.info(f"Retrieved velocity parameters: "
+                               f"min={response.min_velocity:.2f}mm/s, "
+                               f"accel={response.acceleration:.2f}mm/s², "
+                               f"max={response.max_velocity:.2f}mm/s")
+                               
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error getting velocity: {str(e)}"
@@ -458,10 +435,9 @@ class ServiceCallbacks:
     def callback_shutdown(self, request, response):
         """Handle shutdown requests by homing and disconnecting."""
         try:
-            self.logger.info(
-                "Shutdown requested. Homing device before disconnect...")
+            self.logger.info("Shutdown requested. Homing device before disconnect...")
             self.driver.home()
-            self.interface.disconnect()  # Use the interface to manage connection state
+            self.interface.disconnect() # Use the interface to manage connection state
             response.success = True
             response.status_message = "✅ Device homed and disconnected successfully."
         except Exception as e:
@@ -474,159 +450,111 @@ class ServiceCallbacks:
         """Handle operation status requests."""
         try:
             status, status_msg = self.get_operation_status()
-
+            
             response.success = True
             response.operation_status = status.value
             response.status_message = status_msg
-            response.is_busy = (status != OperationStatus.IDLE)
-
+            
         except Exception as e:
             response.success = False
             response.operation_status = "error"
             response.status_message = f"❌ Error getting operation status: {str(e)}"
-            response.is_busy = False
             self.logger.error(response.status_message)
         return response
 
-    def callback_stop(self, request, response):
-        """Handle stop request - can interrupt ongoing operations."""
+    def callback_emergency_stop(self, request, response):
+        """Handle emergency stop requests - immediately stop all movement and interrupt operations."""
         try:
-            # Call the Hardware to stop motion immediately
+            # Check if the axis was moving before stopping
+            was_moving = False
+            try:
+                was_moving = self.driver.is_moving()
+            except:
+                pass  # If we can't check, assume not moving
+            
+            # Force stop any hardware movement immediately
             self.driver.stop()
-            # Update operation status
+            self.logger.warn("🛑 EMERGENCY STOP: Hardware movement halted immediately")
+            
+            # Update operation status to emergency stop
             with self.operation_lock:
-                self.operation_status = OperationStatus.IDLE
-                self.last_operation_message = "⏹️ Motion stopped by user"
+                previous_status = self.operation_status
+                self.operation_status = OperationStatus.EMERGENCY_STOP
+                self.last_operation_message = f"🛑 Emergency stop triggered (was: {previous_status.value})"
+            
             response.success = True
-            response.status_message = "⏹️ Motion stopped successfully"
+            response.was_moving = was_moving
+            response.status_message = f"🛑 Emergency stop executed - movement halted (was_moving: {was_moving})"
+            
+            self.logger.warn(f"🛑 Emergency stop completed. Previous state: {previous_status.value}")
+            
         except Exception as e:
             response.success = False
-            response.status_message = f"❌ Error stopping motion: {str(e)}"
+            response.was_moving = False
+            response.status_message = f"❌ Emergency stop failed: {str(e)}"
             self.logger.error(response.status_message)
+        
+        return response
 
-            # Even if stop fails, reset status to prevent deadlock
+    def callback_jog_axis(self, request, response):
+        """Handle axis jogging requests with simplified step-based movement."""
+        try:
+            # Safety check: only allow jogging if not in critical operations
+            with self.operation_lock:
+                if self.operation_status in [OperationStatus.HOMING, OperationStatus.EMERGENCY_STOP]:
+                    response.success = False
+                    response.final_position = -1.0
+                    response.status_message = f"🚫 Jogging not allowed during {self.operation_status.value}"
+                    self.logger.warn(response.status_message)
+                    return response
+                
+                if self.operation_status != OperationStatus.IDLE:
+                    response.success = False
+                    response.final_position = -1.0
+                    response.status_message = f"⚠️ Cannot jog: operation already in progress: {self.operation_status.value}"
+                    return response
+                
+                self.operation_status = OperationStatus.JOGGING
+                direction_str = "positive" if request.step_size >= 0 else "negative"
+                self.last_operation_message = f"Jogging {direction_str} by {abs(request.step_size):.2f}mm..."
+            
+            try:
+                step_size = request.step_size
+                self.logger.info(f"🕹️ Jog step: {step_size:+.2f}mm ({'positive' if step_size >= 0 else 'negative'} direction)")
+                
+                # Use the simplified driver method
+                if step_size >= 0:
+                    self.driver.jog_positive(abs(step_size))
+                else:
+                    self.driver.jog_negative(abs(step_size))
+                
+                # Get final position
+                final_pos = self.driver.get_position()
+                
+                with self.operation_lock:
+                    self.operation_status = OperationStatus.IDLE
+                    self.last_operation_message = f"✅ Jog completed - position: {final_pos:.2f}mm"
+                
+                response.success = True
+                response.final_position = final_pos
+                response.status_message = f"✅ Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm"
+                
+            except Exception as jog_e:
+                with self.operation_lock:
+                    self.operation_status = OperationStatus.ERROR
+                    self.last_operation_message = f"❌ Jog failed: {str(jog_e)}"
+                raise jog_e
+        
+        except Exception as e:
+            response.success = False
+            response.final_position = -1.0
+            response.status_message = f"❌ Jog operation failed: {str(e)}"
+            self.logger.error(response.status_message)
+            
+            # Reset status on error
             with self.operation_lock:
                 self.operation_status = OperationStatus.ERROR
-                self.last_operation_message = f"❌ Stop failed: {str(e)}"
+                self.last_operation_message = f"❌ Jog error: {str(e)}"
+        
         return response
 
-    def callback_jog_step(self, request, response, other_axis_position: float):
-        """Handle single jog step requests."""
-        # Check if another operation is already running
-        with self.operation_lock:
-            if self.operation_status != OperationStatus.IDLE:
-                response.success = False
-                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
-                self.logger.warn(response.status_message)
-                return response
-
-        try:
-            # Normalize direction to ±1
-            direction = 1 if request.direction >= 0 else -1
-
-            # Get current position for validation
-            current_pos = self.driver.get_position()
-
-            # Calculate target position based on jog step
-            jog_step = self.driver.get_jog_step_size() * direction  # Get configured step size
-            target_pos = current_pos + jog_step
-
-            # Safety validation for target position
-            is_valid_target, target_error = self._validate_position(target_pos)
-            if not is_valid_target:
-                response.success = False
-                response.status_message = f"🚫 Safety violation: {target_error}"
-                self.logger.warn(response.status_message)
-                return response
-
-            # Collision check
-            if self._collision_check(other_axis_position):
-                response.success = False
-                response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
-                self.logger.warn(response.status_message)
-                return response
-
-            # Execute jog step
-            self.logger.info(
-                f"🎮 Executing jog step: direction={direction}, step={abs(jog_step):.3f}mm")
-
-            # Option 1: If driver has dedicated jog_step method
-            if hasattr(self.driver, 'jog_step'):
-                self.driver.jog_step(direction)
-            # Option 2: Use relative move with jog step size
-            else:
-                self.driver.move_relative(jog_step)
-
-            # Get new position
-            new_pos = self.driver.get_position()
-
-            response.success = True
-            response.status_message = f"🎮 Jog step completed: {current_pos:.3f}mm → {new_pos:.3f}mm"
-            response.final_position = new_pos
-            self.logger.info(response.status_message)
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f"❌ Error during jog step: {str(e)}"
-            response.final_position = -1.0
-            self.logger.error(response.status_message)
-
-        return response
-
-    def callback_get_jog_parameters(self, request, response):
-        """Handle jog parameter query requests."""
-        try:
-            step_size, speed = self.driver.get_jog_parameters()
-
-            response.success = True
-            response.status_message = "✅ Jog parameters retrieved"
-            response.step_size = step_size
-            response.speed = speed if speed is not None else -1.0
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f"❌ Error getting jog parameters: {str(e)}"
-            response.step_size = -1.0
-            response.speed = -1.0
-            self.logger.error(response.status_message)
-        return response
-
-    def callback_set_jog_parameters(self, request, response):
-        """Handle jog parameter setting requests."""
-        try:
-            # Validate jog step size
-            step_size = abs(request.step_size)  # Ensure positive
-            if hasattr(self.config, 'max_jog_step') and step_size > self.config.max_jog_step:
-                response.success = False
-                response.status_message = f"🚫 Jog step {step_size:.3f}mm exceeds maximum {self.config.max_jog_step:.3f}mm"
-                self.logger.warn(response.status_message)
-                return response
-
-            # Validate jog speed
-            jog_speed = request.speed if request.speed > 0 else None
-            if jog_speed and hasattr(self.config, 'max_jog_speed') and jog_speed > self.config.max_jog_speed:
-                response.success = False
-                response.status_message = f"🚫 Jog speed {jog_speed:.2f}mm/s exceeds maximum {self.config.max_jog_speed:.2f}mm/s"
-                self.logger.warn(response.status_message)
-                return response
-
-            # Set jog parameters in driver
-            result = self.driver.set_jog_parameters(step_size, jog_speed)
-
-            response.success = True
-            response.status_message = f"✅ Jog parameters set: step={step_size:.3f}mm"
-            if jog_speed:
-                response.status_message += f", speed={jog_speed:.2f}mm/s"
-
-            # Return actual values if driver provides them
-            if isinstance(result, tuple):
-                response.actual_step_size, response.actual_speed = result
-            else:
-                response.actual_step_size = step_size
-                response.actual_speed = jog_speed or -1.0
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f"❌ Error setting jog parameters: {str(e)}"
-            self.logger.error(response.status_message)
-        return response

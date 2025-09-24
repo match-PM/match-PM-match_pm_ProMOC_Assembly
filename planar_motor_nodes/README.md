@@ -152,10 +152,8 @@ ros2 service list | grep mover_node
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `use_mock` | bool | `false` | Use simulation instead of hardware |
-| `debug_mode` | bool | `false` | Enable debug logging |
 | `xbot_id` | int | `0` | Default XBot ID to control |
 | `publish_rate` | float | `10.0` | Rate for position publishing (Hz) |
-| `connection_timeout` | float | `5.0` | PMC connection timeout (seconds) |
 
 ### Example Parameter File
 
@@ -164,11 +162,8 @@ Create `config/mover_node_params.yaml`:
 mover_node:
   ros__parameters:
     use_mock: false
-    debug_mode: true
     xbot_id: 0
     publish_rate: 20.0
-    connection_timeout: 10.0
-```
 
 ## 🔧 Development
 
@@ -190,7 +185,7 @@ ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
 
 Enable debug mode for verbose logging:
 ```bash
-ros2 run planar_motor_nodes mover_node --ros-args -p debug_mode:=true
+ros2 run planar_motor_nodes mover_node --ros-args --log-level debug
 ```
 
 ## 🧪 Testing

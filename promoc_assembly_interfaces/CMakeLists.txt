@@ -25,7 +25,7 @@ endif()
 set(INTERFACE_FILES
   "msg/planar_motor/XBotInfo.msg"
   "srv/planar_motor/ActivateXbots.srv"
-  "srv/planar_motor/ArcMotionTargetRadius.srv"
+  "srv/planar_motor/ArcMotionSi.srv"
   "srv/planar_motor/LevitationXbots.srv"
   "srv/planar_motor/LinearMotionSi.srv"
   "srv/planar_motor/RotaryMotion.srv"
@@ -43,10 +43,8 @@ set(INTERFACE_FILES
   "srv/linear_axis/GetSetHomingParams.srv"
   "srv/linear_axis/SetVelocityParameters.srv"
   "srv/linear_axis/GetVelocityParameters.srv"
-  "srv/linear_axis/Stop.srv"
-  "srv/linear_axis/JogStep.srv"
-  "srv/linear_axis/SetJogParameters.srv"
-  "srv/linear_axis/GetJogParameters.srv"
+  "srv/linear_axis/EmergencyStop.srv"
+  "srv/linear_axis/JogAxis.srv"
 )
 
 if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
