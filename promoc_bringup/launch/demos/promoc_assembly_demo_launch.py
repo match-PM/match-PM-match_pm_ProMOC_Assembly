@@ -16,6 +16,7 @@ def generate_launch_description():
             os.path.join(
                 bringup_pkg_share,
                 'launch',
+                'system',  # Updated path
                 'promoc_assembly_launch.py' 
             )
         )

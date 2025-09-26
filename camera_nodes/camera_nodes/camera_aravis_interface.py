@@ -21,7 +21,7 @@ class CameraAravisInterface:
                 self.SetExposureTime = SetExposureTime
                 
                 self._client = self._node.create_client(
-                    self.SetExposureTime, '/assembly_camera/set_exposure_time')
+                    self.SetExposureTime, '/promoc/assembly_camera_controller/set_exposure_time')
             except ImportError:
                 self._node.get_logger().error(
                     "Could not import driver interfaces from 'pm_genicam_controller_interfaces'."
@@ -49,7 +49,7 @@ class CameraAravisInterface:
         try:
             future = self._client.call_async(request)
             response = await future
-            return response.success, response.message
+            return response.success, response.error  # pm_genicam uses 'error', not 'message'
         except Exception as e:
             self._node.get_logger().error(f"Exception while calling set_exposure service: {e}")
             return False, str(e)

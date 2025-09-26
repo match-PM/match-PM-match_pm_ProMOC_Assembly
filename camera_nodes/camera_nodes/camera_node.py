@@ -40,7 +40,7 @@ class CameraNode(Node):
 
         # --- Subscribers ---
         self.assembly_image_sub = self.create_subscription(
-            Image, '/assembly_camera/image_raw', self.assembly_image_callback, 10)
+            Image, '/promoc/assembly_camera/stream0/image_raw', self.assembly_image_callback, 10)
         
         # --- Publishers ---
         self.processed_assembly_pub = self.create_publisher(

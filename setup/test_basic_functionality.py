@@ -96,7 +96,7 @@ def test_camera_integration():
         
         # Test if our camera_nodes package can be imported (after build)
         try:
-            from camera_nodes.camera_manager import CameraManager
+            from camera_nodes.camera_nodes import camera_node
             print("✓ Camera nodes package available")
         except ImportError:
             print("⚠ Camera nodes package not yet built")
