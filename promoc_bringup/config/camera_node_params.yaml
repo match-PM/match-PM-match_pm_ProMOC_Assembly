@@ -22,7 +22,7 @@ exposure_time:
   max_val: 2000012.4
 
 camera_info:
-  image_width: 2048  # Actual ROI image size
+  image_width: 2048  
   image_height: 1536
   camera_name: assembly_camera_stream0
   camera_matrix:
@@ -45,7 +45,7 @@ camera_info:
   projection_matrix:
     rows: 3
     cols: 4
-    data: [1500.0, 0.0, 1024.0, 0.0,  # Adjusted for 2048x1536
+    data: [1500.0, 0.0, 1024.0, 0.0, 
           0.0, 1500.0, 768.0, 0.0,
           0.0, 0.0, 1.0, 0.0]
 
