@@ -18,7 +18,8 @@ def generate_launch_description():
         executable='mover_service_node_test',
         name='mover_node',
         parameters=[params_file],
-        output='screen'
+        output='screen',
+        arguments=['--ros-args', '--log-level', 'INFO']
     )
 
     demo_controller = Node(
@@ -26,7 +27,8 @@ def generate_launch_description():
         executable='pm_demo', 
         name='demo_controller',
         parameters=[{'xbot_id': 1}],
-        output='screen'
+        output='screen',
+        arguments=['--ros-args', '--log-level', 'INFO']
     )
 
 

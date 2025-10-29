@@ -20,37 +20,37 @@ class Lts300Interface:
 
         if self.config.use_sim_time:
             self.driver = SimulatedLinearAxisDriver()
-            self.logger.info("🔧 Using basic simulation driver for LTS300.")
+            self.logger.info("Using basic simulation driver for LTS300")
         else:
             from .drivers.thorlabs_lts300_driver import ThorlabsLTS300Driver
-            self.driver = ThorlabsLTS300Driver()
-            self.logger.info("🔌 Using Thorlabs LTS300 hardware driver.")
+            self.driver = ThorlabsLTS300Driver(logger)
+            self.logger.info("Using Thorlabs LTS300 hardware driver")
 
     def connect(self) -> bool:
         """Connects to the device."""
         try:
-            self.logger.info(f"🔗 Connecting to device with S/N {self.config.serial_number} on port {self.config.serial_port}...")
+            self.logger.info(f"Connecting to device with S/N {self.config.serial_number} on port {self.config.serial_port}...")
             
             if self.config.use_sim_time:
                 # Simulation mode
                 connected = self.driver.connect()
                 if connected:
-                    self.logger.info("🎮 Connected in simulation mode.")
+                    self.logger.info("Connected in simulation mode")
             else:
-                # Hardware mode - übergebe port als Parameter
+                # Hardware mode - pass port as parameter
                 connected = self.driver.connect(port=self.config.serial_port)
                 if connected:
-                    # Prüfe, ob die Seriennummer übereinstimmt
+                    # Verify serial number matches configuration
                     device_serial = self.driver.get_serial_number()
                     if device_serial != self.config.serial_number:
-                        self.logger.warning(f"⚠️ Expected S/N {self.config.serial_number}, but device reports {device_serial}")
-                    self.logger.info(f"🔌 Connected to Thorlabs LTS300 (S/N: {device_serial})")
+                        self.logger.warn(f"Expected S/N {self.config.serial_number}, but device reports {device_serial}")
+                    self.logger.info(f"Connected to Thorlabs LTS300 (S/N: {device_serial})")
                     
             self.is_connected = connected
             return connected
             
         except Exception as e:
-            self.logger.error(f"❌ Connection failed: {e}")
+            self.logger.error(f"Connection failed: {e}", exc_info=True)
             self.is_connected = False
             return False
             
@@ -59,5 +59,4 @@ class Lts300Interface:
         if self.driver and self.is_connected:
             self.driver.disconnect()
             self.is_connected = False
-            self.is_connected = False
-            self.logger.info("✅ Device disconnected.")
+            self.logger.info("Device disconnected")

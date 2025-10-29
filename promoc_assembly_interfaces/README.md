@@ -21,24 +21,31 @@ promoc_assembly_interfaces/
 │   │   └── XBotInfo.msg           # XBot position and state
 │   └── test/
 │       └── Test.msg               # Test message
-└── srv/
-    ├── linear_axis/
-    │   ├── MoveAbsolute.srv       # Move to absolute position
-    │   ├── MoveRelativ.srv        # Move relative distance
-    │   ├── Home.srv               # Home axis
-    │   ├── GetPosition.srv        # Get current position
-    │   ├── SetVelocityParameters.srv  # Set motion parameters
-    │   ├── GetVelocityParameters.srv  # Get motion parameters
-    │   └── ShutdownLinearAxis.srv # Emergency shutdown
-    └── planar_motor/
-        ├── ActivateXbots.srv      # Activate/deactivate XBots
-        ├── LevitationXbots.srv    # Enable/disable levitation
-        ├── SixDofMotion.srv       # 6DOF motion command
-        ├── LinearMotionSi.srv     # Linear motion in SI units
-        ├── RotaryMotion.srv       # Rotational motion
-        ├── SetVelocityAcceleration.srv # Set motion dynamics
-        ├── ArcMotionSi.srv        # Arc motion control in SI units
-        └── StopMotion.srv         # Emergency stop
+├── srv/
+│   ├── linear_axis/
+│   │   ├── MoveAbsolute.srv       # Move to absolute position
+│   │   ├── MoveRelativ.srv        # Move relative distance
+│   │   ├── Home.srv               # Home axis
+│   │   ├── GetPosition.srv        # Get current position
+│   │   ├── SetVelocityParameters.srv  # Set motion parameters
+│   │   ├── GetVelocityParameters.srv  # Get motion parameters
+│   │   └── ShutdownLinearAxis.srv # Emergency shutdown
+│   ├── planar_motor/
+│   │   ├── ActivateXbots.srv      # Activate/deactivate XBots
+│   │   ├── LevitationXbots.srv    # Enable/disable levitation
+│   │   ├── SixDofMotion.srv       # 6DOF motion command
+│   │   ├── LinearMotionSi.srv     # Linear motion in SI units
+│   │   ├── RotaryMotion.srv       # Rotational motion
+│   │   ├── SetVelocityAcceleration.srv # Set motion dynamics
+│   │   ├── ArcMotionSi.srv        # Arc motion control in SI units
+│   │   └── StopMotion.srv         # Emergency stop
+│   └── camera/                    # Camera services
+├── promoc_exceptions.py           # 🆕 Custom exception hierarchy
+├── error_handling.py              # 🆕 Error handling utilities
+├── error_handling_examples.py     # 🆕 Usage examples
+├── ERROR_HANDLING.md              # 🆕 Error handling documentation
+├── QUICK_REFERENCE.md             # 🆕 Quick reference guide
+└── __init__.py                    # Package initialization
 ```
 
 ## 🔧 Installation
@@ -283,6 +290,65 @@ ros2 service list -t | grep promoc_assembly_interfaces
 ros2 service call /mover_node/six_dof_motion promoc_assembly_interfaces/srv/SixDofMotion --help
 ```
 
+## 🛡️ Error Handling System
+
+### 🆕 Custom Exception Hierarchy
+
+The ProMOC Assembly system now includes a comprehensive error handling system with custom exceptions for precise error handling.
+
+#### Quick Example
+
+```python
+from promoc_assembly_interfaces.promoc_exceptions import (
+    PositionOutOfBoundsError,
+    HomingRequiredError
+)
+from promoc_assembly_interfaces.error_handling import handle_service_errors
+
+class MyNode(Node):
+    @handle_service_errors(logger=self.get_logger())
+    def move_callback(self, request, response):
+        # Validation with specific exceptions
+        if not self.is_homed:
+            raise HomingRequiredError("Device must be homed first")
+        
+        if request.position > self.max_position:
+            raise PositionOutOfBoundsError(
+                f"Position {request.position} exceeds maximum",
+                details={'requested': request.position, 'max': self.max_position}
+            )
+        
+        # Perform movement
+        self.driver.move(request.position)
+        response.success = True
+        return response
+```
+
+#### Exception Categories
+
+- **Connection Errors** (1100-1199): Device discovery, connection, communication
+- **Motion Errors** (1200-1299): Movement, positioning, homing
+- **Safety Violations** (1300-1399): Limit violations, emergency stops
+- **Calibration Errors** (1400-1499): Homing, calibration data
+- **Hardware Errors** (1500-1599): Driver availability, initialization
+- **Configuration Errors** (1600-1699): Parameter validation
+- **Service Errors** (1700-1799): Service call failures
+
+#### Available Features
+
+✅ **Custom Exception Hierarchy** - 24+ specific exception types  
+✅ **Error Codes** - Numerical codes for programmatic handling  
+✅ **Retry Mechanism** - Automatic retry with exponential backoff  
+✅ **Recovery Strategies** - Automatic error recovery (homing, reconnection)  
+✅ **Service Decorators** - Automatic error handling in service callbacks  
+✅ **Standardized Responses** - Consistent service response structure  
+
+#### Documentation
+
+- 📖 [ERROR_HANDLING.md](ERROR_HANDLING.md) - Complete documentation and migration guide
+- 📝 [QUICK_REFERENCE.md](QUICK_REFERENCE.md) - Quick reference cheat sheet
+- 💡 [error_handling_examples.py](error_handling_examples.py) - Practical examples
+
 ## 🛡️ Safety Considerations
 
 ### Service Response Patterns
@@ -361,6 +427,23 @@ TODO: Add license information
 - ed@todo.todo
 
 ## 📋 Changelog
+
+### Version 0.2.0 (29. Oktober 2025) 🆕
+- ✨ Added comprehensive error handling system
+  - Custom exception hierarchy with 24+ specific exception types
+  - Error codes (1100-1799) for programmatic error handling
+  - Retry mechanism with exponential backoff
+  - Error recovery strategies (homing, reconnection, custom)
+  - Service error handling decorators
+  - Standardized service response structure
+- 📚 Added extensive documentation
+  - ERROR_HANDLING.md - Complete error handling guide
+  - QUICK_REFERENCE.md - Developer quick reference
+  - error_handling_examples.py - Practical usage examples
+- 🔧 Added Python modules
+  - promoc_exceptions.py - Exception definitions
+  - error_handling.py - Error handling utilities
+  - __init__.py - Package initialization
 
 ### Version 0.0.0
 - Initial interface definitions

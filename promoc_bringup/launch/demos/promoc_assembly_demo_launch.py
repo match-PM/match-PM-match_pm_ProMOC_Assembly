@@ -31,7 +31,8 @@ def generate_launch_description():
         executable='demo_controller.py',
         name='demo_controller',
         parameters=[demo_controller_params_path],
-        output='screen'
+        output='screen',
+        arguments=['--ros-args', '--log-level', 'INFO']
     )
 
     # --- 3. Return everything ---

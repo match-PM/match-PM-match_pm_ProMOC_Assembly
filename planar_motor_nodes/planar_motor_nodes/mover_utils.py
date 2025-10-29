@@ -45,7 +45,7 @@ class MoverUtils:
     def handle_service_error(self, error: Exception, response):
         """Handles service errors consistently."""
         error_msg = f"Service error: {str(error)}"
-        self.logger.error(f"❌ {error_msg}")
+        self.logger.error(f"{error_msg}", exc_info=True)
         response.success = False
         response.status_message = error_msg
     
@@ -68,18 +68,19 @@ class MoverUtils:
     def get_current_position(self, xbot_id: int = 0) -> Optional[List[float]]:
         """Gets the current XBot position via the PmcInterface."""
         try:
-            xbot_data_list = self.pmc.bot.get_all_xbot_info(0)
+            xbot_data_list = self.pmc.bot.get_xbot_data()
             
             if not xbot_data_list:
-                if not self.is_mock:
-                    self.logger.error("❌ No XBot data returned from PMCLib")
+                if not self._logged_no_data:
+                    self.logger.error("No XBot data returned from PMCLib")
+                    self._logged_no_data = True
                 return None
             
             if xbot_id >= len(xbot_data_list):
                 warning_key = f"xbot_{xbot_id}_unavailable"
                 if warning_key not in self._logged_warnings:
                     self.logger.warning(
-                        f"⚠️ XBot {xbot_id} not available. Available: {len(xbot_data_list)}. "
+                        f"XBot {xbot_id} not available. Available: {len(xbot_data_list)}. "
                         f"Using XBot 0 as fallback.")
                     self._logged_warnings.add(warning_key)
                 xbot_id = 0
@@ -93,7 +94,7 @@ class MoverUtils:
             
         except Exception as e:
             if not self.is_mock:
-                self.logger.error(f"❌ Error in get_current_position for XBot {xbot_id}: {e}")
+                self.logger.error(f"Error in get_current_position for XBot {xbot_id}: {e}", exc_info=True)
             return None
 
     def get_xbot_status_info(self, xbot_id: int = 0) -> Optional[dict]:
@@ -109,7 +110,7 @@ class MoverUtils:
                 xbot_state_str = self._xbot_state_to_string(xbot_state_enum)
             except Exception as e:
                 if not self.is_mock:
-                    self.logger.warning(f"⚠️ Could not get status for XBot {xbot_id}: {e}")
+                    self.logger.warning(f"Could not get status for XBot {xbot_id}: {e}")
                 xbot_state_enum = XbotState.XBOT_UNKNOWN
                 xbot_state_str = "UNKNOWN"
 
@@ -120,7 +121,7 @@ class MoverUtils:
             }
         except Exception as e:
             if not self.is_mock:
-                self.logger.error(f"❌ Error getting XBot status info: {e}")
+                self.logger.error(f"Error getting XBot status info: {e}", exc_info=True)
             return None
             
     def get_xbot_state_string(self, xbot_id: int = 0) -> str:
@@ -150,17 +151,17 @@ class MoverUtils:
             state_str = self.get_xbot_state_string(xbot_id)
 
             if state_str in ["XBOT_IDLE", "IDLE"]:
-                self.logger.info(f"✅ Motion completed for XBot {xbot_id}.")
+                self.logger.info(f"Motion completed for XBot {xbot_id}.")
                 # Optional: Position am Ende verifizieren
                 return MotionStatus.COMPLETED
 
             if state_str in ["XBOT_ERROR", "ERROR", "XBOT_STOPPED"]:
-                self.logger.error(f"❌ Motion error for XBot {xbot_id} - State: {state_str}")
+                self.logger.error(f"Motion error for XBot {xbot_id} - State: {state_str}")
                 return MotionStatus.ERROR
             
             time.sleep(0.1)
 
-        self.logger.warning(f"⚠️ Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s")
+        self.logger.warning(f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s")
         return MotionStatus.TIMEOUT
 
     def is_position_in_bounds(self, x: float, y: float, z: float) -> bool:
@@ -172,7 +173,7 @@ class MoverUtils:
     def validate_xbot_id(self, xbot_id: int) -> bool:
         """Validates the XBot ID."""
         if not (0 <= xbot_id <= 15):
-            self.logger.error(f"❌ Invalid XBot ID: {xbot_id} (must be 0-15)")
+            self.logger.error(f"Invalid XBot ID: {xbot_id} (must be 0-15)")
             return False
         return True
 

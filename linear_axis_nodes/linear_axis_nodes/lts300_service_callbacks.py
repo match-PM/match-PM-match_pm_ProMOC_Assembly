@@ -3,6 +3,73 @@ from .lts300_node_config import Lts300Config
 import threading
 import time
 from enum import Enum
+import sys
+import os
+
+# Add promoc_assembly_interfaces to path for exception imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../promoc_assembly_interfaces'))
+
+try:
+    from promoc_assembly_interfaces.promoc_exceptions import (
+        PositionOutOfBoundsError,
+        MovementTimeoutError,
+        HomingFailedError,
+        CollisionDetectedError,
+        SafetyViolation,
+        SoftLimitViolationError,
+        CommunicationError,
+        HardwareError
+    )
+except ImportError:
+    # Fallback if import fails - define dummy classes
+    class PositionOutOfBoundsError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1202
+    
+    class MovementTimeoutError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1201
+    
+    class HomingFailedError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1204
+    
+    class CollisionDetectedError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1203
+    
+    class SafetyViolation(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1300
+    
+    class SoftLimitViolationError(SafetyViolation):
+        def __init__(self, msg, details=None):
+            super().__init__(msg, details)
+            self.error_code = 1301
+    
+    class CommunicationError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1101
+    
+    class HardwareError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1400
+
+
 
 class OperationStatus(Enum):
     """Status enumeration for long-running operations."""
@@ -48,50 +115,83 @@ class ServiceCallbacks:
         return mm_per_s / self.config.velocity_conversion_factor
 
 
-    def _collision_check(self, other_axis_position: float) -> bool:
+    def _collision_check(self, other_axis_position: float):
         """
         Checks for a potential collision using the current position of the other axis.
         
         Args:
             other_axis_position (float): The current position of the other axis, passed in by the node.
+            
+        Raises:
+            CollisionDetectedError: If collision risk is detected.
         """
         if (other_axis_position is not None and
                 other_axis_position > self.config.collision_threshold):
-            return True
-        return False
+            raise CollisionDetectedError(
+                f"Collision risk detected! Other axis at {other_axis_position:.2f}mm exceeds "
+                f"threshold {self.config.collision_threshold}mm",
+                details={
+                    'other_axis_position': other_axis_position,
+                    'collision_threshold': self.config.collision_threshold,
+                    'axis_name': self.config.node_name
+                }
+            )
 
-    def _validate_position(self, position: float) -> tuple[bool, str]:
+    def _validate_position(self, position: float):
         """
         Validates if a position is within the configured safety limits.
         
         Args:
             position (float): The target position to validate in mm.
             
-        Returns:
-            tuple[bool, str]: (is_valid, error_message)
+        Raises:
+            SoftLimitViolationError: If position is outside configured limits.
         """
         if position < self.config.min_position:
-            return False, f"Position {position:.2f}mm below minimum limit {self.config.min_position:.2f}mm"
+            raise SoftLimitViolationError(
+                f"Position {position:.2f}mm below minimum limit {self.config.min_position:.2f}mm",
+                details={
+                    'requested_position': position,
+                    'min_position': self.config.min_position,
+                    'max_position': self.config.max_position,
+                    'violation_type': 'min_limit'
+                }
+            )
         if position > self.config.max_position:
-            return False, f"Position {position:.2f}mm exceeds maximum limit {self.config.max_position:.2f}mm"
-        return True, ""
+            raise SoftLimitViolationError(
+                f"Position {position:.2f}mm exceeds maximum limit {self.config.max_position:.2f}mm",
+                details={
+                    'requested_position': position,
+                    'min_position': self.config.min_position,
+                    'max_position': self.config.max_position,
+                    'violation_type': 'max_limit'
+                }
+            )
 
-    def _validate_distance(self, distance: float) -> tuple[bool, str]:
+    def _validate_distance(self, distance: float):
         """
         Validates if a relative movement distance is within the configured safety limits.
         
         Args:
             distance (float): The movement distance to validate in mm.
             
-        Returns:
-            tuple[bool, str]: (is_valid, error_message)
+        Raises:
+            SoftLimitViolationError: If distance exceeds maximum single move limit.
         """
         abs_distance = abs(distance)
         if abs_distance > self.config.max_single_move:
-            return False, f"Movement distance {abs_distance:.2f}mm exceeds maximum single move limit {self.config.max_single_move:.2f}mm"
-        return True, ""
+            raise SoftLimitViolationError(
+                f"Movement distance {abs_distance:.2f}mm exceeds maximum single move "
+                f"limit {self.config.max_single_move:.2f}mm",
+                details={
+                    'requested_distance': distance,
+                    'abs_distance': abs_distance,
+                    'max_single_move': self.config.max_single_move,
+                    'violation_type': 'max_distance'
+                }
+            )
 
-    def _validate_target_position(self, current_pos: float, distance: float) -> tuple[bool, str]:
+    def _validate_target_position(self, current_pos: float, distance: float):
         """
         Validates if a relative movement would result in a valid target position.
         
@@ -99,11 +199,11 @@ class ServiceCallbacks:
             current_pos (float): Current position in mm.
             distance (float): Movement distance in mm.
             
-        Returns:
-            tuple[bool, str]: (is_valid, error_message)
+        Raises:
+            SoftLimitViolationError: If target position would be outside limits.
         """
         target_pos = current_pos + distance
-        return self._validate_position(target_pos)
+        self._validate_position(target_pos)
 
     def _async_move_operation(self, move_type: str, position: float):
         """
@@ -125,33 +225,29 @@ class ServiceCallbacks:
             else:  # relative
                 self.driver.move_relative(position)
             
-            self.logger.info(f"🎯 Hardware {move_type} movement command completed")
+            self.logger.info(f"Hardware {move_type} movement command completed")
             
             # Get final position for confirmation
             try:
                 final_pos = self.driver.get_position()
-                self.logger.info(f"📍 Final position after {move_type} movement: {final_pos:.2f}mm")
+                self.logger.info(f"Final position after {move_type} movement: {final_pos:.2f}mm")
             except Exception as pos_e:
-                self.logger.warn(f"⚠️ Could not read position after movement: {pos_e}")
+                self.logger.warn(f"Could not read position after movement: {pos_e}")
                 final_pos = "unknown"
             
             with self.operation_lock:
                 self.operation_status = OperationStatus.IDLE
-                self.last_operation_message = f"✅ Movement completed - final position: {final_pos}mm"
+                self.last_operation_message = f"Movement completed - final position: {final_pos}mm"
             
-            self.logger.info(f"✅ {move_type.capitalize()} movement completed successfully")
+            self.logger.info(f"{move_type.capitalize()} movement completed successfully")
             
         except Exception as e:
             error_msg = str(e) if str(e).strip() else f"Unknown error during {move_type} movement"
             with self.operation_lock:
                 self.operation_status = OperationStatus.ERROR
-                self.last_operation_message = f"❌ Movement failed: {error_msg}"
+                self.last_operation_message = f"Movement failed: {error_msg}"
             
-            self.logger.error(f"❌ {move_type.capitalize()} movement failed: {error_msg}")
-            
-            # Additional debug information
-            import traceback
-            self.logger.error(f"❌ Movement traceback: {traceback.format_exc()}")
+            self.logger.error(f"{move_type.capitalize()} movement failed: {error_msg}", exc_info=True)
 
     def _async_home_operation(self):
         """
@@ -188,18 +284,29 @@ class ServiceCallbacks:
             if "ThorlabsTimeoutError" in str(type(e)) or "timeout" in str(e).lower():
                 error_msg = "Homing timeout - operation may still be in progress on hardware"
                 self.logger.warn(f"⏰ {error_msg}")
+                # Wrap in HomingFailedError for consistent error handling
+                homing_error = HomingFailedError(
+                    error_msg,
+                    details={
+                        'timeout': self.config.homing_timeout,
+                        'original_error': str(e),
+                        'error_type': 'timeout'
+                    }
+                )
             else:
                 error_msg = str(e) if str(e).strip() else "Unknown error during homing"
-                self.logger.error(f"❌ Homing operation failed: {error_msg}")
+                self.logger.error(f"❌ Homing operation failed: {error_msg}", exc_info=True)
+                homing_error = HomingFailedError(
+                    error_msg,
+                    details={
+                        'original_error': str(e),
+                        'error_type': type(e).__name__
+                    }
+                )
             
             with self.operation_lock:
                 self.operation_status = OperationStatus.ERROR
                 self.last_operation_message = f"❌ Homing failed: {error_msg}"
-            
-            # Additional debug information for non-timeout errors
-            if "timeout" not in error_msg.lower():
-                import traceback
-                self.logger.error(f"❌ Homing traceback: {traceback.format_exc()}")
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
         """
@@ -214,31 +321,28 @@ class ServiceCallbacks:
     # --- Service Callback Implementations ---
 
     def callback_move_absolute(self, request, response, other_axis_position: float):
-        """Handle absolute movement, receiving the other axis position as an argument."""
-        # Check if another operation is already running
-        with self.operation_lock:
-            if self.operation_status != OperationStatus.IDLE:
-                response.success = False
-                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
-                self.logger.warn(response.status_message)
-                return response
-
-        # Safety validation for position limits
-        is_valid_pos, pos_error = self._validate_position(request.axis_position)
-        if not is_valid_pos:
-            response.success = False
-            response.status_message = f"🚫 Safety violation: {pos_error}"
-            self.logger.warn(response.status_message)
-            return response
-
-        # Collision check
-        if self._collision_check(other_axis_position):
-            response.success = False
-            response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
-            self.logger.warn(response.status_message)
-            return response
-
+        """
+        Handle absolute movement service request.
+        
+        Uses custom exceptions for precise error handling.
+        """
+        start_time = time.time()
+        
         try:
+            # Check if another operation is already running
+            with self.operation_lock:
+                if self.operation_status != OperationStatus.IDLE:
+                    response.success = False
+                    response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                    self.logger.warn(response.status_message)
+                    return response
+
+            # Safety validation - will raise SoftLimitViolationError if invalid
+            self._validate_position(request.axis_position)
+
+            # Collision check - will raise CollisionDetectedError if detected
+            self._collision_check(other_axis_position)
+
             # Start movement in background thread
             self.logger.info(f'Starting asynchronous absolute movement to: {request.axis_position} mm')
             move_thread = threading.Thread(
@@ -250,53 +354,53 @@ class ServiceCallbacks:
             
             response.success = True
             response.status_message = f"🎯 Absolute movement to {request.axis_position:.2f}mm started - check status with get_operation_status"
+            
+        except SoftLimitViolationError as e:
+            response.success = False
+            response.status_message = f"🚫 Safety violation: {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Limit violation details: {e.details}")
+            
+        except CollisionDetectedError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Collision details: {e.details}")
+            
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error starting move_absolute: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_move_relative(self, request, response, other_axis_position: float):
-        """Handle relative movement requests."""
-        # Check if another operation is already running
-        with self.operation_lock:
-            if self.operation_status != OperationStatus.IDLE:
-                response.success = False
-                response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
-                self.logger.warn(response.status_message)
-                return response
-
-        # Safety validation for movement distance
-        is_valid_dist, dist_error = self._validate_distance(request.axis_position)
-        if not is_valid_dist:
-            response.success = False
-            response.status_message = f"🚫 Safety violation: {dist_error}"
-            self.logger.warn(response.status_message)
-            return response
-
-        # Safety validation for target position
+        """
+        Handle relative movement service request.
+        
+        Uses custom exceptions for precise error handling.
+        """
+        start_time = time.time()
+        
         try:
+            # Check if another operation is already running
+            with self.operation_lock:
+                if self.operation_status != OperationStatus.IDLE:
+                    response.success = False
+                    response.status_message = f"⚠️ Operation already in progress: {self.operation_status.value}"
+                    self.logger.warn(response.status_message)
+                    return response
+
+            # Safety validation for movement distance - will raise if invalid
+            self._validate_distance(request.axis_position)
+
+            # Safety validation for target position
             current_pos = self.driver.get_position()
-            is_valid_target, target_error = self._validate_target_position(current_pos, request.axis_position)
-            if not is_valid_target:
-                response.success = False
-                response.status_message = f"🚫 Safety violation: {target_error}"
-                self.logger.warn(response.status_message)
-                return response
-        except Exception as e:
-            response.success = False
-            response.status_message = f"❌ Error getting current position for safety check: {str(e)}"
-            self.logger.error(response.status_message)
-            return response
+            self._validate_target_position(current_pos, request.axis_position)
 
-        # Collision check
-        if self._collision_check(other_axis_position):
-            response.success = False
-            response.status_message = f"⚠️ Collision risk! Other axis at {other_axis_position:.2f}mm > {self.config.collision_threshold}mm."
-            self.logger.warn(response.status_message)
-            return response
-            
-        try:
+            # Collision check - will raise CollisionDetectedError if detected
+            self._collision_check(other_axis_position)
+
             # Start movement in background thread
             self.logger.info(f'Starting asynchronous relative movement by: {request.axis_position} mm')
             move_thread = threading.Thread(
@@ -308,10 +412,24 @@ class ServiceCallbacks:
             
             response.success = True
             response.status_message = f"🎯 Relative movement by {request.axis_position:.2f}mm started - check status with get_operation_status"
+            
+        except SoftLimitViolationError as e:
+            response.success = False
+            response.status_message = f"🚫 Safety violation: {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Limit violation details: {e.details}")
+            
+        except CollisionDetectedError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Collision details: {e.details}")
+            
         except Exception as e:
             response.success = False
-            response.status_message = f"❌ Error starting move_relative: {str(e)}"
-            self.logger.error(response.status_message)
+            response.status_message = f"❌ Error in move_relative: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_home(self, request, response):
@@ -362,12 +480,20 @@ class ServiceCallbacks:
                 response.status_message = f"📍 Position: {response.axis_position:.2f}mm | Status: {status_msg}"
             else:
                 response.status_message = "✅ Position retrieved"
-                
+        
+        except CommunicationError as e:
+            response.axis_position = -1.0
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
+            
         except Exception as e:
             response.axis_position = -1.0
             response.success = False
             response.status_message = f"❌ Error getting position: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
         
     def callback_set_velocity_parameters(self, request, response):
@@ -396,11 +522,18 @@ class ServiceCallbacks:
                                f"min={response.actual_min_velocity:.2f}mm/s, "
                                f"accel={response.actual_acceleration:.2f}mm/s², "
                                f"max={response.actual_max_velocity:.2f}mm/s")
+        
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
             
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error setting velocity: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_get_velocity_parameters(self, request, response):
@@ -425,11 +558,18 @@ class ServiceCallbacks:
                                f"min={response.min_velocity:.2f}mm/s, "
                                f"accel={response.acceleration:.2f}mm/s², "
                                f"max={response.max_velocity:.2f}mm/s")
+        
+        except CommunicationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
                                
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error getting velocity: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_shutdown(self, request, response):
@@ -440,10 +580,29 @@ class ServiceCallbacks:
             self.interface.disconnect() # Use the interface to manage connection state
             response.success = True
             response.status_message = "✅ Device homed and disconnected successfully."
+            
+        except HomingFailedError as e:
+            response.success = False
+            response.status_message = f"⚠️ Shutdown partial: {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Homing failed details: {e.details}")
+            # Still try to disconnect
+            try:
+                self.interface.disconnect()
+            except:
+                pass
+                
+        except CommunicationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
+            
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error during shutdown: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_get_operation_status(self, request, response):
@@ -539,6 +698,26 @@ class ServiceCallbacks:
                 response.final_position = final_pos
                 response.status_message = f"✅ Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm"
                 
+            except SoftLimitViolationError as e:
+                with self.operation_lock:
+                    self.operation_status = OperationStatus.ERROR
+                    self.last_operation_message = f"⚠️ Jog limit violation: {str(e)}"
+                response.success = False
+                response.final_position = -1.0
+                response.status_message = f"⚠️ {str(e)}"
+                self.logger.warn(response.status_message)
+                self.logger.debug(f"Soft limit violation details: {e.details}")
+                
+            except HardwareError as e:
+                with self.operation_lock:
+                    self.operation_status = OperationStatus.ERROR
+                    self.last_operation_message = f"❌ Jog hardware error: {str(e)}"
+                response.success = False
+                response.final_position = -1.0
+                response.status_message = f"⚠️ {str(e)}"
+                self.logger.error(response.status_message)
+                self.logger.debug(f"Hardware error details: {e.details}")
+                
             except Exception as jog_e:
                 with self.operation_lock:
                     self.operation_status = OperationStatus.ERROR
@@ -549,7 +728,7 @@ class ServiceCallbacks:
             response.success = False
             response.final_position = -1.0
             response.status_message = f"❌ Jog operation failed: {str(e)}"
-            self.logger.error(response.status_message)
+            self.logger.error(response.status_message, exc_info=True)
             
             # Reset status on error
             with self.operation_lock:

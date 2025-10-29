@@ -16,6 +16,15 @@ git clone https://github.com/FraunhoferIOSB/camera_aravis2.git
 # Install system dependencies
 sudo apt install libaravis-dev aravis-tools
 ```
+### Setup IDS Camera Permissions
+
+For IDS USB3Vision cameras, create udev rules to allow user access:
+
+```bash
+sudo tee /etc/udev/rules.d/99-ids-cameras.rules <<EOF
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8000", MODE="0666"
+EOF
+```
 
 ### 2. Use vcs tool (Recommended)
 

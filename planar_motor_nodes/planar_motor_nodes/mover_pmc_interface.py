@@ -33,7 +33,7 @@ class PmcInterface:
         """
         if self.force_mock:
             self._load_mock_lib()
-            self.logger.warning("⚠️ Forcing MOCK PMCLib as per launch configuration.")
+            self.logger.warning("Forcing MOCK PMCLib as per launch configuration.")
             return
 
         # Priority 1: Attempt to load local developer version
@@ -41,7 +41,7 @@ class PmcInterface:
             from .drivers.match_pm_xBot import xbot_commands, system_commands, pmc_types
             self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
             self.status = {'source': 'local_driver', 'is_mock': False}
-            self.logger.info("✅ Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
+            self.logger.info("Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
             return
         except ImportError:
             self.logger.debug("Local PMCLib driver not found, trying system-installed version.")
@@ -51,7 +51,7 @@ class PmcInterface:
             return
 
         # Priority 3: Fallback to mock library
-        self.logger.warning("⚠️ Real PMCLib not found. Falling back to MOCK implementation.")
+        self.logger.warning("Real PMCLib not found. Falling back to MOCK implementation.")
         self._load_mock_lib()
 
     def _load_installed_lib(self) -> bool:
@@ -60,7 +60,7 @@ class PmcInterface:
             from pmclib import xbot_commands, system_commands, pmc_types
             self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
             self.status = {'source': 'installed_pmclib', 'is_mock': False}
-            self.logger.info("✅ Loaded system-installed PMCLib.")
+            self.logger.info("Loaded system-installed PMCLib.")
             return True
         except ImportError:
             return False
@@ -71,7 +71,7 @@ class PmcInterface:
         self.bot, self.sys_cmd, self.pmc_types = \
             mock_pmclib.xbot_commands, mock_pmclib.system_commands, mock_pmclib.pmc_types
         self.status = {'source': 'mock', 'is_mock': True}
-        self.logger.info("✅ Loaded MOCK PMCLib for simulation.")
+        self.logger.info("Loaded MOCK PMCLib for simulation.")
 
     def connect(self, ip_address: str) -> bool:
         """Tries to connect to the PMC ONCE and returns the status."""

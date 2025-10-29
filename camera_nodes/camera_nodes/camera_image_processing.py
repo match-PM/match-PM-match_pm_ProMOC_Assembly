@@ -5,6 +5,14 @@ import csv
 class CameraImageProcessing:
     """A class to hold all image processing and analysis logic."""
 
+    def __init__(self, logger):
+        """
+        Initializes the image processing class.
+
+        :param logger: ROS2 logger instance for logging messages.
+        """
+        self.logger = logger
+
     def calculate_mtf_from_roi(self, roi_image, oversample_factor=4):
         """
         Calculates the MTF from a given ROI containing a slanted edge.
@@ -15,7 +23,7 @@ class CameraImageProcessing:
         """
         esf = self._calculate_esf(roi_image, oversample_factor)
         if esf is None:
-            print("ESF calculation failed.")
+            self.logger.error("ESF calculation failed.")
             return None
         
         freq, mtf = self._calculate_lsf_and_mtf(esf, oversample_factor)
@@ -133,4 +141,4 @@ class CameraImageProcessing:
             # Write data rows
             rows = zip(*data_dict.values())
             writer.writerows(rows)
-        print(f"Successfully exported data to {filename}")
+        self.logger.info(f"Successfully exported data to {filename}")

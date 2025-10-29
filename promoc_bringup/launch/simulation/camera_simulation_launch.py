@@ -19,6 +19,7 @@ def generate_launch_description():
             executable='camera_simulator',
             name='camera_simulator',
             output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
         
         # The camera controller node that we want to test
@@ -28,5 +29,6 @@ def generate_launch_description():
             name='camera_node',
             output='screen',
             parameters=[config_file],
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
     ])

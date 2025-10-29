@@ -31,12 +31,12 @@ class CameraNode(Node):
 
         # Initialize components
         self.bridge = CvBridge()
-        self.image_processor = CameraImageProcessing()
+        self.image_processor = CameraImageProcessing(self.get_logger())
         self.aravis_interface = CameraAravisInterface(self)
         self.service_callbacks = CameraServiceCallbacks(self, self.aravis_interface)
         
         self.latest_image_msg = None
-        self.get_logger().info(f"🎥 Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode...")
+        self.get_logger().info(f"Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode...")
 
         # --- Subscribers ---
         self.assembly_image_sub = self.create_subscription(
@@ -56,7 +56,7 @@ class CameraNode(Node):
             self.manual_set_exposure_service = self.create_service(
                 SetExposure, '~/set_exposure', self.service_callbacks.manual_set_exposure_callback)
 
-        self.get_logger().info("✅ Camera Node initialized")
+        self.get_logger().info("Camera Node initialized")
     
     def assembly_image_callback(self, msg: Image):
         """Stores the latest image message received from the camera."""

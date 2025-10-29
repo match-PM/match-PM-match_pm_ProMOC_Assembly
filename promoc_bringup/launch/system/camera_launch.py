@@ -60,6 +60,7 @@ def generate_launch_description():
             executable=driver,
             output="screen",
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', 'INFO'],
             parameters=[{
                 "guid": camera_params["guid"],
                 "frame_id": camera_params["cameraname"],
@@ -91,6 +92,7 @@ def generate_launch_description():
             executable="controller",
             output="screen",
             emulate_tty=True,
+            arguments=['--ros-args', '--log-level', 'INFO'],
             parameters=[{
                 "driver_node": f"/promoc/{driver_node_name}",
             }]
@@ -103,6 +105,7 @@ def generate_launch_description():
             name='camera_node',
             namespace='promoc',
             output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO'],
             parameters=[camera_node_params_file, {'use_simulator': False}],
         ),
     ])

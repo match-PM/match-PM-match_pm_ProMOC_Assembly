@@ -31,16 +31,16 @@ class LTS300Node(Node):
                 self.get_logger().error("Shutting down node due to connection failure.")
                 self.get_logger().error("Node initialization failed, exiting...")
                 return
-            self.get_logger().info("✅ Connection successful, continuing initialization...")
+            self.get_logger().info("Connection successful, continuing initialization...")
             # 4. ROS-Schnittstellen einrichten
             self.other_axis_position = None
             self._setup_ros_communication()
             
-            self.get_logger().info(f"✅ {self.get_name()} with S/N {self.config.serial_number} is running.")
-            self.get_logger().info("✅ Node initialization complete!")
+            self.get_logger().info(f"{self.get_name()} with S/N {self.config.serial_number} is running.")
+            self.get_logger().info("Node initialization complete!")
         
         except Exception as e:
-            self.get_logger().error(f"❌ Exception during initialization: {e}")
+            self.get_logger().error(f"Exception during initialization: {e}", exc_info=True)
             self.get_logger().error("Node initialization failed, exiting...")
             import traceback
             traceback.print_exc()
@@ -77,12 +77,12 @@ class LTS300Node(Node):
         """Erstellt alle ROS-Publisher, -Subscriber und -Services."""
         try:
             node_name = self.get_name()
-            self.get_logger().info(f"🔧 Setting up ROS communication for {node_name}...")
+            self.get_logger().info(f"Setting up ROS communication for {node_name}...")
             
             # Publisher & Timer
             self.position_publisher = self.create_publisher(LinearAxisInfo, f"/{self.config.namespace}/{node_name}/position", 10)
             self.create_timer(0.1, self.publish_position)
-            self.get_logger().info("✅ Publisher and timer created")
+            self.get_logger().info("Publisher and timer created")
 
             # Subscriber
             axis_type = self.interface.driver.get_axis_type()
@@ -92,7 +92,7 @@ class LTS300Node(Node):
                 f"/{self.config.namespace}/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
                 10)
-            self.get_logger().info(f"✅ Subscriber created for {other_axis}-axis")
+            self.get_logger().info(f"Subscriber created for {other_axis}-axis")
                 
             # Services (jetzt mit lambdas und korrekten Callback-Namen)
             self.create_service(MoveAbsolute, f'{node_name}/move_absolute', 
@@ -107,12 +107,10 @@ class LTS300Node(Node):
             self.create_service(ShutdownLinearAxis, f'{node_name}/shutdown', self.callbacks.callback_shutdown)
             self.create_service(EmergencyStop, f'{node_name}/emergency_stop', self.callbacks.callback_emergency_stop)
             self.create_service(JogAxis, f'{node_name}/jog_axis', self.callbacks.callback_jog_axis)
-            self.get_logger().info("✅ All services created")
+            self.get_logger().info("All services created")
             
         except Exception as e:
-            self.get_logger().error(f"❌ Error in _setup_ros_communication: {e}")
-            import traceback
-            traceback.print_exc()
+            self.get_logger().error(f"Error in _setup_ros_communication: {e}", exc_info=True)
             raise e  # Re-raise to be caught by main try-catch
 
     def publish_position(self):
@@ -179,7 +177,7 @@ def main(args=None):
     # GEÄNDERT: Prüfe connected-Property des drivers anstatt interface.is_connected
     try:
         if hasattr(node, 'interface') and hasattr(node.interface, 'driver') and node.interface.driver.connected:
-            node.get_logger().info("🚀 Node successfully initialized, starting spin...")
+            node.get_logger().info("Node successfully initialized, starting spin...")
             try:
                 rclpy.spin(node)
             except KeyboardInterrupt:

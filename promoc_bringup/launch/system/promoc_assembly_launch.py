@@ -17,7 +17,8 @@ def load_mover_config(bringup_pkg_share):
             executable='mover_node',
             name='mover_node',
             parameters=[mover_params_path],
-            output='screen'
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         )
         print(" mover_node' prepared.")
         return mover_node
@@ -138,7 +139,8 @@ def generate_launch_description():
                             axes_config_path,
                             {'serial_port': stable_device_path}
                         ],
-                        output='screen'
+                        output='screen',
+                        arguments=['--ros-args', '--log-level', 'INFO']
                     )
                     launch_actions.append(axis_node)
                 else:

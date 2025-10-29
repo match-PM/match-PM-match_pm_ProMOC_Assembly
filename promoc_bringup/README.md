@@ -113,6 +113,71 @@ Includes only:
 
 ## ⚙️ Configuration Files
 
+### Logging Configuration
+
+**Log-Level Management**
+
+All nodes in the ProMOC system use ROS2's native logging system. Log levels can be configured at launch time or changed during runtime.
+
+**Available Log Levels:**
+- `DEBUG` - Detailed diagnostic information
+- `INFO` - General informational messages (default)
+- `WARN` - Warning messages for non-critical issues
+- `ERROR` - Error messages for failures
+- `FATAL` - Critical errors causing system shutdown
+
+**Configure at Launch Time:**
+
+All launch files include default log-level arguments set to `INFO`. You can override these:
+
+```bash
+# Set specific log level for all nodes
+ros2 launch promoc_bringup promoc_assembly_launch.py --ros-args --log-level DEBUG
+
+# Or modify launch file to change individual node levels (see Launch File Customization below)
+```
+
+**Change at Runtime:**
+
+```bash
+# Set log level for specific node
+ros2 service call /lts300_x_axis/set_logger_level rcl_interfaces/srv/SetLoggerLevels \
+  "{logger_name: 'lts300_x_axis', level: DEBUG}"
+
+# Check current log levels
+ros2 service call /lts300_x_axis/get_logger_levels rcl_interfaces/srv/GetLoggerLevels
+
+# Monitor logs in real-time
+ros2 run rqt_console rqt_console  # GUI tool
+ros2 topic echo /rosout            # Command line
+```
+
+**Launch File Customization:**
+
+To permanently change log levels, modify the launch file:
+
+```python
+# In promoc_assembly_launch.py or other launch files
+axis_node = Node(
+    package='linear_axis_nodes',
+    executable='lts300_node',
+    name=node_name,
+    parameters=[axes_config_path, {'serial_port': stable_device_path}],
+    output='screen',
+    arguments=['--ros-args', '--log-level', 'DEBUG']  # Change to desired level
+)
+```
+
+**Best Practices:**
+- Use `INFO` for production (default in all launch files)
+- Use `DEBUG` for development and troubleshooting
+- Use `WARN` to reduce output noise while still catching issues
+- Monitor `/rosout` topic for centralized log aggregation
+
+**Removed Legacy Configuration:**
+- ❌ `debug_mode` parameter has been removed from all configuration files
+- ✅ Use ROS2 native log levels instead (more flexible and standardized)
+
 ### mover_node_params.yaml
 
 **Planar motor system configuration.**
@@ -150,18 +215,28 @@ mover_node:
 ```yaml
 lts300_z_axis:
   ros__parameters:
-    debug_mode: false
     serial_number: '45407924'           # Hardware serial number
     collision_threshold: 200.0          # Safety distance (mm)
     device_units_per_mm: 409600.0      # Hardware scaling factor
+    max_position: 300.0                 # Maximum position (mm)
+    min_position: 0.0                   # Minimum position (mm)
+    max_single_move: 300.0             # Maximum single move distance (mm)
+    homing_timeout: 180.0              # Homing timeout (seconds)
+    velocity_unit_factor: 0.018        # Velocity scaling factor
 
 lts300_x_axis:
   ros__parameters:
-    debug_mode: false
     serial_number: '45456044'
     collision_threshold: 200.0
     device_units_per_mm: 409600.0
+    max_position: 300.0
+    min_position: 0.0
+    max_single_move: 300.0
+    homing_timeout: 180.0
+    velocity_unit_factor: 0.018
 ```
+
+**Note:** `debug_mode` parameter has been removed. Use ROS2 log levels instead (see Logging Configuration above).
 
 ## 🤖 Demo Controller
 
@@ -340,13 +415,21 @@ ros2 launch promoc_bringup promoc_assembly_launch.py \
 
 ### Debug Mode
 
-Enable comprehensive logging:
+Enable comprehensive logging using ROS2 log levels:
 
 ```bash
-ros2 launch promoc_bringup promoc_assembly_launch.py \
-  mover_node.debug_mode:=true \
-  lts300_x_axis.debug_mode:=true \
-  lts300_z_axis.debug_mode:=true
+# Enable DEBUG logging for all nodes
+ros2 launch promoc_bringup promoc_assembly_launch.py --ros-args --log-level DEBUG
+
+# Or set individual node log levels at runtime
+ros2 service call /mover_node/set_logger_level rcl_interfaces/srv/SetLoggerLevels \
+  "{logger_name: 'mover_node', level: DEBUG}"
+
+ros2 service call /lts300_x_axis/set_logger_level rcl_interfaces/srv/SetLoggerLevels \
+  "{logger_name: 'lts300_x_axis', level: DEBUG}"
+
+# Monitor logs with rqt_console for better visualization
+ros2 run rqt_console rqt_console
 ```
 
 ## 📚 Related Packages

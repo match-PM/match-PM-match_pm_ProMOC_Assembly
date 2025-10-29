@@ -40,7 +40,8 @@ def generate_launch_description():
                 linear_axes_params_path,
                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
             ],
-            output='screen'
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
 
         # Launch the camera simulator
@@ -49,6 +50,7 @@ def generate_launch_description():
             executable='camera_simulator',
             name='camera_simulator',
             output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
 
         # Launch the camera node
@@ -60,6 +62,7 @@ def generate_launch_description():
                 camera_node_params_path,
                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
             ],
-            output='screen'
+            output='screen',
+            arguments=['--ros-args', '--log-level', 'INFO']
         ),
     ])

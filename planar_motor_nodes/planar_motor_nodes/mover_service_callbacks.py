@@ -1,7 +1,59 @@
 import math
+import sys
+import os
 from .mover_pmc_interface import PmcInterface
 from .mover_utils import MoverUtils, MotionStatus
 from .mover_node_config import NodeConfig
+
+# Add promoc_assembly_interfaces to path for exception imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../promoc_assembly_interfaces'))
+
+try:
+    from promoc_assembly_interfaces.promoc_exceptions import (
+        PositionOutOfBoundsError,
+        MovementTimeoutError,
+        HardwareError,
+        CommunicationError,
+        ParameterValidationError,
+        SafetyViolation
+    )
+except ImportError:
+    # Fallback if import fails - define dummy classes
+    class PositionOutOfBoundsError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1202
+    
+    class MovementTimeoutError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1201
+    
+    class HardwareError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1400
+    
+    class CommunicationError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1101
+    
+    class ParameterValidationError(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1601
+    
+    class SafetyViolation(Exception):
+        def __init__(self, msg, details=None):
+            super().__init__(msg)
+            self.details = details or {}
+            self.error_code = 1300
 
 
 class ServiceCallbacks:
@@ -28,7 +80,7 @@ class ServiceCallbacks:
         self.mover_utils = mover_utils
         self.config = config
 
-        self.logger.info(f"🔧 ServiceCallbacks initialized. Using PMCLib: {self.pmc.status['source']}")
+        self.logger.info(f"ServiceCallbacks initialized. Using PMCLib: {self.pmc.status['source']}")
 
     def _process_motion_input(self, request, current_position: list = None, motion_type: str = "6dof") -> list:
         """
@@ -43,37 +95,114 @@ class ServiceCallbacks:
             list: Processed target position in SI units [x, y, z, rx, ry, rz]
             
         Raises:
-            ValueError: If parameters are invalid
+            ParameterValidationError: If parameters are invalid
         """
         # === VALIDATION (integrated) ===
         # Common validations for all motion types
         if hasattr(request, 'xbot_id') and request.xbot_id < 0:
-            raise ValueError(f"XBot ID must be non-negative, got: {request.xbot_id}")
+            raise ParameterValidationError(
+                f"XBot ID must be non-negative, got: {request.xbot_id}",
+                details={
+                    'parameter': 'xbot_id',
+                    'value': request.xbot_id,
+                    'constraint': 'non-negative'
+                }
+            )
         
         # Motion type specific validations
         if motion_type == "rotary":
             if hasattr(request, 'rot_mode') and request.rot_mode not in [0, 1, 2]:
-                raise ValueError(f"Invalid rot_mode: {request.rot_mode}. Valid values are 0 (NO_ANGLE_WRAP), 1 (WRAP_TO_2PI_CCW), 2 (WRAP_TO_2PI_CW)")
+                raise ParameterValidationError(
+                    f"Invalid rot_mode: {request.rot_mode}. Valid values are 0 (NO_ANGLE_WRAP), 1 (WRAP_TO_2PI_CCW), 2 (WRAP_TO_2PI_CW)",
+                    details={
+                        'parameter': 'rot_mode',
+                        'value': request.rot_mode,
+                        'valid_values': [0, 1, 2]
+                    }
+                )
             if hasattr(request, 'max_rz_speed') and request.max_rz_speed <= 0:
-                raise ValueError(f"Max RZ speed must be positive, got: {request.max_rz_speed}")
+                raise ParameterValidationError(
+                    f"Max RZ speed must be positive, got: {request.max_rz_speed}",
+                    details={
+                        'parameter': 'max_rz_speed',
+                        'value': request.max_rz_speed,
+                        'constraint': 'positive'
+                    }
+                )
             if hasattr(request, 'max_accel_rz') and request.max_accel_rz <= 0:
-                raise ValueError(f"Max RZ acceleration must be positive, got: {request.max_accel_rz}")
+                raise ParameterValidationError(
+                    f"Max RZ acceleration must be positive, got: {request.max_accel_rz}",
+                    details={
+                        'parameter': 'max_accel_rz',
+                        'value': request.max_accel_rz,
+                        'constraint': 'positive'
+                    }
+                )
         
         elif motion_type in ["arc", "arc_si"]:
             if hasattr(request, 'arc_mode') and request.arc_mode not in [0, 1, 2]:
-                raise ValueError(f"Invalid arc_mode: {request.arc_mode}. Valid values are 0, 1, 2")
+                raise ParameterValidationError(
+                    f"Invalid arc_mode: {request.arc_mode}. Valid values are 0, 1, 2",
+                    details={
+                        'parameter': 'arc_mode',
+                        'value': request.arc_mode,
+                        'valid_values': [0, 1, 2]
+                    }
+                )
             if hasattr(request, 'arc_type') and request.arc_type not in [0, 1]:
-                raise ValueError(f"Invalid arc_type: {request.arc_type}. Valid values are 0 (MINOR), 1 (MAJOR)")
+                raise ParameterValidationError(
+                    f"Invalid arc_type: {request.arc_type}. Valid values are 0 (MINOR), 1 (MAJOR)",
+                    details={
+                        'parameter': 'arc_type',
+                        'value': request.arc_type,
+                        'valid_values': [0, 1]
+                    }
+                )
             if hasattr(request, 'arc_direction') and request.arc_direction not in [0, 1]:
-                raise ValueError(f"Invalid arc_direction: {request.arc_direction}. Valid values are 0 (CW), 1 (CCW)")
+                raise ParameterValidationError(
+                    f"Invalid arc_direction: {request.arc_direction}. Valid values are 0 (CW), 1 (CCW)",
+                    details={
+                        'parameter': 'arc_direction',
+                        'value': request.arc_direction,
+                        'valid_values': [0, 1]
+                    }
+                )
             if hasattr(request, 'pos_mode') and request.pos_mode not in [0, 1]:
-                raise ValueError(f"Invalid pos_mode: {request.pos_mode}. Valid values are 0 (ABSOLUTE), 1 (RELATIVE)")
+                raise ParameterValidationError(
+                    f"Invalid pos_mode: {request.pos_mode}. Valid values are 0 (ABSOLUTE), 1 (RELATIVE)",
+                    details={
+                        'parameter': 'pos_mode',
+                        'value': request.pos_mode,
+                        'valid_values': [0, 1]
+                    }
+                )
             if hasattr(request, 'radius') and request.radius <= 0:
-                raise ValueError(f"Radius must be positive, got: {request.radius}")
+                raise ParameterValidationError(
+                    f"Radius must be positive, got: {request.radius}",
+                    details={
+                        'parameter': 'radius',
+                        'value': request.radius,
+                        'constraint': 'positive'
+                    }
+                )
             if hasattr(request, 'max_speed') and request.max_speed <= 0:
-                raise ValueError(f"Max speed must be positive, got: {request.max_speed}")
+                raise ParameterValidationError(
+                    f"Max speed must be positive, got: {request.max_speed}",
+                    details={
+                        'parameter': 'max_speed',
+                        'value': request.max_speed,
+                        'constraint': 'positive'
+                    }
+                )
             if hasattr(request, 'max_accel') and request.max_accel <= 0:
-                raise ValueError(f"Max acceleration must be positive, got: {request.max_accel}")
+                raise ParameterValidationError(
+                    f"Max acceleration must be positive, got: {request.max_accel}",
+                    details={
+                        'parameter': 'max_accel',
+                        'value': request.max_accel,
+                        'constraint': 'positive'
+                    }
+                )
         
         # === PROCESSING ===
         # Get current position if not provided
@@ -132,9 +261,15 @@ class ServiceCallbacks:
             target_pos = self._process_motion_input(request, motion_type="linear")
 
             if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
-                response.success = False
-                response.status_message = "Position outside valid bounds."
-                return response
+                raise PositionOutOfBoundsError(
+                    "Target position outside valid bounds",
+                    details={
+                        'target_x': target_pos[0],
+                        'target_y': target_pos[1],
+                        'target_z': target_pos[2],
+                        'xbot_id': request.xbot_id
+                    }
+                )
 
             speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.linear_motion_si(
@@ -149,8 +284,30 @@ class ServiceCallbacks:
             
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
+            
+        except ParameterValidationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Parameter validation details: {e.details}")
+            
+        except PositionOutOfBoundsError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Position bounds violation: {e.details}")
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Linear motion failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_six_d_motion(self, request, response):
@@ -160,9 +317,18 @@ class ServiceCallbacks:
             target_pos = self._process_motion_input(request, motion_type="6dof")
             
             if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
-                 response.success = False
-                 response.status_message = "Position outside valid bounds."
-                 return response
+                raise PositionOutOfBoundsError(
+                    "Target position outside valid bounds",
+                    details={
+                        'target_x': target_pos[0],
+                        'target_y': target_pos[1],
+                        'target_z': target_pos[2],
+                        'target_rx': target_pos[3],
+                        'target_ry': target_pos[4],
+                        'target_rz': target_pos[5],
+                        'xbot_id': request.xbot_id
+                    }
+                )
 
             speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.six_d_of_motion_si(
@@ -181,8 +347,30 @@ class ServiceCallbacks:
             
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
+            
+        except ParameterValidationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Parameter validation details: {e.details}")
+            
+        except PositionOutOfBoundsError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Position bounds violation: {e.details}")
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ 6DOF motion failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_activate_xbot(self, request, response):
@@ -195,24 +383,55 @@ class ServiceCallbacks:
                 self.pmc.bot.deactivate_xbots()
                 response.status_message = "XBots successfully deactivated"
             response.success = True
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
+        except CommunicationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ XBot activation failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_levitation_xbot(self, request, response):
         """Handle XBot levitation."""
         try:
             command = 1 if request.levitation else 0
-            self.logger.info(f"🔍 Calling levitation_command(0, {command})")
+            self.logger.debug(f"Calling levitation_command(0, {command})")
             
             self.pmc.bot.levitation_command(0, command)  # 0 = alle XBots
             
             response.status_message = f"Levitation command sent: {'enable' if request.levitation else 'disable'}"
             response.success = True
-            self.logger.info(f"✅ Levitation {'enabled' if request.levitation else 'disabled'} globally")
+            self.logger.info(f"Levitation {'enabled' if request.levitation else 'disabled'} globally")
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
+        except CommunicationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
             
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Levitation command failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_rotary_motion(self, request, response):
@@ -249,8 +468,23 @@ class ServiceCallbacks:
             
             self.logger.info(f"🔄 Rotary motion completed: target={self.mover_utils.rad_to_deg(target_pos[5]):.1f}°, mode={rot_mode_names.get(rot_mode)}, travel_time={travel_time:.2f}s")
             
+        except ParameterValidationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Parameter validation details: {e.details}")
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Rotary motion failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
     
 
@@ -262,30 +496,95 @@ class ServiceCallbacks:
             # A more robust version could poll the state until it's IDLE.
             response.success = True
             response.status_message = f"Stop command sent to XBot {request.xbot_id}."
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
+        except CommunicationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Communication error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Stop motion failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_set_velocity_acceleration(self, request, response):
         """Handle velocity/acceleration parameter setting."""
         try:
-            # You could add validation here to ensure values are positive etc.
+            # Validate XBot ID
+            if request.xbot_id < 0:
+                raise ParameterValidationError(
+                    f"XBot ID must be non-negative, got: {request.xbot_id}",
+                    details={
+                        'parameter': 'xbot_id',
+                        'value': request.xbot_id,
+                        'constraint': 'non-negative'
+                    }
+                )
+            
+            # Validate all velocity/acceleration parameters are positive
+            params_to_validate = {
+                'xy_vel': request.xy_vel,
+                'z_vel': request.z_vel,
+                'rx_vel': request.rx_vel,
+                'ry_vel': request.ry_vel,
+                'rz_vel': request.rz_vel,
+                'xy_max_accel': request.xy_max_accel,
+                'z_max_accel': request.z_max_accel
+            }
+            
+            for param_name, param_value in params_to_validate.items():
+                if param_value <= 0:
+                    raise ParameterValidationError(
+                        f"{param_name} must be positive, got: {param_value}",
+                        details={
+                            'parameter': param_name,
+                            'value': param_value,
+                            'constraint': 'positive'
+                        }
+                    )
+            
+            # Set parameters
             self.mover_utils.velocity_params[request.xbot_id] = {
                 'xy_vel': request.xy_vel, 'z_vel': request.z_vel,
                 'rx_vel': request.rx_vel, 'ry_vel': request.ry_vel,
                 'rz_vel': request.rz_vel, 'xy_max_accel': request.xy_max_accel,
                 'z_max_accel': request.z_max_accel
             }
-            self.logger.info(f"✅ Velocity/acceleration parameters set for XBot {request.xbot_id}")
+            
+            self.logger.info(f"Velocity/acceleration parameters set for XBot {request.xbot_id}: "
+                           f"xy_vel={request.xy_vel:.3f}m/s, xy_accel={request.xy_max_accel:.3f}m/s², "
+                           f"z_vel={request.z_vel:.3f}m/s, z_accel={request.z_max_accel:.3f}m/s²")
             response.success = True
             response.status_message = "Parameters set successfully"
+            
+        except ParameterValidationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Parameter validation details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Setting velocity/acceleration parameters failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response
 
     def callback_arc_motion_si(self, request, response):
         """Handle arc motion requests with SI units and comprehensive parameters."""
         try:
+            # Use universal motion processor (includes validation)
+            target_pos = self._process_motion_input(request, motion_type="arc_si")
+            
             # Convert units: mm -> m, degrees -> radians, mm/s -> m/s
             target_x_m = self.mover_utils.mm_to_m(request.target_x)
             target_y_m = self.mover_utils.mm_to_m(request.target_y)
@@ -312,9 +611,6 @@ class ServiceCallbacks:
                 angle_rad
             )
             
-            # Get target position for motion completion monitoring (includes validation)
-            target_pos = self._process_motion_input(request, motion_type="arc_si")
-            
             # Wait for completion with extended timeout for arc motions
             timeout = max((travel_time * 1.8 + 5.0) if travel_time else 8.0, 8.0)
             motion_result = self.mover_utils.wait_for_motion_completion(
@@ -338,11 +634,32 @@ class ServiceCallbacks:
                 f"pos: {pos_mode_names.get(request.pos_mode, 'unknown')})"
             )
             
-            self.logger.info(f"Arc motion completed: "
+            self.logger.info(f"🌀 Arc motion completed: "
                            f"target=({request.target_x:.1f}, {request.target_y:.1f})mm, "
                            f"radius={request.radius:.1f}mm, "
                            f"travel_time={travel_time:.2f}s")
             
+        except ParameterValidationError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Parameter validation details: {e.details}")
+            
+        except PositionOutOfBoundsError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.warn(response.status_message)
+            self.logger.debug(f"Position bounds violation: {e.details}")
+            
+        except HardwareError as e:
+            response.success = False
+            response.status_message = f"⚠️ {str(e)}"
+            self.logger.error(response.status_message)
+            self.logger.debug(f"Hardware error details: {e.details}")
+            
         except Exception as e:
-            self.mover_utils.handle_service_error(e, response)
+            response.success = False
+            response.status_message = f"❌ Arc motion failed: {str(e)}"
+            self.logger.error(response.status_message, exc_info=True)
+            
         return response

@@ -40,17 +40,17 @@ class MoverServiceNode(Node):
         self._setup_services()
 
         # 4. Start connection attempts
-        self.get_logger().info(f"🔗 Connecting to PMC at {self.config.pmc_ip}...")
+        self.get_logger().info(f"Connecting to PMC at {self.config.pmc_ip}...")
         # Wir versuchen die Verbindung schneller, um einen freien Port zu finden.
         self.connection_timer = self.create_timer(0.1, self._try_connect) # 10 Versuche pro Sekunde
 
-        self.get_logger().info("✅ Mover Service Node initialized. Waiting for PMC connection...")
+        self.get_logger().info("Mover Service Node initialized. Waiting for PMC connection...")
         
     def _try_connect(self):
         """Wird vom Timer aufgerufen, um die Verbindung zu versuchen."""
         
         if self.pmc.connect(self.config.pmc_ip):
-            self.get_logger().info("✅✅✅ PMC Connected! Activating system.")
+            self.get_logger().info("PMC Connected! Activating system.")
             self.is_connected = True
             
             # Timer stoppen, wir brauchen ihn nicht mehr
@@ -63,7 +63,7 @@ class MoverServiceNode(Node):
         """Aktiviert die XBots und startet die Publisher, nachdem die Verbindung steht."""
         try:
             self.pmc.bot.activate_xbots()
-            self.get_logger().info("✅ XBot Activated")
+            self.get_logger().info("XBot Activated")
             # Erst jetzt den Publisher-Timer starten
             self._start_publisher_timer()
         except Exception as e:
@@ -106,7 +106,7 @@ class MoverServiceNode(Node):
             z_max=self.get_parameter('z_max').value,
         )
 
-        self.get_logger().info(f"🔧 Configuration loaded: {config}")
+        self.get_logger().info(f"Configuration loaded: {config}")
         return config
 
     def _setup_services(self):
@@ -123,7 +123,7 @@ class MoverServiceNode(Node):
         ]
         for name, srv_type, callback in services:
             self.create_service(srv_type, f"{self.get_name()}/{name}", callback)
-        self.get_logger().info("✅ All services are created.")
+        self.get_logger().info("All services are created.")
 
     def _start_publisher_timer(self):
         """Startet die periodischen Timer NACHDEM die Verbindung steht."""
@@ -131,7 +131,7 @@ class MoverServiceNode(Node):
         self.xbot_position_timer = self.create_timer(publish_interval, self._publish_xbot_position)
         if not self.pmc.status['is_mock']:
             self.xbot_diagnosis_timer = self.create_timer(5.0, self.mover_utils.diagnose_xbot_availability)
-        self.get_logger().info("✅ Timers started.")
+        self.get_logger().info("Timers started.")
 
     def _m_to_mm(self, value_m: float) -> float:
         """Convert meters to millimeters."""

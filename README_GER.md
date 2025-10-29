@@ -146,7 +146,43 @@ ros2 service call /mover_node/activate_xbots promoc_assembly_interfaces/srv/Acti
 ros2 service call /lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
 
-🐛 Troubleshooting
+� Logging & Debugging
+Das System nutzt das native ROS2 Logging-System für konsistente und konfigurierbare Log-Ausgaben.
+
+**Log-Level Konfiguration:**
+
+```bash
+# System mit DEBUG-Logging starten (detaillierte Diagnoseinformationen)
+ros2 launch promoc_bringup promoc_assembly_launch.py --ros-args --log-level DEBUG
+
+# Log-Level zur Laufzeit ändern
+ros2 service call /lts300_x_axis/set_logger_level rcl_interfaces/srv/SetLoggerLevels \
+  "{logger_name: 'lts300_x_axis', level: DEBUG}"
+
+# Aktuelle Log-Level abfragen
+ros2 service call /mover_node/get_logger_levels rcl_interfaces/srv/GetLoggerLevels
+
+# Logs in Echtzeit überwachen
+ros2 run rqt_console rqt_console  # GUI-Tool
+ros2 topic echo /rosout            # Kommandozeile
+```
+
+**Verfügbare Log-Levels:**
+- `DEBUG` - Detaillierte Diagnoseinformationen (für Entwicklung)
+- `INFO` - Allgemeine Informationen (Standard für Produktion)
+- `WARN` - Warnungen für nicht-kritische Probleme
+- `ERROR` - Fehlermeldungen
+- `FATAL` - Kritische Fehler
+
+**Best Practices:**
+- ✅ Nutze `INFO` für den Produktionsbetrieb (Standard in allen Launch-Files)
+- ✅ Nutze `DEBUG` für Entwicklung und Fehlersuche
+- ✅ Überwache `/rosout` Topic für zentrale Log-Aggregation
+- ❌ Der alte `debug_mode` Parameter wurde entfernt - nutze stattdessen ROS2 Log-Levels
+
+**Hinweis:** Alle Launch-Files sind bereits mit Standard Log-Level `INFO` konfiguriert. Die veralteten `debug_mode` Parameter wurden aus allen Konfigurationsdateien entfernt.
+
+�🐛 Troubleshooting
 Sollten Probleme bei der Installation oder Ausführung auftreten, lies bitte unsere detaillierte Anleitung zur Fehlerbehebung:
 
 ➡️ TROUBLESHOOTING.md
