@@ -10,14 +10,13 @@ def generate_launch_description():
     bringup_pkg_share = get_package_share_directory('promoc_bringup')
     
     # --- 1. Start base system (mover + dynamic joints) ---
-    # We include the existing launch file.
+    # We include the consolidated system launch file.
     base_system_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
                 bringup_pkg_share,
                 'launch',
-                'system',  # Updated path
-                'promoc_assembly_launch.py' 
+                'system.launch.py' 
             )
         )
     )

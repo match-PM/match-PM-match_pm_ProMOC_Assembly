@@ -36,11 +36,11 @@ ProMocError (base)
 └── ServiceError
     ├── ServiceCallFailedError
     ├── InvalidServiceRequestError
-    └── ServiceTimeoutError
+    ├── ServiceTimeoutError
 
 Usage Example:
 --------------
-    from promoc_exceptions import PositionOutOfBoundsError, HomingRequiredError
+    from promoc_core.promoc_exceptions import PositionOutOfBoundsError, HomingRequiredError
     
     def move_to_position(position):
         if not self.is_homed:
@@ -343,7 +343,15 @@ ERROR_CODE_REGISTRY = {
     1701: "Service Call Failed",
     1702: "Invalid Service Request",
     1703: "Service Timeout",
+    # Vision Errors
+    1800: "Image Processing Error",
 }
+
+
+class ImageProcessingError(ProMocError):
+    """Raised when image processing fails."""
+    def _default_error_code(self) -> int:
+        return 1800
 
 
 def get_error_description(error_code: int) -> str:

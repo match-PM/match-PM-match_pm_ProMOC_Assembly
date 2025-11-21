@@ -16,7 +16,7 @@ cd setup
 
 # 4. Launch the simulation
 source ../install/setup.bash
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py sim_mode:=true
 
 # For demo with automated sequences
 ros2 launch promoc_bringup promoc_assembly_demo_launch.py
@@ -28,6 +28,7 @@ Comprehensive documentation for each package:
 - **[Planar Motor Nodes](planar_motor_nodes/README.md)** – XBot control and PMCLib integration
 - **[Linear Axis Nodes](linear_axis_nodes/README.md)** – Thorlabs LTS300 control with collision detection
 - **[Camera Integration](camera_integration/README.md)** – IDS camera integration using camera_aravis2
+- **[Core Library](promoc_core/README.md)** – Shared logic, error handling, and utilities
 - **[Interface Definitions](promoc_assembly_interfaces/README.md)** – ROS2 messages and services
 - **[Launch & Configuration](promoc_bringup/README.md)** – System startup and parameter management
 
@@ -112,7 +113,7 @@ pip install local_libraries/pmclib-*.whl
 **Mock Development (no hardware):**
 ```bash
 export USE_MOCK_PMC=true
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py sim_mode:=true
 ```
 
 Linear Axes (Thorlabs LTS300)
@@ -140,7 +141,7 @@ Comprehensive testing capabilities for all system components:
 
 # 2. Test complete system (simulation)
 source install/setup.bash
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py sim_mode:=true
 
 # 3. Demo with automated sequences
 ros2 launch promoc_bringup promoc_assembly_demo_launch.py

@@ -45,7 +45,7 @@ ProMocError (Basis)
 ### 1. Exceptions Werfen
 
 ```python
-from promoc_assembly_interfaces.promoc_exceptions import (
+from promoc_core.promoc_exceptions import (
     PositionOutOfBoundsError,
     HomingRequiredError,
     DeviceNotFoundError
@@ -79,8 +79,8 @@ class MyDriver:
 ### 2. Service Error Handling mit Decorator
 
 ```python
-from promoc_assembly_interfaces.error_handling import handle_service_errors
-from promoc_assembly_interfaces.promoc_exceptions import MotionError
+from promoc_core.error_handling import handle_service_errors
+from promoc_core.promoc_exceptions import MotionError
 
 class MyNode(Node):
     def __init__(self):
@@ -105,7 +105,7 @@ class MyNode(Node):
 ### 3. Retry Mechanismus
 
 ```python
-from promoc_assembly_interfaces.error_handling import retry_on_error, RetryConfig
+from promoc_core.error_handling import retry_on_error, RetryConfig
 
 class MyDriver:
     @retry_on_error(RetryConfig(
@@ -123,7 +123,7 @@ class MyDriver:
 ### 4. Error Recovery Strategien
 
 ```python
-from promoc_assembly_interfaces.error_handling import (
+from promoc_core.error_handling import (
     ErrorRecoveryManager,
     HomingRecoveryStrategy,
     ReconnectionRecoveryStrategy
@@ -159,7 +159,7 @@ class MyNode(Node):
 ### 5. Standardisierte Service Responses
 
 ```python
-from promoc_assembly_interfaces.error_handling import ServiceResponse
+from promoc_core.error_handling import ServiceResponse
 
 def my_service_callback(self, request, response):
     start_time = time.time()
@@ -239,7 +239,7 @@ except ProMocError as e:
         pass
     
     # Oder verwende ERROR_CODE_REGISTRY
-    from promoc_assembly_interfaces.promoc_exceptions import get_error_description
+    from promoc_core.promoc_exceptions import get_error_description
     description = get_error_description(e.error_code)
 ```
 
@@ -262,7 +262,7 @@ except ProMocError as e:
 ### Schritt 1: Import hinzufügen
 
 ```python
-from promoc_assembly_interfaces.promoc_exceptions import (
+from promoc_core.promoc_exceptions import (
     DeviceNotFoundError,
     MovementTimeoutError,
     HomingRequiredError,
@@ -303,7 +303,7 @@ except Exception as e:
 
 **Nachher:**
 ```python
-from promoc_assembly_interfaces.error_handling import handle_service_errors
+from promoc_core.error_handling import handle_service_errors
 
 @handle_service_errors(logger=self.get_logger())
 def callback(self, request, response):
@@ -330,7 +330,7 @@ def callback(self, request, response):
 
 ```python
 import pytest
-from promoc_assembly_interfaces.promoc_exceptions import PositionOutOfBoundsError
+from promoc_core.promoc_exceptions import PositionOutOfBoundsError
 
 def test_position_validation():
     driver = MyDriver()

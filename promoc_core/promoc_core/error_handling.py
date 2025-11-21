@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 try:
-    from promoc_exceptions import (
+    from .promoc_exceptions import (
         ProMocError, 
         CommunicationTimeoutError,
         DeviceDisconnectedError,
@@ -24,7 +24,7 @@ try:
     )
 except ImportError:
     # Fallback if module is in same directory
-    from .promoc_exceptions import (
+    from promoc_exceptions import (
         ProMocError,
         CommunicationTimeoutError,
         DeviceDisconnectedError,
@@ -269,7 +269,7 @@ class HomingRecoveryStrategy(ErrorRecoveryStrategy):
     """
     
     def can_recover(self, error: Exception) -> bool:
-        from promoc_exceptions import (
+        from .promoc_exceptions import (
             PositionOutOfBoundsError,
             HomingRequiredError,
             SoftLimitViolationError

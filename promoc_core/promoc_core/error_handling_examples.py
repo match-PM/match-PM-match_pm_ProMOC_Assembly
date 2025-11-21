@@ -11,7 +11,7 @@ Date: 29. Oktober 2025
 # Example 1: Basic Exception Usage
 # ============================================================================
 
-from promoc_assembly_interfaces.promoc_exceptions import (
+from promoc_core.promoc_exceptions import (
     PositionOutOfBoundsError,
     HomingRequiredError,
     DeviceNotFoundError,
@@ -89,7 +89,7 @@ class ExampleLinearAxisDriver:
 # ============================================================================
 
 from rclpy.node import Node
-from promoc_assembly_interfaces.error_handling import (
+from promoc_core.error_handling import (
     handle_service_errors,
     ServiceResponse
 )
@@ -138,8 +138,8 @@ class ExampleNode(Node):
 # Example 3: Retry Mechanism
 # ============================================================================
 
-from promoc_assembly_interfaces.error_handling import retry_on_error, RetryConfig
-from promoc_assembly_interfaces.promoc_exceptions import (
+from promoc_core.error_handling import retry_on_error, RetryConfig
+from promoc_core.promoc_exceptions import (
     DeviceDisconnectedError,
     CommunicationTimeoutError
 )
@@ -186,13 +186,13 @@ class ExampleDriverWithRetry:
 # Example 4: Error Recovery Strategies
 # ============================================================================
 
-from promoc_assembly_interfaces.error_handling import (
+from promoc_core.error_handling import (
     ErrorRecoveryManager,
     HomingRecoveryStrategy,
     ReconnectionRecoveryStrategy,
     ErrorRecoveryStrategy
 )
-from promoc_assembly_interfaces.promoc_exceptions import ProMocError
+from promoc_core.promoc_exceptions import ProMocError
 
 
 class CustomRecoveryStrategy(ErrorRecoveryStrategy):

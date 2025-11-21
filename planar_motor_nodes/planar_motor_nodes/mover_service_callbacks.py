@@ -3,62 +3,17 @@ import sys
 import os
 from .mover_pmc_interface import PmcInterface
 from .mover_utils import MoverUtils, MotionStatus
-from .mover_node_config import NodeConfig
-
-# Add promoc_assembly_interfaces to path for exception imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../promoc_assembly_interfaces'))
-
-try:
-    from promoc_assembly_interfaces.promoc_exceptions import (
-        PositionOutOfBoundsError,
-        MovementTimeoutError,
-        HardwareError,
-        CommunicationError,
-        ParameterValidationError,
-        SafetyViolation
-    )
-except ImportError:
-    # Fallback if import fails - define dummy classes
-    class PositionOutOfBoundsError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1202
-    
-    class MovementTimeoutError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1201
-    
-    class HardwareError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1400
-    
-    class CommunicationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1101
-    
-    class ParameterValidationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1601
-    
-    class SafetyViolation(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1300
-
+from promoc_core.promoc_exceptions import (
+    MovementTimeoutError,
+    HardwareError,
+    ConnectionError,
+    InvalidParameterError,
+    SafetyViolation,
+    PositionOutOfBoundsError
+)
 
 class ServiceCallbacks:
     """
-    Handles all ROS service callback logic, decoupled from the ROS node.
     It contains the business logic for motion commands and other services.
     """
     
@@ -141,7 +96,7 @@ class ServiceCallbacks:
         
         elif motion_type in ["arc", "arc_si"]:
             if hasattr(request, 'arc_mode') and request.arc_mode not in [0, 1, 2]:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Invalid arc_mode: {request.arc_mode}. Valid values are 0, 1, 2",
                     details={
                         'parameter': 'arc_mode',
@@ -150,7 +105,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'arc_type') and request.arc_type not in [0, 1]:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Invalid arc_type: {request.arc_type}. Valid values are 0 (MINOR), 1 (MAJOR)",
                     details={
                         'parameter': 'arc_type',
@@ -159,7 +114,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'arc_direction') and request.arc_direction not in [0, 1]:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Invalid arc_direction: {request.arc_direction}. Valid values are 0 (CW), 1 (CCW)",
                     details={
                         'parameter': 'arc_direction',
@@ -168,7 +123,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'pos_mode') and request.pos_mode not in [0, 1]:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Invalid pos_mode: {request.pos_mode}. Valid values are 0 (ABSOLUTE), 1 (RELATIVE)",
                     details={
                         'parameter': 'pos_mode',
@@ -177,7 +132,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'radius') and request.radius <= 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Radius must be positive, got: {request.radius}",
                     details={
                         'parameter': 'radius',
@@ -186,7 +141,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'max_speed') and request.max_speed <= 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Max speed must be positive, got: {request.max_speed}",
                     details={
                         'parameter': 'max_speed',
@@ -195,7 +150,7 @@ class ServiceCallbacks:
                     }
                 )
             if hasattr(request, 'max_accel') and request.max_accel <= 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"Max acceleration must be positive, got: {request.max_accel}",
                     details={
                         'parameter': 'max_accel',
@@ -285,7 +240,7 @@ class ServiceCallbacks:
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.warn(response.status_message)
@@ -348,7 +303,7 @@ class ServiceCallbacks:
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.warn(response.status_message)
@@ -468,7 +423,7 @@ class ServiceCallbacks:
             
             self.logger.info(f"🔄 Rotary motion completed: target={self.mover_utils.rad_to_deg(target_pos[5]):.1f}°, mode={rot_mode_names.get(rot_mode)}, travel_time={travel_time:.2f}s")
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.warn(response.status_message)
@@ -503,7 +458,7 @@ class ServiceCallbacks:
             self.logger.error(response.status_message)
             self.logger.debug(f"Hardware error details: {e.details}")
             
-        except CommunicationError as e:
+        except ConnectionError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.error(response.status_message)
@@ -521,7 +476,7 @@ class ServiceCallbacks:
         try:
             # Validate XBot ID
             if request.xbot_id < 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     f"XBot ID must be non-negative, got: {request.xbot_id}",
                     details={
                         'parameter': 'xbot_id',
@@ -543,7 +498,7 @@ class ServiceCallbacks:
             
             for param_name, param_value in params_to_validate.items():
                 if param_value <= 0:
-                    raise ParameterValidationError(
+                    raise InvalidParameterError(
                         f"{param_name} must be positive, got: {param_value}",
                         details={
                             'parameter': param_name,
@@ -566,7 +521,7 @@ class ServiceCallbacks:
             response.success = True
             response.status_message = "Parameters set successfully"
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.warn(response.status_message)
@@ -639,7 +594,7 @@ class ServiceCallbacks:
                            f"radius={request.radius:.1f}mm, "
                            f"travel_time={travel_time:.2f}s")
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.warn(response.status_message)

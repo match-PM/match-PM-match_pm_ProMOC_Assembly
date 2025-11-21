@@ -4,7 +4,7 @@
 
 ### 1. Import Exceptions
 ```python
-from promoc_assembly_interfaces.promoc_exceptions import (
+from promoc_core.promoc_exceptions import (
     PositionOutOfBoundsError,
     HomingRequiredError,
     DeviceNotFoundError,
@@ -26,7 +26,7 @@ raise PositionOutOfBoundsError(
 
 ### 3. Service Callback with Auto-Error-Handling
 ```python
-from promoc_assembly_interfaces.error_handling import handle_service_errors
+from promoc_core.error_handling import handle_service_errors
 
 @handle_service_errors(logger=self.get_logger())
 def my_service_callback(self, request, response):
@@ -38,7 +38,7 @@ def my_service_callback(self, request, response):
 
 ### 4. Add Retry to Functions
 ```python
-from promoc_assembly_interfaces.error_handling import retry_on_error, RetryConfig
+from promoc_core.error_handling import retry_on_error, RetryConfig
 
 @retry_on_error(RetryConfig(max_attempts=5, delay=1.0))
 def connect(self, port: str):
@@ -105,7 +105,7 @@ except PositionOutOfBoundsError as e:
 
 ### Pattern 3: Error Recovery
 ```python
-from promoc_assembly_interfaces.error_handling import (
+from promoc_core.error_handling import (
     ErrorRecoveryManager,
     HomingRecoveryStrategy
 )
@@ -122,7 +122,7 @@ except ProMocError as e:
 
 ### Pattern 4: Service Response
 ```python
-from promoc_assembly_interfaces.error_handling import ServiceResponse
+from promoc_core.error_handling import ServiceResponse
 
 def callback(self, request, response):
     start = time.time()

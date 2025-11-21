@@ -4,70 +4,13 @@ import threading
 import time
 from enum import Enum
 import sys
-import os
-
-# Add promoc_assembly_interfaces to path for exception imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../promoc_assembly_interfaces'))
-
-try:
-    from promoc_assembly_interfaces.promoc_exceptions import (
-        PositionOutOfBoundsError,
-        MovementTimeoutError,
-        HomingFailedError,
-        CollisionDetectedError,
-        SafetyViolation,
-        SoftLimitViolationError,
-        CommunicationError,
-        HardwareError
-    )
-except ImportError:
-    # Fallback if import fails - define dummy classes
-    class PositionOutOfBoundsError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1202
-    
-    class MovementTimeoutError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1201
-    
-    class HomingFailedError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1204
-    
-    class CollisionDetectedError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1203
-    
-    class SafetyViolation(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1300
-    
-    class SoftLimitViolationError(SafetyViolation):
-        def __init__(self, msg, details=None):
-            super().__init__(msg, details)
-            self.error_code = 1301
-    
-    class CommunicationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1101
-    
-    class HardwareError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1400
+from promoc_core.promoc_exceptions import (
+    CollisionDetectedError,
+    SoftLimitViolationError,
+    HomingFailedError,
+    ConnectionError,
+    HardwareError
+)
 
 
 
@@ -559,7 +502,7 @@ class ServiceCallbacks:
                                f"accel={response.acceleration:.2f}mm/s², "
                                f"max={response.max_velocity:.2f}mm/s")
         
-        except CommunicationError as e:
+        except ConnectionError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.error(response.status_message)
@@ -592,7 +535,7 @@ class ServiceCallbacks:
             except:
                 pass
                 
-        except CommunicationError as e:
+        except ConnectionError as e:
             response.success = False
             response.status_message = f"⚠️ {str(e)}"
             self.logger.error(response.status_message)

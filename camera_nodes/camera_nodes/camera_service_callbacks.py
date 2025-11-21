@@ -7,57 +7,14 @@ import rclpy
 from promoc_assembly_interfaces.srv import MoveAbsolute, JogAxis
 import time
 import sys
-import os
-
-# Add promoc_assembly_interfaces to path for exception imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../promoc_assembly_interfaces'))
-
-try:
-    from promoc_assembly_interfaces.promoc_exceptions import (
-        HardwareError,
-        CommunicationError,
-        ParameterValidationError,
-        ServiceCallFailedError,
-        ImageProcessingError,
-        ConfigurationError
-    )
-except ImportError:
-    # Fallback if import fails - define dummy classes
-    class HardwareError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1500
-    
-    class CommunicationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1101
-    
-    class ParameterValidationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1601
-    
-    class ServiceCallFailedError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1701
-    
-    class ImageProcessingError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1502
-    
-    class ConfigurationError(Exception):
-        def __init__(self, msg, details=None):
-            super().__init__(msg)
-            self.details = details or {}
-            self.error_code = 1600
+from promoc_core.promoc_exceptions import (
+    ConnectionError,
+    InvalidParameterError,
+    ServiceCallFailedError,
+    ImageProcessingError,
+    ConfigurationError,
+    HardwareError
+)
 
 class CameraServiceCallbacks:
     """Holds all service callback methods for the main camera node."""
@@ -178,7 +135,7 @@ class CameraServiceCallbacks:
         try:
             # Validate parameters
             if request.start_position >= request.end_position:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     "Start position must be less than end position",
                     details={
                         'start_position': request.start_position,
@@ -188,7 +145,7 @@ class CameraServiceCallbacks:
                 )
             
             if request.step_size <= 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     "Step size must be positive",
                     details={
                         'parameter': 'step_size',
@@ -312,7 +269,7 @@ class CameraServiceCallbacks:
             response.message = f"Autofocus successful. Best position: {best_position:.2f}mm (sharpness: {max_sharpness:.2f})"
             response.best_position = best_position
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.message = f"⚠️ {str(e)}"
             self._node.get_logger().warn(response.message)
@@ -344,7 +301,7 @@ class CameraServiceCallbacks:
         try:
             # Validate exposure time
             if request.exposure_time <= 0:
-                raise ParameterValidationError(
+                raise InvalidParameterError(
                     "Exposure time must be positive",
                     details={
                         'parameter': 'exposure_time',
@@ -370,7 +327,7 @@ class CameraServiceCallbacks:
             response.message = f"Exposure set to {request.exposure_time}µs successfully"
             self._node.get_logger().info(response.message)
             
-        except ParameterValidationError as e:
+        except InvalidParameterError as e:
             response.success = False
             response.message = f"⚠️ {str(e)}"
             self._node.get_logger().warn(response.message)

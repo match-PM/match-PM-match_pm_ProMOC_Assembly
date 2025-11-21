@@ -29,38 +29,6 @@ class MoverUtils:
         self.pmc = pmc_interface
         self.config = config
         self.is_mock = self.pmc.status['is_mock']
-        self._logged_warnings = set()
-        
-        # Velocity parameters management
-        self.velocity_params = {}
-        self.standard_velocity_params = {
-            'xy_vel': 1.00, 'z_vel': 0.10, 'rx_vel': 0.10, 'ry_vel': 0.10,
-            'rz_vel': 0.10, 'xy_max_accel': 5.00, 'z_max_accel': 1.00
-        }
-
-    def get_speed_params(self, xbot_id: int) -> dict:
-        """Helper to get speed parameters for a specific XBot."""
-        return self.velocity_params.get(xbot_id, self.standard_velocity_params)
-
-    def handle_service_error(self, error: Exception, response):
-        """Handles service errors consistently."""
-        error_msg = f"Service error: {str(error)}"
-        self.logger.error(f"{error_msg}", exc_info=True)
-        response.success = False
-        response.status_message = error_msg
-    
-    def mm_to_m(self, value_mm: float) -> float:
-        """Convert millimeters to meters."""
-        return value_mm / 1000.0
-    
-    def m_to_mm(self, value_m: float) -> float:
-        """Convert meters to millimeters."""
-        return value_m * 1000.0
-    
-    def deg_to_rad(self, value_deg: float) -> float:
-        """Convert degrees to radians."""
-        return math.radians(value_deg)
-    
     def rad_to_deg(self, value_rad: float) -> float:
         """Convert radians to degrees."""
         return math.degrees(value_rad)
