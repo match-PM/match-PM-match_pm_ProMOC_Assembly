@@ -1,5 +1,7 @@
+
 import sys
 import os
+from promoc_core.promoc_exceptions import ConnectionError, DriverNotAvailableError
 
 class PmcInterface:
     """
@@ -74,6 +76,14 @@ class PmcInterface:
         self.logger.info("Loaded MOCK PMCLib for simulation.")
 
     def connect(self, ip_address: str) -> bool:
-        """Tries to connect to the PMC ONCE and returns the status."""
+        """
+        Tries to connect to the PMC ONCE.
+        Raises ConnectionError if connection fails.
+        """
         success = self.sys_cmd.connect_to_pmc(ip_address)
-        return success
+        if not success:
+            raise ConnectionError(
+                message=f"Failed to connect to PMC at {ip_address}",
+                details={'ip_address': ip_address}
+            )
+        return True

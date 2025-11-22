@@ -10,7 +10,7 @@ def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('promoc_bringup')
     config_dir = os.path.join(bringup_dir, 'config')
-    params_file = os.path.join(config_dir, 'promoc_assembly_params.yaml')
+    params_file = os.path.join(config_dir, 'mover_node_params.yaml')
 
     # Hardware Nodes
     mover_node = Node(

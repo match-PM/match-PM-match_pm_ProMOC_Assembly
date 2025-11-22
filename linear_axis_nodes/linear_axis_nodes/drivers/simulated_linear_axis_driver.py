@@ -3,6 +3,7 @@
 import time
 from typing import Optional, Tuple
 from .linear_axis_driver import LinearAxisDriver
+from promoc_core.promoc_exceptions import SoftLimitViolationError
 
 class SimulatedLinearAxisDriver(LinearAxisDriver):
     def __init__(self):
@@ -128,7 +129,15 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
         # Validate position
         target_pos = self._position + step_size
         if target_pos > 300.0:  # Assume 300mm max limit
-            raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+            raise SoftLimitViolationError(
+                f"Jog target position {target_pos:.2f}mm would exceed safety limits",
+                details={
+                    'current_position': self._position,
+                    'step_size': step_size,
+                    'target_position': target_pos,
+                    'limits': {'min': 0.0, 'max': 300.0}
+                }
+            )
         
         self.move_relative(step_size)
         
@@ -140,7 +149,15 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
         # Validate position
         target_pos = self._position - step_size
         if target_pos < 0.0:  # Assume 0mm min limit
-            raise ValueError(f"Jog target position {target_pos:.2f}mm would exceed safety limits")
+            raise SoftLimitViolationError(
+                f"Jog target position {target_pos:.2f}mm would exceed safety limits",
+                details={
+                    'current_position': self._position,
+                    'step_size': -step_size,
+                    'target_position': target_pos,
+                    'limits': {'min': 0.0, 'max': 300.0}
+                }
+            )
         
         self.move_relative(-step_size)
 

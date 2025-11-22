@@ -9,7 +9,27 @@ import os
 
 # Try to import Thorlabs library
 try:
-ABSOLUTE_MAX_POSITION =300.0
+    from pylablib.devices import Thorlabs
+except ImportError as e:
+    Thorlabs = None # Set to None if import fails
+
+from .linear_axis_driver import LinearAxisDriver
+from promoc_core.promoc_exceptions import (
+    DeviceNotFoundError,
+    ConnectionTimeoutError,
+    ConnectionError,
+    HardwareError,
+    HomingFailedError,
+    MovementTimeoutError,
+    SoftLimitViolationError,
+    DriverNotAvailableError
+)
+
+# Suppress pylablib warnings during import
+warnings.filterwarnings("ignore", message="can't recognize the stage name*")
+warnings.filterwarnings("ignore", message="can't recognize motor model*")
+
+ABSOLUTE_MAX_POSITION = 300.0
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
     def __init__(self, logger):
