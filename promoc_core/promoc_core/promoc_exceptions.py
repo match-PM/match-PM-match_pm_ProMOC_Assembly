@@ -59,19 +59,19 @@ from typing import Optional, Dict, Any
 class ProMocError(Exception):
     """
     Base exception class for all ProMOC Assembly errors.
-    
+
     All custom exceptions in the ProMOC system inherit from this class,
     allowing for easy catch-all error handling when needed.
-    
+
     Attributes:
         message: Human-readable error description
         error_code: Numerical error code for programmatic handling
         details: Additional context information (dict)
     """
-    
+
     def __init__(
-        self, 
-        message: str, 
+        self,
+        message: str,
         error_code: Optional[int] = None,
         details: Optional[Dict[str, Any]] = None
     ):
@@ -79,15 +79,16 @@ class ProMocError(Exception):
         self.message = message
         self.error_code = error_code or self._default_error_code()
         self.details = details or {}
-    
+
     def _default_error_code(self) -> int:
         """Return default error code for this exception type."""
         return 1000  # Generic error
-    
+
     def __str__(self) -> str:
         base = f"[{self.__class__.__name__}:{self.error_code}] {self.message}"
         if self.details:
-            details_str = ", ".join(f"{k}={v}" for k, v in self.details.items())
+            details_str = ", ".join(
+                f"{k}={v}" for k, v in self.details.items())
             return f"{base} | Details: {details_str}"
         return base
 
@@ -98,26 +99,37 @@ class ProMocError(Exception):
 
 class ConnectionError(ProMocError):
     """Base class for all connection-related errors."""
+
     def _default_error_code(self) -> int:
         return 1100
 
 
 class DeviceNotFoundError(ConnectionError):
     """Raised when a device cannot be found or discovered."""
+
     def _default_error_code(self) -> int:
         return 1101
 
 
 class DeviceDisconnectedError(ConnectionError):
     """Raised when a device unexpectedly disconnects."""
+
     def _default_error_code(self) -> int:
         return 1102
 
 
 class CommunicationTimeoutError(ConnectionError):
     """Raised when communication with a device times out."""
+
     def _default_error_code(self) -> int:
         return 1103
+
+
+class CommunicationError(ConnectionError):
+    """Raised when communication with a device fails (e.g., device not connected)."""
+
+    def _default_error_code(self) -> int:
+        return 1104
 
 
 # ============================================================================
@@ -126,30 +138,35 @@ class CommunicationTimeoutError(ConnectionError):
 
 class MotionError(ProMocError):
     """Base class for all motion-related errors."""
+
     def _default_error_code(self) -> int:
         return 1200
 
 
 class MovementTimeoutError(MotionError):
     """Raised when a movement operation times out."""
+
     def _default_error_code(self) -> int:
         return 1201
 
 
 class PositionOutOfBoundsError(MotionError):
     """Raised when a requested position is outside valid range."""
+
     def _default_error_code(self) -> int:
         return 1202
 
 
 class CollisionDetectedError(MotionError):
     """Raised when a collision is detected or predicted."""
+
     def _default_error_code(self) -> int:
         return 1203
 
 
 class HomingFailedError(MotionError):
     """Raised when homing operation fails."""
+
     def _default_error_code(self) -> int:
         return 1204
 
@@ -160,30 +177,35 @@ class HomingFailedError(MotionError):
 
 class SafetyViolation(ProMocError):
     """Base class for all safety-related errors."""
+
     def _default_error_code(self) -> int:
         return 1300
 
 
 class SoftLimitViolationError(SafetyViolation):
     """Raised when a software limit is violated."""
+
     def _default_error_code(self) -> int:
         return 1301
 
 
 class HardLimitViolationError(SafetyViolation):
     """Raised when a hardware limit is violated."""
+
     def _default_error_code(self) -> int:
         return 1302
 
 
 class EmergencyStopError(SafetyViolation):
     """Raised when emergency stop is triggered."""
+
     def _default_error_code(self) -> int:
         return 1303
 
 
 class SafetyZoneViolationError(SafetyViolation):
     """Raised when a safety zone is violated."""
+
     def _default_error_code(self) -> int:
         return 1304
 
@@ -194,24 +216,28 @@ class SafetyZoneViolationError(SafetyViolation):
 
 class CalibrationError(ProMocError):
     """Base class for all calibration-related errors."""
+
     def _default_error_code(self) -> int:
         return 1400
 
 
 class HomingRequiredError(CalibrationError):
     """Raised when an operation requires homing first."""
+
     def _default_error_code(self) -> int:
         return 1401
 
 
 class CalibrationFailedError(CalibrationError):
     """Raised when calibration process fails."""
+
     def _default_error_code(self) -> int:
         return 1402
 
 
 class CalibrationDataInvalidError(CalibrationError):
     """Raised when calibration data is invalid or corrupted."""
+
     def _default_error_code(self) -> int:
         return 1403
 
@@ -222,24 +248,28 @@ class CalibrationDataInvalidError(CalibrationError):
 
 class HardwareError(ProMocError):
     """Base class for all hardware-related errors."""
+
     def _default_error_code(self) -> int:
         return 1500
 
 
 class DriverNotAvailableError(HardwareError):
     """Raised when required hardware driver is not available."""
+
     def _default_error_code(self) -> int:
         return 1501
 
 
 class HardwareInitializationError(HardwareError):
     """Raised when hardware initialization fails."""
+
     def _default_error_code(self) -> int:
         return 1502
 
 
 class SensorReadError(HardwareError):
     """Raised when reading sensor data fails."""
+
     def _default_error_code(self) -> int:
         return 1503
 
@@ -250,26 +280,34 @@ class SensorReadError(HardwareError):
 
 class ConfigurationError(ProMocError):
     """Base class for all configuration-related errors."""
+
     def _default_error_code(self) -> int:
         return 1600
 
 
 class InvalidParameterError(ConfigurationError):
     """Raised when a parameter has an invalid value."""
+
     def _default_error_code(self) -> int:
         return 1601
 
 
 class MissingConfigurationError(ConfigurationError):
     """Raised when required configuration is missing."""
+
     def _default_error_code(self) -> int:
         return 1602
 
 
 class ValidationError(ConfigurationError):
     """Raised when configuration validation fails."""
+
     def _default_error_code(self) -> int:
         return 1603
+
+
+# Alias for backwards compatibility - ParameterValidationError is used in some modules
+ParameterValidationError = InvalidParameterError
 
 
 # ============================================================================
@@ -278,24 +316,28 @@ class ValidationError(ConfigurationError):
 
 class ServiceError(ProMocError):
     """Base class for all service-related errors."""
+
     def _default_error_code(self) -> int:
         return 1700
 
 
 class ServiceCallFailedError(ServiceError):
     """Raised when a service call fails."""
+
     def _default_error_code(self) -> int:
         return 1701
 
 
 class InvalidServiceRequestError(ServiceError):
     """Raised when a service request contains invalid data."""
+
     def _default_error_code(self) -> int:
         return 1702
 
 
 class ServiceTimeoutError(ServiceError):
     """Raised when a service call times out."""
+
     def _default_error_code(self) -> int:
         return 1703
 
@@ -311,6 +353,7 @@ ERROR_CODE_REGISTRY = {
     1101: "Device Not Found",
     1102: "Device Disconnected",
     1103: "Communication Timeout",
+    1104: "Communication Error",
     # Motion Errors
     1200: "Motion Error",
     1201: "Movement Timeout",
@@ -350,6 +393,7 @@ ERROR_CODE_REGISTRY = {
 
 class ImageProcessingError(ProMocError):
     """Raised when image processing fails."""
+
     def _default_error_code(self) -> int:
         return 1800
 
@@ -357,10 +401,10 @@ class ImageProcessingError(ProMocError):
 def get_error_description(error_code: int) -> str:
     """
     Get human-readable description for an error code.
-    
+
     Args:
         error_code: The numerical error code
-        
+
     Returns:
         Error description string, or "Unknown Error" if code not found
     """
