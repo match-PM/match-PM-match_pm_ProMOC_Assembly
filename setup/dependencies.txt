@@ -34,6 +34,12 @@ pyserial>=3.4                # Serial communication for Thorlabs devices
 pyusb>=1.0.0                 # USB communication support
 numpy>=1.20.0,<2.0.0         # Required by pylablib and scientific computing
 
+# --- pylablib Compatibility (CRITICAL for Ubuntu 24.04 / Python 3.12) ---
+# These version pins are REQUIRED to avoid numba/coverage conflicts
+numba==0.59.1               # PINNED: Required for pylablib, newer versions conflict with coverage
+llvmlite==0.42.0            # PINNED: Must match numba 0.59.1 requirements
+coverage<7.4                # PINNED: coverage >=7.4 conflicts with numba 0.59.1
+
 # --- ROS2 Python (usually pre-installed with ROS2) ---
 # rclpy                      # ROS2 Python client library
 # std_msgs                   # Standard ROS2 message types  

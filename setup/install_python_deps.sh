@@ -3,19 +3,30 @@
 # ProMOC Assembly Python Dependencies Installation Script
 # This script installs Python dependencies for both development and hardware modes
 # Handles Ubuntu 24.04 PEP 668 externally-managed environment
+# 
+# CRITICAL: Includes version pins for numba/llvmlite/coverage to fix pylablib compatibility
 
 set -e  # Exit on error
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Installing ProMOC Assembly Python Dependencies..."
 echo "================================================="
 
-# Check if we're on Ubuntu 24.04 (has PEP 668 restrictions)
+# Detect Ubuntu version and Python version
 if [[ -f /etc/os-release ]]; then
     source /etc/os-release
-    if [[ "$VERSION_ID" == "24.04" ]]; then
-        echo "⚠ Ubuntu 24.04 detected - PEP 668 externally-managed environment"
-        PEP668_MODE=true
-    fi
+    UBUNTU_VERSION="$VERSION_ID"
+    echo "Detected Ubuntu $UBUNTU_VERSION"
+fi
+
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "Detected Python $PYTHON_VERSION"
+
+# Check if we're on Ubuntu 24.04 (has PEP 668 restrictions)
+if [[ "$UBUNTU_VERSION" == "24.04" ]] || [[ "$PYTHON_VERSION" == "3.12" ]]; then
+    echo "⚠ Ubuntu 24.04 / Python 3.12 detected - PEP 668 externally-managed environment"
+    PEP668_MODE=true
 fi
 
 # Check if we're in a virtual environment
@@ -132,9 +143,23 @@ if ! pip_install "pythonnet"; then
     pip_install "pythonnet"
 fi
 
-# Install pylablib
-echo "Installing pylablib..."
+# Install pylablib with required numba/llvmlite version pins
+echo ""
+echo "Installing pylablib with compatible numba/llvmlite versions..."
+echo "⚠ CRITICAL: numba 0.59.1 is required - newer versions conflict with coverage"
+
+# First install llvmlite (specific version required by numba 0.59.1)
+pip_install "llvmlite==0.42.0" "" || echo "⚠ llvmlite installation failed"
+
+# Install numba (pinned to 0.59.1 for coverage compatibility)
+pip_install "numba==0.59.1" "" || echo "⚠ numba installation failed"
+
+# Install coverage with version constraint (>=7.4 conflicts with numba 0.59.1)
+pip_install "coverage<7.4" "" || echo "⚠ coverage installation failed"
+
+# Now install pylablib
 pip_install "pylablib>=1.4.0"
+echo "✓ pylablib installed with compatible numba version"
 
 # Run .NET runtime detection and configuration
 echo "Checking .NET runtime compatibility..."

@@ -1,23 +1,50 @@
 #!/bin/bash
 
+# ================================================================
 # ProMOC Assembly Master Installation Script
-# This script orchestrates the complete installation of all dependencies and setup
+# ================================================================
+# 
+# This script orchestrates the complete installation of all dependencies
+# for the ProMOC Assembly ROS2 system.
+#
+# Supports:
+#   - Ubuntu 22.04 (Jammy) with ROS2 Humble
+#   - Ubuntu 24.04 (Noble) with ROS2 Jazzy
+#
+# Components installed:
+#   - System dependencies (.NET SDK, Mono, Aravis, build tools)
+#   - Python dependencies (pythonnet, pylablib, numba, etc.)
+#   - USB/Serial device permissions (udev rules, dialout group)
+#   - camera_aravis2 driver (optional, for IDS cameras)
+#   - ROS2 workspace build
+#
 # Author: ProMOC Assembly Team
-# Version: 1.0
+# Version: 2.0
+# ================================================================
 
 set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$PROJECT_ROOT/.." && pwd)"
 
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Logging functions
+# Installation options (can be overridden via environment variables)
+INSTALL_CAMERA_ARAVIS2=${INSTALL_CAMERA_ARAVIS2:-true}
+CAMERA_WS="${CAMERA_WS:-$HOME/ros2_ws}"
+SKIP_GROUP_CHECK=${SKIP_GROUP_CHECK:-false}
+
+# ================================================================
+# Logging Functions
+# ================================================================
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -34,23 +61,57 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+log_step() {
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}  $1${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# ================================================================
+# Header and Help
+# ================================================================
+
 print_header() {
     echo ""
     echo "================================================================"
-    echo "  ProMOC Assembly System - Complete Installation Script"
+    echo "  ProMOC Assembly System - Complete Installation Script v2.0"
     echo "================================================================"
     echo ""
     echo "This script will install:"
-    echo "• System dependencies (.NET SDK, Mono, build tools)"
-    echo "• Python dependencies (pythonnet, pylablib, etc.)"
-    echo "• ROS2 dependencies via rosdep"
-    echo "• Validate the complete installation"
+    echo "  • System dependencies (.NET SDK, Mono, Aravis, build tools)"
+    echo "  • Python dependencies (pythonnet, pylablib, numba, etc.)"
+    echo "  • USB/Serial device permissions (dialout group, udev rules)"
+    echo "  • camera_aravis2 driver (for IDS USB3 Vision cameras)"
+    echo "  • ROS2 workspace (colcon build)"
+    echo ""
+    echo "Project root: $PROJECT_ROOT"
+    echo "Workspace:    $WORKSPACE_ROOT"
     echo ""
 }
 
-# Check prerequisites
+print_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --no-camera       Skip camera_aravis2 installation"
+    echo "  --camera-ws PATH  Custom workspace for camera_aravis2"
+    echo "  --skip-groups     Skip dialout/plugdev group check"
+    echo "  --non-interactive Run without prompts (use defaults)"
+    echo "  -h, --help        Show this help message"
+    echo ""
+    echo "Environment variables:"
+    echo "  INSTALL_CAMERA_ARAVIS2=true/false"
+    echo "  CAMERA_WS=/path/to/camera/workspace"
+    echo "  SKIP_GROUP_CHECK=true/false"
+}
+
+# ================================================================
+# Prerequisite Checks
+# ================================================================
+
 check_prerequisites() {
-    log_info "Checking prerequisites..."
+    log_step "Step 1: Checking Prerequisites"
     
     # Check if running on Ubuntu
     if [[ ! -f /etc/os-release ]]; then
@@ -59,23 +120,46 @@ check_prerequisites() {
     fi
     
     source /etc/os-release
+    UBUNTU_VERSION="$VERSION_ID"
     log_info "Detected OS: $PRETTY_NAME"
+    
+    # Check Python version
+    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    log_info "Detected Python: $PYTHON_VERSION"
     
     # Check if ROS2 is installed
     if ! command -v ros2 &> /dev/null; then
-        log_error "ROS2 not found! Please install ROS2 first:"
-        echo "  https://docs.ros.org/en/humble/Installation.html"
+        # Try to source ROS2 automatically
+        if [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
+            source /opt/ros/jazzy/setup.bash
+            log_info "Sourced ROS2 Jazzy"
+        elif [[ -f "/opt/ros/humble/setup.bash" ]]; then
+            source /opt/ros/humble/setup.bash
+            log_info "Sourced ROS2 Humble"
+        else
+            log_error "ROS2 not found! Please install ROS2 first:"
+            echo ""
+            echo "  For Ubuntu 24.04 (Jazzy):"
+            echo "    https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html"
+            echo ""
+            echo "  For Ubuntu 22.04 (Humble):"
+            echo "    https://docs.ros.org/en/humble/Installation.html"
+            exit 1
+        fi
+    fi
+    
+    ROS_DISTRO=$(printenv ROS_DISTRO)
+    if [[ -z "$ROS_DISTRO" ]]; then
+        log_error "ROS_DISTRO not set! Source your ROS2 setup first."
         exit 1
     fi
     
-    local ros_distro=$(printenv ROS_DISTRO)
-    if [[ -z "$ros_distro" ]]; then
-        log_error "ROS_DISTRO not set! Source your ROS2 setup:"
-        echo "  source /opt/ros/humble/setup.bash"
-        exit 1
-    fi
+    log_success "ROS2 $ROS_DISTRO detected"
     
-    log_success "ROS2 $ros_distro detected"
+    # Verify colcon is available
+    if ! command -v colcon &> /dev/null; then
+        log_warning "colcon not found, will be installed with system dependencies"
+    fi
     
     # Check if we're in the correct directory
     if [[ ! -f "$SCRIPT_DIR/dependencies.txt" ]]; then
@@ -83,71 +167,147 @@ check_prerequisites() {
         exit 1
     fi
     
+    # Check workspace structure
+    if [[ ! -d "$PROJECT_ROOT/camera_nodes" ]] || [[ ! -d "$PROJECT_ROOT/linear_axis_nodes" ]]; then
+        log_warning "Some package directories not found - workspace may be incomplete"
+    fi
+    
     log_success "Prerequisites check passed"
 }
 
-# Install system dependencies
+# ================================================================
+# Installation Functions
+# ================================================================
+
+install_colcon() {
+    if ! command -v colcon &> /dev/null; then
+        log_info "Installing colcon build tools..."
+        sudo apt-get update
+        sudo apt-get install -y python3-colcon-common-extensions
+        log_success "colcon installed"
+    fi
+}
+
 install_system_deps() {
-    log_info "Installing system dependencies..."
+    log_step "Step 2: Installing System Dependencies"
     
     if [[ -x "$SCRIPT_DIR/install_system_deps.sh" ]]; then
         bash "$SCRIPT_DIR/install_system_deps.sh"
         log_success "System dependencies installed"
     else
-        log_error "install_system_deps.sh not found or not executable"
-        exit 1
+        chmod +x "$SCRIPT_DIR/install_system_deps.sh"
+        bash "$SCRIPT_DIR/install_system_deps.sh"
+        log_success "System dependencies installed"
     fi
 }
 
-# Install Python dependencies
 install_python_deps() {
-    log_info "Installing Python dependencies..."
+    log_step "Step 3: Installing Python Dependencies"
     
     if [[ -x "$SCRIPT_DIR/install_python_deps.sh" ]]; then
         bash "$SCRIPT_DIR/install_python_deps.sh"
         log_success "Python dependencies installed"
     else
-        log_error "install_python_deps.sh not found or not executable"
-        exit 1
+        chmod +x "$SCRIPT_DIR/install_python_deps.sh"
+        bash "$SCRIPT_DIR/install_python_deps.sh"
+        log_success "Python dependencies installed"
     fi
 }
 
-# Install ROS2 dependencies
-install_ros2_deps() {
-    log_info "Installing ROS2 dependencies with rosdep..."
+install_camera_aravis2() {
+    log_step "Step 4: Installing camera_aravis2 Driver"
     
-    cd "$PROJECT_ROOT"
+    if [[ "$INSTALL_CAMERA_ARAVIS2" != "true" ]]; then
+        log_info "Skipping camera_aravis2 installation (--no-camera)"
+        return 0
+    fi
+    
+    if [[ -x "$SCRIPT_DIR/install_camera_aravis2.sh" ]]; then
+        CAMERA_WS="$CAMERA_WS" bash "$SCRIPT_DIR/install_camera_aravis2.sh"
+        log_success "camera_aravis2 installed"
+    else
+        chmod +x "$SCRIPT_DIR/install_camera_aravis2.sh"
+        CAMERA_WS="$CAMERA_WS" bash "$SCRIPT_DIR/install_camera_aravis2.sh"
+        log_success "camera_aravis2 installed"
+    fi
+}
+
+install_ros2_deps() {
+    log_step "Step 5: Installing ROS2 Dependencies"
+    
+    log_info "Updating rosdep..."
     
     # Initialize rosdep if not already done
     if ! rosdep --version &> /dev/null; then
         log_info "Initializing rosdep..."
-        sudo rosdep init || true  # Don't fail if already initialized
-        rosdep update
-    else
-        log_info "Updating rosdep..."
-        rosdep update
+        sudo rosdep init 2>/dev/null || true  # Don't fail if already initialized
     fi
+    rosdep update
     
     # Install dependencies for all packages
     log_info "Installing ROS2 package dependencies..."
-    rosdep install --from-paths . --ignore-src -y --rosdistro $ROS_DISTRO
+    cd "$PROJECT_ROOT"
+    rosdep install --from-paths . --ignore-src -y --rosdistro $ROS_DISTRO || {
+        log_warning "Some rosdep dependencies could not be installed automatically"
+    }
     
     log_success "ROS2 dependencies installed"
 }
 
-# Build the workspace
+setup_pmclib_directory() {
+    log_info "Setting up PMCLib directory structure..."
+    
+    local local_libs_dir="$PROJECT_ROOT/local_libs"
+    
+    if [[ ! -d "$local_libs_dir" ]]; then
+        mkdir -p "$local_libs_dir"
+        log_info "Created local_libs directory"
+    fi
+    
+    # Create PMCLib directory if it doesn't exist
+    if [[ ! -d "$local_libs_dir/pmclib" ]]; then
+        mkdir -p "$local_libs_dir/pmclib"
+        cat > "$local_libs_dir/pmclib/README.md" << 'EOF'
+# PMCLib Directory
+
+This directory should contain the proprietary PMCLib Python package from Match/IEMCA.
+
+## Installation
+
+1. Obtain PMCLib from Match/IEMCA
+2. Extract the pmclib package here so that the directory structure is:
+   ```
+   local_libs/pmclib/
+   ├── __init__.py
+   ├── system_commands.py
+   └── ... (other modules)
+   ```
+
+3. The ProMOC Assembly system will automatically find PMCLib via Python path.
+
+## Note
+
+For development without hardware, the system uses mock_pmclib.py automatically.
+EOF
+    fi
+    
+    log_success "PMCLib directory structure ready"
+}
+
 build_workspace() {
-    log_info "Building ROS2 workspace..."
+    log_step "Step 6: Building ROS2 Workspace"
     
-    cd "$PROJECT_ROOT"
+    cd "$WORKSPACE_ROOT"
     
-    # Clean previous build (optional)
+    # Clean previous build if requested
     if [[ -d "build" ]] || [[ -d "install" ]] || [[ -d "log" ]]; then
-        read -p "Remove previous build artifacts? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf build install log
-            log_info "Previous build artifacts removed"
+        if [[ "$NON_INTERACTIVE" != "true" ]]; then
+            read -p "Remove previous build artifacts? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -rf build install log
+                log_info "Previous build artifacts removed"
+            fi
         fi
     fi
     
@@ -158,163 +318,217 @@ build_workspace() {
     log_success "Workspace built successfully"
 }
 
-# Validate installation
 validate_installation() {
-    log_info "Validating installation..."
+    log_step "Step 7: Validating Installation"
     
-    if [[ -x "$SCRIPT_DIR/validate_setup.sh" ]]; then
-        bash "$SCRIPT_DIR/validate_setup.sh"
+    local validation_passed=true
+    
+    # Check Python imports
+    log_info "Testing Python dependencies..."
+    
+    python3 -c "import pythonnet; print('✓ pythonnet')" 2>/dev/null || {
+        log_warning "pythonnet import failed"
+        validation_passed=false
+    }
+    
+    python3 -c "import pylablib; print('✓ pylablib')" 2>/dev/null || {
+        log_warning "pylablib import failed"
+        validation_passed=false
+    }
+    
+    python3 -c "import numba; print(f'✓ numba {numba.__version__}')" 2>/dev/null || {
+        log_warning "numba import failed"
+        validation_passed=false
+    }
+    
+    # Check ROS2 packages
+    log_info "Testing ROS2 packages..."
+    source "$WORKSPACE_ROOT/install/setup.bash"
+    
+    ros2 pkg list | grep -q linear_axis_nodes && echo "✓ linear_axis_nodes" || {
+        log_warning "linear_axis_nodes not found"
+        validation_passed=false
+    }
+    
+    ros2 pkg list | grep -q camera_nodes && echo "✓ camera_nodes" || {
+        log_warning "camera_nodes not found"
+        validation_passed=false
+    }
+    
+    ros2 pkg list | grep -q planar_motor_nodes && echo "✓ planar_motor_nodes" || {
+        log_warning "planar_motor_nodes not found"
+        validation_passed=false
+    }
+    
+    # Check group membership
+    if [[ "$SKIP_GROUP_CHECK" != "true" ]]; then
+        log_info "Checking group membership..."
+        
+        if groups $USER | grep -q dialout; then
+            echo "✓ User in dialout group (serial ports)"
+        else
+            log_warning "User NOT in dialout group - serial devices may not work"
+            log_warning "Run: sudo usermod -a -G dialout \$USER && logout"
+            validation_passed=false
+        fi
+        
+        if groups $USER | grep -q plugdev; then
+            echo "✓ User in plugdev group (USB devices)"
+        else
+            log_warning "User NOT in plugdev group - USB devices may not work"
+            validation_passed=false
+        fi
+    fi
+    
+    if [[ "$validation_passed" == "true" ]]; then
+        log_success "All validation checks passed"
     else
-        log_warning "validate_setup.sh not found, skipping validation"
+        log_warning "Some validation checks failed - see warnings above"
     fi
 }
 
-# Create local_libs directory for PMCLib
-setup_pmclib_directory() {
-    log_info "Setting up PMCLib directory structure..."
-    
-    local local_libs_dir="$PROJECT_ROOT/local_libs"
-    
-    if [[ ! -d "$local_libs_dir" ]]; then
-        mkdir -p "$local_libs_dir"
-        log_info "Created local_libs directory: $local_libs_dir"
-    fi
-    
-    # Create a README for the local_libs directory
-    cat > "$local_libs_dir/README.md" << 'EOF'
-# Local Libraries Directory
-
-This directory contains proprietary libraries that are not publicly available.
-
-## PMCLib Installation
-
-1. Obtain the PMCLib wheel file from Match/IEMCA:
-   ```
-   pmclib-X.X.X-py3-none-any.whl
-   ```
-
-2. Copy it to this directory:
-   ```bash
-   cp /path/to/pmclib-*.whl local_libs/
-   ```
-
-3. Install it in your Python environment:
-   ```bash
-   pip install local_libs/pmclib-*.whl
-   ```
-
-## Note
-
-- This directory is included in .gitignore to prevent accidental commits
-- The PMCLib is proprietary and should not be shared publicly
-- For development without hardware, the mock_pmclib.py will be used automatically
-EOF
-    
-    log_success "PMCLib directory structure created"
-}
-
-# Generate setup summary
 generate_setup_summary() {
-    local summary_file="$SCRIPT_DIR/INSTALLATION_SUMMARY.md"
+    log_step "Generating Installation Summary"
     
-    log_info "Generating installation summary..."
+    local summary_file="$SCRIPT_DIR/INSTALLATION_SUMMARY.md"
     
     cat > "$summary_file" << EOF
 # ProMOC Assembly Installation Summary
 
 **Installation Date:** $(date)
-**System:** $(lsb_release -d | cut -f2)
+**System:** $(lsb_release -d 2>/dev/null | cut -f2 || echo "Unknown")
 **ROS2 Distro:** $ROS_DISTRO
+**Python Version:** $PYTHON_VERSION
 
 ## Installation Status
 
-### ✅ System Dependencies
-- .NET SDK 8.0: $(command -v dotnet &> /dev/null && echo "✓ Installed" || echo "✗ Not available")
-- Mono Runtime: $(command -v mono &> /dev/null && echo "✓ Installed" || echo "✗ Not available") 
-- Build Tools: ✓ Installed
-- Python Dev Headers: ✓ Installed
+### System Dependencies
+- .NET SDK 8.0: $(command -v dotnet &> /dev/null && echo "✓ Installed ($(dotnet --version))" || echo "✗ Not available")
+- Mono Runtime: $(command -v mono &> /dev/null && echo "✓ Installed" || echo "✗ Not available")
+- Aravis Tools: $(command -v arv-tool-0.8 &> /dev/null && echo "✓ Installed" || echo "✗ Not available")
 
-### ✅ Python Dependencies
-- pythonnet: $(pip show pythonnet &> /dev/null && echo "✓ Installed" || echo "⚠ Check required")
-- pylablib: $(pip show pylablib &> /dev/null && echo "✓ Installed" || echo "⚠ Check required")
-- pyserial: $(pip show pyserial &> /dev/null && echo "✓ Installed" || echo "⚠ Check required")
+### Python Dependencies
+- pythonnet: $(python3 -c "import pythonnet; print('✓ Installed')" 2>/dev/null || echo "✗ Not installed")
+- pylablib: $(python3 -c "import pylablib; print('✓ Installed')" 2>/dev/null || echo "✗ Not installed")
+- numba: $(python3 -c "import numba; print(f'✓ {numba.__version__}')" 2>/dev/null || echo "✗ Not installed")
 
-### ✅ ROS2 Dependencies
-- Workspace built: $(test -d "$PROJECT_ROOT/install" && echo "✓ Yes" || echo "✗ No")
-- rosdep updated: ✓ Yes
+### ROS2 Workspace
+- Workspace: $WORKSPACE_ROOT
+- Build Status: $(test -d "$WORKSPACE_ROOT/install" && echo "✓ Built" || echo "✗ Not built")
 
-## Next Steps
+### User Permissions
+- dialout group: $(groups $USER | grep -q dialout && echo "✓ Member" || echo "✗ Not member (REQUIRED for serial ports)")
+- plugdev group: $(groups $USER | grep -q plugdev && echo "✓ Member" || echo "✗ Not member")
 
-1. **Source the workspace:**
-   \`\`\`bash
-   source $PROJECT_ROOT/install/setup.bash
-   \`\`\`
+## Quick Start
 
-2. **For PMCLib (if available):**
-   \`\`\`bash
-   # Copy wheel file to local_libs/
-   cp /path/to/pmclib-*.whl $PROJECT_ROOT/local_libs/
-   
-   # Install PMCLib
-   pip install $PROJECT_ROOT/local_libs/pmclib-*.whl
-   \`\`\`
+\`\`\`bash
+# Source the workspace
+source $WORKSPACE_ROOT/install/setup.bash
 
-3. **Test the installation:**
-   \`\`\`bash
-   cd $SCRIPT_DIR
-   python3 test_basic_functionality.py
-   \`\`\`
+# Start LTS300 linear axis node
+ros2 run linear_axis_nodes lts300_node --ros-args \\
+    -r __node:=lts300_x_axis \\
+    -p serial_port:=/dev/ttyUSB0 \\
+    -p debug_mode:=true
 
-4. **Run simulation:**
-   \`\`\`bash
-   ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
-   \`\`\`
+# Start camera (requires camera_aravis2)
+ros2 launch promoc_bringup assembly_camera.launch.py
+\`\`\`
 
 ## Troubleshooting
 
-- For .NET issues: Run \`$SCRIPT_DIR/check_dotnet_runtime.py\`
-- For validation: Run \`$SCRIPT_DIR/validate_setup.sh\`
-- For detailed logs: Check colcon build output
-
-## Project Structure
-
-\`\`\`
-$PROJECT_ROOT/
-├── linear_axis_nodes/          # Thorlabs LTS300 control
-├── planar_motor_nodes/         # Planar motor with PMCLib
-├── promoc_assembly_interfaces/ # Custom ROS2 messages/services
-├── promoc_bringup/            # Launch files and configurations
-├── setup/                     # Installation and validation scripts
-└── local_libs/               # Proprietary libraries (PMCLib)
+### Serial Port Access Denied
+\`\`\`bash
+sudo usermod -a -G dialout \$USER
+# Then logout and login again
 \`\`\`
 
-Generated by: ProMOC Assembly Master Installer
+### Camera Not Detected
+\`\`\`bash
+# List available cameras
+arv-tool-0.8
+
+# Check udev rules
+ls -la /etc/udev/rules.d/99-ids*
+\`\`\`
+
+### Python Import Errors (pylablib/numba)
+\`\`\`bash
+# Install correct numba version
+pip install --break-system-packages numba==0.59.1 llvmlite==0.42.0 coverage\<7.4
+\`\`\`
+
+---
+Generated by: install_all.sh v2.0
 EOF
     
-    log_success "Installation summary generated: $summary_file"
+    log_success "Installation summary: $summary_file"
 }
 
-# Main installation flow
+# ================================================================
+# Main Installation Flow
+# ================================================================
+
 main() {
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --no-camera)
+                INSTALL_CAMERA_ARAVIS2=false
+                shift
+                ;;
+            --camera-ws)
+                CAMERA_WS="$2"
+                shift 2
+                ;;
+            --skip-groups)
+                SKIP_GROUP_CHECK=true
+                shift
+                ;;
+            --non-interactive)
+                NON_INTERACTIVE=true
+                shift
+                ;;
+            -h|--help)
+                print_usage
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                print_usage
+                exit 1
+                ;;
+        esac
+    done
+    
     print_header
     
     # Check if user wants to proceed
-    read -p "Do you want to proceed with the complete installation? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Installation cancelled by user"
-        exit 0
+    if [[ "$NON_INTERACTIVE" != "true" ]]; then
+        read -p "Proceed with complete installation? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Installation cancelled by user"
+            exit 0
+        fi
     fi
     
-    # Step-by-step installation
     echo ""
     log_info "Starting complete ProMOC Assembly installation..."
     echo ""
     
+    # Run installation steps
     check_prerequisites
-    setup_pmclib_directory
+    install_colcon
     install_system_deps
     install_python_deps
+    
+    if [[ "$INSTALL_CAMERA_ARAVIS2" == "true" ]]; then
+        install_camera_aravis2
+    fi
+    
+    setup_pmclib_directory
     install_ros2_deps
     build_workspace
     validate_installation
@@ -322,16 +536,21 @@ main() {
     
     echo ""
     echo "================================================================"
-    log_success "ProMOC Assembly installation completed successfully!"
+    log_success "ProMOC Assembly installation completed!"
     echo "================================================================"
     echo ""
     echo "📋 Installation summary: $SCRIPT_DIR/INSTALLATION_SUMMARY.md"
     echo ""
-    echo "🚀 Quick start:"
-    echo "   source $PROJECT_ROOT/install/setup.bash"
-    echo "   ros2 launch promoc_bringup dual_lts300_gazebo.launch.py"
+    echo "⚠️  IMPORTANT: Logout and login again for group changes to take effect!"
     echo ""
-    echo "📝 For detailed next steps, see the installation summary above."
+    echo "🚀 Quick start:"
+    echo "   source $WORKSPACE_ROOT/install/setup.bash"
+    echo ""
+    echo "   # Test LTS300 linear axis"
+    echo "   ros2 run linear_axis_nodes lts300_node --ros-args -p debug_mode:=true"
+    echo ""
+    echo "   # Test camera (if installed)"
+    echo "   ros2 launch promoc_bringup assembly_camera.launch.py"
     echo ""
 }
 
