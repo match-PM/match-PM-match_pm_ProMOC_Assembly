@@ -1,124 +1,95 @@
-# ProMOC Assembly - Quick Start Guide# Quick Start Guide
+# ProMOC Assembly - Quick Start Guide
 
+## 🚀 One-Command Installation
 
-
-## 🚀 One-Command Installation## For New Users - Complete Setup
-
-
-
-```bash1. **System Dependencies (Ubuntu):**
-
-cd setup/   ```bash
-
-./install_all.sh   ./install_system_deps.sh
-
-```   ```
-
-   Installs .NET SDK 8.0 + Mono fallback + build tools
+```bash
+cd setup/
+./install_all.sh
+```
 
 This installs **everything** needed for a fresh Ubuntu 24.04 system:
+- System dependencies (.NET, Mono, Aravis, build tools)
+- Python dependencies (pythonnet, pylablib, numba)
+- USB/Serial permissions (dialout group, udev rules)
+- camera_aravis2 driver (for IDS cameras)
+- ROS2 workspace build
 
-- System dependencies (.NET, Mono, Aravis, build tools)2. **Python Dependencies:**
+**⚠️ IMPORTANT**: After installation, **logout and login again** for group changes!
 
-- Python dependencies (pythonnet, pylablib, numba)   ```bash
+---
 
-- USB/Serial permissions (dialout group, udev rules)   ./install_python_deps.sh
+## 📋 Step-by-Step (If You Prefer Manual)
 
-- camera_aravis2 driver (for IDS cameras)   ```
+### 1. Prerequisites
 
-- ROS2 workspace build   Installs packages + tests .NET runtime compatibility
+```bash
+# Ensure ROS2 Jazzy is installed and sourced
+source /opt/ros/jazzy/setup.bash
 
+# Check colcon is available
+colcon --version || sudo apt install python3-colcon-common-extensions
+```
 
+### 2. Install Dependencies
 
-**⚠️ IMPORTANT**: After installation, **logout and login again** for group changes!3. **Hardware Setup (if using real hardware):**
-
-   ```bash
-
----   # Copy PMCLib wheel file
-
-   cp /path/to/pmclib-*.whl local_libs/
-
-## 📋 Step-by-Step (If You Prefer Manual)   # Reinstall with PMCLib
-
-   ./install_python_deps.sh
-
-### 1. Prerequisites   ```
-
-
-
-```bash4. **Build and Test:**
-
-# Ensure ROS2 Jazzy is installed and sourced   ```bash
-
-source /opt/ros/jazzy/setup.bash   cd ~/your_ros2_workspace
-
-   colcon build
-
-# Check colcon is available   source install/setup.bash
-
-colcon --version || sudo apt install python3-colcon-common-extensions   ros2 launch promoc_bringup promoc_assembly_launch.py
-
-```   ```
-
-
-
-### 2. Install Dependencies## Development Mode (Mock Services)
-
-
-
-```bash```bash
-
-cd setup/# Quick test without hardware
-
-ros2 launch promoc_bringup promoc_assembly_launch.py
+```bash
+cd setup/
 
 # System dependencies (includes udev rules)
+./install_system_deps.sh
 
-./install_system_deps.sh# Test individual services
-
-ros2 service call /planar_motor/move_absolute promoc_assembly_interfaces/srv/LinearMotionSi "{bot_id: 1, x_pos: 0.1, y_pos: 0.1, velocity: 0.5, acceleration: 1.0}"
-
-# Python dependencies (with correct numba version!)```
-
+# Python dependencies (with correct numba version!)
 ./install_python_deps.sh
 
-## Hardware Mode
-
 # Camera driver (optional, for IDS cameras)
+./install_camera_aravis2.sh
+```
 
-./install_camera_aravis2.sh```bash
+### 3. Build Workspace
 
-```# Ensure hardware is connected and PMCLib is installed
-
-ros2 launch promoc_bringup promoc_assembly_hardware_launch.py
-
-### 3. Build Workspace```
-
-
-
-```bash## Common Issues
-
+```bash
 cd ~/Documents/Development/Ros2/promoc_assembly
+colcon build --symlink-install
+source install/setup.bash
+```
 
-colcon build --symlink-install- **Permission denied on scripts:** `chmod +x *.sh`
-
-source install/setup.bash- **Python import errors:** Check virtual environment and dependencies
-
-```- **.NET runtime issues:** Run `python3 check_dotnet_runtime.py`
-
-- **Hardware not found:** Check connections and permissions
-
-### 4. Add to ~/.bashrc- **Build failures:** Ensure ROS2 is sourced: `source /opt/ros/humble/setup.bash`
-
-- **PMCLib fails:** Try Mono fallback: `sudo apt-get install mono-complete`
+### 4. Add to ~/.bashrc
 
 ```bash
 # Add ROS2 and workspace to bashrc
 echo 'source /opt/ros/jazzy/setup.bash' >> ~/.bashrc
 echo 'source ~/Documents/Development/Ros2/promoc_assembly/install/setup.bash' >> ~/.bashrc
 
-# If camera_aravis2 is in separate workspace:
-echo 'source ~/ros2_ws/install/setup.bash' >> ~/.bashrc
+# Activate Python virtual environment
+echo 'source ~/ros2_promoc_venv/bin/activate' >> ~/.bashrc
+```
+
+---
+
+## 🔧 Repair & Troubleshooting
+
+### Python Environment Repair
+
+If you have problems with Python dependencies (import errors, version conflicts):
+
+```bash
+cd setup/
+
+# Interactive repair (recommended)
+./repair.sh
+
+# Force complete recreation (delete & recreate venv)
+./repair.sh --force
+
+# Quick reinstall (keep venv, only reinstall packages)
+./repair.sh --keep-venv
+```
+
+### Check Installation Status
+
+```bash
+cd setup/
+./check_installation.sh
 ```
 
 ---
@@ -167,8 +138,11 @@ sudo usermod -a -G dialout $USER
 ### pylablib/numba Import Error
 
 ```bash
-# Install correct numba version (critical!)
-pip install --break-system-packages numba==0.59.1 llvmlite==0.42.0 coverage<7.4
+# Option 1: Use repair script (recommended)
+./repair.sh
+
+# Option 2: Manual fix
+pip install numba==0.59.1 llvmlite==0.42.0
 ```
 
 ### Camera Not Detected
@@ -184,16 +158,6 @@ groups $USER  # should include 'plugdev'
 arv-tool-0.8
 ```
 
-### ROS2 Not Found
-
-```bash
-# Source ROS2 Jazzy
-source /opt/ros/jazzy/setup.bash
-
-# Or add to ~/.bashrc permanently
-echo 'source /opt/ros/jazzy/setup.bash' >> ~/.bashrc
-```
-
 ---
 
 ## 📁 Project Structure
@@ -204,14 +168,18 @@ promoc_assembly/
 │   └── match-PM-match_pm_ProMOC_Assembly/
 │       ├── camera_nodes/         # Camera integration
 │       ├── linear_axis_nodes/    # Thorlabs LTS300 control
+│       ├── lens_testing_nodes/   # Autofocus & MTF measurement
 │       ├── planar_motor_nodes/   # Planar motor (PMCLib)
 │       ├── promoc_bringup/       # Launch files & config
+│       ├── promoc_core/          # Shared utilities & exceptions
 │       ├── promoc_assembly_interfaces/  # ROS2 messages/services
 │       └── setup/                # Installation scripts
 │           ├── install_all.sh    # Master installer ⭐
 │           ├── install_system_deps.sh
 │           ├── install_python_deps.sh
 │           ├── install_camera_aravis2.sh
+│           ├── check_installation.sh  # Diagnose installation
+│           ├── repair.sh         # Fix Python environment ⭐
 │           └── dependencies.txt
 └── install/                      # Built packages (after colcon build)
 ```
@@ -244,4 +212,4 @@ promoc_assembly/
 
 ---
 
-*Last updated: $(date +%Y-%m-%d)*
+*Last updated: 2024-12-06*

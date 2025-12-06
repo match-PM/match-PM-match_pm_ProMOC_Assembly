@@ -16,10 +16,13 @@ cd setup/
 - **`install_all.sh`** - 🎯 **Master installer** - runs everything automatically
 - **`install_system_deps.sh`** - Installs system dependencies (.NET SDK, Mono, build tools)  
 - **`install_python_deps.sh`** - Installs Python dependencies with PEP 668 compatibility
+- **`install_camera_aravis2.sh`** - Installs camera_aravis2 driver for IDS USB3 cameras
+- **`repair.sh`** - 🔧 **Python environment repair** - recreates venv and reinstalls dependencies
 - **`dependencies.txt`** - Python package requirements (enhanced with version pinning)
 
 ### Validation and Testing
-- **`validate_setup_enhanced.sh`** - 🔍 **Comprehensive system validation** with detailed reporting
+- **`check_installation.sh`** - 🔍 **Diagnose installation** - checks what's installed vs missing
+- **`validate_setup_enhanced.sh`** - Comprehensive system validation with detailed reporting
 - **`validate_setup.sh`** - Basic validation script (legacy)
 - **`check_dotnet_runtime.py`** - Tests .NET runtime compatibility and configuration
 - **`test_basic_functionality.py`** - Basic functionality tests for development
