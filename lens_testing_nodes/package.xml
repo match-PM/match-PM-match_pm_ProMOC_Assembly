@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>lens_testing_nodes</name>
+  <version>1.0.0</version>
+  <description>
+    Lens Testing Nodes - Autofocus and MTF measurement for optical lens testing
+    in the ProMOC Assembly System.
+    
+    Contains:
+    - Hybrid Autofocus Node (Coarse/Fine search with Golden Section optimization)
+    - MTF Analysis Node (Slanted Edge Method per ISO 12233)
+  </description>
+  <maintainer email="your.email@match.uni-hannover.de">Your Name</maintainer>
+  <license>MIT</license>
+
+  <!-- Build dependencies -->
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- Runtime dependencies -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  
+  <!-- ProMOC dependencies -->
+  <exec_depend>promoc_assembly_interfaces</exec_depend>
+  <exec_depend>linear_axis_nodes</exec_depend>
+  <exec_depend>camera_nodes</exec_depend>
+
+  <!-- Test dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,20 @@
+# MTF Analyse Parameter
+# =====================
+
+# Kamera-Eigenschaften
+pixel_size_um: 3.45      # Pixelgröße [µm] - IDS U3-380xCP-C
+
+# ROI für Kantenmessung
+roi_width: 200           # Breite [px]
+roi_height: 400          # Höhe [px]
+
+# Analyse-Parameter
+oversample_factor: 4     # Überabtastungsfaktor für ESF
+auto_detect_edge: true   # Automatische Kantenerkennung
+
+# Kantenwinkel-Grenzen (Slanted Edge muss schräg sein)
+min_edge_angle: 2.0      # Minimum [Grad]
+max_edge_angle: 10.0     # Maximum [Grad]
+
+# ROS2 Topics
+image_topic: "/promoc/assembly_camera/stream0/image_raw"
