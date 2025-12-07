@@ -1,3 +1,23 @@
+"""
+System Launch File for ProMOC Assembly
+=======================================
+
+This is the main launch file that starts the complete ProMOC system:
+- Camera (via camera.launch.py)
+- Planar Motor (mover_node)
+- Linear Axes (auto-discovered from hardware)
+
+Usage:
+    # Launch with real hardware
+    ros2 launch promoc_bringup system.launch.py
+    
+    # Launch in simulation mode
+    ros2 launch promoc_bringup system.launch.py sim_mode:=true
+
+The launch file automatically discovers connected Thorlabs linear stages
+and only starts nodes for hardware that is actually present.
+"""
+
 import os
 import re
 import glob
@@ -10,141 +30,164 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import launch
 
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
 def discover_connected_devices():
     """
     Discover Thorlabs APT stepper motor controllers connected under /dev/serial/by-id.
-    Returns a map of serial number to device path.
+
+    Returns:
+        Dict mapping serial number to device path
     """
     port_map = {}
-    print("🛰️  Scanning for connected devices in /dev/serial/by-id/...")
     search_pattern = '/dev/serial/by-id/usb-Thorlabs_APT_Stepper_Motor_Controller_*'
-    
+
+    print("🛰️  Scanning for connected devices...")
+
     for device_path in glob.glob(search_pattern):
         try:
             filename = os.path.basename(device_path)
-            match = re.search(r'usb-Thorlabs_APT_Stepper_Motor_Controller_([0-9]+)', filename)
-
+            match = re.search(
+                r'usb-Thorlabs_APT_Stepper_Motor_Controller_([0-9]+)', filename)
             if match:
                 serial = match.group(1)
                 port_map[serial] = device_path
-                print(f"  -> Detected device: {filename} (serial: {serial}) -> using stable path {device_path}")
-            else:
-                print(f"  ⚠️  Unrecognized device filename format: {filename}")
-
+                print(f"  ✅ Found: {serial}")
         except Exception as e:
-            print(f"  ⚠️  Error processing {device_path}: {e}")
-            continue
-            
-    if port_map:
-        print(f"  -> Found {len(port_map)} device(s).")
-    else:
-        print("  -> No devices found.")
+            print(f"  ❌ Error: {e}")
+
+    print(f"  → {len(port_map)} device(s) found")
     return port_map
 
+
 def load_axes_config(bringup_pkg_share):
-    """Loads the axes configuration."""
-    config_file_path = os.path.join(bringup_pkg_share, 'config', 'linear_axes_params.yaml')
+    """Load linear axes configuration from YAML."""
+    config_path = os.path.join(
+        bringup_pkg_share, 'config', 'linear_axes_params.yaml')
     try:
-        with open(config_file_path, 'r') as file:
-            config = yaml.safe_load(file)
-        return config, config_file_path
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f), config_path
     except Exception as e:
-        print(f"❌ Error loading configuration: {e}")
+        print(f"❌ Error loading axes config: {e}")
         return {}, None
 
-def generate_launch_description():
-    """
-    Consolidated system launch file.
-    Launches:
-    - Camera (via camera.launch.py)
-    - Mover Node
-    - Linear Axis Nodes (Hardware or Simulation)
-    """
-    
-    sim_mode_arg = DeclareLaunchArgument(
-        'sim_mode',
-        default_value='false',
-        description='Run in simulation mode'
-    )
 
+# =============================================================================
+# Launch Description
+# =============================================================================
+
+def generate_launch_description():
+    """Generate the launch description with arguments."""
     return LaunchDescription([
-        sim_mode_arg,
+        DeclareLaunchArgument(
+            'sim_mode',
+            default_value='false',
+            description='Run in simulation mode (true/false)'
+        ),
         OpaqueFunction(function=launch_setup)
     ])
 
+
 def launch_setup(context, *args, **kwargs):
-    sim_mode = LaunchConfiguration('sim_mode').perform(context).lower() == 'true'
-    launch_actions = []
-    
-    bringup_pkg_share = get_package_share_directory('promoc_bringup')
-    
-    # 1. Launch Camera
+    """
+    Set up all nodes based on configuration and detected hardware.
+
+    This function is called by OpaqueFunction to allow runtime evaluation
+    of LaunchConfiguration values.
+    """
+    # Get parameters
+    sim_mode = LaunchConfiguration(
+        'sim_mode').perform(context).lower() == 'true'
+    bringup_pkg = get_package_share_directory('promoc_bringup')
+
+    nodes = []
+
+    # -------------------------------------------------------------------------
+    # 1. Camera System
+    # -------------------------------------------------------------------------
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(bringup_pkg_share, 'launch', 'camera.launch.py')
+            os.path.join(bringup_pkg, 'launch', 'camera.launch.py')
         ),
         launch_arguments={'sim_mode': str(sim_mode).lower()}.items()
     )
-    launch_actions.append(camera_launch)
-    
-    # 2. Launch Mover Node
-    mover_params_path = os.path.join(bringup_pkg_share, 'config', 'mover_node_params.yaml')
-    if os.path.exists(mover_params_path):
-        launch_actions.append(Node(
+    nodes.append(camera_launch)
+
+    # -------------------------------------------------------------------------
+    # 2. Planar Motor (Mover Node)
+    # -------------------------------------------------------------------------
+    mover_config = os.path.join(
+        bringup_pkg, 'config', 'mover_node_params.yaml')
+
+    if os.path.exists(mover_config):
+        nodes.append(Node(
             package='planar_motor_nodes',
             executable='mover_node',
             name='mover_node',
-            parameters=[mover_params_path],
+            parameters=[mover_config],
             output='screen',
             arguments=['--ros-args', '--log-level', 'INFO']
         ))
     else:
-        launch.logging.get_logger().error(f"mover_node config not found at {mover_params_path}")
+        launch.logging.get_logger().error(
+            f"Mover config not found: {mover_config}")
 
-    # 3. Launch Linear Axes
-    axes_config, axes_config_path = load_axes_config(bringup_pkg_share)
-    
-    if axes_config:
-        if sim_mode:
-            launch.logging.get_logger().info("🚀 Launching Linear Axes in SIMULATION mode")
-            # Launch all defined axes in simulation mode
-            for node_name in axes_config.keys():
-                launch_actions.append(Node(
-                    package='linear_axis_nodes',
-                    executable='lts300_node',
-                    name=node_name,
-                    parameters=[
-                        axes_config_path,
-                        {'use_sim_time': True}
-                    ],
-                    output='screen',
-                    arguments=['--ros-args', '--log-level', 'INFO']
+    # -------------------------------------------------------------------------
+    # 3. Linear Axes
+    # -------------------------------------------------------------------------
+    axes_config, axes_config_path = load_axes_config(bringup_pkg)
+
+    if not axes_config:
+        launch.logging.get_logger().warn("No linear axes configuration found")
+        return nodes
+
+    if sim_mode:
+        # Simulation mode: Launch all configured axes
+        launch.logging.get_logger().info("🚀 Linear Axes: SIMULATION mode")
+        for node_name in axes_config.keys():
+            nodes.append(_create_axis_node(
+                node_name, axes_config_path, sim=True))
+    else:
+        # Hardware mode: Only launch axes that are connected
+        launch.logging.get_logger().info("⚙️ Linear Axes: HARDWARE mode")
+        connected = discover_connected_devices()
+
+        for node_name, params in axes_config.items():
+            serial = params.get('ros__parameters', {}).get('serial_number')
+
+            if not serial:
+                launch.logging.get_logger().warn(
+                    f"  ⚠️ {node_name}: No serial_number configured")
+                continue
+
+            if serial in connected:
+                launch.logging.get_logger().info(f"  ✅ {node_name}: Connected")
+                nodes.append(_create_axis_node(
+                    node_name, axes_config_path,
+                    sim=False, device_path=connected[serial]
                 ))
-        else:
-            launch.logging.get_logger().info("⚙️ Launching Linear Axes in HARDWARE mode")
-            connected_devices = discover_connected_devices()
-            
-            for node_name, node_params in axes_config.items():
-                try:
-                    target_serial = node_params['ros__parameters']['serial_number']
-                    if target_serial in connected_devices:
-                        stable_device_path = connected_devices[target_serial]
-                        launch.logging.get_logger().info(f"  ✅ '{node_name}' is connected. Creating node.")
-                        launch_actions.append(Node(
-                            package='linear_axis_nodes',
-                            executable='lts300_node',
-                            name=node_name,
-                            parameters=[
-                                axes_config_path,
-                                {'serial_port': stable_device_path, 'use_sim_time': False}
-                            ],
-                            output='screen',
-                            arguments=['--ros-args', '--log-level', 'INFO']
-                        ))
-                    else:
-                        launch.logging.get_logger().warn(f"  ❌ '{node_name}' (S/N: {target_serial}) is configured but not connected.")
-                except KeyError:
-                    launch.logging.get_logger().warn(f"  ⚠️  Skipping '{node_name}', 'serial_number' not found.")
-                    continue
+            else:
+                launch.logging.get_logger().warn(
+                    f"  ❌ {node_name}: Not connected (S/N: {serial})")
 
-    return launch_actions
+    return nodes
+
+
+def _create_axis_node(node_name: str, config_path: str, sim: bool, device_path: str = None):
+    """Create a linear axis node with appropriate parameters."""
+    params = [config_path, {'use_sim_time': sim}]
+
+    if device_path:
+        params.append({'serial_port': device_path})
+
+    return Node(
+        package='linear_axis_nodes',
+        executable='lts300_node',
+        name=node_name,
+        parameters=params,
+        output='screen',
+        arguments=['--ros-args', '--log-level', 'INFO']
+    )

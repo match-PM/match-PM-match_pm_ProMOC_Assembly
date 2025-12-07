@@ -1,3 +1,64 @@
+"""
+Service Callbacks für LTS300 Linearachse - Geschäftslogik für alle Services.
+
+Dieses Modul enthält die ServiceCallbacks-Klasse, die alle ROS2-Service-Callbacks
+für den Linearachsen-Node implementiert. Hier findet die eigentliche Bewegungslogik statt.
+
+Architektur-Übersicht:
+======================
+    Service Request
+         │
+         ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │  ServiceCallbacks                                            │
+    │  ├── Validierung                                            │
+    │  │   ├── _validate_position() → Soft-Limits prüfen         │
+    │  │   ├── _validate_distance() → Max. Einzelbewegung prüfen │
+    │  │   └── _collision_check()   → Kollisionsgefahr prüfen    │
+    │  │                                                          │
+    │  ├── Asynchrone Operationen                                 │
+    │  │   ├── _async_move_operation() → Bewegung im Thread      │
+    │  │   └── _async_home_operation() → Homing im Thread        │
+    │  │                                                          │
+    │  └── callback_xxx()  ← Spezifische Service-Handler         │
+    │      ├── Validierung aufrufen                               │
+    │      ├── Thread starten für lange Operation                 │
+    │      └── Sofortige Response zurückgeben                     │
+    └─────────────────────────────────────────────────────────────┘
+
+Verfügbare Services:
+====================
+- callback_move_absolute: Absolute Bewegung zu Position (mm)
+- callback_move_relative: Relative Bewegung um Distanz (mm)
+- callback_home: Referenzfahrt durchführen
+- callback_get_position: Aktuelle Position abfragen
+- callback_get_operation_status: Status laufender Operation
+- callback_set_velocity_parameters: Geschwindigkeit setzen
+- callback_get_velocity_parameters: Geschwindigkeit abfragen
+- callback_shutdown: Gerät herunterfahren
+- callback_emergency_stop: Notfall-Stopp
+- callback_jog_axis: Schrittweises Bewegen
+
+Asynchrone Operationen:
+=======================
+Lange Operationen (Bewegungen, Homing) laufen in separaten Threads,
+damit der ROS2-Node nicht blockiert. Der Status kann mit
+get_operation_status abgefragt werden.
+
+    1. Service-Request kommt rein
+    2. Validierung (sofort)
+    3. Thread für Operation starten
+    4. Sofortige Response: "Operation gestartet"
+    5. Client fragt Status ab mit get_operation_status
+
+Exception-Handling:
+===================
+- SoftLimitViolationError: Position außerhalb Grenzen
+- CollisionDetectedError: Kollisionsgefahr erkannt
+- HomingFailedError: Homing fehlgeschlagen
+- HardwareError: Hardware-Fehler
+"""
+
 from .lts300_interface import Lts300Interface
 from .lts300_node_config import Lts300Config
 import threading
@@ -12,10 +73,21 @@ from promoc_core.promoc_exceptions import (
     CommunicationError,
     HardwareError
 )
+from promoc_core.validation import is_in_range, check_collision_risk
 
 
 class OperationStatus(Enum):
-    """Status enumeration for long-running operations."""
+    """
+    Status-Enumeration für lang laufende Operationen.
+
+    Werte:
+        IDLE: Bereit für neue Operationen
+        HOMING: Referenzfahrt läuft
+        MOVING: Bewegung läuft
+        JOGGING: Jog-Bewegung läuft
+        ERROR: Fehler aufgetreten
+        EMERGENCY_STOP: Notfall-Stopp aktiv
+    """
     IDLE = "idle"
     HOMING = "homing"
     MOVING = "moving"
@@ -26,49 +98,79 @@ class OperationStatus(Enum):
 
 class ServiceCallbacks:
     """
-    Handles all ROS service callback logic for the LTS300 node, decoupled from the ROS node.
-    This class contains the business logic for motion commands and other services.
+    Geschäftslogik für alle Services des LTS300-Nodes.
+
+    Diese Klasse ist von ROS2 entkoppelt und enthält:
+    - Validierungslogik (Limits, Kollision)
+    - Asynchrone Bewegungsoperationen
+    - Status-Tracking für lange Operationen
+
+    Attribute:
+        logger: ROS2-Logger
+        interface (Lts300Interface): Hardware-Schnittstelle
+        config (Lts300Config): Konfiguration
+        driver: Direkter Zugriff auf den Treiber
+        operation_status (OperationStatus): Aktueller Status
+        operation_lock: Thread-Lock für Status-Zugriff
     """
 
     def __init__(self, logger, interface: Lts300Interface, config: Lts300Config):
         """
-        Initializes the callbacks with explicit dependencies.
+        Initialisiert die Callbacks mit ihren Abhängigkeiten.
 
         Args:
-            logger: The ROS 2 logger instance.
-            interface: The hardware interface for the LTS300 driver.
-            config: The dataclass holding all node parameters.
+            logger: ROS2-Logger für Log-Ausgaben
+            interface: Hardware-Schnittstelle
+            config: Konfiguration mit Limits und Timeouts
         """
         self.logger = logger
         self.interface = interface
         self.config = config
-        self.driver = self.interface.driver  # Direct access to the driver instance
+        self.driver = self.interface.driver
 
-        # Status tracking for long operations
+        # Status-Tracking für asynchrone Operationen
         self.operation_status = OperationStatus.IDLE
         self.operation_lock = threading.Lock()
         self.last_operation_message = ""
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # EINHEITEN-KONVERTIERUNG
+    # ══════════════════════════════════════════════════════════════════════════
+
     def _device_units_to_mm_per_s(self, device_units: float) -> float:
-        """Convert device velocity units to mm/s."""
+        """Konvertiert Geräte-Geschwindigkeitseinheiten zu mm/s."""
         return device_units * self.config.velocity_conversion_factor
 
     def _mm_per_s_to_device_units(self, mm_per_s: float) -> float:
-        """Convert mm/s to device velocity units."""
+        """Konvertiert mm/s zu Geräte-Geschwindigkeitseinheiten."""
         return mm_per_s / self.config.velocity_conversion_factor
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # VALIDIERUNG
+    # ══════════════════════════════════════════════════════════════════════════
 
     def _collision_check(self, other_axis_position: float):
         """
-        Checks for a potential collision using the current position of the other axis.
+        Prüft auf Kollisionsgefahr mit der anderen Achse.
+
+        Ablauf:
+        -------
+        1. Position der anderen Achse prüfen
+        2. Wenn über collision_threshold → Fehler werfen
 
         Args:
-            other_axis_position (float): The current position of the other axis, passed in by the node.
+            other_axis_position: Aktuelle Position der anderen Achse (mm)
 
         Raises:
-            CollisionDetectedError: If collision risk is detected.
+            CollisionDetectedError: Wenn Kollisionsgefahr besteht
         """
-        if (other_axis_position is not None and
-                other_axis_position > self.config.collision_threshold):
+        is_safe, warning_msg = check_collision_risk(
+            axis_position=0,
+            other_axis_position=other_axis_position,
+            collision_threshold=self.config.collision_threshold
+        )
+
+        if not is_safe:
             raise CollisionDetectedError(
                 f"Collision risk detected! Other axis at {other_axis_position:.2f}mm exceeds "
                 f"threshold {self.config.collision_threshold}mm",
@@ -81,44 +183,41 @@ class ServiceCallbacks:
 
     def _validate_position(self, position: float):
         """
-        Validates if a position is within the configured safety limits.
+        Validiert ob eine Position innerhalb der Soft-Limits liegt.
 
         Args:
-            position (float): The target position to validate in mm.
+            position: Zielposition in mm
 
         Raises:
-            SoftLimitViolationError: If position is outside configured limits.
+            SoftLimitViolationError: Wenn Position außerhalb Grenzen
         """
-        if position < self.config.min_position:
+        if not is_in_range(position, self.config.min_position, self.config.max_position):
+            if position < self.config.min_position:
+                violation_type = 'min_limit'
+                msg = f"Position {position:.2f}mm below minimum limit {self.config.min_position:.2f}mm"
+            else:
+                violation_type = 'max_limit'
+                msg = f"Position {position:.2f}mm exceeds maximum limit {self.config.max_position:.2f}mm"
+
             raise SoftLimitViolationError(
-                f"Position {position:.2f}mm below minimum limit {self.config.min_position:.2f}mm",
+                msg,
                 details={
                     'requested_position': position,
                     'min_position': self.config.min_position,
                     'max_position': self.config.max_position,
-                    'violation_type': 'min_limit'
-                }
-            )
-        if position > self.config.max_position:
-            raise SoftLimitViolationError(
-                f"Position {position:.2f}mm exceeds maximum limit {self.config.max_position:.2f}mm",
-                details={
-                    'requested_position': position,
-                    'min_position': self.config.min_position,
-                    'max_position': self.config.max_position,
-                    'violation_type': 'max_limit'
+                    'violation_type': violation_type
                 }
             )
 
     def _validate_distance(self, distance: float):
         """
-        Validates if a relative movement distance is within the configured safety limits.
+        Validiert ob eine Bewegungsdistanz erlaubt ist.
 
         Args:
-            distance (float): The movement distance to validate in mm.
+            distance: Bewegungsdistanz in mm
 
         Raises:
-            SoftLimitViolationError: If distance exceeds maximum single move limit.
+            SoftLimitViolationError: Wenn Distanz zu groß
         """
         abs_distance = abs(distance)
         if abs_distance > self.config.max_single_move:
@@ -135,25 +234,39 @@ class ServiceCallbacks:
 
     def _validate_target_position(self, current_pos: float, distance: float):
         """
-        Validates if a relative movement would result in a valid target position.
+        Validiert ob eine relative Bewegung zu einer gültigen Position führt.
 
         Args:
-            current_pos (float): Current position in mm.
-            distance (float): Movement distance in mm.
+            current_pos: Aktuelle Position in mm
+            distance: Bewegungsdistanz in mm
 
         Raises:
-            SoftLimitViolationError: If target position would be outside limits.
+            SoftLimitViolationError: Wenn Zielposition außerhalb Grenzen
         """
         target_pos = current_pos + distance
         self._validate_position(target_pos)
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # ASYNCHRONE OPERATIONEN
+    # ══════════════════════════════════════════════════════════════════════════
+
     def _async_move_operation(self, move_type: str, position: float):
         """
-        Performs movement operation in a separate thread.
+        Führt Bewegungsoperation in separatem Thread aus.
+
+        Diese Methode wird von move_absolute/move_relative genutzt,
+        damit der ROS2-Node nicht blockiert.
+
+        Ablauf:
+        -------
+        1. Status auf MOVING setzen
+        2. Bewegung an Hardware senden
+        3. Auf Abschluss warten
+        4. Status auf IDLE oder ERROR setzen
 
         Args:
-            move_type: "absolute" or "relative"
-            position: Target position or movement distance
+            move_type: "absolute" oder "relative"
+            position: Zielposition oder Bewegungsdistanz (mm)
         """
         try:
             with self.operation_lock:
@@ -165,13 +278,13 @@ class ServiceCallbacks:
 
             if move_type == "absolute":
                 self.driver.move_absolute(position)
-            else:  # relative
+            else:
                 self.driver.move_relative(position)
 
             self.logger.info(
                 f"Hardware {move_type} movement command completed")
 
-            # Get final position for confirmation
+            # Endposition für Bestätigung
             try:
                 final_pos = self.driver.get_position()
                 self.logger.info(

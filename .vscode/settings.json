@@ -1,21 +1,24 @@
 {
-    "cmake.sourceDirectory": "/home/soc/Documents/Development/Ros2/promoc_assembly/src/match-PM-match_pm_ProMOC_Assembly/promoc_assembly_interfaces",
+    // Disable CMake auto-configuration for ROS2 workspace (use colcon build instead)
+    "cmake.configureOnOpen": false,
+    "cmake.automaticReconfigure": false,
     "python.autoComplete.extraPaths": [
-        "/home/promoc/promoc_ws/build/thorlabs_nodes",
-        "/home/promoc/promoc_ws/install/thorlabs_nodes/lib/python3.12/site-packages",
-        "/home/promoc/promoc_ws/install/promoc_assembly_interfaces/lib/python3.12/site-packages",
-        "/home/promoc/promoc_ws/build/planar_motor_nodes",
-        "/home/promoc/promoc_ws/install/planar_motor_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/promoc_core/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/promoc_assembly_interfaces/local/lib/python3.12/dist-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/camera_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/linear_axis_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/planar_motor_nodes/lib/python3.12/site-packages",
         "/opt/ros/jazzy/lib/python3.12/site-packages"
     ],
     "python.analysis.extraPaths": [
-        "/home/promoc/promoc_ws/build/thorlabs_nodes",
-        "/home/promoc/promoc_ws/install/thorlabs_nodes/lib/python3.12/site-packages",
-        "/home/promoc/promoc_ws/install/promoc_assembly_interfaces/lib/python3.12/site-packages",
-        "/home/promoc/promoc_ws/build/planar_motor_nodes",
-        "/home/promoc/promoc_ws/install/planar_motor_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/promoc_core/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/promoc_assembly_interfaces/local/lib/python3.12/dist-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/camera_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/linear_axis_nodes/lib/python3.12/site-packages",
+        "/home/soc/Documents/Development/Ros2/promoc_assembly/install/planar_motor_nodes/lib/python3.12/site-packages",
         "/opt/ros/jazzy/lib/python3.12/site-packages",
-        "./planar_motor_nodes/planar_motor_nodes/drivers"
+        "./planar_motor_nodes/planar_motor_nodes/drivers",
+        "./promoc_core/promoc_core"
     ],
     "cSpell.words": [
         "accl"

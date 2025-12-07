@@ -1,21 +1,91 @@
+"""
+PMC Interface - Hardware-Abstraktion für den Planar Motor Controller.
+
+Dieses Modul kapselt alle Interaktionen mit der PMCLib und bietet
+eine einheitliche Schnittstelle, unabhängig davon ob die echte
+Hardware oder ein Mock verwendet wird.
+
+Funktionsweise (Library-Loading):
+=================================
+Das Interface versucht, die PMCLib in folgender Priorität zu laden:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │  0. Force Mock (wenn use_mock=True)                        │
+    │     └── Nutzt sofort Mock, überspringt alle anderen        │
+    │                                                             │
+    │  1. Lokale Developer-Version                                │
+    │     └── ./drivers/match_pm_xBot/                           │
+    │     └── Für Entwicklung mit lokalen Änderungen             │
+    │                                                             │
+    │  2. System-installierte Version                             │
+    │     └── import pmclib (via pip/apt installiert)            │
+    │     └── Für Produktion                                      │
+    │                                                             │
+    │  3. Mock-Version (Fallback)                                 │
+    │     └── ./drivers/mock_pmclib.py                           │
+    │     └── Für Tests und Simulation ohne Hardware             │
+    └─────────────────────────────────────────────────────────────┘
+
+Komponenten nach dem Laden:
+===========================
+- bot (xbot_commands): Bewegungsbefehle (linear_motion, arc_motion, etc.)
+- sys_cmd (system_commands): Systembefehle (connect_to_pmc, disconnect)
+- pmc_types: Konstanten und Enums für PMC-Kommunikation
+
+Verwendung:
+===========
+    # Normal (versucht echte Hardware):
+    pmc = PmcInterface(logger)
+    
+    # Erzwinge Simulation:
+    pmc = PmcInterface(logger, use_mock=True)
+    
+    # Verbinden:
+    pmc.connect("192.168.10.100")
+    
+    # Bewegung ausführen:
+    pmc.bot.linear_motion_si(xbot_id=0, x=0.1, y=0.05)
+"""
 
 import sys
 import os
 from promoc_core.promoc_exceptions import ConnectionError, DriverNotAvailableError
 
+
 class PmcInterface:
     """
-    A dedicated interface for all PMCLib interactions.
-    It encapsulates the logic for loading the real or mock library
-    and provides a single point of access to its components.
+    Zentrale Schnittstelle für PMC-Controller-Kommunikation.
+
+    Diese Klasse abstrahiert die Hardware-Ebene und ermöglicht:
+    - Nahtloses Umschalten zwischen echter Hardware und Simulation
+    - Einheitliche API für alle Bewegungsbefehle
+    - Klare Fehlerbehandlung bei Verbindungsproblemen
+
+    Attribute:
+        bot: XBot-Befehle (Bewegungen, Aktivierung)
+        sys_cmd: System-Befehle (Verbindung, Konfiguration)
+        pmc_types: Konstanten für PMC-Kommunikation
+        status (dict): Aktueller Status {'source': str, 'is_mock': bool}
+
+    Beispiel:
+        >>> pmc = PmcInterface(logger, use_mock=False)
+        >>> pmc.connect("192.168.10.100")
+        >>> pmc.bot.activate_xbots()
+        >>> pmc.bot.linear_motion_si(0, 0.1, 0.05, ...)
     """
+
     def __init__(self, logger, use_mock: bool = False):
         """
-        Initializes the interface and loads the appropriate PMCLib.
-        
+        Initialisiert das Interface und lädt die passende PMCLib.
+
+        Ablauf:
+        -------
+        1. Logger und Status initialisieren
+        2. _load_pmclib() aufrufen → lädt echte oder Mock-Library
+
         Args:
-            logger: The ROS 2 logger instance for logging messages.
-            use_mock (bool): If True, forces the use of the mock library.
+            logger: ROS2-Logger für Log-Ausgaben
+            use_mock: True = Mock erzwingen, False = echte Hardware bevorzugen
         """
         self.logger = logger
         self.bot = None
@@ -27,37 +97,52 @@ class PmcInterface:
 
     def _load_pmclib(self) -> None:
         """
-        Smartly loads the real or mock PMCLib using a clear priority:
-        0. Force mock if specified via parameter
-        1. Local developer version (relative import)
-        2. System-installed version
-        3. Mock version (fallback)
+        Lädt die PMCLib nach Priorität (Mock → Lokal → Installiert → Fallback).
+
+        Schritt-für-Schritt:
+        --------------------
+        1. Wenn force_mock=True → Mock laden, fertig
+        2. Versuche lokale Version (drivers/match_pm_xBot/)
+        3. Versuche installierte Version (import pmclib)
+        4. Fallback: Mock-Version laden
+
+        Nach erfolgreichem Laden sind bot, sys_cmd und pmc_types verfügbar.
         """
+        # ── Schritt 0: Mock erzwingen falls angefordert ──
         if self.force_mock:
             self._load_mock_lib()
-            self.logger.warning("Forcing MOCK PMCLib as per launch configuration.")
+            self.logger.warning(
+                "Forcing MOCK PMCLib as per launch configuration.")
             return
 
-        # Priority 1: Attempt to load local developer version
+        # ── Schritt 1: Lokale Developer-Version ──
         try:
             from .drivers.match_pm_xBot import xbot_commands, system_commands, pmc_types
             self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
             self.status = {'source': 'local_driver', 'is_mock': False}
-            self.logger.info("Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
+            self.logger.info(
+                "Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
             return
         except ImportError:
-            self.logger.debug("Local PMCLib driver not found, trying system-installed version.")
+            self.logger.debug(
+                "Local PMCLib driver not found, trying system-installed version.")
 
-        # Priority 2: Attempt to load system-installed version
+        # ── Schritt 2: System-installierte Version ──
         if self._load_installed_lib():
             return
 
-        # Priority 3: Fallback to mock library
-        self.logger.warning("Real PMCLib not found. Falling back to MOCK implementation.")
+        # ── Schritt 3: Fallback zu Mock ──
+        self.logger.warning(
+            "Real PMCLib not found. Falling back to MOCK implementation.")
         self._load_mock_lib()
 
     def _load_installed_lib(self) -> bool:
-        """Tries to load the system-installed version."""
+        """
+        Versucht die system-installierte PMCLib zu laden.
+
+        Returns:
+            True wenn erfolgreich, False wenn nicht installiert
+        """
         try:
             from pmclib import xbot_commands, system_commands, pmc_types
             self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
@@ -68,7 +153,12 @@ class PmcInterface:
             return False
 
     def _load_mock_lib(self) -> None:
-        """Loads the mock library."""
+        """
+        Lädt die Mock-Library für Simulation ohne Hardware.
+
+        Die Mock-Bibliothek simuliert alle Bewegungen und
+        gibt realistische Positionen zurück.
+        """
         from .drivers import mock_pmclib
         self.bot, self.sys_cmd, self.pmc_types = \
             mock_pmclib.xbot_commands, mock_pmclib.system_commands, mock_pmclib.pmc_types
@@ -77,8 +167,16 @@ class PmcInterface:
 
     def connect(self, ip_address: str) -> bool:
         """
-        Tries to connect to the PMC ONCE.
-        Raises ConnectionError if connection fails.
+        Stellt Verbindung zum PMC-Controller her.
+
+        Args:
+            ip_address: IP-Adresse des PMC-Controllers (z.B. "192.168.10.100")
+
+        Returns:
+            True bei erfolgreicher Verbindung
+
+        Raises:
+            ConnectionError: Wenn Verbindung fehlschlägt
         """
         success = self.sys_cmd.connect_to_pmc(ip_address)
         if not success:

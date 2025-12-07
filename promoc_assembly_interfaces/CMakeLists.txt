@@ -50,6 +50,7 @@ set(INTERFACE_FILES
   "srv/linear_axis/GetJogParameters.srv"
   "srv/camera/SetExposure.srv"
   "srv/camera/AutoFocus.srv"
+  "srv/camera/MeasureMTF.srv"
 )
 
 # CRITICAL: Generate the interfaces (this was missing!)

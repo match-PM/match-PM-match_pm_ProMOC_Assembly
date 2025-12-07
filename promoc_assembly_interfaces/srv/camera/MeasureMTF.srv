@@ -1,0 +1,41 @@
+# Request: Parameters for MTF measurement
+
+# ROI center X position (pixels, -1 for image center)
+int32 roi_center_x -1
+
+# ROI center Y position (pixels, -1 for image center)
+int32 roi_center_y -1
+
+# ROI width (pixels, 0 for default 200px)
+int32 roi_width 0
+
+# ROI height (pixels, 0 for default 200px)
+int32 roi_height 0
+
+# Pixel size in micrometers (0 for default 3.45µm)
+float32 pixel_size_um 0.0
+
+---
+
+# Response: MTF measurement results
+
+# True if measurement was successful
+bool success
+
+# Human-readable result message
+string message
+
+# MTF50 frequency (lp/mm) - frequency where MTF = 50%
+float32 mtf50
+
+# MTF20 frequency (lp/mm) - frequency where MTF = 20%
+float32 mtf20
+
+# MTF10 frequency (lp/mm) - frequency where MTF = 10%
+float32 mtf10
+
+# Detected edge angle (degrees)
+float32 edge_angle
+
+# Nyquist frequency (lp/mm)
+float32 nyquist_frequency
