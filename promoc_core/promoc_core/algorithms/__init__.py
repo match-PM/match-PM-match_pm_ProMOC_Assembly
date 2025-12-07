@@ -6,8 +6,10 @@ focus analysis, and optical measurements.
 
 Modules:
     - focus_metrics: Focus quality metrics (variance, tenengrad, brenner)
-    - autofocus: Hybrid autofocus algorithm (coarse + golden section)
-    - mtf_analysis: MTF computation using slanted edge method
+    - autofocus: Hybrid autofocus algorithm with hysteresis compensation
+    - mtf_analysis: MTF computation using slanted edge method (ISO 12233)
+    - siemens_star: Siemens star analysis for MTF and astigmatism
+    - ronchi_grating: Ronchi grating analysis for MTF at specific frequency
 """
 
 from .focus_metrics import (
@@ -18,9 +20,31 @@ from .focus_metrics import (
     sml
 )
 
-from .autofocus import HybridAutofocus, AutofocusResult, AutofocusConfig, FocusPhase
+from .autofocus import (
+    HybridAutofocus,
+    AutofocusResult,
+    AutofocusConfig,
+    FocusPhase,
+    ScanDirection
+)
 
 from .mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig, compute_mtf
+
+from .siemens_star import (
+    SiemensStarAnalyzer,
+    SiemensStarResult,
+    SiemensStarConfig,
+    DirectionalMTF,
+    AnalysisStatus
+)
+
+from .ronchi_grating import (
+    RonchiAnalyzer,
+    RonchiResult,
+    RonchiConfig,
+    RonchiStatus,
+    compute_ronchi_mtf
+)
 
 __all__ = [
     # Focus metrics
@@ -34,9 +58,22 @@ __all__ = [
     'AutofocusResult',
     'AutofocusConfig',
     'FocusPhase',
-    # MTF
+    'ScanDirection',
+    # MTF (Slanted Edge)
     'MTFAnalyzer',
     'MTFResult',
     'MTFConfig',
     'compute_mtf',
+    # Siemens Star
+    'SiemensStarAnalyzer',
+    'SiemensStarResult',
+    'SiemensStarConfig',
+    'DirectionalMTF',
+    'AnalysisStatus',
+    # Ronchi Grating
+    'RonchiAnalyzer',
+    'RonchiResult',
+    'RonchiConfig',
+    'RonchiStatus',
+    'compute_ronchi_mtf',
 ]
