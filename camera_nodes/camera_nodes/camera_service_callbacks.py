@@ -64,7 +64,7 @@ Exception-Handling:
 
 import cv2
 import rclpy
-from promoc_assembly_interfaces.srv import MoveAbsolute, JogAxis
+from promoc_assembly_interfaces.srv import MoveAbsolute, JogAxis, GetOperationStatus
 import time
 import sys
 import numpy as np
@@ -311,22 +311,36 @@ class CameraServiceCallbacks:
                 )
 
             # ── Schritt 2: Service-Clients erstellen ──
+            # Get z-axis node name from parameter (default: lts300_z_axis)
+            z_axis_name = self._node.get_parameter('z_axis_node_name').get_parameter_value().string_value
+            move_service = f'/{z_axis_name}/move_absolute'
+            jog_service = f'/{z_axis_name}/jog_axis'
+            status_service = f'/{z_axis_name}/get_operation_status'
+            
             move_abs_client = self._node.create_client(
-                MoveAbsolute, '/lts300_node/move_absolute')
+                MoveAbsolute, move_service)
             jog_client = self._node.create_client(
-                JogAxis, '/lts300_node/jog_axis')
+                JogAxis, jog_service)
+            status_client = self._node.create_client(
+                GetOperationStatus, status_service)
 
             if not move_abs_client.wait_for_service(timeout_sec=1.0):
                 raise ServiceCallFailedError(
                     "Linear axis move_absolute service not available",
-                    details={'service': '/lts300_node/move_absolute',
+                    details={'service': move_service,
                              'timeout': 1.0}
                 )
 
             if not jog_client.wait_for_service(timeout_sec=1.0):
                 raise ServiceCallFailedError(
                     "Linear axis jog_axis service not available",
-                    details={'service': '/lts300_node/jog_axis', 'timeout': 1.0}
+                    details={'service': jog_service, 'timeout': 1.0}
+                )
+            
+            if not status_client.wait_for_service(timeout_sec=1.0):
+                raise ServiceCallFailedError(
+                    "Linear axis get_operation_status service not available",
+                    details={'service': status_service, 'timeout': 1.0}
                 )
 
             sharpness_values = []
@@ -334,33 +348,51 @@ class CameraServiceCallbacks:
 
             # Move to start position
             move_req = MoveAbsolute.Request()
-            move_req.position = request.start_position
-            future = move_abs_client.call_async(move_req)
-            rclpy.spin_until_future_complete(self._node, future)
+            move_req.axis_position = float(request.start_position)
+            move_response = move_abs_client.call(move_req)
 
-            if future.result() is None:
+            if move_response is None:
                 raise ServiceCallFailedError(
                     "Move to start position - no response received",
                     details={'target_position': request.start_position}
                 )
 
-            if not future.result().success:
+            if not move_response.success:
                 raise ServiceCallFailedError(
-                    f"Failed to move to start position: {future.result().status_message}",
+                    f"Failed to move to start position: {move_response.status_message}",
                     details={
                         'target_position': request.start_position,
-                        'service_response': future.result().status_message
+                        'service_response': move_response.status_message
                     }
                 )
 
+            # Wait for movement to complete
+            self._node.get_logger().info("Waiting for movement to complete...")
+            while True:
+                status_req = GetOperationStatus.Request()
+                status_resp = status_client.call(status_req)
+                if status_resp and status_resp.operation_status == "idle":
+                    break
+                elif status_resp and status_resp.operation_status == "error":
+                    raise ServiceCallFailedError(f"Axis reported error during movement: {status_resp.status_message}")
+                time.sleep(0.1)
+            self._node.get_logger().info("Movement complete")
+
             # Scan through positions
             current_pos = request.start_position
+            self._node.get_logger().info(f"Starting scan loop from {current_pos} to {request.end_position}")
+            
             while current_pos <= request.end_position:
                 positions.append(current_pos)
+                self._node.get_logger().info(f"Processing position {current_pos}")
 
                 # Capture image and calculate sharpness
                 if self._node.latest_image_msg is None:
-                    time.sleep(0.5)  # Wait for image
+                    self._node.get_logger().warn("No image available, waiting...")
+                    # Try to spin a bit to get an image? 
+                    # We can't easily spin here without a future.
+                    # But we just spun for the move, so we should have an image.
+                    time.sleep(0.5)
 
                 if self._node.latest_image_msg is None:
                     self._node.get_logger().warn(
@@ -372,7 +404,7 @@ class CameraServiceCallbacks:
                             self._node.latest_image_msg, "bgr8")
                         sharpness = self._calculate_sharpness(cv_image)
                         sharpness_values.append(sharpness)
-                        self._node.get_logger().debug(
+                        self._node.get_logger().info(
                             f"Position: {current_pos:.2f}mm, Sharpness: {sharpness:.2f}")
                     except Exception as e:
                         self._node.get_logger().warn(
@@ -381,14 +413,25 @@ class CameraServiceCallbacks:
 
                 # Move to next position (unless we're at the end)
                 if current_pos + request.step_size <= request.end_position:
-                    jog_req = JogAxis.Request()
-                    jog_req.step_size = request.step_size
-                    future = jog_client.call_async(jog_req)
-                    rclpy.spin_until_future_complete(self._node, future)
-
-                    if future.result() is None or not future.result().success:
+                    target_pos = current_pos + request.step_size
+                    self._node.get_logger().info(f"Moving to next position: {target_pos:.2f}mm...")
+                    
+                    move_req = MoveAbsolute.Request()
+                    move_req.axis_position = float(target_pos)
+                    move_response = move_abs_client.call(move_req)
+                    
+                    if move_response is None or not move_response.success:
                         self._node.get_logger().warn(
-                            f"Failed to jog axis at position {current_pos}")
+                            f"Failed to move axis to {target_pos}")
+                    else:
+                        # Wait for movement to complete
+                        while True:
+                            status_req = GetOperationStatus.Request()
+                            status_resp = status_client.call(status_req)
+                            if status_resp and status_resp.operation_status == "idle":
+                                break
+                            time.sleep(0.1)
+                        self._node.get_logger().info("Move complete")
 
                 current_pos += request.step_size
 
@@ -410,7 +453,7 @@ class CameraServiceCallbacks:
                 f"📷 Best focus position: {best_position:.2f}mm (sharpness: {max_sharpness:.2f})")
 
             # Move to best position
-            move_req.position = best_position
+            move_req.axis_position = float(best_position)
             future = move_abs_client.call_async(move_req)
             rclpy.spin_until_future_complete(self._node, future)
 
@@ -432,7 +475,7 @@ class CameraServiceCallbacks:
 
             response.success = True
             response.message = f"Autofocus successful. Best position: {best_position:.2f}mm (sharpness: {max_sharpness:.2f})"
-            response.best_position = best_position
+            # response.best_position = best_position
 
         except InvalidParameterError as e:
             response.success = False
@@ -458,7 +501,7 @@ class CameraServiceCallbacks:
         except Exception as e:
             response.success = False
             response.message = f"❌ Autofocus failed: {str(e)}"
-            self._node.get_logger().error(response.message, exc_info=True)
+            self._node.get_logger().error(f"{response.message}\n{type(e).__name__}: {str(e)}")
 
         return response
 

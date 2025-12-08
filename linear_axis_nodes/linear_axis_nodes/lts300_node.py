@@ -158,7 +158,7 @@ class LTS300Node(Node):
 
         except Exception as e:
             self.get_logger().error(
-                f"Exception during initialization: {e}", exc_info=True)
+                f"Exception during initialization: {e}")
             self.get_logger().error("Node initialization failed, exiting...")
             import traceback
             traceback.print_exc()
@@ -284,7 +284,7 @@ class LTS300Node(Node):
 
         except Exception as e:
             self.get_logger().error(
-                f"Error in _setup_ros_communication: {e}", exc_info=True)
+                f"Error in _setup_ros_communication: {e}")
             raise e  # Re-raise to be caught by main try-catch
 
     def publish_position(self):

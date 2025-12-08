@@ -25,7 +25,7 @@ def generate_launch_description():
                 'camera_info_urls': [os.path.join(
                     get_package_share_directory('camera_aravis2'),
                     'config/camera_info_example_uv.yaml')],
-                'verbose': False,
+                'verbose': True,
 
                 # GenICam-specific parameters
                 'ImageFormatControl': {

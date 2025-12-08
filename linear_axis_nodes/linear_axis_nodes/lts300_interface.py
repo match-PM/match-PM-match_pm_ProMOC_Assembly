@@ -129,7 +129,7 @@ class Lts300Interface:
             return connected
 
         except Exception as e:
-            self.logger.error(f"Connection failed: {e}", exc_info=True)
+            self.logger.error(f"Connection failed: {e}")
             self.is_connected = False
             return False
 

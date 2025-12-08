@@ -16,8 +16,7 @@ except ImportError as e:
 from .linear_axis_driver import LinearAxisDriver
 from promoc_core.promoc_exceptions import (
     DeviceNotFoundError,
-    ConnectionTimeoutError,
-    ConnectionError,
+    CommunicationTimeoutError,
     CommunicationError,
     HardwareError,
     HomingFailedError,
@@ -25,6 +24,10 @@ from promoc_core.promoc_exceptions import (
     SoftLimitViolationError,
     DriverNotAvailableError
 )
+
+# Alias for backwards compatibility
+ConnectionTimeoutError = CommunicationTimeoutError
+ConnectionError = CommunicationError
 
 # Suppress pylablib warnings during import
 warnings.filterwarnings("ignore", message="can't recognize the stage name*")
@@ -125,7 +128,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 self.logger.info('Device disconnected')
             except Exception as e:
                 self.logger.error(
-                    f'Error during disconnect: {e}', exc_info=True)
+                    f'Error during disconnect: {e}')
 
     def move_absolute(self, position: float):
         """Move to absolute position in millimeters."""
@@ -437,7 +440,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
         except Exception as e:
             self.logger.error(
-                f'Error getting velocity parameters: {e}', exc_info=True)
+                f'Error getting velocity parameters: {e}')
             # Return default safe values in case of error
             return (0.0, 1.0, 5.0)
 
@@ -496,7 +499,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
         except Exception as e:
             self.logger.error(
-                f'Error setting velocity parameters: {e}', exc_info=True)
+                f'Error setting velocity parameters: {e}')
             raise
 
     def stop(self):
@@ -525,7 +528,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
             except Exception as e:
                 self.logger.error(
-                    f'Error during emergency stop: {e}', exc_info=True)
+                    f'Error during emergency stop: {e}')
                 raise
             finally:
                 self._comm_lock.release()
@@ -536,7 +539,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 self.device.stop()
             except Exception as e:
                 self.logger.error(
-                    f'Error during force stop: {e}', exc_info=True)
+                    f'Error during force stop: {e}')
                 raise
 
     def jog_positive(self, step_size: float = 1.0):

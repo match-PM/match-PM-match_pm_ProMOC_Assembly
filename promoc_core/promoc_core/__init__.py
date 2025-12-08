@@ -80,12 +80,20 @@ For More Information
 - See QUICK_REFERENCE.md for common patterns
 """
 
+# Import modules in dependency order to avoid circular imports
 from . import promoc_exceptions
-from . import error_handling
 from . import conversions
 from . import validation
 from . import motion
-from . import algorithms
+from . import error_handling
+
+# Import algorithms last (may depend on other modules)
+try:
+    from . import algorithms
+    _has_algorithms = True
+except ImportError:
+    _has_algorithms = False
+    algorithms = None
 
 __all__ = [
     'promoc_exceptions',
@@ -93,5 +101,7 @@ __all__ = [
     'conversions',
     'validation',
     'motion',
-    'algorithms'
 ]
+
+if _has_algorithms:
+    __all__.append('algorithms')

@@ -309,7 +309,7 @@ class ServiceCallbacks:
                 self.last_operation_message = f"Movement failed: {error_msg}"
 
             self.logger.error(
-                f"{move_type.capitalize()} movement failed: {error_msg}", exc_info=True)
+                f"{move_type.capitalize()} movement failed: {error_msg}")
 
     def _async_home_operation(self):
         """
@@ -360,7 +360,7 @@ class ServiceCallbacks:
                 error_msg = str(e) if str(e).strip(
                 ) else "Unknown error during homing"
                 self.logger.error(
-                    f"❌ Homing operation failed: {error_msg}", exc_info=True)
+                    f"❌ Homing operation failed: {error_msg}")
                 homing_error = HomingFailedError(
                     error_msg,
                     details={
@@ -436,7 +436,7 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error starting move_absolute: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -495,7 +495,7 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error in move_relative: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -561,7 +561,7 @@ class ServiceCallbacks:
             response.axis_position = -1.0
             response.success = False
             response.status_message = f"❌ Error getting position: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -610,7 +610,7 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error setting velocity: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -649,7 +649,7 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error getting velocity: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -683,7 +683,7 @@ class ServiceCallbacks:
         except Exception as e:
             response.success = False
             response.status_message = f"❌ Error during shutdown: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
         return response
 
@@ -813,7 +813,7 @@ class ServiceCallbacks:
             response.success = False
             response.final_position = -1.0
             response.status_message = f"❌ Jog operation failed: {str(e)}"
-            self.logger.error(response.status_message, exc_info=True)
+            self.logger.error(response.status_message)
 
             # Reset status on error
             with self.operation_lock:

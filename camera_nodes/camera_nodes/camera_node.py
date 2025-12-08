@@ -70,6 +70,8 @@ Beispiel-Service-Calls:
 
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -137,6 +139,7 @@ class CameraNode(Node):
         self.declare_parameter('pixel_size_um', 3.45)
         self.declare_parameter('default_roi_width', 200)
         self.declare_parameter('default_roi_height', 200)
+        self.declare_parameter('z_axis_node_name', 'lts300_z_axis')  # Name of z-axis node for autofocus
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value
@@ -174,17 +177,19 @@ class CameraNode(Node):
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 5: Services registrieren
         # ══════════════════════════════════════════════════════════════════════
+        self.cb_group = ReentrantCallbackGroup()
+
         self.select_roi_service = self.create_service(
-            Trigger, '~/select_roi', self.service_callbacks.select_roi_callback)
+            Trigger, '~/select_roi', self.service_callbacks.select_roi_callback, callback_group=self.cb_group)
         self.autofocus_service = self.create_service(
-            AutoFocus, '~/autofocus', self.service_callbacks.autofocus_callback)
+            AutoFocus, '~/autofocus', self.service_callbacks.autofocus_callback, callback_group=self.cb_group)
         self.mtf_service = self.create_service(
-            MeasureMTF, '~/measure_mtf', self.service_callbacks.measure_mtf_callback)
+            MeasureMTF, '~/measure_mtf', self.service_callbacks.measure_mtf_callback, callback_group=self.cb_group)
 
         # Belichtungs-Service nur bei echter Kamera mit verbundenem Treiber
         if not self.use_simulator and self.camera_driver.is_connected:
             self.manual_set_exposure_service = self.create_service(
-                SetExposure, '~/set_exposure', self.service_callbacks.manual_set_exposure_callback)
+                SetExposure, '~/set_exposure', self.service_callbacks.manual_set_exposure_callback, callback_group=self.cb_group)
 
         self.get_logger().info("✓ Camera Node initialisiert")
 
@@ -217,8 +222,9 @@ class CameraNode(Node):
         Die Verarbeitung wird durch Services ausgelöst, nicht automatisch.
         Das Bild wird nur gespeichert für späteren Zugriff.
 
-        Bei echtem Treiber: Bild auch an Treiber weiterleiten.
+        # Bei echtem Treiber: Bild auch an Treiber weiterleiten.
         """
+        # self.get_logger().info("Received image") # Uncomment for debugging
         self.latest_image_msg = msg
 
         # Bei Aravis-Treiber: Bild im Treiber cachen
@@ -235,8 +241,10 @@ class CameraNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     camera_node = CameraNode()
+    executor = MultiThreadedExecutor()
+    executor.add_node(camera_node)
     try:
-        rclpy.spin(camera_node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
