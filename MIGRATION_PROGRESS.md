@@ -181,6 +181,26 @@
 - **Fortschritt Gesamt: ~65%** (Alle Service Callbacks komplett + 1 Driver komplett)
 - Geschätzte verbleibende Arbeit: 2 Driver-Dateien + Service-Interface Updates
 
+---
+
+## 🧹 Codebase Cleanup (Legacy Removal) – Dezember 2025
+
+**Ziel:** Veraltete Features entfernen, ohne Drittanbieter-Treiber/Abhängigkeiten (z.B. PMCLib/pmclib) anzutasten.
+
+### Entfernt / ersetzt
+
+**promoc_bringup (Demo Controller):**
+- Legacy Demo Controller Entry-Points entfernt (`demo_controller`, `pm_demo`).
+- Launchfiles aktualisiert, sodass sie den einzigen unterstützten Demo-Controller `unified_demo` starten.
+- Legacy Module-Dateien entfernt (`promoc_bringup/promoc_bringup/demo_controller.py`, `promoc_bringup/promoc_bringup/pm_demo.py`).
+
+**setup (Validation):**
+- `setup/validate_setup.sh` entfernt (legacy). `validate_setup_enhanced.sh` bleibt als Standard.
+
+### Nicht verändert (bewusst)
+
+- Drittanbieter / fremd gepflegte Driver & Libraries bleiben unverändert (z.B. PMCLib/pmclib und vendor code in `local_libraries/`).
+
 ## 🎯 Nächste Prioritäten
 
 1. ~~Rest der lts300_service_callbacks.py Methoden~~ ✅ **ERLEDIGT**

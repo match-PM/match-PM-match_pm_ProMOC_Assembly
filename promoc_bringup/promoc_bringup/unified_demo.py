@@ -53,8 +53,8 @@ class UnifiedDemoController(Node):
     """
     Unified demo controller for the ProMOC Assembly system.
 
-    This controller consolidates the functionality of the previous
-    demo_controller.py and pm_demo.py into a single, configurable node.
+    This controller consolidates earlier demo-controller variants into a
+    single, configurable node.
     """
 
     # =========================================================================

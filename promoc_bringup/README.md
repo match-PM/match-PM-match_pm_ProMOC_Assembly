@@ -22,10 +22,9 @@ promoc_bringup/
 ├── config/
 │   ├── mover_node_params.yaml          # Planar motor configuration
 │   ├── linear_axes_params.yaml         # Linear axes configuration
-│   └── demo_controller.yaml            # Demo controller settings
+│   └── demo_controller_params.yaml     # Demo controller settings
 ├── promoc_bringup/
-│   ├── demo_controller.py              # Automated demo controller
-│   └── pm_demo.py                      # Planar motor demo utilities
+│   └── unified_demo.py                 # Unified demo controller (all modes)
 └── urdf/
     ├── assemblies/                     # Complete system descriptions
     ├── modules/                        # Individual component models

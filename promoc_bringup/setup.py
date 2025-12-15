@@ -33,9 +33,6 @@ setup(
         'console_scripts': [
             # New unified demo controller (recommended)
             'unified_demo = promoc_bringup.unified_demo:main',
-            # Legacy demo controllers (kept for backwards compatibility)
-            'demo_controller = promoc_bringup.demo_controller:main',
-            'pm_demo = promoc_bringup.pm_demo:main',
         ],
     },
 )

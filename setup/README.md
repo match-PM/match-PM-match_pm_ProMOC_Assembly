@@ -23,7 +23,6 @@ cd setup/
 ### Validation and Testing
 - **`check_installation.sh`** - 🔍 **Diagnose installation** - checks what's installed vs missing
 - **`validate_setup_enhanced.sh`** - Comprehensive system validation with detailed reporting
-- **`validate_setup.sh`** - Basic validation script (legacy)
 - **`check_dotnet_runtime.py`** - Tests .NET runtime compatibility and configuration
 - **`test_basic_functionality.py`** - Basic functionality tests for development
 

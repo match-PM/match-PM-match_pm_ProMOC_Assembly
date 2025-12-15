@@ -24,13 +24,12 @@ def generate_launch_description():
 
     demo_controller = Node(
         package='promoc_bringup',
-        executable='pm_demo', 
+        executable='unified_demo',
         name='demo_controller',
-        parameters=[{'xbot_id': 1}],
+        parameters=[{'demo_mode': 'planar_motor', 'xbot_id': 1}],
         output='screen',
         arguments=['--ros-args', '--log-level', 'INFO']
     )
-
 
     # Starte Demo Controller mit Verzögerung (5 Sekunden)
     demo_delayed = TimerAction(

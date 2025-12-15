@@ -8,8 +8,6 @@ for the ProMOC Assembly system.
 Modules:
     - unified_demo: Configurable demo controller for all modes
     - service_helper: Reusable service call utilities
-    - demo_controller: Legacy full-system demo (use unified_demo instead)
-    - pm_demo: Legacy planar motor demo (use unified_demo instead)
 
 Quick Start:
     # Launch full system
