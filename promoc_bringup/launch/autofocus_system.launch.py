@@ -20,7 +20,7 @@ Verwendung:
 Autofokus starten:
 ==================
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \\
-        "{start_position: 100.0, end_position: 150.0, step_size: 5.0}"
+        "{start_position: 100.0, end_position: 150.0, step_size: 0.5}"
 """
 
 import os
@@ -107,6 +107,11 @@ def generate_launch_description():
                 'z_axis_node_name': LaunchConfiguration('z_axis_name'),
                 'pixel_size_um': 3.45,
                 'mtf_csv_path': '/tmp/mtf_results.csv',
+                # Autofokus: standardmäßig Multi-Level Refinement bis 10µm
+                'autofocus.enable_multilevel': True,
+                'autofocus.refinement_samples': 51,
+                'autofocus.min_step_mm': 0.01,
+                'autofocus.refinement_shrink_factor': 0.35,
             }
         ]
     )

@@ -88,10 +88,14 @@ from . import motion
 from . import error_handling
 
 # Import algorithms last (may depend on other modules)
+# NOTE: In some ROS/pytest collection scenarios (especially with mixed
+# workspaces and partially built install trees), importing algorithms can
+# trigger circular-import style errors that are not a plain ImportError.
+# We keep the package importable and let users import submodules directly.
 try:
     from . import algorithms
     _has_algorithms = True
-except ImportError:
+except Exception:  # noqa: BLE001
     _has_algorithms = False
     algorithms = None
 

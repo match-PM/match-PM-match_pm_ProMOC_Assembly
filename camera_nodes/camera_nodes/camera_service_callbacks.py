@@ -12,7 +12,7 @@ Architektur-Übersicht:
     ┌─────────────────────────────────────────────────────────────┐
     │  CameraServiceCallbacks                                      │
     │  ├── Schärfe-Berechnung                                     │
-    │  │   ├── _calculate_sharpness() → Laplacian/Tenengrad      │
+    │  │   ├── _calculate_sharpness() → Tenengrad                │
     │  │   └── Nutzt promoc_core.algorithms                       │
     │  │                                                          │
     │  ├── select_roi_callback()                                  │
@@ -21,7 +21,7 @@ Architektur-Übersicht:
     │  ├── autofocus_callback()                                   │
     │  │   ├── Hybrid-Algorithmus:                               │
     │  │   │   1. Grobe Suche (linear)                          │
-    │  │   │   2. Feine Suche (Golden Section)                   │
+    │  │   │   2. Multi-Level Verfeinerung (Bereich enger, Step kleiner) │
     │  │   └── Steuert Z-Achse für Fokus-Optimierung            │
     │  │                                                          │
     │  └── measure_mtf_callback()                                 │
@@ -37,22 +37,22 @@ Verfügbare Services:
 
 Autofokus-Algorithmus:
 ======================
-Der Hybrid-Autofokus funktioniert in zwei Phasen:
+Der Hybrid-Autofokus arbeitet in Stufen und wird standardmäßig als
+Multi-Level Refinement ausgeführt:
 
     Phase 1: Grobe Suche
     ├── Fahre gesamten Bereich mit großen Schritten ab
     ├── Berechne Schärfe an jeder Position
     └── Finde ungefähres Maximum
 
-    Phase 2: Feine Suche (Golden Section Search)
-    ├── Konzentriere auf Bereich um Maximum
-    ├── Teile Bereich nach goldenem Schnitt
-    └── Konvergiere zum präzisen Fokuspunkt
+    Phase 2..N: Verfeinerung
+    ├── Bereich um das aktuelle Maximum verengen
+    ├── Schrittweite passend zum Bereich wählen
+    └── Wiederholen bis minimale Schrittweite erreicht ist
 
-Schärfe-Metriken:
-=================
-- Laplacian Variance: Standardmetrik, robust
-- Tenengrad: Alternative für Kanten-reiche Bilder
+Schärfe-Metrik:
+==============
+- Tenengrad: robust für Einzelbilder (Rechenzeit ist hier unkritisch)
 
 Exception-Handling:
 ===================
@@ -78,7 +78,6 @@ from promoc_core.promoc_exceptions import (
     HardwareError
 )
 from promoc_core.algorithms import (
-    laplacian_variance,
     tenengrad,
     HybridAutofocus,
     AutofocusConfig,
@@ -125,7 +124,7 @@ class CameraServiceCallbacks:
     # SCHÄRFE-BERECHNUNG
     # ══════════════════════════════════════════════════════════════════════════
 
-    def _calculate_sharpness(self, image, metric: str = 'variance'):
+    def _calculate_sharpness(self, image, metric: str = 'tenengrad'):
         """
         Berechnet die Schärfe eines Bildes.
 
@@ -134,9 +133,8 @@ class CameraServiceCallbacks:
 
         Args:
             image: Eingabebild (BGR oder Graustufen)
-            metric: Metrik-Typ:
-                - 'variance': Laplacian Variance (Standard)
-                - 'tenengrad': Gradient-basiert
+            metric: Für Abwärtskompatibilität vorhanden.
+                Unterstützt wird ausschließlich 'tenengrad'.
 
         Returns:
             float: Schärfe-Score (höher = schärfer)
@@ -145,10 +143,12 @@ class CameraServiceCallbacks:
             >>> sharpness = self._calculate_sharpness(cv_image)
             >>> print(f"Schärfe: {sharpness:.2f}")
         """
-        if metric == 'tenengrad':
-            return tenengrad(image)
-        else:
-            return laplacian_variance(image)
+        if metric != 'tenengrad':
+            # Nicht hart failen, weil in ROS-Parametern/alten Clients ggf.
+            # noch 'variance' gesetzt ist. Wir loggen und nutzen Tenengrad.
+            self._node.get_logger().warn(
+                f"Unsupported sharpness metric '{metric}', using 'tenengrad' instead")
+        return tenengrad(image)
 
     # ══════════════════════════════════════════════════════════════════════════
     # ROI-AUSWAHL
@@ -275,9 +275,10 @@ class CameraServiceCallbacks:
         """
         Callback für automatische Fokussierung.
 
-        Führt einen Hybrid-Autofokus durch:
-        1. Grobe Suche über gesamten Bereich
-        2. Feine Suche mit Golden Section um Maximum
+        Führt einen Hybrid-Autofokus durch (promoc_core.algorithms.HybridAutofocus):
+        - Coarse Search über den Bereich
+        - Fine Search um das gefundene Maximum (unidirektional, Hysterese-arm)
+        - Fokus-Metrik: Tenengrad
 
         Parameter:
         ----------
@@ -312,11 +313,12 @@ class CameraServiceCallbacks:
 
             # ── Schritt 2: Service-Clients erstellen ──
             # Get z-axis node name from parameter (default: lts300_z_axis)
-            z_axis_name = self._node.get_parameter('z_axis_node_name').get_parameter_value().string_value
+            z_axis_name = self._node.get_parameter(
+                'z_axis_node_name').get_parameter_value().string_value
             move_service = f'/{z_axis_name}/move_absolute'
             jog_service = f'/{z_axis_name}/jog_axis'
             status_service = f'/{z_axis_name}/get_operation_status'
-            
+
             move_abs_client = self._node.create_client(
                 MoveAbsolute, move_service)
             jog_client = self._node.create_client(
@@ -336,19 +338,44 @@ class CameraServiceCallbacks:
                     "Linear axis jog_axis service not available",
                     details={'service': jog_service, 'timeout': 1.0}
                 )
-            
+
             if not status_client.wait_for_service(timeout_sec=1.0):
                 raise ServiceCallFailedError(
                     "Linear axis get_operation_status service not available",
                     details={'service': status_service, 'timeout': 1.0}
                 )
 
-            sharpness_values = []
-            positions = []
+            # HybridAutofocus konfigurieren (Tenengrad-only in promoc_core)
+            # Optionales Multi-Level Refinement wird über ROS-Parameter gesteuert,
+            # damit keine Interface-Änderungen notwendig sind.
+            enable_multilevel = self._node.get_parameter(
+                'autofocus.enable_multilevel').get_parameter_value().bool_value
+            refinement_samples = self._node.get_parameter(
+                'autofocus.refinement_samples').get_parameter_value().integer_value
+            min_step_mm = self._node.get_parameter(
+                'autofocus.min_step_mm').get_parameter_value().double_value
+            refinement_shrink_factor = self._node.get_parameter(
+                'autofocus.refinement_shrink_factor').get_parameter_value().double_value
 
-            # Move to start position
+            af_config = AutofocusConfig(
+                z_min_mm=float(request.start_position),
+                z_max_mm=float(request.end_position),
+                coarse_step_mm=float(request.step_size),
+                # Defaults aus AutofocusConfig: fine_step_mm, fine_range_mm, etc.
+                metric='tenengrad',
+                enable_multilevel=bool(enable_multilevel),
+                refinement_samples=int(
+                    refinement_samples) if refinement_samples else 41,
+                min_step_mm=float(min_step_mm) if min_step_mm else 0.01,
+                refinement_shrink_factor=float(
+                    refinement_shrink_factor) if refinement_shrink_factor else 0.25,
+            )
+            af = HybridAutofocus(af_config)
+
+            # Move to initial position
+            current_pos = float(af.start())
             move_req = MoveAbsolute.Request()
-            move_req.axis_position = float(request.start_position)
+            move_req.axis_position = current_pos
             move_response = move_abs_client.call(move_req)
 
             if move_response is None:
@@ -366,116 +393,116 @@ class CameraServiceCallbacks:
                     }
                 )
 
-            # Wait for movement to complete
-            self._node.get_logger().info("Waiting for movement to complete...")
-            while True:
-                status_req = GetOperationStatus.Request()
-                status_resp = status_client.call(status_req)
-                if status_resp and status_resp.operation_status == "idle":
-                    break
-                elif status_resp and status_resp.operation_status == "error":
-                    raise ServiceCallFailedError(f"Axis reported error during movement: {status_resp.status_message}")
-                time.sleep(0.1)
-            self._node.get_logger().info("Movement complete")
+            def _wait_for_axis_idle() -> None:
+                self._node.get_logger().debug('Waiting for axis to become idle...')
+                while True:
+                    status_req = GetOperationStatus.Request()
+                    status_resp = status_client.call(status_req)
+                    if status_resp and status_resp.operation_status == 'idle':
+                        return
+                    if status_resp and status_resp.operation_status == 'error':
+                        raise ServiceCallFailedError(
+                            f"Axis reported error during movement: {status_resp.status_message}")
+                    time.sleep(0.1)
 
-            # Scan through positions
-            current_pos = request.start_position
-            self._node.get_logger().info(f"Starting scan loop from {current_pos} to {request.end_position}")
-            
-            while current_pos <= request.end_position:
-                positions.append(current_pos)
-                self._node.get_logger().info(f"Processing position {current_pos}")
+            # Initial move wait
+            _wait_for_axis_idle()
 
-                # Capture image and calculate sharpness
+            # State-machine loop
+            best_position: float | None = None
+            best_score: float = 0.0
+            max_iterations = 1000
+
+            for _ in range(max_iterations):
                 if self._node.latest_image_msg is None:
-                    self._node.get_logger().warn("No image available, waiting...")
-                    # Try to spin a bit to get an image? 
-                    # We can't easily spin here without a future.
-                    # But we just spun for the move, so we should have an image.
-                    time.sleep(0.5)
+                    # give the image subscriber a moment
+                    time.sleep(0.1)
 
                 if self._node.latest_image_msg is None:
-                    self._node.get_logger().warn(
-                        f"No image at position {current_pos}")
-                    sharpness_values.append(0)
+                    raise ImageProcessingError(
+                        'No image available during autofocus',
+                        details={'z_mm': current_pos}
+                    )
+
+                cv_image = self._node.bridge.imgmsg_to_cv2(
+                    self._node.latest_image_msg, 'bgr8')
+
+                af_result = af.process_image(current_pos, cv_image)
+                best_score = af_result.best_score
+
+                # Logging (lightweight)
+                if af_result.current_score:
+                    level_info = ''
+                    if af_result.refinement_step_mm is not None and af_result.refinement_range_mm is not None:
+                        level_info = (
+                            f" step={af_result.refinement_step_mm:.4f}mm"
+                            f" range=±{af_result.refinement_range_mm:.4f}mm"
+                        )
+                    self._node.get_logger().info(
+                        f"AF {af_result.phase.name}: z={current_pos:.3f}mm score={af_result.current_score:.2f} best={best_score:.2f}{level_info}")
                 else:
-                    try:
-                        cv_image = self._node.bridge.imgmsg_to_cv2(
-                            self._node.latest_image_msg, "bgr8")
-                        sharpness = self._calculate_sharpness(cv_image)
-                        sharpness_values.append(sharpness)
-                        self._node.get_logger().info(
-                            f"Position: {current_pos:.2f}mm, Sharpness: {sharpness:.2f}")
-                    except Exception as e:
-                        self._node.get_logger().warn(
-                            f"Failed to process image at position {current_pos}: {str(e)}")
-                        sharpness_values.append(0)
+                    self._node.get_logger().debug(
+                        f"AF {af_result.phase.name}: z={current_pos:.3f}mm best={best_score:.2f}")
 
-                # Move to next position (unless we're at the end)
-                if current_pos + request.step_size <= request.end_position:
-                    target_pos = current_pos + request.step_size
-                    self._node.get_logger().info(f"Moving to next position: {target_pos:.2f}mm...")
-                    
-                    move_req = MoveAbsolute.Request()
-                    move_req.axis_position = float(target_pos)
-                    move_response = move_abs_client.call(move_req)
-                    
-                    if move_response is None or not move_response.success:
-                        self._node.get_logger().warn(
-                            f"Failed to move axis to {target_pos}")
-                    else:
-                        # Wait for movement to complete
-                        while True:
-                            status_req = GetOperationStatus.Request()
-                            status_resp = status_client.call(status_req)
-                            if status_resp and status_resp.operation_status == "idle":
-                                break
-                            time.sleep(0.1)
-                        self._node.get_logger().info("Move complete")
+                if af_result.finished:
+                    best_position = float(
+                        af_result.best_z_mm) if af_result.best_z_mm is not None else None
+                    break
 
-                current_pos += request.step_size
+                if af_result.next_z_mm is None:
+                    raise ImageProcessingError(
+                        'Autofocus did not provide next position',
+                        details={'phase': af_result.phase.name}
+                    )
 
-            # Validate results
-            if not sharpness_values or all(s == 0 for s in sharpness_values):
+                # Move to next requested position
+                next_pos = float(af_result.next_z_mm)
+                move_req = MoveAbsolute.Request()
+                move_req.axis_position = next_pos
+                move_response = move_abs_client.call(move_req)
+
+                if move_response is None or not move_response.success:
+                    raise ServiceCallFailedError(
+                        f"Failed to move axis to {next_pos}",
+                        details={'target_position': next_pos}
+                    )
+
+                _wait_for_axis_idle()
+                current_pos = next_pos
+
+            if best_position is None:
                 raise ImageProcessingError(
-                    "No valid sharpness values calculated during autofocus scan",
-                    details={
-                        'positions_scanned': len(positions),
-                        'valid_measurements': sum(1 for s in sharpness_values if s > 0)
-                    }
+                    'Autofocus did not finish within expected iterations',
+                    details={'max_iterations': max_iterations}
                 )
-
-            # Find best position
-            max_sharpness = max(sharpness_values)
-            best_position = positions[sharpness_values.index(max_sharpness)]
 
             self._node.get_logger().info(
-                f"📷 Best focus position: {best_position:.2f}mm (sharpness: {max_sharpness:.2f})")
+                f"📷 Best focus position: {best_position:.3f}mm (score: {best_score:.2f})")
 
-            # Move to best position
+            final_step = getattr(af_result, 'refinement_step_mm', None)
+            final_range = getattr(af_result, 'refinement_range_mm', None)
+            final_level_info = ''
+            if final_step is not None and final_range is not None:
+                final_level_info = (
+                    f" final_step={final_step:.4f}mm final_range=±{final_range:.4f}mm"
+                )
+
+            # Ensure we end at best position
+            move_req = MoveAbsolute.Request()
             move_req.axis_position = float(best_position)
-            future = move_abs_client.call_async(move_req)
-            rclpy.spin_until_future_complete(self._node, future)
-
-            if future.result() is None:
+            move_response = move_abs_client.call(move_req)
+            if move_response is None or not move_response.success:
                 raise ServiceCallFailedError(
-                    "Move to best position - no response received",
+                    f"Failed to move to best position: {best_position}",
                     details={'target_position': best_position}
                 )
-
-            if not future.result().success:
-                raise ServiceCallFailedError(
-                    f"Failed to move to best position: {future.result().status_message}",
-                    details={
-                        'target_position': best_position,
-                        'max_sharpness': max_sharpness,
-                        'service_response': future.result().status_message
-                    }
-                )
+            _wait_for_axis_idle()
 
             response.success = True
-            response.message = f"Autofocus successful. Best position: {best_position:.2f}mm (sharpness: {max_sharpness:.2f})"
-            # response.best_position = best_position
+            response.message = (
+                f"Autofocus successful. Best position: {best_position:.3f}mm "
+                f"(tenengrad score: {best_score:.2f}){final_level_info}"
+            )
 
         except InvalidParameterError as e:
             response.success = False
@@ -501,7 +528,8 @@ class CameraServiceCallbacks:
         except Exception as e:
             response.success = False
             response.message = f"❌ Autofocus failed: {str(e)}"
-            self._node.get_logger().error(f"{response.message}\n{type(e).__name__}: {str(e)}")
+            self._node.get_logger().error(
+                f"{response.message}\n{type(e).__name__}: {str(e)}")
 
         return response
 

@@ -6,6 +6,11 @@ Dieses Modul implementiert einen Hybrid-Autofokus-Algorithmus mit:
 2. Fine Search: Verfeinerung um das Maximum
 3. Hysterese-Kompensation: Unidirektionale Bewegung
 
+Fokus-Metrik:
+=============
+Für die Bildauswertung wird durchgängig Tenengrad verwendet (robust für
+Einzelbilder; Rechenzeit ist in diesem Anwendungsfall unkritisch).
+
 WICHTIG - Hysterese-Problem:
 ============================
 Linear-Achsen haben mechanische Hysterese (Spiel, Reibung).
@@ -83,7 +88,7 @@ from typing import Optional, List, Tuple, Callable
 import math
 import numpy as np
 
-from .focus_metrics import laplacian_variance, tenengrad
+from .focus_metrics import tenengrad
 
 
 class ScanDirection(Enum):
@@ -117,7 +122,6 @@ class FocusPhase(Enum):
     COARSE_SEARCH = auto()      # Grobe Suche in Scan-Richtung
     FINE_REPOSITION = auto()    # Zurückfahren zum Start des Fine-Bereichs
     FINE_SEARCH = auto()        # Feine Suche (gleiche Richtung wie Coarse)
-    FINE_SEARCH_INIT = auto()   # Legacy: Golden Section Init
 
     # Bidirektionale Phasen (Hysterese-Messung)
     COARSE_FORWARD = auto()     # Vorwärts-Scan
@@ -138,8 +142,7 @@ class AutofocusConfig:
         coarse_step_mm: Schrittweite für grobe Suche
         fine_step_mm: Schrittweite für feine Suche
         fine_range_mm: Bereich um Maximum für Fine Search (±fine_range)
-        fine_metric: Fokus-Metrik ('variance' oder 'tenengrad')
-        coarse_metric: Fokus-Metrik für Coarse Search
+    metric: Fokus-Metrik (fix: 'tenengrad')
         min_focus_score: Minimaler Score für gültigen Fokus
         scan_direction: Scan-Richtung (FORWARD, BACKWARD, BIDIRECTIONAL)
         hysteresis_threshold_mm: Ab welcher Hysterese wird gewarnt
@@ -154,9 +157,20 @@ class AutofocusConfig:
     coarse_step_mm: float = 0.5
     fine_step_mm: float = 0.05          # NEU: Feine Schrittweite
     fine_range_mm: float = 1.5          # NEU: ±1.5mm um Coarse-Maximum
-    fine_tolerance_mm: float = 0.01     # Legacy: Golden Section Toleranz
-    fine_metric: str = 'tenengrad'
-    coarse_metric: str = 'variance'
+    # Optional: Multi-Level Refinement (iterative Bereichsverengung)
+    # Wenn enable_multilevel=True wird nach dem initialen Coarse-Scan der Bereich
+    # um das aktuelle Maximum iterativ verengt. Pro Level werden ungefähr
+    # refinement_samples Messpunkte genommen; die Schrittweite wird passend zum
+    # Level-Bereich bestimmt, bis min_step_mm erreicht ist.
+    enable_multilevel: bool = True
+    refinement_samples: int = 51
+    min_step_mm: float = 0.01
+    refinement_shrink_factor: float = 0.35
+
+    # Fokus-Metrik: Tenengrad hat sich für Einzelbildanalyse als robust erwiesen.
+    # Wir halten den Parameter für Abwärtskompatibilität (z. B. config-Dateien),
+    # erlauben aber nur 'tenengrad'.
+    metric: str = 'tenengrad'
     min_focus_score: float = 100.0
     scan_direction: ScanDirection = ScanDirection.FORWARD  # NEU
     hysteresis_threshold_mm: float = 0.1  # NEU: Warnung ab 0.1mm Hysterese
@@ -178,6 +192,20 @@ class AutofocusConfig:
         if self.fine_step_mm >= self.coarse_step_mm:
             raise ValueError(
                 f"fine_step ({self.fine_step_mm}) sollte < coarse_step ({self.coarse_step_mm}) sein")
+
+        if self.refinement_samples < 5:
+            raise ValueError(
+                f"refinement_samples muss >= 5 sein, ist {self.refinement_samples}")
+        if self.min_step_mm <= 0:
+            raise ValueError(
+                f"min_step_mm muss positiv sein, ist {self.min_step_mm}")
+        if not (0.0 < self.refinement_shrink_factor < 1.0):
+            raise ValueError(
+                f"refinement_shrink_factor muss zwischen 0 und 1 liegen, ist {self.refinement_shrink_factor}")
+
+        if self.metric != 'tenengrad':
+            raise ValueError(
+                f"Nur 'tenengrad' wird unterstützt (angefordert: {self.metric!r})")
 
 
 @dataclass
@@ -223,6 +251,10 @@ class AutofocusResult:
     # Repositionierung (für unidirektionale Fine Search)
     requires_repositioning: bool = False
     reposition_z_mm: Optional[float] = None
+
+    # Multi-Level Refinement (optional): aktuelle Level-Parameter
+    refinement_step_mm: Optional[float] = None
+    refinement_range_mm: Optional[float] = None
 
 
 @dataclass
@@ -331,20 +363,15 @@ class HybridAutofocus:
         self._fine_start_z: float = 0.0  # Startposition für Fine Search
         self._fine_end_z: float = 0.0    # Endposition für Fine Search
 
+        # Multi-Level Refinement State
+        self._refine_current_step_mm: float = self.config.fine_step_mm
+        self._refine_current_range_mm: float = self.config.fine_range_mm
+
         # Bidirektional: Ergebnisse beider Richtungen
         self._forward_measurements: List[_FocusMeasurement] = []
         self._backward_measurements: List[_FocusMeasurement] = []
         self._forward_best_z: float = 0.0
         self._backward_best_z: float = 0.0
-
-        # Legacy: Golden Section State (für Abwärtskompatibilität)
-        self._gs_a: float = 0.0
-        self._gs_b: float = 0.0
-        self._gs_c: float = 0.0
-        self._gs_d: float = 0.0
-        self._gs_fc: Optional[float] = None
-        self._gs_fd: Optional[float] = None
-        self._gs_waiting_for: Optional[str] = None
 
         # Best result tracking
         self._best_z: float = 0.0
@@ -448,10 +475,6 @@ class HybridAutofocus:
         if self._phase == FocusPhase.COMPARE_RESULTS:
             return self._compare_bidirectional_results()
 
-        # Legacy: Golden Section (für Abwärtskompatibilität)
-        if self._phase == FocusPhase.FINE_SEARCH_INIT:
-            return self._init_fine_search(current_z_mm, image)
-
         # Bereits fertig
         return AutofocusResult(
             finished=True,
@@ -462,14 +485,10 @@ class HybridAutofocus:
             message="Autofokus abgeschlossen"
         )
 
-    def _compute_metric(self, image: np.ndarray, metric_type: str) -> float:
-        """Berechnet Fokus-Metrik für ein Bild."""
-        if metric_type == 'variance':
-            return laplacian_variance(image)
-        elif metric_type == 'tenengrad':
-            return tenengrad(image)
-        else:
-            raise ValueError(f"Unbekannte Metrik: {metric_type}")
+    def _compute_focus_score(self, image: np.ndarray) -> float:
+        """Berechnet den Fokus-Score für ein Bild (Tenengrad)."""
+        # Tenengrad ist für Einzelbilder robust und liefert höhere Werte für schärfere Bilder.
+        return tenengrad(image)
 
     # ══════════════════════════════════════════════════════════════════════════
     # UNIDIREKTIONALE SUCHE (FORWARD/BACKWARD)
@@ -481,8 +500,8 @@ class HybridAutofocus:
 
         Fährt nur in eine Richtung (keine Hysterese).
         """
-        # Fokus-Metrik berechnen
-        score = self._compute_metric(image, self.config.coarse_metric)
+        # Fokus-Score berechnen
+        score = self._compute_focus_score(image)
 
         # Messung speichern
         self._measurements.append(
@@ -533,19 +552,14 @@ class HybridAutofocus:
         best_z = self._best_z
         forward = (self.config.scan_direction == ScanDirection.FORWARD)
 
-        # Bereich: ±fine_range_mm um Maximum
-        fine_start = max(self.config.z_min_mm, best_z -
-                         self.config.fine_range_mm)
-        fine_end = min(self.config.z_max_mm, best_z +
-                       self.config.fine_range_mm)
+        # Multi-Level: initialer Fine-Level basiert auf config.fine_range_mm / fine_step_mm,
+        # danach wird iterativ verengt. Single-Level (Default) verhält sich wie bisher.
+        self._refine_current_step_mm = self.config.fine_step_mm
+        self._refine_current_range_mm = self.config.fine_range_mm
 
-        # Fine-Positionen generieren
-        num_fine_steps = int((fine_end - fine_start) /
-                             self.config.fine_step_mm) + 1
-        self._fine_positions = [
-            fine_start + i * self.config.fine_step_mm
-            for i in range(num_fine_steps)
-        ]
+        fine_start, fine_end = self._compute_refinement_window(best_z)
+        self._fine_positions = self._generate_refinement_positions(
+            fine_start, fine_end, self._refine_current_step_mm, forward=forward)
 
         # Bei Rückwärts-Scan: umkehren
         if not forward:
@@ -593,6 +607,39 @@ class HybridAutofocus:
                 message="Starte feine Suche"
             )
 
+    def _compute_refinement_window(self, best_z: float) -> Tuple[float, float]:
+        """Compute [start,end] window for current refinement range around best_z."""
+        start = max(self.config.z_min_mm, best_z -
+                    self._refine_current_range_mm)
+        end = min(self.config.z_max_mm, best_z + self._refine_current_range_mm)
+        if end < start:
+            end = start
+        return start, end
+
+    def _generate_refinement_positions(
+        self,
+        start: float,
+        end: float,
+        step_mm: float,
+        *,
+        forward: bool,
+    ) -> List[float]:
+        """Generate inclusive positions from start..end with given step."""
+        if step_mm <= 0:
+            raise ValueError(f"step_mm must be positive, got {step_mm}")
+
+        width = end - start
+        if width <= 0:
+            return [start]
+
+        num_steps = int(width / step_mm) + 1
+        positions = [start + i * step_mm for i in range(num_steps)]
+        if positions[-1] > end:
+            positions[-1] = end
+        if not forward:
+            positions = positions[::-1]
+        return positions
+
     def _process_fine_reposition(self, current_z_mm: float) -> AutofocusResult:
         """
         Verarbeitet Repositionierung vor Fine Search.
@@ -618,8 +665,8 @@ class HybridAutofocus:
 
         Fährt nur in eine Richtung durch den Fine-Bereich.
         """
-        # Fokus-Metrik berechnen
-        score = self._compute_metric(image, self.config.fine_metric)
+        # Fokus-Score berechnen
+        score = self._compute_focus_score(image)
 
         # Messung speichern
         self._measurements.append(
@@ -645,17 +692,61 @@ class HybridAutofocus:
                 phase=FocusPhase.FINE_SEARCH,
                 current_score=score,
                 best_score=self._best_score,
+                refinement_step_mm=self._refine_current_step_mm,
+                refinement_range_mm=self._refine_current_range_mm,
                 progress=progress,
                 message=f"Feine Suche: {self._fine_index}/{len(self._fine_positions)}"
             )
 
-        # Fine Search fertig
+        # Fine Search Level fertig → ggf. refinement weiterführen
+        if self.config.enable_multilevel and self._refine_current_step_mm > self.config.min_step_mm:
+            # Bereich verengen und Schrittweite passend zum neuen Bereich wählen,
+            # so dass ungefähr refinement_samples Punkte abgetastet werden.
+            self._refine_current_range_mm = max(
+                self._refine_current_range_mm * self.config.refinement_shrink_factor,
+                self.config.min_step_mm,
+            )
+
+            # step ≈ (2*range)/(samples-1)
+            target_step = (2.0 * self._refine_current_range_mm) / max(
+                1, (self.config.refinement_samples - 1))
+            self._refine_current_step_mm = max(
+                self.config.min_step_mm, target_step)
+
+            forward = (self.config.scan_direction == ScanDirection.FORWARD)
+            fine_start, fine_end = self._compute_refinement_window(
+                self._best_z)
+            self._fine_positions = self._generate_refinement_positions(
+                fine_start, fine_end, self._refine_current_step_mm, forward=forward)
+            self._fine_index = 0
+
+            # Repositionieren wie gehabt auf den Start des nächsten Levels.
+            self._phase = FocusPhase.FINE_REPOSITION
+            return AutofocusResult(
+                finished=False,
+                next_z_mm=self._fine_positions[0],
+                phase=FocusPhase.FINE_REPOSITION,
+                best_score=self._best_score,
+                refinement_step_mm=self._refine_current_step_mm,
+                refinement_range_mm=self._refine_current_range_mm,
+                progress=min(0.99, progress),
+                message=(
+                    f"Refinement-Level: range=±{self._refine_current_range_mm:.4f}mm "
+                    f"step={self._refine_current_step_mm:.4f}mm"
+                ),
+                requires_repositioning=True,
+                reposition_z_mm=self._fine_positions[0],
+            )
+
+        # Fine (final) fertig
         self._phase = FocusPhase.FINISHED
         return AutofocusResult(
             finished=True,
             best_z_mm=self._best_z,
             phase=FocusPhase.FINISHED,
             best_score=self._best_score,
+            refinement_step_mm=self._refine_current_step_mm,
+            refinement_range_mm=self._refine_current_range_mm,
             progress=1.0,
             message=f"Fokus gefunden bei Z={self._best_z:.4f}mm"
         )
@@ -668,7 +759,7 @@ class HybridAutofocus:
         """
         Verarbeitet Bild während Vorwärts-Scan (Bidirektional).
         """
-        score = self._compute_metric(image, self.config.coarse_metric)
+        score = self._compute_focus_score(image)
 
         self._forward_measurements.append(
             _FocusMeasurement(z_mm=current_z_mm, score=score))
@@ -717,7 +808,7 @@ class HybridAutofocus:
         """
         Verarbeitet Bild während Rückwärts-Scan (Bidirektional).
         """
-        score = self._compute_metric(image, self.config.coarse_metric)
+        score = self._compute_focus_score(image)
 
         self._backward_measurements.append(
             _FocusMeasurement(z_mm=current_z_mm, score=score))

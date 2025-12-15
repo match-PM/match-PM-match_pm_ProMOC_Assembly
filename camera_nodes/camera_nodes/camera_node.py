@@ -26,9 +26,9 @@ Treiber-Auswahl:
 Hauptfunktionen:
 ================
 1. Autofokus:
-   - Hybrid-Algorithmus: Grobe Suche + Golden Section Search
+    - Hybrid-Algorithmus: Grobe Suche + Multi-Level Verfeinerung
    - Steuert Z-Achse für Fokus-Optimierung
-   - Verwendet Schärfe-Metriken (Laplacian Variance, Tenengrad)
+    - Verwendet Schärfe-Metrik: Tenengrad
 
 2. MTF-Messung:
    - Slanted Edge Method nach ISO 12233
@@ -139,7 +139,14 @@ class CameraNode(Node):
         self.declare_parameter('pixel_size_um', 3.45)
         self.declare_parameter('default_roi_width', 200)
         self.declare_parameter('default_roi_height', 200)
-        self.declare_parameter('z_axis_node_name', 'lts300_z_axis')  # Name of z-axis node for autofocus
+        # Name of z-axis node for autofocus
+        self.declare_parameter('z_axis_node_name', 'lts300_z_axis')
+
+        # Autofocus refinement (optional, keeps stable defaults)
+        self.declare_parameter('autofocus.enable_multilevel', True)
+        self.declare_parameter('autofocus.refinement_samples', 51)
+        self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10µm
+        self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value
