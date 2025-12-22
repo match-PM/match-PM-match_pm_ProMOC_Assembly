@@ -1,12 +1,20 @@
-"""
-Error Handling Utilities for ProMOC Assembly System
+"""Utilities for error handling in the ProMOC assembly system.
 
-This module provides utilities for consistent error handling across the
-ProMOC Assembly system, including standardized service responses, retry
-mechanisms, and error recovery strategies.
+This module bundles helper functions and classes for consistent error handling
+throughout the ProMOC assembly system, including:
+
+- Standardized service responses (success/error_code/status_message/etc.).
+- Retry mechanisms for transient connection drops or timeouts.
+- Recovery strategies (e.g., homing, reconnect) that can be optionally
+  applied automatically.
+
+Note:
+    This module does not modify ROS2 interfaces directly but helps to
+    implement service callbacks *uniformly* and to communicate error cases
+    cleanly to the outside world.
 
 Author: ProMOC Assembly Team
-Date: 29. Oktober 2025
+Date: October 29, 2025
 """
 
 import time
@@ -17,13 +25,13 @@ from enum import Enum
 
 try:
     from .promoc_exceptions import (
-        ProMocError, 
+        ProMocError,
         CommunicationTimeoutError,
         DeviceDisconnectedError,
         ConnectionError as ProMocConnectionError
     )
 except ImportError:
-    # Fallback if module is in same directory
+    # Fallback if module is in the same directory
     from promoc_exceptions import (
         ProMocError,
         CommunicationTimeoutError,
@@ -37,7 +45,7 @@ T = TypeVar('T')
 
 
 class ErrorSeverity(Enum):
-    """Severity levels for errors."""
+    """Severity levels for errors/warnings."""
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -47,18 +55,18 @@ class ErrorSeverity(Enum):
 @dataclass
 class ServiceResponse:
     """
-    Standardized service response structure.
-    
-    This class provides a consistent format for all service responses,
-    including success status, error codes, messages, and additional metadata.
-    
+    Standardized response structure for services.
+
+    This class provides a uniform format for service responses, including
+    a success flag, error code, status message, warnings, and optional metadata.
+
     Attributes:
-        success: Whether the operation succeeded
-        error_code: Numerical error code (0 = success)
-        status_message: Human-readable status message
-        warnings: List of warning messages
-        execution_time: Time taken to execute the operation (seconds)
-        details: Additional response-specific information
+        success: Whether the operation was successful.
+        error_code: A numerical error code (0 = success).
+        status_message: A human-readable status or error message.
+        warnings: A list of warning messages.
+        execution_time: The duration of the operation in seconds.
+        details: Additional, response-specific information.
     """
     success: bool
     error_code: int = 0
@@ -66,7 +74,7 @@ class ServiceResponse:
     warnings: List[str] = field(default_factory=list)
     execution_time: float = 0.0
     details: dict = field(default_factory=dict)
-    
+
     @classmethod
     def success_response(
         cls,
@@ -75,7 +83,7 @@ class ServiceResponse:
         warnings: Optional[List[str]] = None,
         **details
     ) -> 'ServiceResponse':
-        """Create a successful response."""
+        """Creates a successful response."""
         return cls(
             success=True,
             error_code=0,
@@ -84,7 +92,7 @@ class ServiceResponse:
             execution_time=execution_time,
             details=details
         )
-    
+
     @classmethod
     def error_response(
         cls,
@@ -92,16 +100,15 @@ class ServiceResponse:
         execution_time: float = 0.0,
         **details
     ) -> 'ServiceResponse':
-        """
-        Create an error response from an exception.
-        
+        """Creates an error response from an exception.
+
         Args:
-            error: The exception that occurred
-            execution_time: Time taken before error occurred
-            **details: Additional context information
-            
+            error: The exception that occurred.
+            execution_time: The runtime until the error occurred (in seconds).
+            **details: Additional context.
+
         Returns:
-            ServiceResponse with error information
+            A ServiceResponse containing error information.
         """
         if isinstance(error, ProMocError):
             return cls(
@@ -119,16 +126,16 @@ class ServiceResponse:
                 execution_time=execution_time,
                 details=details
             )
-    
+
     def to_ros_response(self, response_obj: Any) -> Any:
         """
-        Populate a ROS service response object.
-        
+        Populates a ROS service response object.
+
         Args:
-            response_obj: ROS service response object to populate
-            
+            response_obj: The ROS response object to be populated.
+
         Returns:
-            The populated response object
+            The populated response object.
         """
         response_obj.success = self.success
         if hasattr(response_obj, 'error_code'):
@@ -139,26 +146,27 @@ class ServiceResponse:
             response_obj.execution_time = self.execution_time
         if hasattr(response_obj, 'warnings'):
             response_obj.warnings = self.warnings
-        
+
         # Populate additional fields from details
         for key, value in self.details.items():
             if hasattr(response_obj, key):
                 setattr(response_obj, key, value)
-        
+
         return response_obj
 
 
 @dataclass
 class RetryConfig:
     """
-    Configuration for retry mechanism.
-    
+    Configuration for the retry mechanism.
+
     Attributes:
-        max_attempts: Maximum number of retry attempts
-        delay: Initial delay between retries (seconds)
-        backoff_factor: Multiplier for delay after each attempt
-        max_delay: Maximum delay between retries (seconds)
-        retriable_exceptions: Tuple of exception types to retry on
+        max_attempts: The maximum number of attempts.
+        delay: The initial wait time between attempts (in seconds).
+        backoff_factor: The multiplier for the wait time after each attempt.
+        max_delay: The maximum wait time (in seconds).
+        retriable_exceptions: A tuple of exception types for which a retry
+            is sensible.
     """
     max_attempts: int = 3
     delay: float = 1.0
@@ -172,45 +180,46 @@ class RetryConfig:
 
 def retry_on_error(config: Optional[RetryConfig] = None):
     """
-    Decorator for automatic retry on specific exceptions.
-    
-    Usage:
+    A decorator for automatic retries on specific exceptions.
+
+    Example:
         @retry_on_error(RetryConfig(max_attempts=5))
         def connect_to_device():
             # ... connection code
             pass
-    
+
     Args:
-        config: Retry configuration (uses defaults if None)
-        
+        config: Retry configuration (uses default if None).
+
     Returns:
-        Decorated function with retry capability
+        A decorated function with retry capabilities.
     """
     if config is None:
         config = RetryConfig()
-    
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
             last_exception = None
             delay = config.delay
-            
+
             for attempt in range(config.max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except config.retriable_exceptions as e:
                     last_exception = e
-                    
+
                     if attempt < config.max_attempts - 1:
-                        # Log retry attempt if logger is available
+                        # Log retry attempt if a logger is available
                         if args and hasattr(args[0], 'logger'):
                             args[0].logger.warning(
                                 f"Attempt {attempt + 1}/{config.max_attempts} failed: {e}. "
                                 f"Retrying in {delay:.1f}s..."
                             )
-                        
+
                         time.sleep(delay)
-                        delay = min(delay * config.backoff_factor, config.max_delay)
+                        delay = min(delay * config.backoff_factor,
+                                    config.max_delay)
                     else:
                         # Last attempt failed
                         if args and hasattr(args[0], 'logger'):
@@ -218,56 +227,57 @@ def retry_on_error(config: Optional[RetryConfig] = None):
                                 f"All {config.max_attempts} attempts failed. "
                                 f"Last error: {e}"
                             )
-            
+
             # All retries exhausted
             raise last_exception
-        
+
         return wrapper
     return decorator
 
 
 class ErrorRecoveryStrategy:
     """
-    Base class for error recovery strategies.
-    
-    Subclass this to implement specific recovery behaviors for different
-    types of errors.
+    Base class for recovery strategies.
+
+    Inherit from this to implement specific recovery mechanisms (e.g., homing,
+    reconnect). The manager can then select appropriate strategies based on the
+    exception type.
     """
-    
+
     def __init__(self, logger=None):
         self.logger = logger
-    
+
     def can_recover(self, error: Exception) -> bool:
         """
-        Check if this strategy can recover from the given error.
-        
+        Checks if this strategy can handle the given error.
+
         Args:
-            error: The exception that occurred
-            
+            error: The exception that occurred.
+
         Returns:
-            True if recovery is possible, False otherwise
+            True if recovery is possible, otherwise False.
         """
         return False
-    
+
     def recover(self, error: Exception, context: dict) -> bool:
         """
-        Attempt to recover from the error.
-        
+        Attempts to resolve the error.
+
         Args:
-            error: The exception that occurred
-            context: Context information (device state, etc.)
-            
+            error: The exception that occurred.
+            context: Contextual information (device state, handles, parameters, etc.).
+
         Returns:
-            True if recovery succeeded, False otherwise
+            True if recovery was successful, otherwise False.
         """
         return False
 
 
 class HomingRecoveryStrategy(ErrorRecoveryStrategy):
     """
-    Recovery strategy that performs homing after certain errors.
+    A recovery strategy that performs homing after specific errors.
     """
-    
+
     def can_recover(self, error: Exception) -> bool:
         from .promoc_exceptions import (
             PositionOutOfBoundsError,
@@ -279,113 +289,115 @@ class HomingRecoveryStrategy(ErrorRecoveryStrategy):
             HomingRequiredError,
             SoftLimitViolationError
         ))
-    
+
     def recover(self, error: Exception, context: dict) -> bool:
         """
-        Recover by performing homing operation.
-        
+        Recovers by executing a homing operation.
+
         Args:
-            error: The exception that occurred
-            context: Must contain 'driver' with home() method
-            
+            error: The exception that occurred.
+            context: Must contain at least a 'driver' with a home() method.
+
         Returns:
-            True if homing succeeded
+            True if homing was successful.
         """
         try:
             driver = context.get('driver')
             if driver and hasattr(driver, 'home'):
                 if self.logger:
-                    self.logger.info(f"Attempting recovery via homing after: {error}")
-                
+                    self.logger.info(
+                        f"Attempting recovery via homing after: {error}")
+
                 success = driver.home()
-                
+
                 if self.logger:
                     if success:
                         self.logger.info("Homing recovery successful")
                     else:
                         self.logger.error("Homing recovery failed")
-                
+
                 return success
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error during homing recovery: {e}")
-        
+
         return False
 
 
 class ReconnectionRecoveryStrategy(ErrorRecoveryStrategy):
     """
-    Recovery strategy that attempts to reconnect after connection errors.
+    A recovery strategy that attempts to reconnect after connection errors.
     """
-    
+
     def can_recover(self, error: Exception) -> bool:
         return isinstance(error, (
             DeviceDisconnectedError,
             ProMocConnectionError,
         ))
-    
+
     def recover(self, error: Exception, context: dict) -> bool:
         """
-        Recover by attempting to reconnect.
-        
+        Recovers by reconnecting.
+
         Args:
-            error: The exception that occurred
-            context: Must contain 'driver' with connect() method and connection parameters
-            
+            error: The exception that occurred.
+            context: Must contain at least a 'driver' with a connect() method,
+                     and optionally connection parameters (e.g., port).
+
         Returns:
-            True if reconnection succeeded
+            True if reconnection was successful.
         """
         try:
             driver = context.get('driver')
             if driver and hasattr(driver, 'connect'):
                 if self.logger:
                     self.logger.info(f"Attempting reconnection after: {error}")
-                
+
                 # Get connection parameters from context
                 port = context.get('port')
-                
+
                 success = driver.connect(port=port)
-                
+
                 if self.logger:
                     if success:
                         self.logger.info("Reconnection successful")
                     else:
                         self.logger.error("Reconnection failed")
-                
+
                 return success
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error during reconnection recovery: {e}")
-        
+
         return False
 
 
 class ErrorRecoveryManager:
     """
-    Manages multiple error recovery strategies.
-    
-    This class coordinates different recovery strategies and attempts them
-    in order until one succeeds or all fail.
+    A manager for multiple recovery strategies.
+
+    This manager coordinates different strategies and tries them in order
+    until one succeeds or all fail.
     """
-    
+
     def __init__(self, logger=None):
         self.logger = logger
         self.strategies: List[ErrorRecoveryStrategy] = []
-    
+
     def add_strategy(self, strategy: ErrorRecoveryStrategy):
-        """Add a recovery strategy to the manager."""
+        """Adds a recovery strategy to the manager."""
         self.strategies.append(strategy)
-    
+
     def attempt_recovery(self, error: Exception, context: dict) -> bool:
         """
-        Attempt recovery using available strategies.
-        
+        Attempts recovery using the available strategies.
+
         Args:
-            error: The exception that occurred
-            context: Context information for recovery
-            
+            error: The exception that occurred.
+            context: Context for the recovery.
+
         Returns:
-            True if any strategy succeeded, False otherwise
+            True if any strategy was successful, otherwise False.
         """
         for strategy in self.strategies:
             if strategy.can_recover(error):
@@ -393,96 +405,98 @@ class ErrorRecoveryManager:
                     self.logger.info(
                         f"Attempting recovery with {strategy.__class__.__name__}"
                     )
-                
+
                 if strategy.recover(error, context):
                     return True
-        
+
         if self.logger:
             self.logger.warning(
                 f"No recovery strategy succeeded for error: {error}"
             )
-        
+
         return False
 
 
 def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryManager] = None):
     """
-    Decorator for service callbacks with automatic error handling.
-    
-    Usage:
+    A decorator for service callbacks with automatic error handling.
+
+    Example:
         @handle_service_errors(logger=self.get_logger())
         def move_absolute_callback(self, request, response):
             # ... service implementation
             return response
-    
+
     Args:
-        logger: Logger instance for error logging
-        recovery_manager: Optional recovery manager for error recovery
-        
+        logger: A logger instance for logging.
+        recovery_manager: An optional ErrorRecoveryManager for automatic recovery.
+
     Returns:
-        Decorated function with error handling
+        A decorated function with error handling.
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             start_time = time.time()
-            
+
             try:
                 result = func(*args, **kwargs)
                 execution_time = time.time() - start_time
-                
-                # Add execution time if response has the field
+
+                # Add execution time if the response has the field
                 if hasattr(result, 'execution_time'):
                     result.execution_time = execution_time
-                
+
                 return result
-                
+
             except ProMocError as e:
                 execution_time = time.time() - start_time
-                
+
                 if logger:
                     logger.error(f"Service error: {e}", exc_info=True)
-                
-                # Attempt recovery if manager is available
+
+                # Attempt recovery if a manager is available
                 if recovery_manager:
                     context = {'args': args, 'kwargs': kwargs}
                     if recovery_manager.attempt_recovery(e, context):
                         if logger:
-                            logger.info("Recovery succeeded, retrying operation")
+                            logger.info(
+                                "Recovery succeeded, retrying operation")
                         # Retry the operation after successful recovery
                         try:
                             return func(*args, **kwargs)
                         except Exception as retry_error:
                             if logger:
-                                logger.error(f"Retry after recovery failed: {retry_error}")
-                
-                # Create error response
+                                logger.error(
+                                    f"Retry after recovery failed: {retry_error}")
+
+                # Create an error response
                 response = ServiceResponse.error_response(e, execution_time)
-                
+
                 # If we have a ROS response object in args, populate it
                 for arg in args:
                     if hasattr(arg, 'success'):
                         return response.to_ros_response(arg)
-                
-                # Otherwise return the ServiceResponse
+
+                # Otherwise, return the ServiceResponse
                 return response
-                
+
             except Exception as e:
                 execution_time = time.time() - start_time
-                
+
                 if logger:
                     logger.error(
                         f"Unexpected error in service: {type(e).__name__}: {e}",
                         exc_info=True
                     )
-                
+
                 response = ServiceResponse.error_response(e, execution_time)
-                
+
                 for arg in args:
                     if hasattr(arg, 'success'):
                         return response.to_ros_response(arg)
-                
+
                 return response
-        
+
         return wrapper
     return decorator

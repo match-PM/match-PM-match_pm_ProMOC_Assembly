@@ -1,136 +1,141 @@
-"""
-ROS2 Node für Thorlabs LTS300 Linearachsen-Steuerung.
+r"""
+ROS2 Node for Thorlabs LTS300 Linear Axis Control.
 
-Dieses Modul implementiert den LTS300Node - den zentralen Orchestrator
-für die Steuerung der Thorlabs LTS300 Linearachse (300mm Verfahrweg).
+This module implements the LTS300Node, which is the central orchestrator
+for controlling a Thorlabs LTS300 linear stage (300mm travel).
 
-Architektur-Übersicht:
+Architecture Overview:
 ======================
-Der Node folgt dem gleichen Dependency-Injection-Pattern wie der Mover-Node:
+The node follows a dependency injection pattern similar to the mover_node:
 
     LTS300Node (Orchestrator)
         │
-        ├── Lts300Config       → Konfiguration (Seriennummer, Limits, Timeouts)
-        ├── Lts300Interface    → Hardware-Abstraktion (Real/Simuliert)
-        └── ServiceCallbacks   → Geschäftslogik (Bewegungs-Validierung)
+    ├── Config (dict)      → Configuration from ROS parameters (serial number, limits, timeouts)
+        ├── Lts300Interface    → Hardware abstraction (Real/Simulated)
+        └── ServiceCallbacks   → Business logic (e.g., motion validation)
 
-Ablauf beim Start:
+Startup Sequence:
 ==================
-1. Node-Initialisierung
-   └── ROS2-Node erstellen, Logger konfigurieren
+1. Node Initialization:
+   └── Creates the ROS2 node and configures the logger.
 
-2. Konfiguration laden
-   └── Parameter lesen (serial_port, collision_threshold, limits...)
+2. Configuration Loading:
+   └── Reads parameters (serial_port, collision_threshold, limits, etc.).
 
-3. Hardware-Interface erstellen
-   └── Lts300Interface wählt automatisch: Real-Hardware oder Simulation
+3. Hardware Interface Creation:
+   └── Lts300Interface automatically selects between the real hardware driver or a simulation.
 
-4. Verbindung herstellen
-   └── Verbindung zur Achse über seriellen Port
+4. Connection Establishment:
+   └── Connects to the axis via the specified serial port.
 
-5. ROS2-Kommunikation einrichten
-   ├── Publisher: Position-Updates (10 Hz)
-   ├── Subscriber: Position der anderen Achse (für Kollisionserkennung)
-   └── Services: move_absolute, move_relative, home, etc.
+5. ROS2 Communication Setup:
+   ├── Publisher: For 10 Hz position updates.
+   ├── Subscriber: For the other axis's position (for collision avoidance).
+   └── Services: For move_absolute, move_relative, home, etc.
 
-6. Position publizieren
-   └── Timer publiziert alle 100ms die aktuelle Position
+6. Position Publishing:
+   └── A timer publishes the current axis position every 100ms.
 
-Besonderheiten:
-===============
-- Kollisionserkennung: Überwacht Position der anderen Achse (X↔Z)
-- Asynchrone Bewegungen: Lange Operationen blockieren nicht den Node
-- Soft-Limits: Konfigurierbare Bewegungsgrenzen
-- Homing: Automatisches Referenzieren mit Timeout
+Special Features:
+=================
+- Collision Avoidance: Monitors the position of the other axis (X↔Z).
+- Asynchronous Movements: Long-running operations do not block the node.
+- Soft-Limits: Configurable motion boundaries.
+- Homing: Automatic referencing with a timeout.
 
-Verwendung:
-===========
-    # Als ROS2-Node starten:
+Usage:
+======
+    # Start as a ROS2 node:
     ros2 run linear_axis_nodes lts300_node
 
-    # Mit Simulation:
+    # Start with simulation:
     ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true
 
-Beispiel-Service-Calls:
-=======================
-    # Absolute Bewegung (in mm):
-    ros2 service call /lts300_x_axis/move_absolute \\
+Example Service Calls:
+======================
+    # Absolute movement (in mm):
+    ros2 service call /lts300_x_axis/move_absolute \
         promoc_assembly_interfaces/srv/MoveAbsolute "{axis_position: 150.0}"
 
-    # Homing durchführen:
+    # Perform homing:
     ros2 service call /lts300_x_axis/home promoc_assembly_interfaces/srv/Home
 """
 
-import rclpy
-import traceback
-from rclpy.node import Node
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
-    MoveAbsolute, MoveRelativ, Home, ShutdownLinearAxis, GetPosition,
-    SetVelocityParameters, GetVelocityParameters, GetOperationStatus,
-    EmergencyStop, JogAxis
+    EmergencyStop,
+    GetOperationStatus,
+    GetPosition,
+    GetVelocityParameters,
+    Home,
+    JogAxis,
+    MoveAbsolute,
+    MoveRelativ,
+    SetVelocityParameters,
+    ShutdownLinearAxis,
 )
+import rclpy
+from rclpy.node import Node
 
-from .lts300_node_config import Lts300Config
 from .lts300_interface import Lts300Interface
 from .lts300_service_callbacks import ServiceCallbacks
 
 
 class LTS300Node(Node):
     """
-    Zentraler ROS2-Node für die Thorlabs LTS300 Linearachsen-Steuerung.
+    Central ROS2 node for controlling the Thorlabs LTS300 linear axis.
 
-    Diese Klasse ist der "Dirigent" - sie erstellt und koordiniert alle
-    anderen Komponenten, verarbeitet aber keine Geschäftslogik selbst.
+    This class acts as the orchestrator—it creates and coordinates all
+    other components but does not handle business logic itself.
 
-    Funktionsweise:
-    ---------------
-    Der Node durchläuft beim Start folgende Phasen:
+    How it works:
+    -------------
+    The node proceeds through the following phases on startup:
 
     1. CONFIG-PHASE:
-       - Konfiguration aus ROS-Parametern laden
+       - Loads configuration from ROS parameters.
 
     2. INTERFACE-PHASE:
-       - Hardware-Interface erstellen (wählt Real/Simulation)
-       - Verbindung herstellen
+       - Creates the hardware interface (which selects real or simulated hardware).
+       - Establishes a connection to the device.
 
     3. COMMUNICATION-PHASE:
-       - ROS2-Services registrieren
-       - Position-Publisher starten
-       - Subscriber für andere Achse einrichten
+       - Registers ROS2 services.
+       - Starts the position publisher.
+       - Sets up a subscriber for the other axis's position.
 
-    Attribute:
-        config (Lts300Config): Konfiguration (Limits, Seriennummer)
-        interface (Lts300Interface): Hardware-Abstraktion
-        callbacks (ServiceCallbacks): Callback-Logik für Services
-        other_axis_position: Position der anderen Achse für Kollisionserkennung
+    Attributes:
+        config (dict): Configuration dictionary (limits, serial number, etc.).
+        interface (Lts300Interface): Hardware abstraction layer.
+        callbacks (ServiceCallbacks): Business logic for service callbacks.
+        other_axis_position (float): Position of the other axis for collision avoidance.
 
-    Beispiel:
+    Example:
         >>> node = LTS300Node()
         >>> rclpy.spin(node)
     """
 
     def __init__(self):
         """
-        Initialisiert den LTS300Node.
+        Initializes the LTS300Node.
 
-        Ablauf (Schritt für Schritt):
-        -----------------------------
-        1. ROS2-Node erstellen mit Namen "lts300_node"
-        2. Konfiguration aus ROS-Parametern laden
-        3. Hardware-Interface erstellen
-        4. Verbindung zur Achse herstellen
-        5. ROS2-Kommunikation einrichten
+        Sequence of operations:
+        -------------------------
+        1. Creates the ROS2 node named "lts300_node".
+        2. Loads configuration from ROS parameters.
+        3. Creates the hardware interface.
+        4. Connects to the linear axis.
+        5. Sets up ROS2 communication.
         """
         super().__init__('lts300_node')
 
         # ══════════════════════════════════════════════════════════════════════
-        # PHASE 1: Konfiguration laden
+        # PHASE 1: Load Configuration
         # ══════════════════════════════════════════════════════════════════════
         self.config = self._load_config()
 
         # ══════════════════════════════════════════════════════════════════════
-        # PHASE 2: Komponenten erstellen
+        # PHASE 2: Create Components
         # ══════════════════════════════════════════════════════════════════════
         self.interface = Lts300Interface(self.get_logger(), self.config)
         self.callbacks = ServiceCallbacks(
@@ -138,56 +143,55 @@ class LTS300Node(Node):
 
         try:
             # ══════════════════════════════════════════════════════════════════
-            # PHASE 3: Verbindung herstellen
+            # PHASE 3: Establish Connection
             # ══════════════════════════════════════════════════════════════════
             if not self.interface.connect():
-                self.get_logger().error("Shutting down node due to connection failure.")
-                self.get_logger().error("Node initialization failed, exiting...")
+                self.get_logger().error('Shutting down node due to connection failure.')
+                self.get_logger().error('Node initialization failed, exiting...')
                 return
-            self.get_logger().info("Connection successful, continuing initialization...")
+            self.get_logger().info('Connection successful, continuing initialization...')
 
             # ══════════════════════════════════════════════════════════════════
-            # PHASE 4: ROS2-Kommunikation einrichten
+            # PHASE 4: Set up ROS2 Communication
             # ══════════════════════════════════════════════════════════════════
             self.other_axis_position = None
             self._setup_ros_communication()
 
             self.get_logger().info(
-                f"{self.get_name()} with S/N {self.config.serial_number} is running.")
-            self.get_logger().info("Node initialization complete!")
+                f"{self.get_name()} with S/N {self.config['serial_number']} is running.")
+            self.get_logger().info('Node initialization complete!')
 
         except Exception as e:
-            self.get_logger().error(
-                f"Exception during initialization: {e}")
-            self.get_logger().error("Node initialization failed, exiting...")
-            import traceback
-            traceback.print_exc()
+            self.get_logger().error(f'Exception during initialization: {e}')
+            self.get_logger().error('Node initialization failed, exiting...')
+            raise
 
-    def _load_config(self) -> Lts300Config:
+    def _load_config(self) -> dict:
         """
-        Lädt Konfiguration aus ROS-Parametern.
+        Loads configuration from ROS parameters.
 
-        Parameter-Kategorien:
+        Parameter Categories:
         ---------------------
-        1. Verbindung:
-           - serial_port: Serieller Port (z.B. /dev/ttyUSB0)
-           - serial_number: Geräte-Seriennummer für Identifikation
+        1. Connection:
+           - serial_port: The serial port, e.g., /dev/ttyUSB0.
+           - serial_number: Device serial number for identification.
 
-        2. Sicherheit:
-           - collision_threshold: Ab welcher Position der anderen Achse
-             keine Bewegung mehr erlaubt ist (in mm)
-           - max_position/min_position: Soft-Limits
-           - max_single_move: Maximale Einzelbewegung
+        2. Safety:
+           - collision_threshold: Position of the other axis beyond which
+             movement is prohibited (in mm).
+           - max_position/min_position: Software-defined motion limits.
+           - max_single_move: Maximum allowed distance for a single move.
 
         3. Timing:
-           - homing_timeout: Maximale Zeit für Homing-Operation
+           - homing_timeout: Maximum duration for a homing operation.
 
-        4. Umrechnung:
-           - velocity_unit_factor: Faktor für Geschwindigkeitsumrechnung
+        4. Conversion:
+           - velocity_conversion_factor: Factor for velocity unit conversion.
 
         Returns:
-            Lts300Config: Dataclass mit allen Konfigurationswerten
+            dict: A dictionary containing all configuration values.
         """
+        self.declare_parameter('use_sim_time', False)
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('serial_number', '00000000')
         self.declare_parameter('collision_threshold', 300.0)
@@ -196,101 +200,130 @@ class LTS300Node(Node):
         self.declare_parameter('min_position', 0.0)
         self.declare_parameter('max_single_move', 300.0)
         self.declare_parameter('homing_timeout', 180.0)
-        self.declare_parameter('velocity_unit_factor', 0.018)
+        self.declare_parameter('velocity_conversion_factor', 0.018)
 
-        return Lts300Config(
-            use_sim_time=self.get_parameter('use_sim_time').value,
-            serial_port=self.get_parameter('serial_port').value,
-            serial_number=self.get_parameter('serial_number').value,
-            collision_threshold=self.get_parameter(
-                'collision_threshold').value,
-            namespace=self.get_parameter('namespace').value,
-            max_position=self.get_parameter('max_position').value,
-            min_position=self.get_parameter('min_position').value,
-            max_single_move=self.get_parameter('max_single_move').value,
-            homing_timeout=self.get_parameter('homing_timeout').value,
-            velocity_conversion_factor=self.get_parameter(
-                'velocity_unit_factor').value
-        )
+        return {
+            'use_sim_time': self.get_parameter('use_sim_time').value,
+            'serial_port': self.get_parameter('serial_port').value,
+            'serial_number': self.get_parameter('serial_number').value,
+            'collision_threshold': self.get_parameter('collision_threshold').value,
+            'namespace': self.get_parameter('namespace').value,
+            'max_position': self.get_parameter('max_position').value,
+            'min_position': self.get_parameter('min_position').value,
+            'max_single_move': self.get_parameter('max_single_move').value,
+            'homing_timeout': self.get_parameter('homing_timeout').value,
+            'velocity_conversion_factor': self.get_parameter('velocity_conversion_factor').value,
+        }
 
     def _setup_ros_communication(self):
         """
-        Richtet die ROS2-Kommunikation ein.
+        Sets up all ROS2 communication components.
 
-        Erstellt:
-        ---------
+        Creates:
+        --------
         1. Publisher:
-           - /{namespace}/{node_name}/position: Aktuelle Position (10 Hz)
+           - `/{namespace}/{node_name}/position`: Publishes current position at 10 Hz.
 
         2. Subscriber:
-           - Position der anderen Achse für Kollisionserkennung
+           - Subscribes to the other axis's position for collision avoidance.
 
         3. Services:
-           - move_absolute: Absolute Bewegung zu Position
-           - move_relative: Relative Bewegung um Distanz
-           - home: Referenzfahrt durchführen
-           - get_position: Aktuelle Position abfragen
-           - get_operation_status: Status laufender Operation
-           - set/get_velocity_parameters: Geschwindigkeit einstellen
-           - shutdown: Gerät herunterfahren
-           - emergency_stop: Notfall-Stopp
-           - jog_axis: Schrittweises Bewegen
+           - `move_absolute`: Move to an absolute position.
+           - `move_relative`: Move by a relative distance.
+           - `home`: Perform the homing sequence.
+           - `get_position`: Request the current position.
+           - `get_operation_status`: Get the status of an ongoing operation.
+           - `set/get_velocity_parameters`: Set or get velocity settings.
+           - `shutdown`: Shut down the device.
+           - `emergency_stop`: Immediately stop all motion.
+           - `jog_axis`: Move incrementally.
         """
         try:
             node_name = self.get_name()
             self.get_logger().info(
-                f"Setting up ROS communication for {node_name}...")
+                f'Setting up ROS communication for {node_name}...'
+            )
 
             # ── Publisher & Timer ──
             self.position_publisher = self.create_publisher(
-                LinearAxisInfo, f"/{self.config.namespace}/{node_name}/position", 10)
+                LinearAxisInfo,
+                f"/{self.config['namespace']}/{node_name}/position",
+                10,
+            )
             self.create_timer(0.1, self.publish_position)
-            self.get_logger().info("Publisher and timer created")
+            self.get_logger().info('Publisher and timer created')
 
-            # ── Subscriber für Kollisionserkennung ──
-            # Abonniert Position der jeweils anderen Achse (X↔Z)
+            # ── Subscriber for Collision Avoidance ──
+            # Subscribes to the position of the other axis (X↔Z).
             axis_type = self.interface.driver.get_axis_type()
             other_axis = 'z' if axis_type == 'x' else 'x'
             self.create_subscription(
                 LinearAxisInfo,
-                f"/{self.config.namespace}/lts300_{other_axis}_axis/position",
+                f"/{self.config['namespace']}/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
                 10)
-            self.get_logger().info(f"Subscriber created for {other_axis}-axis")
+            self.get_logger().info(f'Subscriber created for {other_axis}-axis')
 
             # ── Services ──
-            # move_absolute/move_relative: Übergeben other_axis_position für Kollisionsprüfung
-            self.create_service(MoveAbsolute, f'{node_name}/move_absolute',
-                                lambda req, res: self.callbacks.callback_move_absolute(req, res, self.other_axis_position))
-            self.create_service(MoveRelativ, f'{node_name}/move_relative',
-                                lambda req, res: self.callbacks.callback_move_relative(req, res, self.other_axis_position))
+            # The other_axis_position is passed to move callbacks for collision checking.
+            self.create_service(
+                MoveAbsolute,
+                f'{node_name}/move_absolute',
+                lambda req, res: self.callbacks.callback_move_absolute(
+                    req,
+                    res,
+                    self.other_axis_position,
+                ),
+            )
+            self.create_service(
+                MoveRelativ,
+                f'{node_name}/move_relative',
+                lambda req, res: self.callbacks.callback_move_relative(
+                    req,
+                    res,
+                    self.other_axis_position,
+                ),
+            )
             self.create_service(
                 Home, f'{node_name}/home', self.callbacks.callback_home)
             self.create_service(
                 GetPosition, f'{node_name}/get_position', self.callbacks.callback_get_position)
             self.create_service(
-                GetOperationStatus, f'{node_name}/get_operation_status', self.callbacks.callback_get_operation_status)
+                GetOperationStatus,
+                f'{node_name}/get_operation_status',
+                self.callbacks.callback_get_operation_status,
+            )
             self.create_service(
-                SetVelocityParameters, f'{node_name}/set_velocity_parameters', self.callbacks.callback_set_velocity_parameters)
+                SetVelocityParameters,
+                f'{node_name}/set_velocity_parameters',
+                self.callbacks.callback_set_velocity_parameters,
+            )
             self.create_service(
-                GetVelocityParameters, f'{node_name}/get_velocity_parameters', self.callbacks.callback_get_velocity_parameters)
+                GetVelocityParameters,
+                f'{node_name}/get_velocity_parameters',
+                self.callbacks.callback_get_velocity_parameters,
+            )
             self.create_service(
                 ShutdownLinearAxis, f'{node_name}/shutdown', self.callbacks.callback_shutdown)
             self.create_service(
-                EmergencyStop, f'{node_name}/emergency_stop', self.callbacks.callback_emergency_stop)
+                EmergencyStop,
+                f'{node_name}/emergency_stop',
+                self.callbacks.callback_emergency_stop,
+            )
             self.create_service(
                 JogAxis, f'{node_name}/jog_axis', self.callbacks.callback_jog_axis)
-            self.get_logger().info("All services created")
+            self.get_logger().info('All services created')
 
         except Exception as e:
             self.get_logger().error(
-                f"Error in _setup_ros_communication: {e}")
-            raise e  # Re-raise to be caught by main try-catch
+                f'Error in _setup_ros_communication: {e}'
+            )
+            raise
 
     def publish_position(self):
         """Publishes the current axis position."""
         if not self.interface.is_connected:
-            self.get_logger().debug("Skipping position publish - interface not connected")
+            self.get_logger().debug('Skipping position publish - interface not connected')
             return
         try:
             msg = LinearAxisInfo()
@@ -300,7 +333,7 @@ class LTS300Node(Node):
             msg.axis_position = driver.get_position()
             msg.serial_number = driver.get_serial_number()
 
-            # Set axis_type based on node name instead of unreliable driver method
+            # Set axis_type based on node name instead of relying on the driver method.
             node_name = self.get_name()
             if 'x_axis' in node_name:
                 msg.axis_type = 'x'
@@ -309,39 +342,43 @@ class LTS300Node(Node):
             else:
                 msg.axis_type = 'unknown'
 
-            # Use our operation status instead of unreliable hardware is_moving()
+            # Use our internal operation status, which is more reliable than the hardware's is_moving().
             operation_status, _ = self.callbacks.get_operation_status()
             msg.operation_status = operation_status.value
 
             self.position_publisher.publish(msg)
             self.get_logger().debug(
-                f"Published position: {msg.axis_position:.2f}mm, status: {operation_status.value}")
+                f'Published position: {msg.axis_position:.2f}mm, '
+                f'status: {operation_status.value}'
+            )
 
         except Exception as e:
-            # Reduce error logging frequency to avoid spam
+            # Reduce error logging frequency to avoid spamming the console.
             if not hasattr(self, '_last_publish_error_time'):
                 self._last_publish_error_time = 0
 
             import time
             current_time = time.time()
-            if current_time - self._last_publish_error_time > 5.0:  # Log error only every 5 seconds
-                self.get_logger().error(f"Error publishing position: {e}")
+            if current_time - self._last_publish_error_time > 5.0:
+                # Log the error at most once every 5 seconds.
+                self.get_logger().error(f'Error publishing position: {e}')
                 self._last_publish_error_time = current_time
             else:
                 self.get_logger().debug(
-                    f"Position publish error (suppressed): {e}")
+                    f'Position publish error (suppressed): {e}'
+                )
 
     def other_axis_position_callback(self, msg):
-        """Speichert die Position der anderen Achse."""
+        """Stores the position of the other axis."""
         self.other_axis_position = msg.axis_position
 
     def shutdown_device(self):
-        """Fährt das Gerät sauber herunter."""
-        self.get_logger().info("Homing device before shutdown...")
+        """Performs a clean shutdown of the device."""
+        self.get_logger().info('Homing device before shutdown...')
         try:
             self.interface.driver.home()
         except Exception as e:
-            self.get_logger().error(f"Error during homing on shutdown: {e}")
+            self.get_logger().error(f'Error during homing on shutdown: {e}')
         finally:
             self.interface.disconnect()
 
@@ -350,15 +387,20 @@ def main(args=None):
     rclpy.init(args=args)
     node = LTS300Node()
 
-    # Check if the node was initialized successfully
-    # GEÄNDERT: Prüfe connected-Property des drivers anstatt interface.is_connected
+    # Check if the node was initialized successfully.
+    # CHANGED: Check the driver's 'connected' property directly instead of interface.is_connected.
     try:
-        if hasattr(node, 'interface') and hasattr(node.interface, 'driver') and node.interface.driver.connected:
-            node.get_logger().info("Node successfully initialized, starting spin...")
+        connected = (
+            hasattr(node, 'interface')
+            and hasattr(node.interface, 'driver')
+            and node.interface.driver.connected
+        )
+        if connected:
+            node.get_logger().info('Node successfully initialized, starting spin...')
             try:
                 rclpy.spin(node)
             except KeyboardInterrupt:
-                node.get_logger().info("Keyboard interrupt, shutting down...")
+                node.get_logger().info('Keyboard interrupt, shutting down...')
             finally:
                 node.get_logger().info('Final shutdown procedure...')
                 node.shutdown_device()
@@ -366,18 +408,16 @@ def main(args=None):
                 if rclpy.ok():
                     rclpy.shutdown()
         else:
-            node.get_logger().error("Node initialization failed, exiting...")
+            node.get_logger().error('Node initialization failed, exiting...')
             node.destroy_node()
             if rclpy.ok():
                 rclpy.shutdown()
     except Exception as e:
-        node.get_logger().error(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
+        node.get_logger().error(f'Error in main: {e}')
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

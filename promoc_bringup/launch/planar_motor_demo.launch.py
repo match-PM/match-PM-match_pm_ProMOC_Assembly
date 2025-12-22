@@ -7,12 +7,10 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    # Get the launch directory
     bringup_dir = get_package_share_directory('promoc_bringup')
     config_dir = os.path.join(bringup_dir, 'config')
     params_file = os.path.join(config_dir, 'mover_node_params.yaml')
 
-    # Hardware Nodes
     mover_node = Node(
         package='planar_motor_nodes',
         executable='mover_service_node_test',
@@ -31,7 +29,6 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'INFO']
     )
 
-    # Starte Demo Controller mit Verzögerung (5 Sekunden)
     demo_delayed = TimerAction(
         period=5.0,
         actions=[demo_controller]

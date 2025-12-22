@@ -68,7 +68,7 @@ pandas>=1.0.0               # Data manipulation and analysis
 # ================================================================
 #
 # 1. PMCLib (proprietary):
-#    - Must be obtained separately from Match/IEMCA
+#    - Must be obtained separately from Match
 #    - Install with: pip install local_libs/pmclib-*.whl
 #    - For development without hardware: uses mock_pmclib.py
 #

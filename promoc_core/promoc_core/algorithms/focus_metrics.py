@@ -1,24 +1,27 @@
-"""
-Focus Quality Metrics for Image Sharpness Evaluation.
+"""Focus/Sharpness Metrics for Image Quality Assessment.
 
-This module provides various focus quality metrics used in autofocus algorithms.
-All metrics return higher values for sharper (more in-focus) images.
+This module provides several focus quality metrics typically used in
+autofocus algorithms. The core idea is the same for all:
 
-Metrics:
-    - laplacian_variance: Fast, good for coarse focusing
-    - tenengrad: Robust, good for fine focusing
-    - brenner_gradient: Simple gradient-based metric
-    - normalized_variance: Intensity-normalized variance
+    **The higher the score, the sharper ("more in focus") the image.**
 
-Usage:
+Which metric to use?
+    - `laplacian_variance`: Fast, good for coarse focusing.
+    - `tenengrad`: Robust, good for fine focusing.
+    - `brenner_gradient`: Very simple, gradient-based.
+    - `normalized_variance`: Variance normalized by the mean (more robust to brightness changes).
+    - `sml`: Sum of Modified Laplacian (second derivative, often good edge sensitivity).
+
+Quickstart:
     from promoc_core.algorithms.focus_metrics import laplacian_variance, tenengrad
-    
+
     score = laplacian_variance(image)
     score = tenengrad(image, threshold=0.0)
 
-Note:
-    All functions expect grayscale images as numpy arrays.
-    Color images will be automatically converted to grayscale.
+Important:
+    - All functions expect a grayscale image as a NumPy array.
+    - Color images are automatically converted to grayscale.
+    - OpenCV (`cv2`) is required for conversion and some filters.
 """
 
 from typing import Optional
@@ -31,7 +34,12 @@ except ImportError:
 
 
 def _ensure_grayscale(image: np.ndarray) -> np.ndarray:
-    """Convert image to grayscale if needed."""
+    """Converts an image to grayscale if necessary.
+
+    Raises:
+        ImportError: if OpenCV (`cv2`) is not available.
+        ValueError: if the image is empty or None.
+    """
     if cv2 is None:
         raise ImportError("OpenCV (cv2) is required for focus metrics")
 
@@ -50,21 +58,22 @@ def _ensure_grayscale(image: np.ndarray) -> np.ndarray:
 
 def laplacian_variance(image: np.ndarray, ksize: int = 3) -> float:
     """
-    Compute Laplacian variance as focus metric.
+    Calculates the variance of the Laplacian as a focus metric.
 
-    Fast metric suitable for coarse focusing. Measures the amount of
-    edges/high-frequency content in the image.
+    This is a fast metric suitable for coarse focus searches. It measures the
+    variance of the Laplacian response (2nd derivative)—sharper images typically
+    contain more high-frequency content/edges, leading to larger values.
 
     Args:
-        image: Input image (grayscale or color)
-        ksize: Kernel size for Laplacian operator (default: 3)
+        image: Input image (grayscale or color).
+        ksize: Kernel size for the Laplacian operator (default: 3).
 
     Returns:
-        Variance of Laplacian response. Higher = sharper.
+        The variance of the Laplacian response. Higher is sharper.
 
     Raises:
-        ValueError: If image is empty or None
-        ImportError: If OpenCV is not available
+        ValueError: if the image is empty or None.
+        ImportError: if OpenCV is not available.
 
     Example:
         >>> score = laplacian_variance(image)
@@ -77,22 +86,22 @@ def laplacian_variance(image: np.ndarray, ksize: int = 3) -> float:
 
 def tenengrad(image: np.ndarray, ksize: int = 3, threshold: float = 0.0) -> float:
     """
-    Compute Tenengrad focus metric using Sobel gradients.
+    Calculates the Tenengrad focus metric (using Sobel gradients).
 
-    Robust metric suitable for fine focusing. Measures gradient magnitude
-    across the image.
+    This is a robust metric suitable for fine-grained focusing. It is based on
+    the gradient energy (sum of squared Sobel gradients) in the image.
 
     Args:
-        image: Input image (grayscale or color)
-        ksize: Kernel size for Sobel operator (default: 3)
-        threshold: Minimum gradient to consider (default: 0.0)
+        image: Input image (grayscale or color).
+        ksize: Kernel size for the Sobel operator (default: 3).
+        threshold: Minimum gradient magnitude to consider (default: 0.0).
 
     Returns:
-        Sum of squared gradients above threshold. Higher = sharper.
+        The sum of squared gradients above the threshold. Higher is sharper.
 
     Raises:
-        ValueError: If image is empty or None
-        ImportError: If OpenCV is not available
+        ValueError: if the image is empty or None.
+        ImportError: if OpenCV is not available.
 
     Example:
         >>> score = tenengrad(image, threshold=100.0)
@@ -100,14 +109,14 @@ def tenengrad(image: np.ndarray, ksize: int = 3, threshold: float = 0.0) -> floa
     """
     gray = _ensure_grayscale(image)
 
-    # Compute Sobel gradients
+    # Sobel gradients
     gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=ksize)
     gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=ksize)
 
-    # Compute gradient magnitude squared
+    # Sum of squared gradients
     gradient_magnitude = gx**2 + gy**2
 
-    # Apply threshold if specified
+    # Optional thresholding
     if threshold > 0:
         gradient_magnitude[gradient_magnitude < threshold**2] = 0
 
@@ -116,19 +125,20 @@ def tenengrad(image: np.ndarray, ksize: int = 3, threshold: float = 0.0) -> floa
 
 def brenner_gradient(image: np.ndarray, step: int = 2) -> float:
     """
-    Compute Brenner gradient focus metric.
+    Calculates the Brenner gradient metric.
 
-    Simple and fast metric based on horizontal pixel differences.
+    A very simple and fast metric based on horizontal pixel differences
+    at a fixed distance (`step`).
 
     Args:
-        image: Input image (grayscale or color)
-        step: Pixel step for gradient calculation (default: 2)
+        image: Input image (grayscale or color).
+        step: Pixel distance for the difference calculation (default: 2).
 
     Returns:
-        Sum of squared differences. Higher = sharper.
+        The sum of the squared differences. Higher is sharper.
 
     Raises:
-        ValueError: If image is empty or None
+        ValueError: if the image is empty or None.
 
     Example:
         >>> score = brenner_gradient(image)
@@ -137,7 +147,7 @@ def brenner_gradient(image: np.ndarray, step: int = 2) -> float:
     gray = _ensure_grayscale(image)
     gray = gray.astype(np.float64)
 
-    # Compute horizontal differences with step
+    # Horizontal differences with a fixed step
     diff = gray[:, step:] - gray[:, :-step]
 
     return float((diff**2).sum())
@@ -145,20 +155,20 @@ def brenner_gradient(image: np.ndarray, step: int = 2) -> float:
 
 def normalized_variance(image: np.ndarray) -> float:
     """
-    Compute normalized variance focus metric.
+    Calculates a normalized variance as a focus metric.
 
-    Variance normalized by mean intensity. Less sensitive to
-    illumination changes than raw variance.
+    This metric is the variance normalized by the mean intensity, making it
+    less sensitive to brightness fluctuations than a pure variance measure.
 
     Args:
-        image: Input image (grayscale or color)
+        image: Input image (grayscale or color).
 
     Returns:
-        Variance divided by mean. Higher = sharper.
-        Returns 0.0 if mean is zero to avoid division by zero.
+        The variance divided by the mean. Higher is sharper.
+        Returns 0.0 if the mean is 0 to avoid division by zero.
 
     Raises:
-        ValueError: If image is empty or None
+        ValueError: if the image is empty or None.
 
     Example:
         >>> score = normalized_variance(image)
@@ -176,25 +186,27 @@ def normalized_variance(image: np.ndarray) -> float:
 
 def sml(image: np.ndarray, threshold: float = 0.0) -> float:
     """
-    Compute Sum of Modified Laplacian (SML) focus metric.
+    Calculates the "Sum of Modified Laplacian" (SML) focus metric.
 
-    Modified Laplacian using absolute values of second derivatives.
+    The "Modified Laplacian" is based on the absolute values of the second
+    derivative. In practice, this is an edge/detail metric (high-frequency
+    content) that often correlates well with sharpness.
 
     Args:
-        image: Input image (grayscale or color)
-        threshold: Minimum value to consider (default: 0.0)
+        image: Input image (grayscale or color).
+        threshold: Minimum value to consider (default: 0.0).
 
     Returns:
-        Sum of modified Laplacian above threshold. Higher = sharper.
+        The sum of the Modified Laplacian values above the threshold. Higher is sharper.
 
     Raises:
-        ValueError: If image is empty or None
-        ImportError: If OpenCV is not available
+        ValueError: if the image is empty or None.
+        ImportError: if OpenCV is not available.
     """
     gray = _ensure_grayscale(image)
     gray = gray.astype(np.float64)
 
-    # Compute second derivatives
+    # Second derivatives
     kernel_x = np.array([[1, -2, 1]], dtype=np.float64)
     kernel_y = np.array([[1], [-2], [1]], dtype=np.float64)
 

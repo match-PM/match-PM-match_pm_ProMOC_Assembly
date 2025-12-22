@@ -1,58 +1,61 @@
-"""
-Unit Conversion Utilities for ProMOC Assembly
-==============================================
+"""\
+Unit Conversions for ProMOC Assembly
+======================================
 
-This module provides common unit conversion functions for use across
-all ProMOC nodes and components. Using these functions ensures
-consistency and reduces conversion errors.
+This module provides common conversion functions that can be used across all
+ProMOC nodes and components. This ensures that units remain consistent and
+typical conversion errors are avoided.
 
-**Important:** Always use these functions instead of inline calculations!
-    ✓ position_m = mm_to_m(position_mm)
-    ✗ position_m = position_mm / 1000  # Avoid!
+Important
+---------
+Please **always** use these functions instead of inline calculations:
 
-Quick Start
------------
-1. **Length conversions (most common):**
-   
-   >>> from promoc_core.conversions import mm_to_m, m_to_mm, um_to_mm
-   >>> 
-   >>> # ROS uses meters, hardware often uses mm
-   >>> position_ros = mm_to_m(150.0)  # 0.15 m
-   >>> position_hw = m_to_mm(0.15)    # 150.0 mm
-   >>> 
-   >>> # Pixel sizes are often in micrometers
-   >>> pixel_size_mm = um_to_mm(3.45)  # 0.00345 mm
+     ✓ position_m = mm_to_m(position_mm)
+     ✗ position_m = position_mm / 1000  # avoid!
 
-2. **Angle conversions:**
-   
-   >>> from promoc_core.conversions import deg_to_rad, rad_to_deg
-   >>> 
-   >>> angle_rad = deg_to_rad(90.0)  # 1.5708... rad
-   >>> angle_deg = rad_to_deg(3.14159)  # 180.0 deg
+Quickstart
+----------
+1) **Length (most common case):**
 
-3. **Optical/MTF conversions (for camera/lens testing):**
-   
-   >>> from promoc_core.conversions import lp_mm_to_lp_px, nyquist_frequency_lp_mm
-   >>> 
-   >>> # Convert spatial frequency units
-   >>> lp_per_pixel = lp_mm_to_lp_px(100, pixel_size_um=3.45)  # 0.345
-   >>> 
-   >>> # Calculate Nyquist limit
-   >>> nyquist = nyquist_frequency_lp_mm(3.45)  # 144.93 lp/mm
+    >>> from promoc_core.conversions import mm_to_m, m_to_mm, um_to_mm
+    >>>
+    >>> # ROS typically uses meters (SI), while hardware often uses millimeters.
+    >>> position_ros = mm_to_m(150.0)  # 0.15 m
+    >>> position_hw = m_to_mm(0.15)    # 150.0 mm
+    >>>
+    >>> # Pixel sizes are often specified in micrometers.
+    >>> pixel_size_mm = um_to_mm(3.45)  # 0.00345 mm
 
-4. **Velocity conversions:**
-   
-   >>> from promoc_core.conversions import mm_s_to_m_s, m_s_to_mm_s
-   >>> 
-   >>> velocity_ros = mm_s_to_m_s(50.0)  # 0.05 m/s
-   >>> velocity_hw = m_s_to_mm_s(0.05)   # 50.0 mm/s
+2) **Angles:**
 
-Conversion Categories
----------------------
-- Length:   m ↔ mm ↔ µm (meters, millimeters, micrometers)
-- Angle:    rad ↔ deg ↔ mrad (radians, degrees, milliradians)
-- Optical:  lp/mm ↔ lp/px (line pairs per mm/pixel)
-- Velocity: m/s ↔ mm/s
+    >>> from promoc_core.conversions import deg_to_rad, rad_to_deg
+    >>>
+    >>> angle_rad = deg_to_rad(90.0)  # 1.5708... rad
+    >>> angle_deg = rad_to_deg(3.14159)  # 180.0 deg
+
+3) **Optics/MTF (e.g., for camera/lens testing):**
+
+    >>> from promoc_core.conversions import lp_mm_to_lp_px, nyquist_frequency_lp_mm
+    >>>
+    >>> # Conversion of spatial frequencies
+    >>> lp_per_pixel = lp_mm_to_lp_px(100, pixel_size_um=3.45)  # 0.345
+    >>>
+    >>> # Calculate Nyquist limit
+    >>> nyquist = nyquist_frequency_lp_mm(3.45)  # 144.93 lp/mm
+
+4) **Velocity:**
+
+    >>> from promoc_core.conversions import mm_s_to_m_s, m_s_to_mm_s
+    >>>
+    >>> velocity_ros = mm_s_to_m_s(50.0)  # 0.05 m/s
+    >>> velocity_hw = m_s_to_mm_s(0.05)   # 50.0 mm/s
+
+Categories
+----------
+- Length:   m ↔ mm ↔ µm
+- Angle:    rad ↔ deg ↔ mrad
+- Optics:   lp/mm ↔ lp/px
+- Speed:    m/s ↔ mm/s
 """
 import math
 from typing import Union
@@ -61,23 +64,23 @@ from typing import Union
 # =============================================================================
 # Length Conversions
 # =============================================================================
-# These are the most commonly used conversions in ProMOC.
-# ROS typically uses meters (SI), but hardware interfaces often use mm.
+# These are the most frequently used conversions in ProMOC.
+# ROS typically works in meters (SI), while hardware interfaces often use mm.
 
 def m_to_mm(value: float) -> float:
     """
-    Convert meters to millimeters.
+    Converts meters to millimeters.
 
-    Use when: Sending positions to hardware that expects mm.
+    Use when sending positions to hardware that expects mm.
 
     Args:
-        value: Length in meters
+        value: Length in meters.
 
     Returns:
-        Length in millimeters
+        Length in millimeters.
 
     Example:
-        >>> m_to_mm(0.15)  # 150mm in ROS coordinates
+        >>> m_to_mm(0.15)  # 150mm
         150.0
     """
     return value * 1000.0
@@ -85,15 +88,15 @@ def m_to_mm(value: float) -> float:
 
 def mm_to_m(value: float) -> float:
     """
-    Convert millimeters to meters.
+    Converts millimeters to meters.
 
-    Use when: Converting hardware readings (mm) to ROS (meters).
+    Use when converting hardware values (mm) to ROS units (m).
 
     Args:
-        value: Length in millimeters
+        value: Length in millimeters.
 
     Returns:
-        Length in meters
+        Length in meters.
 
     Example:
         >>> mm_to_m(150.0)  # Hardware reports 150mm
@@ -104,18 +107,18 @@ def mm_to_m(value: float) -> float:
 
 def um_to_mm(value: float) -> float:
     """
-    Convert micrometers to millimeters.
+    Converts micrometers (µm) to millimeters.
 
-    Use when: Working with pixel sizes or fine positioning.
+    Use when dealing with pixel sizes or fine positioning.
 
     Args:
-        value: Length in micrometers (µm)
+        value: Length in micrometers (µm).
 
     Returns:
-        Length in millimeters
+        Length in millimeters.
 
     Example:
-        >>> um_to_mm(3.45)  # Typical camera pixel size
+        >>> um_to_mm(3.45)  # typical pixel size
         0.00345
     """
     return value / 1000.0
@@ -123,18 +126,18 @@ def um_to_mm(value: float) -> float:
 
 def mm_to_um(value: float) -> float:
     """
-    Convert millimeters to micrometers.
+    Converts millimeters to micrometers (µm).
 
-    Use when: Converting to fine precision units.
+    Use when conversion to finer units is necessary.
 
     Args:
-        value: Length in millimeters
+        value: Length in millimeters.
 
     Returns:
-        Length in micrometers (µm)
+        Length in micrometers (µm).
 
     Example:
-        >>> mm_to_um(0.001)  # 1 micron positioning accuracy
+        >>> mm_to_um(0.001)  # 1µm
         1.0
     """
     return value * 1000.0
@@ -142,18 +145,18 @@ def mm_to_um(value: float) -> float:
 
 def um_to_m(value: float) -> float:
     """
-    Convert micrometers to meters.
+    Converts micrometers (µm) to meters.
 
-    Use when: Converting fine measurements directly to ROS units.
+    Use when fine measurements are needed directly in ROS units (m).
 
     Args:
-        value: Length in micrometers (µm)
+        value: Length in micrometers (µm).
 
     Returns:
-        Length in meters
+        Length in meters.
 
     Example:
-        >>> um_to_m(3.45)  # Pixel size to meters
+        >>> um_to_m(3.45)
         3.45e-06
     """
     return value / 1_000_000.0
@@ -161,16 +164,16 @@ def um_to_m(value: float) -> float:
 
 def m_to_um(value: float) -> float:
     """
-    Convert meters to micrometers.
+    Converts meters to micrometers (µm).
 
     Args:
-        value: Length in meters
+        value: Length in meters.
 
     Returns:
-        Length in micrometers (µm)
+        Length in micrometers (µm).
 
     Example:
-        >>> m_to_um(0.001)  # 1mm in micrometers
+        >>> m_to_um(0.001)  # 1mm
         1000.0
     """
     return value * 1_000_000.0
@@ -179,22 +182,22 @@ def m_to_um(value: float) -> float:
 # =============================================================================
 # Angle Conversions
 # =============================================================================
-# ROS uses radians, but humans and some interfaces use degrees.
+# ROS uses radians, while humans and some interfaces use degrees.
 
 def rad_to_deg(value: float) -> float:
     """
-    Convert radians to degrees.
+    Converts radians to degrees.
 
-    Use when: Displaying angles to users or logging.
+    Use when displaying angles for users or in logs.
 
     Args:
-        value: Angle in radians
+        value: Angle in radians.
 
     Returns:
-        Angle in degrees
+        Angle in degrees.
 
     Example:
-        >>> rad_to_deg(3.14159)  # π radians
+        >>> rad_to_deg(3.14159)  # π
         180.0
     """
     return math.degrees(value)
@@ -202,15 +205,15 @@ def rad_to_deg(value: float) -> float:
 
 def deg_to_rad(value: float) -> float:
     """
-    Convert degrees to radians.
+    Converts degrees to radians.
 
-    Use when: Converting user input to ROS angles.
+    Use when converting user input (degrees) to ROS angles (radians).
 
     Args:
-        value: Angle in degrees
+        value: Angle in degrees.
 
     Returns:
-        Angle in radians
+        Angle in radians.
 
     Example:
         >>> deg_to_rad(90.0)
@@ -221,15 +224,15 @@ def deg_to_rad(value: float) -> float:
 
 def mrad_to_deg(value: float) -> float:
     """
-    Convert milliradians to degrees.
+    Converts milliradians (mrad) to degrees.
 
-    Use when: Working with precision optics (tilt stages, etc.)
+    Use when dealing with precision optics, tilt stages, etc.
 
     Args:
-        value: Angle in milliradians
+        value: Angle in milliradians.
 
     Returns:
-        Angle in degrees
+        Angle in degrees.
 
     Example:
         >>> mrad_to_deg(17.45)  # ~1 degree
@@ -240,13 +243,13 @@ def mrad_to_deg(value: float) -> float:
 
 def deg_to_mrad(value: float) -> float:
     """
-    Convert degrees to milliradians.
+    Converts degrees to milliradians (mrad).
 
     Args:
-        value: Angle in degrees
+        value: Angle in degrees.
 
     Returns:
-        Angle in milliradians
+        Angle in milliradians.
     """
     return math.radians(value) * 1000.0
 
@@ -254,36 +257,33 @@ def deg_to_mrad(value: float) -> float:
 # =============================================================================
 # Optical / MTF Conversions
 # =============================================================================
-# These are used for lens testing and MTF analysis.
-# Line pairs (lp) measure how well a lens can resolve fine details.
+# These conversions are used for lens testing and MTF analysis.
+# Line pairs (lp) describe how well an optic can resolve fine details.
 
 def lp_mm_to_lp_px(lp_mm: float, pixel_size_um: float) -> float:
     """
-    Convert line pairs per millimeter to line pairs per pixel.
+    Converts line pairs per millimeter (lp/mm) to line pairs per pixel (lp/px).
 
-    Use when: Converting from physical frequency (lp/mm) to digital
-    frequency (lp/pixel) for image analysis.
+    Use when converting from a physical spatial frequency (lp/mm) to a digital
+    spatial frequency (lp/px) for image analysis.
 
     Background:
-        - lp/mm: How many line pairs fit in 1mm (physical units)
-        - lp/pixel: How many line pairs fit in 1 pixel (digital units)
-        - If lp/pixel > 0.5, the frequency is beyond Nyquist limit!
+        - lp/mm: How many line pairs fit into 1mm (physical).
+        - lp/pixel: How many line pairs fit into 1 pixel (digital).
+        - If lp/pixel > 0.5, the frequency is above the Nyquist limit.
 
     Args:
-        lp_mm: Spatial frequency in line pairs per millimeter
-        pixel_size_um: Camera pixel size in micrometers
+        lp_mm: Spatial frequency in line pairs per millimeter.
+        pixel_size_um: The camera's pixel size in micrometers.
 
     Returns:
-        Spatial frequency in line pairs per pixel
+        Spatial frequency in line pairs per pixel.
 
     Example:
-        >>> # 100 lp/mm with a 3.45µm pixel camera
         >>> lp_mm_to_lp_px(100, 3.45)
-        0.345  # Well below Nyquist (0.5), good!
-        >>> 
-        >>> # 200 lp/mm with same camera
+        0.345
         >>> lp_mm_to_lp_px(200, 3.45)
-        0.69  # Above Nyquist, will alias!
+        0.69
     """
     pixel_size_mm = um_to_mm(pixel_size_um)
     return lp_mm * pixel_size_mm
@@ -291,21 +291,20 @@ def lp_mm_to_lp_px(lp_mm: float, pixel_size_um: float) -> float:
 
 def lp_px_to_lp_mm(lp_px: float, pixel_size_um: float) -> float:
     """
-    Convert line pairs per pixel to line pairs per millimeter.
+    Converts line pairs per pixel (lp/px) to line pairs per millimeter (lp/mm).
 
-    Use when: Converting from digital frequency back to physical.
+    Use when converting a digital spatial frequency back into physical units.
 
     Args:
-        lp_px: Spatial frequency in line pairs per pixel
-        pixel_size_um: Camera pixel size in micrometers
+        lp_px: Spatial frequency in line pairs per pixel.
+        pixel_size_um: Pixel size in micrometers.
 
     Returns:
-        Spatial frequency in line pairs per millimeter
+        Spatial frequency in line pairs per millimeter.
 
     Example:
-        >>> # Nyquist frequency (0.5 lp/px) for 3.45µm pixels
         >>> lp_px_to_lp_mm(0.5, 3.45)
-        144.93  # Max resolvable frequency
+        144.93
     """
     pixel_size_mm = um_to_mm(pixel_size_um)
     return lp_px / pixel_size_mm
@@ -313,40 +312,38 @@ def lp_px_to_lp_mm(lp_px: float, pixel_size_um: float) -> float:
 
 def nyquist_frequency_lp_mm(pixel_size_um: float) -> float:
     """
-    Calculate Nyquist frequency in line pairs per millimeter.
+    Calculates the Nyquist frequency in lp/mm.
 
-    The Nyquist frequency is the maximum spatial frequency that
-    can be resolved without aliasing. It equals 0.5 line pairs 
-    per pixel (1 line pair = 2 pixels).
+    The Nyquist frequency is the maximum spatial frequency that can be resolved
+    without aliasing. It corresponds to 0.5 lp/px (1 line pair = 2 pixels).
 
-    Use when: Determining the maximum resolvable detail for a camera.
+    Use when determining the maximum resolvable detail frequency of a camera.
 
     Args:
-        pixel_size_um: Camera pixel size in micrometers
+        pixel_size_um: Pixel size in micrometers.
 
     Returns:
-        Nyquist frequency in lp/mm
+        The Nyquist frequency in lp/mm.
 
     Example:
-        >>> # Camera with 3.45µm pixels
         >>> nyquist_frequency_lp_mm(3.45)
-        144.93  # Cannot resolve > 144.93 lp/mm
+        144.93
     """
     return lp_px_to_lp_mm(0.5, pixel_size_um)
 
 
 def cycles_per_pixel_to_lp_mm(cpp: float, pixel_size_um: float) -> float:
     """
-    Convert cycles per pixel to line pairs per millimeter.
+    Converts cycles per pixel (cpp) to line pairs per millimeter (lp/mm).
 
-    Note: 1 cycle = 1 line pair, so this is equivalent to lp_px_to_lp_mm.
+    Note: 1 cycle = 1 line pair. Therefore, this is equivalent to `lp_px_to_lp_mm`.
 
     Args:
-        cpp: Frequency in cycles per pixel
-        pixel_size_um: Camera pixel size in micrometers
+        cpp: Frequency in cycles per pixel.
+        pixel_size_um: Pixel size in micrometers.
 
     Returns:
-        Spatial frequency in lp/mm
+        Spatial frequency in lp/mm.
     """
     return lp_px_to_lp_mm(cpp, pixel_size_um)
 
@@ -354,22 +351,22 @@ def cycles_per_pixel_to_lp_mm(cpp: float, pixel_size_um: float) -> float:
 # =============================================================================
 # Speed / Velocity Conversions
 # =============================================================================
-# Convert between hardware velocity units and ROS velocity units.
+# Conversion between hardware velocity units and ROS units.
 
 def mm_s_to_m_s(value: float) -> float:
     """
-    Convert millimeters per second to meters per second.
+    Converts mm/s to m/s.
 
-    Use when: Converting hardware velocity to ROS (which uses m/s).
+    Use when converting hardware velocity (mm/s) to ROS velocity (m/s).
 
     Args:
-        value: Speed in mm/s
+        value: Velocity in mm/s.
 
     Returns:
-        Speed in m/s
+        Velocity in m/s.
 
     Example:
-        >>> mm_s_to_m_s(50.0)  # Hardware max velocity
+        >>> mm_s_to_m_s(50.0)
         0.05
     """
     return value / 1000.0
@@ -377,18 +374,18 @@ def mm_s_to_m_s(value: float) -> float:
 
 def m_s_to_mm_s(value: float) -> float:
     """
-    Convert meters per second to millimeters per second.
+    Converts m/s to mm/s.
 
-    Use when: Sending velocity commands to hardware (which expects mm/s).
+    Use when sending velocity commands to hardware that expects mm/s.
 
     Args:
-        value: Speed in m/s
+        value: Velocity in m/s.
 
     Returns:
-        Speed in mm/s
+        Velocity in mm/s.
 
     Example:
-        >>> m_s_to_mm_s(0.1)  # ROS velocity command
+        >>> m_s_to_mm_s(0.1)
         100.0
     """
     return value * 1000.0

@@ -1,139 +1,128 @@
 #!/usr/bin/env python3
-"""
-ROS2 Node für Kamera-Bildverarbeitung und Autofokus.
+r"""
+ROS2 Node for Camera Image Processing and Autofocus.
 
-Dieses Modul implementiert den CameraNode - den zentralen Orchestrator
-für Kamera-Operationen wie Autofokus und MTF-Messung.
+This module implements the CameraNode, which orchestrates camera operations
+like autofocus and MTF measurement.
 
-Architektur-Übersicht:
+Architecture Overview:
 ======================
-Der Node folgt dem gleichen Dependency-Injection-Pattern wie die anderen Nodes:
+The node follows a dependency injection pattern for flexibility:
 
     CameraNode (Orchestrator)
         │
-        ├── CameraDriver (Abstraktion)
-        │     ├── AravisCameraDriver  → Echte Kamera via camera_aravis2
-        │     └── SimulatedCameraDriver → Simulator für Tests
+        ├── CameraDriver (Abstraction)
+        │     ├── AravisCameraDriver  → Real camera via camera_aravis2
+        │     └── SimulatedCameraDriver → Simulator for testing
         │
-        ├── CameraImageProcessing  → Bildverarbeitungs-Algorithmen (MTF)
-        └── CameraServiceCallbacks → Service-Logik (Autofokus, MTF)
+        ├── CameraImageProcessing  → Image processing algorithms (MTF)
+        └── CameraServiceCallbacks → Service business logic (Autofocus, MTF)
 
-Treiber-Auswahl:
-================
+Driver Selection:
+=================
+The active driver is chosen via a ROS parameter:
     use_simulator = True  → SimulatedCameraDriver
     use_simulator = False → AravisCameraDriver
 
-Hauptfunktionen:
-================
-1. Autofokus:
-    - Hybrid-Algorithmus: Grobe Suche + Multi-Level Verfeinerung
-   - Steuert Z-Achse für Fokus-Optimierung
-    - Verwendet Schärfe-Metrik: Tenengrad
+Core Features:
+==============
+1. Autofocus:
+   - Hybrid algorithm: Coarse search + multi-level refinement.
+   - Controls a Z-axis for focus optimization.
+   - Uses the Tenengrad sharpness metric.
 
-2. MTF-Messung:
-   - Slanted Edge Method nach ISO 12233
-   - ROI-Auswahl für Messbereich
-   - Export als CSV
+2. MTF Measurement:
+   - Implements the Slanted Edge Method (ISO 12233).
+   - Allows ROI selection for the measurement area.
+   - Exports results to a CSV file.
 
-3. Belichtungssteuerung:
-   - Manuelles Setzen der Belichtungszeit
-   - Kommunikation mit camera_aravis2 Treiber
+3. Exposure Control:
+   - Manual setting of camera exposure time.
+   - Communicates with the underlying camera_aravis2 driver.
 
-Ablauf beim Start:
-==================
-1. Parameter laden (use_simulator, pixel_size_um, mtf_csv_path)
-2. Treiber basierend auf use_simulator auswählen
-3. Komponenten erstellen:
-   - CameraDriver (Simulator oder Aravis)
-   - CameraImageProcessing für Algorithmen
-   - CameraServiceCallbacks für Services
-4. Subscriber für Kamera-Stream erstellen
-5. Services registrieren (autofocus, measure_mtf, select_roi)
+Startup Sequence:
+=================
+1. Load parameters (e.g., use_simulator, pixel_size_um).
+2. Select the appropriate driver based on the 'use_simulator' parameter.
+3. Instantiate components:
+   - CameraDriver (Simulated or Aravis)
+   - CameraImageProcessing for algorithms.
+   - CameraServiceCallbacks for service logic.
+4. Create a subscriber for the raw camera image stream.
+5. Register services (autofocus, measure_mtf, select_roi, etc.).
 
-Verwendung:
-===========
-    # Mit echter Kamera:
+Usage:
+======
+    # With a real camera:
     ros2 run camera_nodes camera_node
 
-    # Mit Simulator:
+    # With the simulator:
     ros2 run camera_nodes camera_node --ros-args -p use_simulator:=true
 
-Beispiel-Service-Calls:
-=======================
-    # Autofokus durchführen:
-    ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \\
+Example Service Calls:
+======================
+    # Perform autofocus:
+    ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \
         "{start_position: 0.0, end_position: 30.0, step_size: 1.0}"
 
-    # MTF messen:
+    # Measure MTF:
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
-
+from cv_bridge import CvBridge
+from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure
 import rclpy
-from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
 from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+from std_srvs.srv import Trigger
 
-# Lokale Module
+# Local imports
 from .camera_image_processing import CameraImageProcessing
 from .camera_service_callbacks import CameraServiceCallbacks
 
-# Treiber-Abstraktion
-from .drivers import CameraDriver, AravisCameraDriver, SimulatedCameraDriver
-
-# Service-Typen
-from std_srvs.srv import Trigger
-from promoc_assembly_interfaces.srv import SetExposure, AutoFocus, MeasureMTF
+# Driver abstraction
+from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
 
 
 class CameraNode(Node):
     """
-    Zentraler ROS2-Node für Kamera-Operationen.
+    Central ROS2 node for camera operations.
 
-    Diese Klasse ist der "Dirigent" - sie erstellt und koordiniert
-    alle Bildverarbeitungs- und Kamera-Komponenten.
+    Orchestrates all image processing and camera components.
 
-    Funktionsweise:
-    ---------------
-    1. INIT-PHASE:
-       - Parameter laden
-       - Treiber auswählen (Simulator vs. Aravis)
+    Architecture:
+    - Phase 1: Load parameters
+    - Phase 2: Select and initialize driver (simulator or real)
+    - Phase 3: Create components (ImageProcessing, ServiceCallbacks)
+    - Phase 4: Register subscriber and publisher
+    - Phase 5: Register services (autofocus, MTF, exposure)
 
-    2. SUBSCRIBE-PHASE:
-       - Auf Kamera-Stream subscriben
-       - Letztes Bild für Verarbeitung speichern
-
-    3. SERVICE-PHASE:
-       - Services registrieren und auf Anfragen warten
-       - Autofokus, MTF-Messung, Belichtung
-
-    Attribute:
-        bridge (CvBridge): ROS-OpenCV Bridge
-        camera_driver (CameraDriver): Kamera-Treiber (abstrakt)
-        image_processor (CameraImageProcessing): Bildverarbeitung
-        service_callbacks (CameraServiceCallbacks): Service-Logik
-        latest_image_msg: Letztes empfangenes Bild
+    Attributes:
+        bridge (CvBridge): ROS-OpenCV converter
+        camera_driver (CameraDriver): Camera driver abstraction
+        image_processor (CameraImageProcessing): Image processing algorithms
+        service_callbacks (CameraServiceCallbacks): Service business logic
+        latest_image_msg: Last received image from subscriber
     """
 
     def __init__(self):
         """
-        Initialisiert den CameraNode.
+        Initialize the camera node.
 
-        Ablauf (Schritt für Schritt):
-        -----------------------------
-        1. ROS2-Node erstellen
-        2. Parameter deklarieren und laden
-        3. Treiber basierend auf use_simulator auswählen
-        4. Komponenten erstellen (ImageProcessing, Callbacks)
-        5. Subscriber für Kamera-Stream erstellen
-        6. Services registrieren
+        Steps:
+        1. Create ROS2 node
+        2. Declare and load parameters
+        3. Select driver based on use_simulator parameter
+        4. Create components (ImageProcessing, ServiceCallbacks)
+        5. Register image subscriber
+        6. Register services
         """
         super().__init__('camera_node')
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PHASE 1: Parameter deklarieren und laden
-        # ══════════════════════════════════════════════════════════════════════
+
+        # Phase 1: Load parameters
+
         self.declare_parameter('use_simulator', False)
         self.declare_parameter('mtf_csv_path', '')
         self.declare_parameter('pixel_size_um', 3.45)
@@ -145,96 +134,110 @@ class CameraNode(Node):
         # Autofocus refinement (optional, keeps stable defaults)
         self.declare_parameter('autofocus.enable_multilevel', True)
         self.declare_parameter('autofocus.refinement_samples', 51)
-        self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10µm
+        self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
         self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value
 
         self.get_logger().info(
-            f"Camera Node startet im {'SIMULATOR' if self.use_simulator else 'REAL'} Modus...")
+            f"Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode...")
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PHASE 2: Treiber basierend auf Modus auswählen
-        # ══════════════════════════════════════════════════════════════════════
+
+        # Phase 2: Select driver
+
         self.bridge = CvBridge()
         self.camera_driver: CameraDriver = self._create_driver()
 
-        # Treiber verbinden
+        # Connect to driver
         self.camera_driver.connect()
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PHASE 3: Komponenten erstellen
-        # ══════════════════════════════════════════════════════════════════════
+
+        # Phase 3: Create components
+
         self.image_processor = CameraImageProcessing(self.get_logger())
         self.service_callbacks = CameraServiceCallbacks(
             self, self.camera_driver)
 
         self.latest_image_msg = None
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PHASE 4: Subscriber & Publisher
-        # ══════════════════════════════════════════════════════════════════════
+
+        # Phase 4: Register subscribers/publishers
+
         self.assembly_image_sub = self.create_subscription(
             Image, '/promoc/assembly_camera/stream0/image_raw', self.assembly_image_callback, 10)
 
         self.processed_assembly_pub = self.create_publisher(
             Image, '/camera/assembly/processed', 10)
 
-        # ══════════════════════════════════════════════════════════════════════
-        # PHASE 5: Services registrieren
-        # ══════════════════════════════════════════════════════════════════════
+
+        # Phase 5: Register services
+
         self.cb_group = ReentrantCallbackGroup()
 
         self.select_roi_service = self.create_service(
-            Trigger, '~/select_roi', self.service_callbacks.select_roi_callback, callback_group=self.cb_group)
+            Trigger,
+            '~/select_roi',
+            self.service_callbacks.select_roi_callback,
+            callback_group=self.cb_group,
+        )
         self.autofocus_service = self.create_service(
-            AutoFocus, '~/autofocus', self.service_callbacks.autofocus_callback, callback_group=self.cb_group)
+            AutoFocus,
+            '~/autofocus',
+            self.service_callbacks.autofocus_callback,
+            callback_group=self.cb_group,
+        )
         self.mtf_service = self.create_service(
-            MeasureMTF, '~/measure_mtf', self.service_callbacks.measure_mtf_callback, callback_group=self.cb_group)
+            MeasureMTF,
+            '~/measure_mtf',
+            self.service_callbacks.measure_mtf_callback,
+            callback_group=self.cb_group,
+        )
 
-        # Belichtungs-Service nur bei echter Kamera mit verbundenem Treiber
+        # Exposure service only for real hardware
         if not self.use_simulator and self.camera_driver.is_connected:
             self.manual_set_exposure_service = self.create_service(
-                SetExposure, '~/set_exposure', self.service_callbacks.manual_set_exposure_callback, callback_group=self.cb_group)
+                SetExposure,
+                '~/set_exposure',
+                self.service_callbacks.manual_set_exposure_callback,
+                callback_group=self.cb_group,
+            )
 
-        self.get_logger().info("✓ Camera Node initialisiert")
+        self.get_logger().info('✓ Camera Node initialized')
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # TREIBER-ERSTELLUNG
-    # ══════════════════════════════════════════════════════════════════════════
+
+    # DRIVER CREATION
+
 
     def _create_driver(self) -> CameraDriver:
         """
-        Erstellt den passenden Kamera-Treiber basierend auf use_simulator.
+        Creates the appropriate camera driver based on the 'use_simulator' parameter.
 
         Returns:
-            CameraDriver: Simulator oder Aravis-Treiber
+            CameraDriver: An instance of the selected driver (Simulated or Aravis).
         """
         if self.use_simulator:
-            self.get_logger().info("📷 Verwende SimulatedCameraDriver")
+            self.get_logger().info('📷 Using SimulatedCameraDriver')
             return SimulatedCameraDriver(self.get_logger())
         else:
-            self.get_logger().info("📷 Verwende AravisCameraDriver")
+            self.get_logger().info('📷 Using AravisCameraDriver')
             return AravisCameraDriver(self, self.get_logger())
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # CALLBACKS
-    # ══════════════════════════════════════════════════════════════════════════
+
+    # IMAGE CALLBACKS
+
 
     def assembly_image_callback(self, msg: Image):
         """
-        Speichert das letzte empfangene Kamera-Bild.
+        Stores the latest received camera image.
 
-        Die Verarbeitung wird durch Services ausgelöst, nicht automatisch.
-        Das Bild wird nur gespeichert für späteren Zugriff.
-
-        # Bei echtem Treiber: Bild auch an Treiber weiterleiten.
+        Processing is triggered by services, not automatically. This callback
+        only stores the image for later access.
         """
         # self.get_logger().info("Received image") # Uncomment for debugging
         self.latest_image_msg = msg
 
-        # Bei Aravis-Treiber: Bild im Treiber cachen
+        # For the Aravis driver, pass the image to the driver to be cached.
         if hasattr(self.camera_driver, 'set_latest_image'):
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(
@@ -242,7 +245,7 @@ class CameraNode(Node):
                 self.camera_driver.set_latest_image(cv_image)
             except Exception as e:
                 self.get_logger().warning(
-                    f"Bild-Konvertierung fehlgeschlagen: {e}")
+                    f'Image conversion failed: {e}')
 
 
 def main(args=None):

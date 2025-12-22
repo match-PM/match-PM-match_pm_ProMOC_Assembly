@@ -1,43 +1,43 @@
 """
-Mover Utilities - Hilfsfunktionen für XBot Positionsmanagement.
+Mover Utilities - Helper functions for XBot position management.
 
-Dieses Modul enthält die MoverUtils-Klasse mit allen Hilfsfunktionen
-für Positionsabfragen, Bewegungsüberwachung und Einheitenkonvertierung.
+This module contains the MoverUtils class, which provides helper functions
+for position queries, motion monitoring, and unit conversion.
 
-Funktionsübersicht:
+Function Overview:
 ==================
 
 Position & Status:
 ------------------
-- get_current_position(xbot_id) → [x, y, z, rx, ry, rz] in SI
-- get_xbot_status_info(xbot_id) → dict mit Position und State
+- get_current_position(xbot_id) → [x, y, z, rx, ry, rz] in SI units
+- get_xbot_status_info(xbot_id) → dict with position and state
 - get_xbot_state_string(xbot_id) → "IDLE", "MOVING", etc.
 
-Bewegungsüberwachung:
----------------------
+Motion Monitoring:
+--------------------
 - wait_for_motion_completion() → MotionStatus (COMPLETED, TIMEOUT, ERROR)
 - is_position_in_bounds(x, y, z) → True/False
 
-Einheiten-Konvertierung:
-------------------------
+Unit Conversion:
+----------------------
 - mm_to_m(value) → value / 1000
 - m_to_mm(value) → value * 1000
 - deg_to_rad(value) → value * π/180
 - rad_to_deg(value) → value * 180/π
 
-Konfiguration:
+Configuration:
 --------------
-- get_speed_params(xbot_id) → dict mit Geschwindigkeiten/Beschleunigungen
+- get_speed_params(xbot_id) → dict with velocities/accelerations
 
-Verwendungsbeispiel:
-====================
+Usage Example:
+==================
     utils = MoverUtils(logger, pmc_interface, config)
     
-    # Position abfragen
+    # Get position
     pos = utils.get_current_position(0)
-    print(f"XBot ist bei x={pos[0]*1000:.1f}mm, y={pos[1]*1000:.1f}mm")
+    print(f"XBot is at x={pos[0]*1000:.1f}mm, y={pos[1]*1000:.1f}mm")
     
-    # Bewegung überwachen
+    # Monitor motion
     result = utils.wait_for_motion_completion(
         xbot_id=0,
         target_pos=[0.1, 0.05, 0.001, 0, 0, 0],
@@ -45,21 +45,20 @@ Verwendungsbeispiel:
         timeout=10.0
     )
     if result == MotionStatus.COMPLETED:
-        print("Ziel erreicht!")
+        print("Target reached!")
 """
 
 import time
 import math
-from typing import List, Optional
+from typing import Dict, List, Optional
 from enum import Enum
 
-# Explizite Importe für saubere Architektur
+# Explicit imports for a clean architecture
 from .mover_pmc_interface import PmcInterface
-from .mover_node_config import NodeConfig
-# XbotState aus Mock (garantiert vorhanden)
+# XbotState from Mock (guaranteed to be available)
 from .drivers.mock_pmclib import XbotState
 
-# Gemeinsame Utilities aus promoc_core
+# Common utilities from promoc_core
 from promoc_core.motion import MotionStatus, check_position_reached
 from promoc_core.validation import is_in_range, validate_id_range
 from promoc_core.conversions import rad_to_deg, mm_to_m, m_to_mm
@@ -67,34 +66,34 @@ from promoc_core.conversions import rad_to_deg, mm_to_m, m_to_mm
 
 class MoverUtils:
     """
-    Hilfsfunktionen für XBot-Positionsmanagement und Bewegungsüberwachung.
+    Helper functions for XBot position management and motion monitoring.
 
-    Diese Klasse ist von ROS2 entkoppelt und kann unabhängig getestet werden.
-    Sie wird vom MoverServiceNode und ServiceCallbacks verwendet.
+    This class is decoupled from ROS2 and can be tested independently.
+    It is used by the MoverServiceNode and ServiceCallbacks.
 
-    Hauptfunktionen:
-    ----------------
-    1. Position abfragen: get_current_position()
-    2. Bewegung überwachen: wait_for_motion_completion()
-    3. Grenzen prüfen: is_position_in_bounds()
-    4. Einheiten konvertieren: mm_to_m(), deg_to_rad(), etc.
+    Main Functions:
+    ---------------
+    1. Get position: get_current_position()
+    2. Monitor motion: wait_for_motion_completion()
+    3. Check boundaries: is_position_in_bounds()
+    4. Convert units: mm_to_m(), deg_to_rad(), etc.
 
-    Attribute:
-        logger: ROS2-Logger für Ausgaben
-        pmc (PmcInterface): Hardware-Schnittstelle
-        config (NodeConfig): Konfiguration mit Bounds
-        is_mock (bool): True wenn Mock-Modus aktiv
-        velocity_params (dict): Geschwindigkeitsparameter pro XBot
+    Attributes:
+        logger: ROS2 logger for output.
+        pmc (PmcInterface): Hardware interface.
+        config (dict): Configuration with bounds.
+        is_mock (bool): True if mock mode is active.
+        velocity_params (dict): Velocity parameters per XBot.
     """
 
-    def __init__(self, logger, pmc_interface: PmcInterface, config: NodeConfig):
+    def __init__(self, logger, pmc_interface: PmcInterface, config: dict):
         """
-        Initialisiert die Utilities mit Abhängigkeiten.
+        Initializes the utilities with dependencies.
 
         Args:
-            logger: ROS2-Logger
-            pmc_interface: Hardware-Schnittstelle
-            config: Konfiguration mit Bounds und Toleranzen
+            logger: ROS2 logger.
+            pmc_interface: Hardware interface.
+            config: Configuration with bounds and tolerances.
         """
         self.logger = logger
         self.pmc = pmc_interface
@@ -103,38 +102,109 @@ class MoverUtils:
         self._logged_no_data = False
         self._logged_warnings = set()
 
+        # Velocity/acceleration parameters per XBot.
+        #
+        # Why this lives here:
+        # - Callbacks should not own mutable runtime tuning state.
+        # - We want a single place that defines defaults and validation.
+        #
+        # Units:
+        # - velocities: m/s (rotational: rad/s)
+        # - accelerations: m/s²
+        self.velocity_params: Dict[int, Dict[str, float]] = {}
+
     # ══════════════════════════════════════════════════════════════════════════
-    # EINHEITEN-KONVERTIERUNG
+    # UNIT CONVERSION
     # ══════════════════════════════════════════════════════════════════════════
 
     def mm_to_m(self, value_mm: float) -> float:
-        """Konvertiert Millimeter zu Meter."""
+        """Converts millimeters to meters."""
         return mm_to_m(value_mm)
 
     def m_to_mm(self, value_m: float) -> float:
-        """Konvertiert Meter zu Millimeter."""
+        """Converts meters to millimeters."""
         return m_to_mm(value_m)
 
+    def deg_to_rad(self, value_deg: float) -> float:
+        """Converts degrees to radians."""
+        return math.radians(value_deg)
+
+    def rad_to_deg(self, value_rad: float) -> float:
+        """Converts radians to degrees."""
+        return rad_to_deg(value_rad)
+
     # ══════════════════════════════════════════════════════════════════════════
-    # POSITIONS-ABFRAGEN
+    # SPEED / ACCELERATION PARAMETERS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def get_speed_params(self, xbot_id: int = 0) -> Dict[str, float]:
+        """Return velocity/acceleration parameters for an XBot.
+
+        The ServiceCallbacks expect these keys:
+        - xy_vel
+        - xy_max_accel
+        - z_vel
+        - z_max_accel
+        - rx_vel
+        - ry_vel
+        - rz_vel
+
+        If no parameters were set via service calls, sensible defaults are
+        returned.
+
+        Args:
+            xbot_id: XBot ID
+
+        Returns:
+            Dict[str, float]: Parameters in SI units.
+        """
+        # Don't hard-fail here; callbacks already validate and we want robust
+        # defaults even in mock.
+        if xbot_id not in self.velocity_params:
+            # Defaults are conservative. They can be tuned via
+            # callback_set_velocity_acceleration.
+            self.velocity_params[xbot_id] = {
+                'xy_vel': 0.05,
+                'xy_max_accel': 0.2,
+                'z_vel': 0.01,
+                'z_max_accel': 0.05,
+                'rx_vel': self.deg_to_rad(10.0),
+                'ry_vel': self.deg_to_rad(10.0),
+                'rz_vel': self.deg_to_rad(15.0),
+            }
+
+        # Return a copy to avoid accidental external mutation.
+        return dict(self.velocity_params[xbot_id])
+
+    def set_speed_params(self, xbot_id: int, params: Dict[str, float]) -> None:
+        """Set velocity/acceleration parameters for an XBot.
+
+        Args:
+            xbot_id: XBot ID
+            params: Dict with same keys as get_speed_params()
+        """
+        self.velocity_params[xbot_id] = dict(params)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # POSITION QUERIES
     # ══════════════════════════════════════════════════════════════════════════
 
     def get_current_position(self, xbot_id: int = 0) -> Optional[List[float]]:
         """
-        Fragt die aktuelle XBot-Position vom PMC-Controller ab.
+        Queries the current XBot position from the PMC controller.
 
         Args:
-            xbot_id: ID des XBots (Standard: 0)
+            xbot_id: ID of the XBot (default: 0).
 
         Returns:
-            Liste [x, y, z, rx, ry, rz] in SI-Einheiten (m, rad)
-            None wenn keine Daten verfügbar
+            A list [x, y, z, rx, ry, rz] in SI units (m, rad), or
+            None if no data is available.
 
-        Ablauf:
-        -------
-        1. XBot-Daten vom PMC holen
-        2. Prüfen ob angeforderte ID verfügbar
-        3. Position als Liste zurückgeben
+        Flow:
+        -----
+        1. Fetch XBot data from the PMC.
+        2. Check if the requested ID is available.
+        3. Return the position as a list.
         """
         try:
             xbot_data_list = self.pmc.bot.get_xbot_data()
@@ -171,13 +241,13 @@ class MoverUtils:
 
     def get_xbot_status_info(self, xbot_id: int = 0) -> Optional[dict]:
         """
-        Holt umfassende Status-Informationen für einen XBot.
+        Fetches comprehensive status information for an XBot.
 
         Args:
-            xbot_id: ID des XBots
+            xbot_id: ID of the XBot.
 
         Returns:
-            dict mit:
+            A dictionary containing:
             - 'position': [x, y, z, rx, ry, rz]
             - 'xbot_state': XbotState Enum
             - 'xbot_state_string': "IDLE", "MOVING", etc.
@@ -211,14 +281,14 @@ class MoverUtils:
 
     def get_xbot_state_string(self, xbot_id: int = 0) -> str:
         """
-        Gibt den XBot-Status als lesbaren String zurück.
+        Returns the XBot status as a human-readable string.
 
-        Mögliche Rückgabewerte:
-        - "IDLE": Bereit für Befehle
-        - "MOVING": In Bewegung
-        - "ERROR": Fehler aufgetreten
-        - "STOPPED": Gestoppt
-        - "UNKNOWN": Status unbekannt
+        Possible return values:
+        - "IDLE": Ready for commands.
+        - "MOVING": In motion.
+        - "ERROR": An error has occurred.
+        - "STOPPED": Halted.
+        - "UNKNOWN": Status cannot be determined.
         """
         try:
             xbot_status = self.pmc.bot.get_xbot_status(xbot_id)
@@ -227,7 +297,7 @@ class MoverUtils:
             return "IDLE"
 
     def _xbot_state_to_string(self, xbot_state) -> str:
-        """Konvertiert XbotState-Enum zu lesbarem String."""
+        """Converts an XbotState enum to a readable string."""
         try:
             if hasattr(xbot_state, 'name'):
                 return xbot_state.name
@@ -238,34 +308,34 @@ class MoverUtils:
             return "UNKNOWN"
 
     # ══════════════════════════════════════════════════════════════════════════
-    # BEWEGUNGS-ÜBERWACHUNG
+    # MOTION MONITORING
     # ══════════════════════════════════════════════════════════════════════════
 
     def wait_for_motion_completion(self, xbot_id: int, target_position: List[float],
                                    position_tolerance: float, max_wait_time: float = 10.0) -> MotionStatus:
         """
-        Wartet auf den Abschluss einer Bewegung.
+        Waits for a motion to complete.
 
-        Polling-Loop, die alle 100ms den XBot-Status prüft.
+        This is a polling loop that checks the XBot status every 100ms.
 
         Args:
-            xbot_id: ID des zu überwachenden XBots
-            target_position: Zielposition [x, y, z, rx, ry, rz] (aktuell nur für Logging)
-            position_tolerance: Toleranz in Metern (aktuell nicht verwendet)
-            max_wait_time: Maximale Wartezeit in Sekunden
+            xbot_id: ID of the XBot to monitor.
+            target_position: Target position [x, y, z, rx, ry, rz] (currently for logging only).
+            position_tolerance: Tolerance in meters (currently not used).
+            max_wait_time: Maximum wait time in seconds.
 
         Returns:
             MotionStatus:
-            - COMPLETED: Bewegung erfolgreich beendet (State = IDLE)
-            - TIMEOUT: max_wait_time überschritten
-            - ERROR: Fehler während Bewegung (State = ERROR)
+            - COMPLETED: Motion finished successfully (State = IDLE).
+            - TIMEOUT: `max_wait_time` was exceeded.
+            - ERROR: An error occurred during motion (State = ERROR).
 
-        Ablauf:
-        -------
-        1. Status in 100ms-Intervallen abfragen
-        2. Bei IDLE → COMPLETED zurückgeben
-        3. Bei ERROR → ERROR zurückgeben
-        4. Bei Timeout → TIMEOUT zurückgeben
+        Flow:
+        -----
+        1. Poll the status at 100ms intervals.
+        2. If IDLE → return COMPLETED.
+        3. If ERROR → return ERROR.
+        4. If timeout → return TIMEOUT.
         """
         start_time = time.time()
         while time.time() - start_time < max_wait_time:
@@ -287,37 +357,37 @@ class MoverUtils:
         return MotionStatus.TIMEOUT
 
     # ══════════════════════════════════════════════════════════════════════════
-    # GRENZEN UND VALIDIERUNG
+    # BOUNDS AND VALIDATION
     # ══════════════════════════════════════════════════════════════════════════
 
     def is_position_in_bounds(self, x: float, y: float, z: float) -> bool:
         """
-        Prüft ob eine Position innerhalb der konfigurierten Grenzen liegt.
+        Checks if a position is within the configured software limits.
 
         Args:
-            x, y, z: Position in Metern
+            x, y, z: Position in meters.
 
         Returns:
-            True wenn alle Koordinaten in Grenzen, False sonst
+            True if all coordinates are within bounds, False otherwise.
 
-        Grenzen aus config:
-            x: [x_min, x_max] (Standard: 0.055 - 0.420 m)
-            y: [y_min, y_max] (Standard: 0.055 - 0.180 m)
-            z: [z_min, z_max] (Standard: 0.000 - 0.004 m)
+        Bounds from config:
+            x: [x_min, x_max] (Default: 0.055 - 0.420 m)
+            y: [y_min, y_max] (Default: 0.055 - 0.180 m)
+            z: [z_min, z_max] (Default: 0.000 - 0.004 m)
         """
-        return (is_in_range(x, self.config.x_min, self.config.x_max) and
-                is_in_range(y, self.config.y_min, self.config.y_max) and
-                is_in_range(z, self.config.z_min, self.config.z_max))
+        return (is_in_range(x, self.config['x_min'], self.config['x_max']) and
+                is_in_range(y, self.config['y_min'], self.config['y_max']) and
+                is_in_range(z, self.config['z_min'], self.config['z_max']))
 
     def validate_xbot_id(self, xbot_id: int) -> bool:
         """
-        Validiert die XBot-ID (muss zwischen 0 und 15 liegen).
+        Validates the XBot ID (must be between 0 and 15).
 
         Args:
-            xbot_id: Zu prüfende ID
+            xbot_id: The ID to check.
 
         Returns:
-            True wenn gültig, False sonst
+            True if valid, False otherwise.
         """
         valid, error_msg = validate_id_range(
             xbot_id, min_id=0, max_id=15, name="XBot ID")
@@ -333,7 +403,7 @@ class MoverUtils:
             diagnosis['total_from_get_all'] = len(
                 data_list) if data_list else 0
 
-            for xbot_id in range(4):  # Teste die ersten 4 IDs
+            for xbot_id in range(4):  # Test the first 4 IDs
                 try:
                     status = self.pmc.bot.get_xbot_status(xbot_id)
                     diagnosis['available_xbots'].append({

@@ -74,20 +74,31 @@ For actual planar motor hardware control:
 
 ```bash
 # 1. Obtain PMCLib wheel from Match/IEMCA (version 117.1.1 or newer)
-# 2. Copy to local_libs directory
-cp /path/to/pmclib-*.whl local_libraries/
+# 2. Install PMCLib wheel (recommended: create/use the venv created by install_all.sh)
+pip install /path/to/pmclib-*.whl
 
-# 3. Install PMCLib
-pip install local_libraries/pmclib-*.whl
+# 3. OPTIONAL (advanced / legacy): place a PMCLib repo checkout here
+#    so the nodes can import via the local drivers path:
+#    planar_motor_nodes/planar_motor_nodes/drivers/pmclib
 
-# 4. Copy additional Python modules (required for full functionality)
-# Note: The setup scripts handle this automatically
-cp local_libraries/match_pm_xBot/xbot_commands.py [python_site_packages]/pmclib/
-cp local_libraries/match_pm_xBot/pmc_types.py [python_site_packages]/pmclib/
+# 4. OPTIONAL: the helper modules are now shipped in this repo under
+#    planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot
+#    (Older docs referenced setup/local_libraries/match_pm_xBot)
 
 # 5. Validate
 ./validate_setup_enhanced.sh
 ```
+
+### Notes about PMCLib locations
+
+The mover node loads PMCLib in this order:
+
+1. **Mock implementation** (simulation): `planar_motor_nodes/planar_motor_nodes/drivers/mock_pmclib.py`
+2. **Local drivers checkout** (recommended for dev): `planar_motor_nodes/planar_motor_nodes/drivers/pmclib`
+3. **System/venv install**: `pip install pmclib-*.whl`
+
+The folder `setup/local_libraries/` is kept for legacy documentation only.
+New setups should not rely on it.
 
 **PMCLib Prerequisites:**
 - **.NET Runtime**: .NET 8.0 SDK (automatically installed by `install_system_deps.sh`)

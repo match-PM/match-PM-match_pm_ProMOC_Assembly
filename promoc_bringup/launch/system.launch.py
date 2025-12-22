@@ -1,21 +1,17 @@
 """
-System Launch File for ProMOC Assembly
-=======================================
+System launch file for ProMOC Assembly
 
-This is the main launch file that starts the complete ProMOC system:
+Starts the complete ProMOC system:
 - Camera (via camera.launch.py)
-- Planar Motor (mover_node)
-- Linear Axes (auto-discovered from hardware)
+- Planar motor (mover_node)
+- Linear axes (automatic hardware detection)
 
 Usage:
-    # Launch with real hardware
     ros2 launch promoc_bringup system.launch.py
-    
-    # Launch in simulation mode
     ros2 launch promoc_bringup system.launch.py sim_mode:=true
 
-The launch file automatically discovers connected Thorlabs linear stages
-and only starts nodes for hardware that is actually present.
+Automatically detects connected Thorlabs linear axes and launches
+only nodes for available hardware.
 """
 
 import os
@@ -37,7 +33,7 @@ import launch
 
 def discover_connected_devices():
     """
-    Discover Thorlabs APT stepper motor controllers connected under /dev/serial/by-id.
+    Find Thorlabs APT stepper motor controllers under `/dev/serial/by-id`.
 
     Returns:
         Dict mapping serial number to device path
@@ -80,7 +76,7 @@ def load_axes_config(bringup_pkg_share):
 # =============================================================================
 
 def generate_launch_description():
-    """Generate the launch description with arguments."""
+    """Generate launch description with launch arguments."""
     return LaunchDescription([
         DeclareLaunchArgument(
             'sim_mode',
@@ -93,10 +89,10 @@ def generate_launch_description():
 
 def launch_setup(context, *args, **kwargs):
     """
-    Set up all nodes based on configuration and detected hardware.
+    Setup all nodes based on configuration and detected hardware.
 
-    This function is called by OpaqueFunction to allow runtime evaluation
-    of LaunchConfiguration values.
+    Called by OpaqueFunction to allow LaunchConfiguration
+    values to be evaluated at runtime.
     """
     # Get parameters
     sim_mode = LaunchConfiguration(
@@ -105,9 +101,6 @@ def launch_setup(context, *args, **kwargs):
 
     nodes = []
 
-    # -------------------------------------------------------------------------
-    # 1. Camera System
-    # -------------------------------------------------------------------------
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(bringup_pkg, 'launch', 'camera.launch.py')
@@ -116,9 +109,6 @@ def launch_setup(context, *args, **kwargs):
     )
     nodes.append(camera_launch)
 
-    # -------------------------------------------------------------------------
-    # 2. Planar Motor (Mover Node)
-    # -------------------------------------------------------------------------
     mover_config = os.path.join(
         bringup_pkg, 'config', 'mover_node_params.yaml')
 
@@ -135,9 +125,6 @@ def launch_setup(context, *args, **kwargs):
         launch.logging.get_logger().error(
             f"Mover config not found: {mover_config}")
 
-    # -------------------------------------------------------------------------
-    # 3. Linear Axes
-    # -------------------------------------------------------------------------
     axes_config, axes_config_path = load_axes_config(bringup_pkg)
 
     if not axes_config:
@@ -145,13 +132,11 @@ def launch_setup(context, *args, **kwargs):
         return nodes
 
     if sim_mode:
-        # Simulation mode: Launch all configured axes
         launch.logging.get_logger().info("🚀 Linear Axes: SIMULATION mode")
         for node_name in axes_config.keys():
             nodes.append(_create_axis_node(
                 node_name, axes_config_path, sim=True))
     else:
-        # Hardware mode: Only launch axes that are connected
         launch.logging.get_logger().info("⚙️ Linear Axes: HARDWARE mode")
         connected = discover_connected_devices()
 
@@ -177,7 +162,7 @@ def launch_setup(context, *args, **kwargs):
 
 
 def _create_axis_node(node_name: str, config_path: str, sim: bool, device_path: str = None):
-    """Create a linear axis node with appropriate parameters."""
+    """Create linear axis node with appropriate parameters."""
     params = [config_path, {'use_sim_time': sim}]
 
     if device_path:

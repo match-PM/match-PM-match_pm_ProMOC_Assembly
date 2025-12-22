@@ -1,27 +1,41 @@
+"""Camera driver abstractions.
+
+Provides driver abstraction layer with lazy loading to avoid import failures
+during test collection when optional dependencies are missing.
+
+Some drivers (e.g., Aravis) depend on optional ROS interfaces that may not be
+installed in minimal environments. Using lazy imports via __getattr__ prevents
+import-time failures.
+
+Usage:
+    from camera_nodes.drivers import CameraDriver, SimulatedCameraDriver
+    from camera_nodes.drivers import AravisCameraDriver  # Loaded on demand
 """
-Camera Drivers Package.
 
-Dieses Package enthält die Treiber-Abstraktionsschicht für Kameras.
+from __future__ import annotations
 
-Verfügbare Treiber:
-===================
-    CameraDriver: Abstrakte Basis-Klasse (Interface-Definition)
-    AravisCameraDriver: Echte Kamera via camera_aravis2 Treiber
-    SimulatedCameraDriver: Simulator für Tests ohne Hardware
-
-Verwendung:
-===========
-    from camera_nodes.drivers import CameraDriver, AravisCameraDriver
-    
-    # Treiber basierend auf Modus auswählen:
-    if use_simulator:
-        driver = SimulatedCameraDriver(logger)
-    else:
-        driver = AravisCameraDriver(node, logger)
-"""
+from typing import Any
 
 from .camera_driver import CameraDriver
-from .aravis_camera_driver import AravisCameraDriver
-from .simulated_camera_driver import SimulatedCameraDriver
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily import driver implementations.
+
+    This avoids import-time failures during test collection when optional
+    dependencies for hardware drivers are not installed.
+    """
+    if name == 'SimulatedCameraDriver':
+        from .simulated_camera_driver import SimulatedCameraDriver
+
+        return SimulatedCameraDriver
+    if name == 'AravisCameraDriver':
+        from .aravis_camera_driver import AravisCameraDriver
+
+        return AravisCameraDriver
+    if name == 'CameraDriver':
+        return CameraDriver
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
 
 __all__ = ['CameraDriver', 'AravisCameraDriver', 'SimulatedCameraDriver']

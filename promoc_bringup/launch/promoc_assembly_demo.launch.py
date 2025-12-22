@@ -10,8 +10,6 @@ def generate_launch_description():
 
     bringup_pkg_share = get_package_share_directory('promoc_bringup')
 
-    # --- 1. Start base system (mover + dynamic joints) ---
-    # We include the consolidated system launch file.
     base_system_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -21,7 +19,7 @@ def generate_launch_description():
             )
         )
     )
-    # --- 2. Prepare demo controller node ---
+
     demo_controller_params_path = os.path.join(
         bringup_pkg_share, 'config', 'demo_controller_params.yaml'
     )
@@ -35,7 +33,6 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'INFO']
     )
 
-    # --- 3. Return everything ---
     return LaunchDescription([
         base_system_launch,
         demo_controller_node

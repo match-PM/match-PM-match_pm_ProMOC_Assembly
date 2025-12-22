@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """
 Service Helper for ProMOC Bringup
-=================================
 
-This module provides reusable helper functions for calling ROS2 services.
-Used by demo controllers and other automation scripts.
-
-The main benefit is consolidating service-call boilerplate code in one place,
-making demo controllers cleaner and more readable.
+Provides reusable helper functions for consistent ROS2 service calls.
+Centralizes boilerplate code: waiting, timeouts, error handling, logging.
 
 Usage:
     from promoc_bringup.service_helper import ServiceHelper
-    
     helper = ServiceHelper(node)
-    helper.call_service(client, request, "Motion started", "Motion failed")
+    helper.call_service(client, request, "Success", "Failed")
 """
 
 import rclpy
@@ -25,35 +20,19 @@ class ServiceHelper:
     """
     Helper class for calling ROS2 services with consistent error handling.
 
-    This class wraps common patterns like:
-    - Waiting for service availability
-    - Calling service with timeout
-    - Logging success/failure
-    - Handling exceptions
-
-    Example:
-        >>> helper = ServiceHelper(self)  # 'self' is a ROS2 Node
-        >>> 
-        >>> # Simple call
-        >>> result = helper.call_service(
-        ...     client=self.move_client,
-        ...     request=MoveRequest(position=10.0),
-        ...     success_msg="Move completed",
-        ...     error_msg="Move failed"
-        ... )
-        >>> 
-        >>> # Check result
-        >>> if helper.was_successful(result):
-        ...     print("Motion done!")
+    Encapsulates common patterns:
+    - Wait for service availability
+    - Service call with timeout
+    - Unified logging for success/failure
+    - Exception handling
     """
 
     def __init__(self, node: Node):
         """
-        Initialize the helper with a ROS2 node.
+        Initialize with a ROS2 node.
 
         Args:
-            node: The ROS2 node that owns the service clients.
-                  Used for logging and spinning.
+            node: ROS2 Node instance for logging and spinning.
         """
         self.node = node
         self.logger = node.get_logger()
@@ -68,55 +47,42 @@ class ServiceHelper:
         wait_for_service_sec: float = 2.0
     ) -> Optional[Any]:
         """
-        Call a ROS2 service with proper error handling.
+        Call a ROS2 service with clean error handling.
 
-        How it works:
-            1. Wait for service to be available
+        Process:
+            1. Wait for service availability
             2. Call service asynchronously
             3. Spin until response or timeout
-            4. Log result and return
+            4. Log and return result
 
         Args:
-            client: The ROS2 service client
-            request: The service request message
-            success_msg: Message to log on success
-            error_msg: Message to log on failure
-            timeout_sec: Timeout for the service call (default: 10s)
-            wait_for_service_sec: Timeout waiting for service (default: 2s)
+            client: ROS2 service client
+            request: Request message
+            success_msg: Log message on success
+            error_msg: Log message on failure
+            timeout_sec: Call timeout in seconds (default: 10s)
+            wait_for_service_sec: Service availability timeout (default: 2s)
 
         Returns:
-            The service response, or None if failed
-
-        Example:
-            >>> request = MoveAbsolute.Request()
-            >>> request.position = 50.0
-            >>> result = helper.call_service(
-            ...     self.move_client, request,
-            ...     "Moved to 50mm", "Move failed",
-            ...     timeout_sec=15.0
-            ... )
+            Service response or None on failure
         """
-        # Step 1: Wait for service
         if not client.wait_for_service(timeout_sec=wait_for_service_sec):
             self.logger.error(
                 f'Service "{client.srv_name}" not available. Skipping call.'
             )
             return None
 
-        # Step 2: Call service
         try:
             future = client.call_async(request)
             rclpy.spin_until_future_complete(
                 self.node, future, timeout_sec=timeout_sec
             )
 
-            # Step 3: Check result
             result = future.result()
             if result is None:
                 self.logger.error(f'{error_msg}: No response received')
                 return None
 
-            # Step 4: Check for success field (if exists)
             if self.was_successful(result):
                 self.logger.info(success_msg)
             else:
@@ -133,23 +99,23 @@ class ServiceHelper:
 
     def was_successful(self, result: Any) -> bool:
         """
-        Check if a service result indicates success.
+        Check if a service response indicates success.
 
-        Handles different service response formats:
-        - Has 'success' field → check its value
-        - No 'success' field → assume success if result exists
+        Supports different response formats:
+        - Has 'success' field: return its value
+        - No 'success' field: assume success if result exists
 
         Args:
-            result: The service response
+            result: Service response
 
         Returns:
-            True if the call was successful
+            True if call was successful
         """
         if result is None:
             return False
         if hasattr(result, 'success'):
             return result.success
-        return True  # No success field, assume success
+        return True
 
     def wait_for_services(
         self,
@@ -161,7 +127,7 @@ class ServiceHelper:
 
         Args:
             clients_with_names: List of (client, name) tuples
-            timeout_per_service: Timeout for each service
+            timeout_per_service: Timeout per service
 
         Returns:
             True if all services are available, False otherwise

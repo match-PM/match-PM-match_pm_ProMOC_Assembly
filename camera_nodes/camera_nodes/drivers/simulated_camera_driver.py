@@ -1,155 +1,156 @@
 """
-Simulierter Kamera-Treiber für Tests ohne Hardware.
+Simulated camera driver for testing without hardware.
 
-Dieser Treiber generiert synthetische Bilder mit steuerbarer
-Unschärfe basierend auf einer simulierten Fokusebene.
+This driver generates synthetic images with controllable blur based on a
+simulated focal plane.
 
-Funktionsweise:
+How it works:
 ===============
     ┌─────────────────────────────────────────────────────────┐
     │  SimulatedCameraDriver                                   │
     │                                                         │
-    │  focal_plane = 15.0mm (feste Fokusebene)               │
-    │  current_position = variable (von set_focus_position)   │
+    │  focal_plane = 15.0mm (fixed focal plane)                │
+    │  current_position = variable (from set_focus_position)   │
     │                                                         │
-    │  Unschärfe = |current_position - focal_plane|           │
+    │  Blur Amount = |current_position - focal_plane|          │
     │                                                         │
     │  ┌─────────────────────────────────────────────────────┐│
-    │  │  Generiertes Bild (640x480):                        ││
+    │  │  Generated Image (640x480):                         ││
     │  │                                                     ││
     │  │         ┌─────────────┐                            ││
-    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Weißes Rechteck        ││
-    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│    5° rotiert             ││
-    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│    (Slanted Edge)         ││
+    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← White rectangle          ││
+    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│    rotated by 5°            ││
+    │  │         │▓▓▓▓▓▓▓▓▓▓▓▓▓│    (Slanted Edge)           ││
     │  │         └─────────────┘                            ││
     │  │                                                     ││
     │  └─────────────────────────────────────────────────────┘│
     │                                                         │
-    │  Gausscher Blur basierend auf Abstand zur Fokusebene   │
+    │  Gaussian blur is applied based on distance to focal plane.│
     └─────────────────────────────────────────────────────────┘
 
-Slanted Edge für MTF:
+Slanted Edge for MTF:
 =====================
-Das 5°-rotierte Rechteck erzeugt eine schräge Kante,
-die für die MTF-Berechnung nach ISO 12233 genutzt wird.
+The 5°-rotated rectangle creates a slanted edge, which is used for MTF
+calculation according to the ISO 12233 standard.
 
-Fokus-Simulation:
+Focus Simulation:
 =================
-    Position  →  Unschärfe  →  Bild
+    Position  →  Blur Amount  →  Image
     ─────────────────────────────────────
-    15.0 mm   →  0          →  Scharf
-    14.0 mm   →  1          →  Leicht unscharf
-    10.0 mm   →  5          →  Unscharf
-    5.0 mm    →  10 (max)   →  Sehr unscharf
+    15.0 mm   →  0            →  Sharp
+    14.0 mm   →  1            →  Slightly blurry
+    10.0 mm   →  5            →  Blurry
+     5.0 mm   →  10 (max)     →  Very blurry
 
-Verwendung:
-===========
+Usage:
+======
     driver = SimulatedCameraDriver(logger)
     driver.connect()
-    
-    # Fokusposition setzen (simuliert Achsenbewegung):
-    driver.set_focus_position(15.0)  # → scharfes Bild
-    driver.set_focus_position(10.0)  # → unscharfes Bild
-    
+
+    # Set the focus position (simulates axis movement):
+    driver.set_focus_position(15.0)  # → sharp image
+    driver.set_focus_position(10.0)  # → blurry image
+
     image = driver.capture_image()
 """
 
 from typing import Optional
-import numpy as np
+
 import cv2
+import numpy as np
 
 from .camera_driver import CameraDriver
 
 
 class SimulatedCameraDriver(CameraDriver):
     """
-    Simulierter Kamera-Treiber für Tests ohne Hardware.
+    Simulated camera driver for testing without hardware.
 
-    Generiert synthetische Bilder mit einer Slanted Edge
-    und steuerbarer Unschärfe für Autofokus-Tests.
+    Generates synthetic images with a slanted edge and controllable blur,
+    ideal for testing autofocus algorithms.
 
-    Attribute:
-        _focal_plane: Simulierte Fokusebene in mm
-        _current_position: Aktuelle simulierte Z-Position
-        _exposure: Simulierte Belichtungszeit (hat keinen Effekt)
-        _image_size: Bildgröße (width, height)
+    Attributes:
+        _focal_plane (float): Simulated focal plane in mm.
+        _current_position (float): Current simulated Z-axis position.
+        _exposure (float): Simulated exposure time (has no visual effect).
+        _image_size (tuple): Image size as (width, height).
     """
 
-    # ── Konstanten ──
+    # ── Constants ──
     DEFAULT_FOCAL_PLANE = 15.0      # mm
     DEFAULT_IMAGE_WIDTH = 640       # px
     DEFAULT_IMAGE_HEIGHT = 480      # px
-    MAX_BLUR = 10                   # Maximum Blur-Kernel-Größe
-    EDGE_ANGLE = 5                  # Grad (für Slanted Edge)
+    MAX_BLUR = 10                   # Maximum blur kernel size
+    EDGE_ANGLE = 5                  # Degrees (for slanted edge)
 
     def __init__(self, logger):
         """
-        Initialisiert den Simulator-Treiber.
+        Initializes the simulator driver.
 
         Args:
-            logger: Logger für Ausgaben
+            logger: Logger for output.
         """
         super().__init__(logger)
 
-        # ── Fokus-Simulation ──
+        # ── Focus Simulation ──
         self._focal_plane = self.DEFAULT_FOCAL_PLANE
         self._current_position = 0.0
 
-        # ── Kamera-Einstellungen ──
-        self._exposure = 10000.0  # µs (hat keinen visuellen Effekt)
+        # ── Camera Settings ──
+        self._exposure = 10000.0  # µs (has no visual effect)
         self._image_size = (self.DEFAULT_IMAGE_WIDTH,
                             self.DEFAULT_IMAGE_HEIGHT)
 
-        # ── Bild-Cache ──
+        # ── Image Cache ──
         self._latest_image: Optional[np.ndarray] = None
 
     # ══════════════════════════════════════════════════════════════════════════
-    # VERBINDUNG
+    # CONNECTION
     # ══════════════════════════════════════════════════════════════════════════
 
     def connect(self, camera_name: str = None) -> bool:
         """
-        Simuliert Kamera-Verbindung.
+        Simulates a camera connection.
 
-        Generiert direkt das erste Bild.
+        Generates the first image immediately upon connection.
 
         Returns:
-            bool: Immer True (Simulator kann nicht fehlschlagen)
+            bool: Always True, as the simulator cannot fail to connect.
         """
         self._connected = True
-        self._logger.info("📷 Kamera-Simulator verbunden")
-        self._logger.info(f"   Fokusebene bei Z = {self._focal_plane} mm")
+        self._logger.info('📷 Camera simulator connected')
+        self._logger.info(f'   Focal plane is at Z = {self._focal_plane} mm')
 
-        # Erstes Bild generieren
+        # Generate the initial image
         self._update_image()
         return True
 
     def disconnect(self):
-        """Trennt den Simulator."""
+        """Disconnects the simulator."""
         self._connected = False
         self._latest_image = None
-        self._logger.info("Kamera-Simulator getrennt")
+        self._logger.info('Camera simulator disconnected')
 
     # ══════════════════════════════════════════════════════════════════════════
-    # BILDAUFNAHME
+    # IMAGE CAPTURE
     # ══════════════════════════════════════════════════════════════════════════
 
     def capture_image(self) -> Optional[np.ndarray]:
         """
-        Generiert ein neues Bild mit aktueller Unschärfe.
+        Generates a new image with the current blur level.
 
         Returns:
-            np.ndarray: BGR-Bild (640x480)
+            np.ndarray: A BGR image (640x480 by default).
         """
         self._update_image()
         return self._latest_image
 
     def get_latest_image(self) -> Optional[np.ndarray]:
         """
-        Gibt das zuletzt generierte Bild zurück.
+        Returns the most recently generated image.
 
         Returns:
-            np.ndarray: BGR-Bild oder None
+            np.ndarray: BGR image, or None.
         """
         if self._latest_image is None:
             self._update_image()
@@ -157,19 +158,19 @@ class SimulatedCameraDriver(CameraDriver):
 
     def _update_image(self):
         """
-        Generiert ein neues Bild basierend auf aktuellem Fokus.
+        Generates a new image based on the current focus position.
 
-        Ablauf:
-        -------
-        1. Unschärfe aus Abstand zur Fokusebene berechnen
-        2. Slanted Edge Bild generieren
-        3. Gausschen Blur anwenden
+        Steps:
+        ------
+        1. Calculate blur from the distance to the focal plane.
+        2. Generate the slanted edge image.
+        3. Apply Gaussian blur.
         """
-        # ── Unschärfe berechnen ──
+        # ── Calculate blur amount ──
         blur_amount = abs(self._current_position - self._focal_plane)
         blur_amount = min(blur_amount, self.MAX_BLUR)
 
-        # ── Bild generieren ──
+        # ── Generate image ──
         width, height = self._image_size
         self._latest_image = self._generate_slanted_edge_image(
             width, height, blur_amount
@@ -182,23 +183,23 @@ class SimulatedCameraDriver(CameraDriver):
         blur_amount: float
     ) -> np.ndarray:
         """
-        Generiert ein Testbild mit schräger Kante (Slanted Edge).
+        Generates a test image containing a slanted edge.
 
-        Das Bild enthält ein weißes Rechteck, das um 5° rotiert ist.
-        Diese schräge Kante ermöglicht MTF-Berechnung nach ISO 12233.
+        The image contains a white rectangle rotated by 5 degrees.
+        This slanted edge allows for MTF calculation per ISO 12233.
 
         Args:
-            width: Bildbreite in Pixeln
-            height: Bildhöhe in Pixeln
-            blur_amount: Unschärfe (0=scharf, 10=max. unscharf)
+            width: Image width in pixels.
+            height: Image height in pixels.
+            blur_amount: Blur level (0=sharp, 10=max blur).
 
         Returns:
-            np.ndarray: BGR-Bild
+            np.ndarray: A BGR image.
         """
-        # ── Schwarzes Bild erstellen ──
+        # ── Create a black image ──
         image = np.zeros((height, width), dtype=np.uint8)
 
-        # ── Rechteck-Koordinaten (zentriert bei 0,0) ──
+        # ── Define rectangle coordinates (centered at 0,0) ──
         rect_width, rect_height = 200, 400
         box_coords = np.array([
             [-rect_width / 2, -rect_height / 2],
@@ -207,100 +208,100 @@ class SimulatedCameraDriver(CameraDriver):
             [-rect_width / 2, rect_height / 2]
         ])
 
-        # ── Um 5° rotieren ──
+        # ── Rotate by 5 degrees ──
         center_x, center_y = width // 2, height // 2
         M = cv2.getRotationMatrix2D((0, 0), self.EDGE_ANGLE, 1.0)
         rotated_coords = box_coords @ M[:, :2].T
 
-        # ── Ins Bildzentrum verschieben ──
+        # ── Translate to image center ──
         rotated_coords[:, 0] += center_x
         rotated_coords[:, 1] += center_y
 
-        # ── Rechteck weiß füllen ──
+        # ── Fill the rectangle with white ──
         cv2.fillConvexPoly(image, np.int32(rotated_coords), 255)
 
-        # ── Gaussche Unschärfe anwenden ──
+        # ── Apply Gaussian blur ──
         if blur_amount > 0:
             kernel_size = int(blur_amount) * 2 + 1
             image = cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
 
-        # ── In BGR konvertieren (ROS-Kompatibilität) ──
+        # ── Convert to BGR for ROS compatibility ──
         return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # KAMERA-EINSTELLUNGEN
+    # CAMERA SETTINGS
     # ══════════════════════════════════════════════════════════════════════════
 
     async def set_exposure(self, exposure_time: float) -> bool:
         """
-        Simuliert Belichtungszeit-Änderung.
+        Simulates changing the exposure time.
 
-        Hinweis: Hat keinen visuellen Effekt auf das Bild,
-        aber der Wert wird gespeichert.
+        Note: This has no visual effect on the generated image,
+        but the value is stored for completeness.
 
         Args:
-            exposure_time: Belichtungszeit in µs
+            exposure_time: Exposure time in microseconds (µs).
 
         Returns:
-            bool: Immer True
+            bool: Always True.
         """
         self._exposure = exposure_time
-        self._logger.debug(f"Simulierte Belichtung: {exposure_time} µs")
+        self._logger.debug(f'Simulated exposure set to: {exposure_time} µs')
         return True
 
     def get_exposure(self) -> Optional[float]:
         """
-        Gibt die simulierte Belichtungszeit zurück.
+        Returns the simulated exposure time.
 
         Returns:
-            float: Belichtungszeit in µs
+            float: Exposure time in microseconds (µs).
         """
         return self._exposure
 
     def set_roi(self, x: int, y: int, width: int, height: int) -> bool:
         """
-        Ändert die Bildgröße (simuliert ROI).
+        Changes the image size (simulating an ROI).
 
         Args:
-            x, y: Werden ignoriert (immer zentriert)
-            width, height: Neue Bildgröße
+            x, y: Ignored (image is always centered).
+            width, height: New image dimensions.
 
         Returns:
-            bool: True
+            bool: True.
         """
         self._image_size = (width, height)
-        self._logger.info(f"Simulierte Bildgröße: {width}x{height}")
+        self._logger.info(f'Simulated image size set to: {width}x{height}')
         self._update_image()
         return True
 
     # ══════════════════════════════════════════════════════════════════════════
-    # SIMULATOR-SPEZIFISCH
+    # SIMULATOR-SPECIFIC
     # ══════════════════════════════════════════════════════════════════════════
 
     def set_focus_position(self, position: float):
         """
-        Setzt die simulierte Fokusposition.
+        Sets the simulated focus position.
 
-        Die Unschärfe des Bildes wird basierend auf dem Abstand
-        zwischen dieser Position und der Fokusebene berechnet.
+        The image blur is calculated based on the distance between
+        this position and the defined focal plane.
 
         Args:
-            position: Z-Position in mm
+            position: Z-axis position in mm.
 
-        Beispiel:
-            driver.set_focus_position(15.0)  # → scharfes Bild
-            driver.set_focus_position(10.0)  # → unscharfes Bild
+        Example:
+            driver.set_focus_position(15.0)  # → sharp image
+            driver.set_focus_position(10.0)  # → blurry image
         """
         self._current_position = position
         self._update_image()
 
     def set_focal_plane(self, focal_plane: float):
         """
-        Setzt die Fokusebene (wo das Bild scharf ist).
+        Sets the focal plane (the position where the image is sharp).
 
         Args:
-            focal_plane: Z-Position der Fokusebene in mm
+            focal_plane: Z-position of the focal plane in mm.
         """
         self._focal_plane = focal_plane
-        self._logger.info(f"Fokusebene geändert auf Z = {focal_plane} mm")
+        self._logger.info(f'Focal plane changed to Z = {focal_plane} mm')
         self._update_image()

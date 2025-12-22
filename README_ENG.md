@@ -95,11 +95,12 @@ PMCLib is integrated in the package, hardware-specific installation:
 
 ```bash
 # 1. Obtain PMCLib wheel from Match/IEMCA (version 117.1.1+)
-# 2. Copy to local_libraries directory
-cp /path/to/pmclib-*.whl local_libraries/
+# 2. Install Python wheel (recommended: inside the venv created by install_all.sh)
+pip install /path/to/pmclib-*.whl
 
-# 3. Install Python wheel
-pip install local_libraries/pmclib-*.whl
+# Optional (development): clone the PMCLib repo into the local drivers path
+# so the planar motor nodes can import it directly:
+# planar_motor_nodes/planar_motor_nodes/drivers/pmclib
 
 # 4. Validate installation
 ./setup/validate_setup_enhanced.sh

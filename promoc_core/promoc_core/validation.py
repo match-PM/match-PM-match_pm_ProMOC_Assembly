@@ -1,58 +1,58 @@
-"""
+"""\
 Validation Utilities for ProMOC Assembly
 =========================================
 
-This module provides common validation and range-checking functions
-used across different nodes and components. All functions are designed
-to be simple, predictable, and easy to test.
+This module contains central validation and range-checking functions that are
+reused across different nodes and components. The focus is on being:
+**simple**, **predictable**, and **highly testable**.
 
-Quick Start
------------
+Quickstart
+----------
 The most common use cases:
 
-1. **Check if a value is in range:**
-   
-   >>> from promoc_core.validation import is_in_range
-   >>> is_in_range(5.0, min_val=0.0, max_val=10.0)
-   True
+1) **Check if a value is within a range:**
 
-2. **Clamp a value to stay within limits:**
-   
-   >>> from promoc_core.validation import clamp
-   >>> clamp(15.0, min_val=0.0, max_val=10.0)  # Returns 10.0
-   10.0
+    >>> from promoc_core.validation import is_in_range
+    >>> is_in_range(5.0, min_val=0.0, max_val=10.0)
+    True
 
-3. **Validate a 3D/6D position:**
-   
-   >>> from promoc_core.validation import validate_position_3d
-   >>> is_valid, error = validate_position_3d(x=0.5, y=0.5, z=0.5, ...)
-   >>> if not is_valid:
-   ...     print(f"Invalid position: {error}")
+2) **Clamp a value to a range:**
 
-4. **Check collision risk:**
-   
-   >>> from promoc_core.validation import check_collision_risk
-   >>> is_safe, warning = check_collision_risk(
-   ...     axis_position=50.0, 
-   ...     other_axis_position=5.0, 
-   ...     collision_threshold=10.0
-   ... )
+    >>> from promoc_core.validation import clamp
+    >>> clamp(15.0, min_val=0.0, max_val=10.0)  # Result: 10.0
+    10.0
+
+3) **Validate a 3D/6D position:**
+
+    >>> from promoc_core.validation import validate_position_3d
+    >>> is_valid, error = validate_position_3d(x=0.5, y=0.5, z=0.5, ...)
+    >>> if not is_valid:
+    ...     print(f"Invalid position: {error}")
+
+4) **Check for collision risk:**
+
+    >>> from promoc_core.validation import check_collision_risk
+    >>> is_safe, warning = check_collision_risk(
+    ...     axis_position=50.0,
+    ...     other_axis_position=5.0,
+    ...     collision_threshold=10.0
+    ... )
 
 Available Functions
--------------------
-- is_in_range()         Check if value is within bounds
-- clamp()               Constrain value to range  
-- validate_position_3d  Validate 3D position against bounds
-- validate_position_6d  Validate 6D position (x,y,z,rx,ry,rz)
-- validate_positive     Check if value > 0
-- validate_non_negative Check if value >= 0
-- validate_id_range     Check if ID is valid (e.g., XBot ID 0-15)
-- check_collision_risk  Check if motion is safe
+---------------------
+- is_in_range()         Checks if a value is within bounds.
+- clamp()               Clamps a value to a specified range.
+- validate_position_3d  Validates a 3D position against limits.
+- validate_position_6d  Validates a 6D pose (x,y,z,rx,ry,rz).
+- validate_positive     Checks if a value is > 0.
+- validate_non_negative Checks if a value is >= 0.
+- validate_id_range     Checks ID ranges (e.g., XBot ID 0-15).
+- check_collision_risk  Checks if a movement is likely to be safe.
 
 Available Classes
------------------
-- Bounds1D              1D bounds for single axis (e.g., linear axis)
-- Bounds3D              3D bounding box for position validation
+------------------
+- Bounds1D              1D bounds for a single axis.
+- Bounds3D              3D box for position validation.
 """
 
 from dataclasses import dataclass
@@ -64,25 +64,20 @@ class Bounds3D:
     """
     3D bounding box for position validation.
 
-    Use this when you need to repeatedly check if positions are
-    within the same 3D volume (e.g., workspace limits).
+    Useful for repeatedly checking if positions are within the same
+    workspace (e.g., workspace limits).
 
     Attributes:
-        x_min, x_max: X-axis limits (in meters or mm, be consistent)
-        y_min, y_max: Y-axis limits
-        z_min, z_max: Z-axis limits
+        x_min, x_max: X-axis limits (in m or mm - please be consistent).
+        y_min, y_max: Y-axis limits.
+        z_min, z_max: Z-axis limits.
 
     Example:
-        >>> # Define workspace boundaries
         >>> workspace = Bounds3D(x_min=0, x_max=0.5, y_min=0, y_max=0.3, z_min=0, z_max=0.1)
-        >>> 
-        >>> # Check if a point is inside
         >>> workspace.contains(0.1, 0.1, 0.05)
         True
-        >>> 
-        >>> # Clamp a point to the workspace
         >>> workspace.clamp_position(0.6, 0.1, 0.05)
-        (0.5, 0.1, 0.05)  # x was clamped from 0.6 to 0.5
+        (0.5, 0.1, 0.05)
     """
     x_min: float = 0.0
     x_max: float = 1.0
@@ -92,13 +87,15 @@ class Bounds3D:
     z_max: float = 1.0
 
     def contains(self, x: float, y: float, z: float) -> bool:
-        """Check if point is within bounds."""
-        return (self.x_min <= x <= self.x_max and
-                self.y_min <= y <= self.y_max and
-                self.z_min <= z <= self.z_max)
+        """Checks if the point is within the bounds."""
+        return (
+            self.x_min <= x <= self.x_max
+            and self.y_min <= y <= self.y_max
+            and self.z_min <= z <= self.z_max
+        )
 
     def clamp_position(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
-        """Clamp position to bounds."""
+        """Clamps a position to the valid range."""
         return (
             clamp(x, self.x_min, self.x_max),
             clamp(y, self.y_min, self.y_max),
@@ -109,68 +106,61 @@ class Bounds3D:
 @dataclass
 class Bounds1D:
     """
-    1D bounds for single-axis validation (e.g., linear axis).
+    1D bounds for single-axis validation (e.g., a linear stage).
 
-    Use this when you need to repeatedly check if values are
-    within the same 1D range (e.g., linear axis travel limits).
+    Useful for repeatedly checking if values are within the same
+    1D range (e.g., travel limits).
 
     Attributes:
-        min_val: Minimum allowed value
-        max_val: Maximum allowed value
+        min_val: The minimum allowed value.
+        max_val: The maximum allowed value.
 
     Example:
-        >>> # Define linear axis limits (in mm)
         >>> z_axis = Bounds1D(min_val=0.0, max_val=100.0)
-        >>> 
-        >>> # Check if position is valid
         >>> z_axis.contains(50.0)
         True
         >>> z_axis.contains(150.0)
         False
-        >>> 
-        >>> # Clamp to safe range
         >>> z_axis.clamp(150.0)
         100.0
     """
+
     min_val: float = 0.0
     max_val: float = 100.0
 
     def contains(self, value: float) -> bool:
-        """Check if value is within bounds."""
+        """Checks if the value is within the bounds."""
         return self.min_val <= value <= self.max_val
 
     def clamp(self, value: float) -> float:
-        """Clamp value to bounds."""
+        """Clamps the value to the bounds."""
         return clamp(value, self.min_val, self.max_val)
 
 
 def is_in_range(value: float, min_val: float, max_val: float) -> bool:
     """
-    Check if a value is within the specified range (inclusive).
+    Checks if a value is within a range (inclusive of boundaries).
 
-    This is the most basic validation function. Use it when you need
-    a simple yes/no answer about whether a value is within bounds.
+    This is the simplest validation function: if you just need a yes/no
+    answer on whether a value is in the allowed range, this is the right choice.
 
-    How it works:
-        1. Compares value against min_val and max_val
-        2. Returns True if min_val <= value <= max_val
-        3. Returns False otherwise (value too low or too high)
+    Procedure:
+        1) Compares against `min_val` and `max_val`.
+        2) Returns True if `min_val <= value <= max_val`.
+        3) Otherwise, returns False.
 
     Args:
-        value: The value to check
-        min_val: Minimum allowed value (inclusive)
-        max_val: Maximum allowed value (inclusive)
+        value: The value to check.
+        min_val: The lower bound (inclusive).
+        max_val: The upper bound (inclusive).
 
     Returns:
-        True if value is within range, False otherwise
+        True if the value is within the range, False otherwise.
 
     Example:
-        >>> # Check if position is within axis limits
         >>> is_in_range(50.0, min_val=0.0, max_val=100.0)
         True
         >>> is_in_range(150.0, min_val=0.0, max_val=100.0)
-        False
-        >>> is_in_range(-10.0, min_val=0.0, max_val=100.0)
         False
     """
     return min_val <= value <= max_val
@@ -178,35 +168,29 @@ def is_in_range(value: float, min_val: float, max_val: float) -> bool:
 
 def clamp(value: float, min_val: float, max_val: float) -> float:
     """
-    Constrain a value to be within the specified range.
+    Clamps a value to ensure it stays safely within a range.
 
-    Use this when you want to "clip" a value to stay within limits,
-    rather than rejecting it. Common for user inputs or calculations
-    that might slightly exceed bounds.
+    Use this when you want to "clip" a value instead of rejecting it.
+    Typical for user inputs or calculations that might slightly exceed boundaries.
 
-    How it works:
-        1. If value < min_val → returns min_val
-        2. If value > max_val → returns max_val  
-        3. Otherwise → returns value unchanged
+    Procedure:
+        1) If value < min_val → returns min_val.
+        2) If value > max_val → returns max_val.
+        3) Otherwise, returns the value unchanged.
 
     Args:
-        value: The value to clamp
-        min_val: Minimum allowed value
-        max_val: Maximum allowed value
+        value: The value to clamp.
+        min_val: The lower bound.
+        max_val: The upper bound.
 
     Returns:
-        The clamped value, guaranteed to be within [min_val, max_val]
+        The clamped value (guaranteed to be within [min_val, max_val]).
 
     Example:
-        >>> # Value in range - returned unchanged
         >>> clamp(5.0, min_val=0.0, max_val=10.0)
         5.0
-        >>> 
-        >>> # Value too high - clamped to max
         >>> clamp(15.0, min_val=0.0, max_val=10.0)
         10.0
-        >>> 
-        >>> # Value too low - clamped to min
         >>> clamp(-5.0, min_val=0.0, max_val=10.0)
         0.0
     """
@@ -220,31 +204,30 @@ def validate_position_3d(
     z_min: float, z_max: float
 ) -> Tuple[bool, Optional[str]]:
     """
-    Validate a 3D position against bounds.
+    Validates a 3D position against specified boundaries.
 
-    Use this when you need to check if a position is valid AND get
-    a descriptive error message if it's not. Perfect for service
-    callbacks that need to explain why a position was rejected.
+    Use this when you need not just a "valid/invalid" check, but also a
+    human-readable error message (e.g., in service callbacks to explain why
+    a position was rejected).
 
-    How it works:
-        1. Checks each axis (X, Y, Z) against its min/max bounds
-        2. Collects all violations into an error message
-        3. Returns (True, None) if all axes are valid
-        4. Returns (False, error_message) if any axis is out of range
+    Procedure:
+        1) Checks each axis (X, Y, Z) against its min/max limits.
+        2) Collects all violations into an error message.
+        3) Returns (True, None) if everything is within limits.
+        4) Returns (False, error_message) if anything is out of bounds.
 
     Args:
-        x, y, z: Position coordinates to validate
-        x_min, x_max: X-axis bounds
-        y_min, y_max: Y-axis bounds
-        z_min, z_max: Z-axis bounds
+        x, y, z: The coordinates to check.
+        x_min, x_max: X-axis limits.
+        y_min, y_max: Y-axis limits.
+        z_min, z_max: Z-axis limits.
 
     Returns:
-        Tuple of (is_valid, error_message)
-        - is_valid: True if position is within all bounds
-        - error_message: None if valid, otherwise describes the violations
+        A tuple (is_valid, error_message).
+        - is_valid: True if the position is within all boundaries.
+        - error_message: None if valid, otherwise a description of the violations.
 
     Example:
-        >>> # Valid position
         >>> valid, error = validate_position_3d(
         ...     x=0.1, y=0.1, z=0.05,
         ...     x_min=0, x_max=0.5, y_min=0, y_max=0.3, z_min=0, z_max=0.1
@@ -253,18 +236,8 @@ def validate_position_3d(
         True
         >>> error is None
         True
-        >>> 
-        >>> # Invalid position (X too high)
-        >>> valid, error = validate_position_3d(
-        ...     x=0.6, y=0.1, z=0.05,  # X exceeds 0.5
-        ...     x_min=0, x_max=0.5, y_min=0, y_max=0.3, z_min=0, z_max=0.1
-        ... )
-        >>> valid
-        False
-        >>> error
-        'X=0.6000 out of range [0.0000, 0.5000]'
     """
-    # Step 1: Check each axis and collect errors
+    # Step 1: Check axes and collect errors
     errors = []
 
     if not is_in_range(x, x_min, x_max):
@@ -286,15 +259,19 @@ def validate_position_6d(
     axis_names: Optional[List[str]] = None
 ) -> Tuple[bool, Optional[str]]:
     """
-    Validate a 6D position (x, y, z, rx, ry, rz) against bounds.
+    Validates a 6D position (x, y, z, rx, ry, rz) against boundaries.
+
+    This is a generic function for arbitrary 6D poses. It checks all 6
+    components against a (min, max) interval and combines any deviations
+    into a single error message.
 
     Args:
-        position: List of 6 position values [x, y, z, rx, ry, rz]
-        bounds: List of 6 (min, max) tuples for each axis
-        axis_names: Optional axis names for error messages
+        position: A list of 6 position values [x, y, z, rx, ry, rz].
+        bounds: A list of 6 (min, max) tuples for each axis.
+        axis_names: Optional: axis names for error messages.
 
     Returns:
-        Tuple of (is_valid, error_message)
+        A tuple (is_valid, error_message).
 
     Example:
         >>> pos = [0.1, 0.1, 0.002, 0, 0, 0]
@@ -320,14 +297,14 @@ def validate_position_6d(
 
 def validate_positive(value: float, name: str = "value") -> Tuple[bool, Optional[str]]:
     """
-    Validate that a value is positive (> 0).
+    Checks if a value is positive (> 0).
 
     Args:
-        value: The value to check
-        name: Name for error message
+        value: The value to check.
+        name: The name to use in the error message.
 
     Returns:
-        Tuple of (is_valid, error_message)
+        A tuple (is_valid, error_message).
     """
     if value <= 0:
         return False, f"{name} must be positive, got {value}"
@@ -336,14 +313,14 @@ def validate_positive(value: float, name: str = "value") -> Tuple[bool, Optional
 
 def validate_non_negative(value: float, name: str = "value") -> Tuple[bool, Optional[str]]:
     """
-    Validate that a value is non-negative (>= 0).
+    Checks if a value is non-negative (>= 0).
 
     Args:
-        value: The value to check
-        name: Name for error message
+        value: The value to check.
+        name: The name to use in the error message.
 
     Returns:
-        Tuple of (is_valid, error_message)
+        A tuple (is_valid, error_message).
     """
     if value < 0:
         return False, f"{name} must be non-negative, got {value}"
@@ -357,16 +334,16 @@ def validate_id_range(
     name: str = "ID"
 ) -> Tuple[bool, Optional[str]]:
     """
-    Validate an ID value is within allowed range.
+    Checks if an ID is within the allowed range.
 
     Args:
-        id_value: The ID to validate
-        min_id: Minimum allowed ID
-        max_id: Maximum allowed ID
-        name: Name for error message
+        id_value: The ID to check.
+        min_id: The minimum allowed ID.
+        max_id: The maximum allowed ID.
+        name: The name to use in the error message.
 
     Returns:
-        Tuple of (is_valid, error_message)
+        A tuple (is_valid, error_message).
 
     Example:
         >>> valid, error = validate_id_range(5, 0, 15, "XBot ID")
@@ -386,34 +363,33 @@ def check_collision_risk(
     collision_threshold: float
 ) -> Tuple[bool, Optional[str]]:
     """
-    Check if there's a collision risk between two axes.
+    Checks for a collision risk between two axes.
 
-    This is specifically designed for scenarios where one axis
-    (e.g., camera Z-axis) cannot move safely when another axis
-    (e.g., linear axis) is extended beyond a certain threshold.
+    Intended for scenarios where one axis (e.g., camera Z) cannot move safely
+    if another axis (e.g., a linear stage) is extended beyond a certain threshold.
 
-    How it works:
-        1. If other axis position is unknown (None) → assume safe (with warning)
-        2. If other axis position > threshold → NOT safe (collision risk)
-        3. If other axis position <= threshold → safe to move
+    Procedure:
+        1) If the other axis position is unknown (None) → assume it's "safe"
+           but return a warning.
+        2) If other_axis_position > threshold → NOT safe (risk).
+        3) If other_axis_position <= threshold → safe.
 
     Typical Use Case (Camera + Linear Axis):
-        - Linear axis carries something that could collide with camera
-        - If linear axis is extended (high position), camera cannot go down
-        - Threshold defines the safe limit for the other axis
+        - A linear axis carries an object that could collide with the camera.
+        - If the linear axis is extended far out, the camera should not lower.
+        - The threshold defines the "safe zone" of the other axis.
 
     Args:
-        axis_position: Position of the axis we want to move (for logging)
-        other_axis_position: Position of the other axis (None if unknown)
-        collision_threshold: Maximum safe position for the other axis
+        axis_position: The position of the axis that intends to move (for logging).
+        other_axis_position: The position of the other axis (None if unknown).
+        collision_threshold: The maximum safe position of the other axis.
 
     Returns:
-        Tuple of (is_safe, message)
-        - is_safe: True if movement is allowed, False if blocked
-        - message: Warning or error description (None if clearly safe)
+        A tuple (is_safe, message).
+        - is_safe: True if movement is allowed, False if blocked.
+        - message: A warning/error message (None if clearly safe).
 
     Example:
-        >>> # Other axis is retracted (safe)
         >>> safe, msg = check_collision_risk(
         ...     axis_position=10.0,
         ...     other_axis_position=5.0,   # Below threshold
@@ -421,29 +397,18 @@ def check_collision_risk(
         ... )
         >>> safe
         True
-        >>> 
-        >>> # Other axis is extended (NOT safe)
-        >>> safe, msg = check_collision_risk(
-        ...     axis_position=10.0,
-        ...     other_axis_position=15.0,  # Above threshold!
-        ...     collision_threshold=8.0
-        ... )
-        >>> safe
-        False
-        >>> msg
-        'Collision risk: other axis at 15.00mm exceeds threshold 8.00mm'
     """
-    # Step 1: Handle unknown position
+    # Step 1: Unknown position
     if other_axis_position is None:
         # Can't check - assume safe but warn the caller
         return True, "Other axis position unknown, proceeding with caution"
 
-    # Step 2: Check if other axis is in safe zone
+    # Step 2: Check risk
     if other_axis_position > collision_threshold:
         return False, (
             f"Collision risk: other axis at {other_axis_position:.2f}mm "
             f"exceeds threshold {collision_threshold:.2f}mm"
         )
 
-    # Step 3: Safe to proceed
+    # Step 3: Safe
     return True, None

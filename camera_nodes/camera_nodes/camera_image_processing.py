@@ -1,108 +1,76 @@
 """
-Bildverarbeitungs-Algorithmen für Kamera-Node.
+Image processing algorithms for MTF (Modulation Transfer Function) calculation.
 
-Dieses Modul enthält die CameraImageProcessing-Klasse mit allen
-Algorithmen für MTF-Berechnung und Bildanalyse.
+This module provides the CameraImageProcessing class implementing the Slanted
+Edge Method (ISO 12233) for MTF calculation and image analysis.
 
-MTF-Berechnung (Modulation Transfer Function):
-=============================================
-Die MTF beschreibt, wie gut ein optisches System Kontrast
-bei verschiedenen Frequenzen überträgt.
+MTF describes how well an optical system transmits contrast at different spatial
+frequencies. Higher MTF values indicate better image quality at those frequencies.
 
-Berechnungs-Pipeline:
---------------------
-    Eingabe: ROI mit Slanted Edge
-         │
-         ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │  1. ESF berechnen (Edge Spread Function)                    │
-    │     ├── Kante im Bild finden                               │
-    │     ├── Pixel auf Linie senkrecht zur Kante projizieren    │
-    │     └── Intensitätsprofil = ESF                            │
-    │                                                             │
-    │  2. LSF berechnen (Line Spread Function)                    │
-    │     └── LSF = Ableitung der ESF                            │
-    │                                                             │
-    │  3. MTF berechnen                                           │
-    │     └── MTF = |FFT(LSF)| normalisiert                      │
-    └─────────────────────────────────────────────────────────────┘
+Processing Pipeline:
+- ESF (Edge Spread Function): Extract intensity profile perpendicular to edge
+- LSF (Line Spread Function): Derivative of ESF
+- MTF: FFT of LSF (normalized)
 
-Slanted Edge Method (ISO 12233):
-================================
-Die Kante muss leicht schräg sein (ca. 5°), damit Sub-Pixel-
-Informationen aus mehreren Zeilen extrahiert werden können.
+Slanted Edge Method:
+The edge must be at ~5° angle to extract sub-pixel information across multiple
+rows, improving measurement accuracy.
 
-    ┌───────────────────┐
-    │▓▓▓▓▓▓░░░░░░░░░░░░│  ← Schräge Kante
-    │▓▓▓▓▓▓▓░░░░░░░░░░░│
-    │▓▓▓▓▓▓▓▓░░░░░░░░░░│
-    │▓▓▓▓▓▓▓▓▓░░░░░░░░░│
-    └───────────────────┘
-
-Verwendung:
-===========
+Usage:
     processor = CameraImageProcessing(logger)
-    
-    # MTF aus ROI berechnen:
     results = processor.calculate_mtf_from_roi(roi_image)
-    
-    # Ergebnis exportieren:
     processor.export_to_csv(results, "mtf_results.csv")
 """
 
+import csv
+
 import cv2
 import numpy as np
-import csv
 
 
 class CameraImageProcessing:
     """
-    Bildverarbeitungs-Algorithmen für MTF-Berechnung.
+    Image processing for MTF calculation using slanted edge method.
 
-    Diese Klasse implementiert die Slanted Edge Method nach ISO 12233
-    für die MTF-Berechnung und weitere Bildanalyse-Funktionen.
+    Implements ISO 12233 standard for optical system quality measurement.
 
-    Attribute:
-        logger: ROS2-Logger für Ausgaben
+    Attributes:
+        logger: ROS2 logger
 
-    Hauptfunktionen:
-        calculate_mtf_from_roi(): Berechnet MTF aus ROI mit Slanted Edge
-        export_to_csv(): Exportiert MTF-Ergebnisse als CSV
+    Main Methods:
+        calculate_mtf_from_roi(): Calculate MTF from edge ROI
+        export_to_csv(): Export results to CSV file
     """
 
     def __init__(self, logger):
-        """
-        Initialisiert die Bildverarbeitungs-Klasse.
+        """Initialize image processing module.
 
         Args:
-            logger: ROS2-Logger für Log-Ausgaben
+            logger: ROS2 logger for diagnostic output
         """
         self.logger = logger
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # MTF-BERECHNUNG
-    # ══════════════════════════════════════════════════════════════════════════
+    # MTF CALCULATION
 
     def calculate_mtf_from_roi(self, roi_image, oversample_factor=4):
         """
-        Berechnet die MTF aus einem ROI mit Slanted Edge.
+        Calculate MTF from slanted edge region of interest.
 
-        Ablauf (Schritt für Schritt):
-        =============================
-        1. ESF (Edge Spread Function) berechnen
-        2. LSF (Line Spread Function) aus ESF ableiten
-        3. MTF als FFT der LSF berechnen
+        Steps:
+        1. Compute ESF (Edge Spread Function)
+        2. Derive LSF (Line Spread Function) from ESF
+        3. Calculate MTF as FFT of LSF
 
         Args:
-            roi_image: Bildausschnitt mit schräger Kante
-            oversample_factor: Faktor für Sub-Pixel-Analyse (Standard: 4)
+            roi_image: Image region with slanted edge
+            oversample_factor: Sub-pixel sampling factor (default: 4)
 
         Returns:
-            dict: {'frequency': array, 'mtf': array} oder None bei Fehler
+            dict: {'frequency': array, 'mtf': array} or None on error
         """
         esf = self._calculate_esf(roi_image, oversample_factor)
         if esf is None:
-            self.logger.error("ESF calculation failed.")
+            self.logger.error('ESF calculation failed.')
             return None
 
         freq, mtf = self._calculate_lsf_and_mtf(esf, oversample_factor)
@@ -111,36 +79,33 @@ class CameraImageProcessing:
 
     def _calculate_esf(self, roi_image, oversample_factor):
         """
-        Berechnet die Edge Spread Function (ESF) aus einem Slanted Edge ROI.
+        Calculate Edge Spread Function (ESF) from a slanted edge ROI.
 
-        Ablauf:
-        -------
-        1. In Graustufen konvertieren
-        2. Kante mit Canny-Detektor finden
-        3. Linie durch Kantenpunkte fitten
-        4. Alle Pixel senkrecht zur Linie projizieren
-        5. Intensitäten in Bins sammeln → ESF
+        Steps:
+        1. Convert image to grayscale.
+        2. Detect the edge using the Canny algorithm.
+        3. Fit a line to the detected edge points.
+        4. Project all pixel intensities perpendicularly onto the fitted line.
+        5. Collect the projected intensities into bins to form the ESF.
         """
         if roi_image is None or roi_image.size == 0:
             return None
 
-        # ── Schritt 1: In Graustufen konvertieren ──
+        # Convert to grayscale
         gray_roi = cv2.cvtColor(
             roi_image, cv2.COLOR_BGR2GRAY).astype(np.float64)
 
-        # ── Schritt 2: Kante finden ──
+        # Detect edge
         edges = cv2.Canny(np.uint8(gray_roi), 50, 150)
         points = np.argwhere(edges > 0)
         if len(points) < 10:
-            return None  # Zu wenige Kantenpunkte
+            return None  # Too few edge points
 
-        # ── Schritt 3: Linie durch Kante fitten ──
-        # OpenCV fitLine erwartet (x,y) Format
+        # Fit line through edge points. OpenCV fitLine expects (x,y) format.
         points_xy = points[:, ::-1]
         [vx, vy, x0, y0] = cv2.fitLine(points_xy, cv2.DIST_L2, 0, 0.01, 0.01)
-        angle = np.arctan2(vy, vx)
 
-        # ── Schritt 4: Pixel auf senkrechte Linie projizieren ──
+        # Project pixels onto the perpendicular line to the edge
         min_dist, max_dist = -np.inf, np.inf
         distances = (points_xy[:, 0] - x0) * vy - (points_xy[:, 1] - y0) * vx
         min_dist, max_dist = np.min(distances), np.max(distances)
@@ -152,35 +117,35 @@ class CameraImageProcessing:
         bin_sums = np.zeros(num_bins)
         bin_counts = np.zeros(num_bins)
 
-        # Alle Pixel im ROI verarbeiten
+        # Process all pixels in the ROI
         h, w = gray_roi.shape
         y_coords, x_coords = np.mgrid[:h, :w]
         all_points = np.vstack((x_coords.ravel(), y_coords.ravel())).T
 
-        # Senkrechte Distanz für alle Punkte berechnen
+        # Calculate perpendicular distance for all points
         all_distances = (all_points[:, 0] - x0) * \
             vy - (all_points[:, 1] - y0) * vx
         all_intensities = gray_roi.ravel()
 
-        # Bin-Index für jeden Punkt
+        # Determine the bin index for each point
         bin_indices = np.floor((all_distances - min_dist)
                                * oversample_factor).astype(int)
 
-        # Punkte außerhalb des Bereichs filtern
+        # Filter out points that fall outside the bin range
         valid_mask = (bin_indices >= 0) & (bin_indices < num_bins)
         valid_indices = bin_indices[valid_mask]
         valid_intensities = all_intensities[valid_mask]
 
-        # ── Schritt 5: Werte in Bins sammeln ──
+        # Accumulate intensity values and counts for each bin
         np.add.at(bin_sums, valid_indices, valid_intensities)
         np.add.at(bin_counts, valid_indices, 1)
 
-        # Durchschnitt bilden → ESF
+        # Calculate the average intensity for each bin to get the ESF
         valid_bins = bin_counts > 0
         esf = np.full(num_bins, np.nan)
         esf[valid_bins] = bin_sums[valid_bins] / bin_counts[valid_bins]
 
-        # Leere Bins interpolieren
+        # Interpolate empty bins to create a continuous ESF
         if np.isnan(esf).any():
             x = np.arange(num_bins)
             not_nan = ~np.isnan(esf)
@@ -190,74 +155,69 @@ class CameraImageProcessing:
 
     def _calculate_lsf_and_mtf(self, esf, oversample_factor):
         """
-        Berechnet LSF und MTF aus der ESF.
+        Calculates the LSF and MTF from the ESF.
 
-        Mathematischer Zusammenhang:
-        ============================
-            LSF = d/dx ESF       (Ableitung)
-            MTF = |FFT(LSF)|     (Fourier-Transform)
+        Mathematical relationship:
+        ===========================
+            LSF = d/dx ESF       (Derivative)
+            MTF = |FFT(LSF)|     (Fourier Transform)
 
         Args:
-            esf: Edge Spread Function (1D Array)
-            oversample_factor: Überabtastungsfaktor
+            esf (np.ndarray): 1D array representing the Edge Spread Function.
+            oversample_factor (int): The oversampling factor used.
 
         Returns:
-            tuple: (freq, mtf) - Frequenz- und MTF-Arrays
+            tuple: (frequency_axis, mtf_values)
         """
-        # ── Schritt 1: LSF berechnen (Ableitung der ESF) ──
+        # Calculate LSF (derivative of ESF) and normalize it to sum to 1.
         lsf = np.diff(esf)
-        # Normalisieren auf Summe = 1
         lsf = lsf / np.sum(lsf)
 
-        # ── Schritt 2: Hamming-Fenster anwenden ──
-        # Reduziert spektrales Lecken (Artefakte an Rändern)
+        # Apply a Hamming window to reduce spectral leakage from edge effects.
         window = np.hamming(len(lsf))
         windowed_lsf = lsf * window
 
-        # ── Schritt 3: MTF berechnen (FFT der LSF) ──
+        # Calculate MTF by taking the Fourier Transform of the LSF.
         fft_result = np.fft.fft(windowed_lsf)
-        mtf = np.abs(fft_result)  # Betrag = MTF
+        mtf = np.abs(fft_result)  # Magnitude is the MTF
 
-        # ── Schritt 4: MTF auf DC-Wert normalisieren ──
-        # MTF(0) = 1.0 per Definition
+        # Normalize the MTF to its DC value (MTF at frequency 0 is 1.0 by definition).
         mtf = mtf / mtf[0]
 
-        # ── Schritt 5: Frequenzachse berechnen ──
-        # Einheit: Zyklen/Pixel
+        # Calculate the frequency axis in cycles/pixel.
         freq = np.fft.fftfreq(len(mtf), d=1.0/oversample_factor)
 
-        # Nur positive Frequenzen bis Nyquist-Limit (0.5 cycles/pixel)
+        # Return only the positive frequencies up to the Nyquist limit (0.5 cycles/pixel).
         positive_freq_mask = (freq >= 0) & (freq <= 0.5)
         freq = freq[positive_freq_mask]
         mtf = mtf[positive_freq_mask]
 
         return freq, mtf
 
-    # ══════════════════════════════════════════════════════════════════════════
     # EXPORT
-    # ══════════════════════════════════════════════════════════════════════════
 
     def export_to_csv(self, data_dict, filename):
         """
-        Exportiert MTF-Daten in eine CSV-Datei.
+        Exports MTF data to a CSV file.
 
         Args:
-            data_dict: Dictionary mit Arrays (z.B. {'frequency': f, 'mtf': m})
-            filename: Ausgabe-Dateiname
+            data_dict (dict): A dictionary containing data arrays,
+                              e.g., {'frequency': f, 'mtf': m}.
+            filename (str): The output filename.
 
-        Beispiel CSV-Ausgabe:
+        Example CSV output:
             frequency,mtf
             0.0,1.0
             0.1,0.95
-            0.2,0.87
             ...
         """
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            # Header schreiben
+            # Write header
             header = list(data_dict.keys())
             writer.writerow(header)
-            # Datenzeilen schreiben
+            # Write data rows
             rows = zip(*data_dict.values())
             writer.writerows(rows)
-        self.logger.info(f"Daten erfolgreich exportiert nach {filename}")
+
+        self.logger.info(f'Data successfully exported to {filename}')

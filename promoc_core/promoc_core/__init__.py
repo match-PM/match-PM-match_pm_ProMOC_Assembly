@@ -1,83 +1,88 @@
-"""
-ProMOC Core - Shared Utilities and Algorithms
-==============================================
+"""\
+ProMOC Core – Shared Utilities and Algorithms
+=============================================
 
-This package provides common utilities and algorithms for all ProMOC
-Assembly nodes. By centralizing shared functionality here, we ensure
-consistency and reduce code duplication across the system.
+This package contains common helper functions and algorithms that are reused
+across all ProMOC assembly nodes.
 
-Quick Start
------------
-Most common imports:
+The goal is to bundle central components (conversions, validation, motion tracking,
+error classes, and image processing algorithms) in one place. This helps
+avoid code duplication and maintains consistent behavior across the entire system.
 
-    # Unit conversions (ROS uses meters, hardware often uses mm)
+Quickstart
+----------
+Typical imports:
+
+    # Unit conversions (ROS uses SI → meters, hardware often → mm)
     from promoc_core.conversions import mm_to_m, m_to_mm
-    
-    # Validation (bounds checking, collision detection)
+
+    # Validation (bounds checks, safety checks)
     from promoc_core.validation import is_in_range, check_collision_risk
-    
-    # Motion status tracking
+
+    # Motion status / target achievement
     from promoc_core.motion import MotionStatus, check_position_reached
-    
-    # Custom exceptions
+
+    # Custom Exceptions
     from promoc_core.promoc_exceptions import HardwareError, PositionError
-    
-    # Error handling
+
+    # Error handling (logging, severity, diagnostics)
     from promoc_core.error_handling import ErrorHandler
 
 Module Overview
 ---------------
 **conversions**
-    Unit conversion functions for length (m, mm, µm), angles (rad, deg),
+    Functions for converting units: length (m, mm, µm), angles (rad, deg),
     optical frequencies (lp/mm), and velocities (m/s, mm/s).
 
 **validation**
-    Position validation, bounds checking, and collision detection.
-    Includes Bounds1D, Bounds3D classes and various validate_* functions.
+    Position validation, bounds checking, and collision/risk checks.
+    Contains Bounds1D/Bounds3D and various `validate_*` helpers.
 
 **motion**
-    Motion status tracking and waiting logic. Includes MotionStatus enum,
-    MotionResult dataclass, and wait_for_position/wait_for_idle functions.
+    Motion status tracking and waiting/polling logic.
+    Contains MotionStatus, MotionResult, as well as wait_for_position/wait_for_idle.
 
 **promoc_exceptions**
-    Custom exception hierarchy for structured error handling.
+    Exception hierarchy for structured error handling.
     Base class: ProMOCError. Subclasses: HardwareError, MotionError, etc.
 
 **error_handling**
-    ROS-integrated error handler that manages logging, severity levels,
-    and error counting for diagnostics.
+    ROS-integrated error handling including logging, severity levels, and
+    error counters for diagnostics.
 
 **algorithms**
-    Image processing algorithms for lens testing:
-    - autofocus: Autofocus algorithms (hill climbing, binary search)
-    - focus_metrics: Image sharpness metrics (Laplacian, Tenengrad, etc.)
-    - mtf_analysis: MTF measurement and analysis
+    Image processing algorithms for optics/camera evaluation:
+    - autofocus: Autofocus algorithms (Hybrid, Multi-Level, etc.).
+    - focus_metrics: Sharpness metrics (Laplacian, Tenengrad, ...).
+    - mtf_analysis: MTF measurement & analysis.
 
-Example Usage
--------------
+Example
+--------
 Typical usage in a ROS2 node:
 
     from promoc_core.conversions import mm_to_m
     from promoc_core.validation import is_in_range
     from promoc_core.promoc_exceptions import SoftLimitViolationError
-    
+
     class MyNode(Node):
         def move_to(self, position_mm: float):
             # Validate position
             if not is_in_range(position_mm, self.min_pos, self.max_pos):
-                raise SoftLimitViolationError(f"Position {position_mm} out of range")
-            
+                raise SoftLimitViolationError(
+                    f"Position {position_mm} is outside valid limits"
+                )
+
             # Convert to ROS units (meters)
             position_m = mm_to_m(position_mm)
-            
+
             # Send to hardware...
 
-For More Information
---------------------
-- See individual module docstrings for detailed API documentation
-- See docs/examples/ for example code
-- See ERROR_HANDLING.md for error handling patterns
-- See QUICK_REFERENCE.md for common patterns
+Further Info
+-------------
+- Detailed API documentation is available in the docstrings of the respective modules.
+- Examples can be found under `docs/examples/`.
+- For error handling patterns, see `ERROR_HANDLING.md`.
+- For a quick reference, see `QUICK_REFERENCE.md`.
 """
 
 # Import modules in dependency order to avoid circular imports

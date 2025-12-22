@@ -41,6 +41,11 @@ INSTALL_CAMERA_ARAVIS2=${INSTALL_CAMERA_ARAVIS2:-true}
 CAMERA_WS="${CAMERA_WS:-$HOME/ros2_ws}"
 SKIP_GROUP_CHECK=${SKIP_GROUP_CHECK:-false}
 
+# Optional: fetch private/third-party repositories into this workspace
+FETCH_OPTIONAL_REPOS=${FETCH_OPTIONAL_REPOS:-true}
+PMCLIB_REPO_URL=${PMCLIB_REPO_URL:-""}
+FRAUNHOFER_CAMERA_REPO_URL=${FRAUNHOFER_CAMERA_REPO_URL:-""}
+
 # ================================================================
 # Logging Functions
 # ================================================================
@@ -98,12 +103,111 @@ print_usage() {
     echo "  --camera-ws PATH  Custom workspace for camera_aravis2"
     echo "  --skip-groups     Skip dialout/plugdev group check"
     echo "  --non-interactive Run without prompts (use defaults)"
+    echo "  --no-fetch-repos  Don't ask for / fetch optional repos (PMCLib, Fraunhofer camera)"
+    echo "  --pmclib-url URL  PMCLib repository URL (cloned into planar_motor_nodes/.../drivers/pmclib)"
+    echo "  --camera-url URL  Fraunhofer camera repository URL (cloned into camera_nodes/.../drivers/camera_aravis2)"
     echo "  -h, --help        Show this help message"
     echo ""
     echo "Environment variables:"
     echo "  INSTALL_CAMERA_ARAVIS2=true/false"
     echo "  CAMERA_WS=/path/to/camera/workspace"
     echo "  SKIP_GROUP_CHECK=true/false"
+    echo "  FETCH_OPTIONAL_REPOS=true/false"
+    echo "  PMCLIB_REPO_URL=https://..."
+    echo "  FRAUNHOFER_CAMERA_REPO_URL=https://..."
+}
+
+# ================================================================
+# Optional Repo Fetch (PMCLib + Fraunhofer camera)
+# ================================================================
+
+_git_clone_or_update() {
+    local repo_url="$1"
+    local target_dir="$2"
+    local default_branch="$3"
+
+    if [[ -z "$repo_url" ]]; then
+        return 0
+    fi
+
+    if ! command -v git &> /dev/null; then
+        log_error "git not found. Please install git (sudo apt-get install git)"
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$target_dir")"
+
+    if [[ -d "$target_dir/.git" ]]; then
+        log_info "Updating existing repo in: $target_dir"
+        (
+            cd "$target_dir"
+            git fetch --all --prune || true
+            git pull --ff-only origin "$default_branch" 2>/dev/null || git pull --ff-only origin main 2>/dev/null || git pull --ff-only origin master 2>/dev/null || true
+        )
+    elif [[ -d "$target_dir" ]] && [[ -n "$(ls -A "$target_dir" 2>/dev/null)" ]]; then
+        log_warning "Target directory exists and is not empty: $target_dir"
+        log_warning "Skipping clone to avoid overwriting local files."
+    else
+        log_info "Cloning $repo_url → $target_dir"
+        git clone "$repo_url" "$target_dir"
+    fi
+}
+
+fetch_optional_repos() {
+    log_step "Optional Step: Fetch external repositories (PMCLib, Fraunhofer camera)"
+
+    if [[ "$FETCH_OPTIONAL_REPOS" != "true" ]]; then
+        log_info "Skipping optional repo fetch (--no-fetch-repos)"
+        return 0
+    fi
+
+    # ---------------------------------------------------------------------
+    # 1) PMCLib
+    # ---------------------------------------------------------------------
+    local pmclib_target="$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
+
+    if [[ -z "$PMCLIB_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
+        echo ""
+        log_info "Optional: PMCLib (Match)"
+        echo "Wenn du eine Repo-URL hast, wird sie nach:"
+        echo "  $pmclib_target"
+        echo "geklont/aktualisiert."
+        echo "Leer lassen, um diesen Schritt zu überspringen."
+        read -p "PMCLib Repo-URL: " -r PMCLIB_REPO_URL
+    fi
+
+    if [[ -n "$PMCLIB_REPO_URL" ]]; then
+        _git_clone_or_update "$PMCLIB_REPO_URL" "$pmclib_target" "main" || {
+            log_warning "PMCLib konnte nicht geklont/aktualisiert werden. (Weiter ohne PMCLib)"
+        }
+        log_success "PMCLib (optional) verarbeitet"
+    else
+        log_info "PMCLib Repo-URL nicht angegeben → überspringe"
+    fi
+
+    # ---------------------------------------------------------------------
+    # 2) Fraunhofer camera repo (into camera_nodes drivers)
+    # ---------------------------------------------------------------------
+    local camera_target="$PROJECT_ROOT/camera_nodes/camera_nodes/drivers/camera_aravis2"
+
+    if [[ -z "$FRAUNHOFER_CAMERA_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
+        echo ""
+        log_info "Optional: Fraunhofer Kamera-Repo"
+        echo "Wenn du eine Repo-URL hast, wird sie nach:"
+        echo "  $camera_target"
+        echo "geklont/aktualisiert."
+        echo "Leer lassen, um diesen Schritt zu überspringen."
+        read -p "Fraunhofer Kamera Repo-URL: " -r FRAUNHOFER_CAMERA_REPO_URL
+    fi
+
+    if [[ -n "$FRAUNHOFER_CAMERA_REPO_URL" ]]; then
+        _git_clone_or_update "$FRAUNHOFER_CAMERA_REPO_URL" "$camera_target" "main" || {
+            log_warning "Fraunhofer Kamera-Repo konnte nicht geklont/aktualisiert werden. (Weiter ohne)"
+        }
+        log_success "Fraunhofer Kamera-Repo (optional) verarbeitet"
+    else
+        log_info "Fraunhofer Kamera Repo-URL nicht angegeben → überspringe"
+    fi
 }
 
 # ================================================================
@@ -490,6 +594,18 @@ main() {
                 NON_INTERACTIVE=true
                 shift
                 ;;
+            --no-fetch-repos)
+                FETCH_OPTIONAL_REPOS=false
+                shift
+                ;;
+            --pmclib-url)
+                PMCLIB_REPO_URL="$2"
+                shift 2
+                ;;
+            --camera-url)
+                FRAUNHOFER_CAMERA_REPO_URL="$2"
+                shift 2
+                ;;
             -h|--help)
                 print_usage
                 exit 0
@@ -528,6 +644,9 @@ main() {
         install_camera_aravis2
     fi
     
+    # Optionally fetch external repos into this workspace
+    fetch_optional_repos
+
     setup_pmclib_directory
     install_ros2_deps
     build_workspace

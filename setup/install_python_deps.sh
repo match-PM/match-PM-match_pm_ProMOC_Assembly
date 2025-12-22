@@ -169,14 +169,18 @@ else
     echo "⚠ .NET runtime configuration failed - PMCLib may not work properly"
 fi
 
-# Check if PMCLib directory exists in local_libs
-if [[ -d "local_libs/pmclib" ]]; then
-    echo "✓ PMCLib directory found in local_libs/pmclib"
-    echo "  PMCLib will be imported directly from local_libs/ via Python path"
+# Check if PMCLib directory exists (optional)
+#
+# PMCLib ist proprietär und wird (optional) direkt in dieses Repo geklont, damit
+# die Nodes die Bibliothek über den lokalen drivers/-Pfad finden können.
+PMCLIB_DIR_REL="../planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
+if [[ -d "$PMCLIB_DIR_REL" ]]; then
+    echo "✓ PMCLib directory found in $PMCLIB_DIR_REL"
+    echo "  PMCLib kann von den Nodes über den lokalen drivers/-Pfad verwendet werden"
 else
-    echo "⚠ PMCLib directory not found in local_libs/pmclib"
-    echo "  For planar motor functionality, ensure PMCLib is extracted to local_libs/pmclib/"
-    echo "  Example structure: local_libs/pmclib/__init__.py, local_libs/pmclib/system_commands.py, etc."
+    echo "⚠ PMCLib directory not found in $PMCLIB_DIR_REL"
+    echo "  Für Planarmotor-Funktionalität: PMCLib Repo klonen/ablegen unter:"
+    echo "    planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
 fi
 
 echo ""
@@ -186,10 +190,12 @@ echo "Summary:"
 echo "✓ Core Python packages installed"
 echo "✓ pythonnet installed (for .NET interop)"
 echo "✓ pylablib installed (for Thorlabs hardware)"
-if [[ -d "local_libs/pmclib" ]]; then
-    echo "✓ PMCLib directory available (will be imported via Python path)"
+if [[ -d "$PMCLIB_DIR_REL" ]]; then
+    echo "✓ PMCLib directory available (drivers/pmclib)"
+elif [[ -d "local_libs/pmclib" ]]; then
+    echo "✓ PMCLib directory available (legacy local_libs/pmclib)"
 else
-    echo "⚠ PMCLib directory not found (extract PMCLib to local_libs/pmclib/)"
+    echo "⚠ PMCLib directory not found (optional; expected under planar_motor_nodes/.../drivers/pmclib)"
 fi
 echo ""
 echo "Next steps:"

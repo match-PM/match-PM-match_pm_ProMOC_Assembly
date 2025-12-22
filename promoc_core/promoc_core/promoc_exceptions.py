@@ -1,47 +1,50 @@
-"""
-Custom Exception Hierarchy for ProMOC Assembly System
+"""Custom Exception Hierarchy for the ProMOC Assembly System.
 
-This module defines a comprehensive exception hierarchy for the ProMOC Assembly
-system, enabling more precise error handling and better debugging capabilities.
+This module defines a comprehensive exception hierarchy for the ProMOC
+assembly system. The goal is to enable more precise error handling and
+improve diagnostics and debugging capabilities.
 
-Exception Hierarchy:
---------------------
-ProMocError (base)
-├── ConnectionError
-│   ├── DeviceNotFoundError
-│   ├── DeviceDisconnectedError
-│   └── CommunicationTimeoutError
-├── MotionError
-│   ├── MovementTimeoutError
-│   ├── PositionOutOfBoundsError
-│   ├── CollisionDetectedError
-│   └── HomingFailedError
-├── SafetyViolation
-│   ├── SoftLimitViolationError
-│   ├── HardLimitViolationError
-│   ├── EmergencyStopError
-│   └── SafetyZoneViolationError
-├── CalibrationError
-│   ├── HomingRequiredError
-│   ├── CalibrationFailedError
-│   └── CalibrationDataInvalidError
-├── HardwareError
-│   ├── DriverNotAvailableError
-│   ├── HardwareInitializationError
-│   └── SensorReadError
-├── ConfigurationError
-│   ├── InvalidParameterError
-│   ├── MissingConfigurationError
-│   └── ValidationError
-└── ServiceError
-    ├── ServiceCallFailedError
-    ├── InvalidServiceRequestError
-    ├── ServiceTimeoutError
+Why a Hierarchy?
+    - You can handle specific error categories (e.g., Motion vs. Safety).
+    - Logs become more consistent (with error codes + details).
+    - Services can return understandable error messages.
 
-Usage Example:
---------------
+Exception Hierarchy (Excerpt):
+    ProMocError (Base)
+    ├── ConnectionError
+    │   ├── DeviceNotFoundError
+    │   ├── DeviceDisconnectedError
+    │   └── CommunicationTimeoutError
+    ├── MotionError
+    │   ├── MovementTimeoutError
+    │   ├── PositionOutOfBoundsError
+    │   ├── CollisionDetectedError
+    │   └── HomingFailedError
+    ├── SafetyViolation
+    │   ├── SoftLimitViolationError
+    │   ├── HardLimitViolationError
+    │   ├── EmergencyStopError
+    │   └── SafetyZoneViolationError
+    ├── CalibrationError
+    │   ├── HomingRequiredError
+    │   ├── CalibrationFailedError
+    │   └── CalibrationDataInvalidError
+    ├── HardwareError
+    │   ├── DriverNotAvailableError
+    │   ├── HardwareInitializationError
+    │   └── SensorReadError
+    ├── ConfigurationError
+    │   ├── InvalidParameterError
+    │   ├── MissingConfigurationError
+    │   └── ValidationError
+    └── ServiceError
+        ├── ServiceCallFailedError
+        ├── InvalidServiceRequestError
+        └── ServiceTimeoutError
+
+Example:
     from promoc_core.promoc_exceptions import PositionOutOfBoundsError, HomingRequiredError
-    
+
     def move_to_position(position):
         if not self.is_homed:
             raise HomingRequiredError("Device must be homed before movement")
@@ -50,7 +53,6 @@ Usage Example:
                 f"Position {position} exceeds maximum {self.max_position}"
             )
         # ... perform movement
-
 """
 
 from typing import Optional, Dict, Any
@@ -58,15 +60,16 @@ from typing import Optional, Dict, Any
 
 class ProMocError(Exception):
     """
-    Base exception class for all ProMOC Assembly errors.
+    Base exception for all ProMOC assembly errors.
 
-    All custom exceptions in the ProMOC system inherit from this class,
-    allowing for easy catch-all error handling when needed.
+    All custom exceptions in the ProMOC system inherit from this class.
+    This allows you to (if necessary) create a "catch-all" for ProMocError
+    without having to list all subclasses individually.
 
     Attributes:
-        message: Human-readable error description
-        error_code: Numerical error code for programmatic handling
-        details: Additional context information (dict)
+        message: A human-readable error description.
+        error_code: A numerical error code for programmatic handling.
+        details: Additional context (dict).
     """
 
     def __init__(
@@ -81,7 +84,7 @@ class ProMocError(Exception):
         self.details = details or {}
 
     def _default_error_code(self) -> int:
-        """Return default error code for this exception type."""
+        """Return the default error code for this exception type."""
         return 1000  # Generic error
 
     def __str__(self) -> str:
@@ -98,7 +101,7 @@ class ProMocError(Exception):
 # ============================================================================
 
 class ConnectionError(ProMocError):
-    """Base class for all connection-related errors."""
+    """Base class for connection/connectivity errors."""
 
     def _default_error_code(self) -> int:
         return 1100
@@ -112,7 +115,7 @@ class DeviceNotFoundError(ConnectionError):
 
 
 class DeviceDisconnectedError(ConnectionError):
-    """Raised when a device unexpectedly disconnects."""
+    """Raised when a device unexpectedly loses connection."""
 
     def _default_error_code(self) -> int:
         return 1102
@@ -126,7 +129,7 @@ class CommunicationTimeoutError(ConnectionError):
 
 
 class CommunicationError(ConnectionError):
-    """Raised when communication with a device fails (e.g., device not connected)."""
+    """Raised when communication fails (e.g., device not connected)."""
 
     def _default_error_code(self) -> int:
         return 1104
@@ -144,14 +147,14 @@ class MotionError(ProMocError):
 
 
 class MovementTimeoutError(MotionError):
-    """Raised when a movement operation times out."""
+    """Raised when a motion operation times out."""
 
     def _default_error_code(self) -> int:
         return 1201
 
 
 class PositionOutOfBoundsError(MotionError):
-    """Raised when a requested position is outside valid range."""
+    """Raised when a target position is outside the valid range."""
 
     def _default_error_code(self) -> int:
         return 1202
@@ -165,7 +168,7 @@ class CollisionDetectedError(MotionError):
 
 
 class HomingFailedError(MotionError):
-    """Raised when homing operation fails."""
+    """Raised when homing fails."""
 
     def _default_error_code(self) -> int:
         return 1204
@@ -176,7 +179,7 @@ class HomingFailedError(MotionError):
 # ============================================================================
 
 class SafetyViolation(ProMocError):
-    """Base class for all safety-related errors."""
+    """Base class for all safety violations."""
 
     def _default_error_code(self) -> int:
         return 1300
@@ -197,7 +200,7 @@ class HardLimitViolationError(SafetyViolation):
 
 
 class EmergencyStopError(SafetyViolation):
-    """Raised when emergency stop is triggered."""
+    """Raised when an emergency stop is triggered."""
 
     def _default_error_code(self) -> int:
         return 1303
@@ -215,21 +218,21 @@ class SafetyZoneViolationError(SafetyViolation):
 # ============================================================================
 
 class CalibrationError(ProMocError):
-    """Base class for all calibration-related errors."""
+    """Base class for all calibration/referencing errors."""
 
     def _default_error_code(self) -> int:
         return 1400
 
 
 class HomingRequiredError(CalibrationError):
-    """Raised when an operation requires homing first."""
+    """Raised when an operation requires prior homing."""
 
     def _default_error_code(self) -> int:
         return 1401
 
 
 class CalibrationFailedError(CalibrationError):
-    """Raised when calibration process fails."""
+    """Raised when a calibration process fails."""
 
     def _default_error_code(self) -> int:
         return 1402
@@ -247,14 +250,14 @@ class CalibrationDataInvalidError(CalibrationError):
 # ============================================================================
 
 class HardwareError(ProMocError):
-    """Base class for all hardware-related errors."""
+    """Base class for hardware-related errors."""
 
     def _default_error_code(self) -> int:
         return 1500
 
 
 class DriverNotAvailableError(HardwareError):
-    """Raised when required hardware driver is not available."""
+    """Raised when a required hardware driver is not available."""
 
     def _default_error_code(self) -> int:
         return 1501
@@ -268,7 +271,7 @@ class HardwareInitializationError(HardwareError):
 
 
 class SensorReadError(HardwareError):
-    """Raised when reading sensor data fails."""
+    """Raised when reading from a sensor fails."""
 
     def _default_error_code(self) -> int:
         return 1503
@@ -279,7 +282,7 @@ class SensorReadError(HardwareError):
 # ============================================================================
 
 class ConfigurationError(ProMocError):
-    """Base class for all configuration-related errors."""
+    """Base class for configuration/parameter errors."""
 
     def _default_error_code(self) -> int:
         return 1600
@@ -300,7 +303,7 @@ class MissingConfigurationError(ConfigurationError):
 
 
 class ValidationError(ConfigurationError):
-    """Raised when configuration validation fails."""
+    """Raised when the validation of a configuration fails."""
 
     def _default_error_code(self) -> int:
         return 1603
@@ -315,7 +318,7 @@ ParameterValidationError = InvalidParameterError
 # ============================================================================
 
 class ServiceError(ProMocError):
-    """Base class for all service-related errors."""
+    """Base class for service/RPC-related errors."""
 
     def _default_error_code(self) -> int:
         return 1700
@@ -400,12 +403,12 @@ class ImageProcessingError(ProMocError):
 
 def get_error_description(error_code: int) -> str:
     """
-    Get human-readable description for an error code.
+    Returns a human-readable description for an error code.
 
     Args:
-        error_code: The numerical error code
+        error_code: The numerical error code.
 
     Returns:
-        Error description string, or "Unknown Error" if code not found
+        A description string, or "Unknown Error" if the code is not found.
     """
     return ERROR_CODE_REGISTRY.get(error_code, "Unknown Error")

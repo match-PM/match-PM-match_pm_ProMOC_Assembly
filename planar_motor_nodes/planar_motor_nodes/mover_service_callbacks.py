@@ -1,57 +1,57 @@
 """
-Service Callbacks für XBot Mover - Geschäftslogik für alle Motion-Services.
+Service Callbacks for XBot Mover - Business logic for all motion services.
 
-Dieses Modul enthält die ServiceCallbacks-Klasse, die alle ROS2-Service-Callbacks
-für den Mover-Node implementiert. Hier findet die eigentliche Bewegungslogik statt.
+This module contains the ServiceCallbacks class, which implements all ROS2 service
+callbacks for the mover node. This is where the actual motion logic resides.
 
-Architektur-Übersicht:
+Architecture Overview:
 ======================
     Service Request
          │
          ▼
     ┌─────────────────────────────────────────────────────────┐
     │  ServiceCallbacks                                        │
-    │  ├── _process_motion_input()  ← Universeller Prozessor  │
-    │  │   ├── Validierung (XBot-ID, Parameter)               │
-    │  │   ├── Einheiten-Konvertierung (mm→m, deg→rad)        │
-    │  │   ├── Bounds-Check (Position in erlaubtem Bereich?)  │
-    │  │   └── Gibt verarbeitete Zielposition zurück          │
+    │  ├── _process_motion_input()  ← Universal processor      │
+    │  │   ├── Validation (XBot ID, parameters)               │
+    │  │   ├── Unit Conversion (mm→m, deg→rad)                │
+    │  │   ├── Bounds Check (Is position within limits?)      │
+    │  │   └── Returns the processed target position          │
     │  │                                                       │
-    │  └── callback_xxx()  ← Spezifische Service-Handler      │
-    │      ├── Ruft _process_motion_input() auf               │
-    │      ├── Führt Bewegung via pmc.bot aus                 │
-    │      ├── Wartet auf Abschluss                           │
-    │      └── Exception-Handling mit detaillierten Fehlern   │
+    │  └── callback_xxx()  ← Specific service handlers        │
+    │      ├── Calls _process_motion_input()                  │
+    │      ├── Executes motion via pmc.bot                    │
+    │      ├── Waits for completion                           │
+    │      └── Handles exceptions with detailed errors        │
     └─────────────────────────────────────────────────────────┘
 
-Verfügbare Services:
+Available Services:
 ====================
-- callback_linear_motion_si: Lineare XY-Bewegung
-- callback_six_d_motion: 6-DOF Bewegung (X, Y, Z, Rx, Ry, Rz)
-- callback_rotary_motion: Rotation um Z-Achse
-- callback_arc_motion_si: Bogenförmige Bewegung
-- callback_activate_xbot: XBot aktivieren
-- callback_levitation_xbot: Levitation starten/stoppen
-- callback_stop_motion: Bewegung sofort stoppen
-- callback_set_velocity_acceleration: Geschwindigkeit setzen
+- callback_linear_motion_si: Linear XY motion
+- callback_six_d_motion: 6-DOF motion (X, Y, Z, Rx, Ry, Rz)
+- callback_rotary_motion: Rotation around the Z-axis
+- callback_arc_motion_si: Arc-shaped motion
+- callback_activate_xbot: Activate an XBot
+- callback_levitation_xbot: Start/stop levitation
+- callback_stop_motion: Stop motion immediately
+- callback_set_velocity_acceleration: Set velocity and acceleration
 
-Bewegungs-Pipeline:
+Motion Pipeline:
 ===================
-Jeder Motion-Callback folgt dem gleichen Muster:
+Each motion callback follows the same pattern:
 
-1. Request validieren (via _process_motion_input)
-2. Einheiten konvertieren (mm → m, deg → rad)
-3. Bewegung an PMC senden
-4. Auf Abschluss warten (mit Timeout)
-5. Ergebnis in Response zurückgeben
+1. Validate the request (via _process_motion_input)
+2. Convert units (mm → m, deg → rad)
+3. Send the motion command to the PMC
+4. Wait for completion (with a timeout)
+5. Return the result in the response
 
-Exception-Handling:
+Exception Handling:
 ===================
-Alle Callbacks fangen spezifische Exceptions:
-- InvalidParameterError: Ungültige Eingabewerte
-- PositionOutOfBoundsError: Zielposition außerhalb Grenzen
-- HardwareError: PMC-Controller-Fehler
-- MovementTimeoutError: Bewegung nicht rechtzeitig abgeschlossen
+All callbacks catch specific exceptions:
+- InvalidParameterError: For invalid input values
+- PositionOutOfBoundsError: If the target position is outside limits
+- HardwareError: For PMC controller errors
+- MovementTimeoutError: If motion does not complete in time
 """
 
 import math
@@ -59,7 +59,6 @@ import sys
 import os
 from .mover_pmc_interface import PmcInterface
 from .mover_utils import MoverUtils, MotionStatus
-from .mover_node_config import NodeConfig
 from promoc_core.promoc_exceptions import (
     MovementTimeoutError,
     HardwareError,
@@ -74,37 +73,37 @@ from promoc_core.promoc_exceptions import (
 
 class ServiceCallbacks:
     """
-    Geschäftslogik für alle Motion-Services des Mover-Nodes.
+    Business logic for all motion services of the Mover node.
 
-    Diese Klasse enthält die Callback-Funktionen für alle ROS2-Services.
-    Sie verarbeitet Anfragen, validiert Parameter, führt Bewegungen aus
-    und gibt strukturierte Antworten zurück.
+    This class contains the callback functions for all ROS2 services.
+    It processes requests, validates parameters, executes movements,
+    and returns structured responses.
 
-    Attribute:
-        logger: ROS2-Logger für Ausgaben
-        pmc (PmcInterface): Hardware-Schnittstelle
-        mover_utils (MoverUtils): Hilfsfunktionen
-        config (NodeConfig): Konfiguration (Bounds, Toleranzen)
+    Attributes:
+        logger: ROS2 logger for output.
+        pmc (PmcInterface): Hardware interface.
+        mover_utils (MoverUtils): Helper functions.
+        config (dict): Configuration (bounds, tolerances).
 
-    Wichtigste Methoden:
-        _process_motion_input(): Universeller Eingabe-Prozessor
-        callback_linear_motion_si(): Lineare Bewegung
-        callback_six_d_motion(): 6-DOF Bewegung
-        callback_stop_motion(): Bewegung stoppen
+    Key Methods:
+        _process_motion_input(): Universal input processor.
+        callback_linear_motion_si(): Handles linear motion.
+        callback_six_d_motion(): Handles 6-DOF motion.
+        callback_stop_motion(): Stops motion.
     """
 
-    # Konstanten
-    NO_CHANGE = -999999  # Spezialwert für "aktuelle Position beibehalten"
+    # Constants
+    NO_CHANGE = -999999  # Special value to indicate "keep current position"
 
-    def __init__(self, logger, pmc_interface: PmcInterface, mover_utils: MoverUtils, config: NodeConfig):
+    def __init__(self, logger, pmc_interface: PmcInterface, mover_utils: MoverUtils, config: dict):
         """
-        Initialisiert die Callbacks mit ihren Abhängigkeiten.
+        Initializes the callbacks with their dependencies.
 
         Args:
-            logger: ROS2-Logger für Log-Ausgaben
-            pmc_interface: Hardware-Schnittstelle für PMC-Befehle
-            mover_utils: Hilfsfunktionen für Positionsberechnung
-            config: Konfiguration mit Bounds und Toleranzen
+            logger: ROS2 logger for log output.
+            pmc_interface: Hardware interface for PMC commands.
+            mover_utils: Helper functions for position calculations.
+            config: Configuration with bounds and tolerances.
         """
         self.logger = logger
         self.pmc = pmc_interface
@@ -116,64 +115,64 @@ class ServiceCallbacks:
 
     def _process_motion_input(self, request, current_position: list = None, motion_type: str = "6dof") -> list:
         """
-        Universeller Motion-Input-Prozessor mit integrierter Validierung.
+        Universal motion input processor with integrated validation.
 
-        Dies ist die ZENTRALE Funktion für alle Bewegungsanfragen. Sie:
-        1. Validiert die Eingabeparameter
-        2. Konvertiert Einheiten (mm → m, deg → rad)
-        3. Prüft ob Zielposition in erlaubten Grenzen liegt
-        4. Gibt die verarbeitete Zielposition zurück
+        This is the CENTRAL function for all motion requests. It:
+        1. Validates input parameters.
+        2. Converts units (mm → m, deg → rad).
+        3. Checks if the target position is within allowed bounds.
+        4. Returns the processed target position.
 
-        Ablauf (Schritt für Schritt):
-        =============================
+        Flow (Step-by-Step):
+        =====================
 
-        PHASE 1: Parameter-Validierung
-        ├── XBot-ID prüfen (muss >= 0 sein)
-        ├── Motion-Type-spezifische Prüfungen:
-        │   ├── rotary: rot_mode in [0,1,2]?
-        │   └── arc: arc_mode, arc_type, arc_direction gültig?
-        └── Geschwindigkeiten/Beschleunigungen positiv?
+        PHASE 1: Parameter Validation
+        ├── Check XBot ID (must be >= 0).
+        ├── Perform motion-type-specific checks:
+        │   ├── rotary: Is rot_mode in [0,1,2]?
+        │   └── arc: Are arc_mode, arc_type, arc_direction valid?
+        └── Are velocities/accelerations positive?
 
-        PHASE 2: Aktuelle Position holen
-        └── Falls nicht übergeben, von PMC abfragen
+        PHASE 2: Get Current Position
+        └── If not provided, query it from the PMC.
 
-        PHASE 3: Zielposition berechnen
-        ├── Für jede Achse:
-        │   ├── Wenn Wert = NO_CHANGE → aktuelle Position verwenden
-        │   └── Sonst: mm/deg → m/rad konvertieren
-        └── Ergebnis: [x, y, z, rx, ry, rz] in SI-Einheiten
+        PHASE 3: Calculate Target Position
+        ├── For each axis:
+        │   ├── If value = NO_CHANGE → use the current position.
+        │   └── Otherwise: convert mm/deg → m/rad.
+        └── Result: [x, y, z, rx, ry, rz] in SI units.
 
-        PHASE 4: Bounds-Check
-        ├── Ist x in [x_min, x_max]?
-        ├── Ist y in [y_min, y_max]?
-        └── Ist z in [z_min, z_max]?
+        PHASE 4: Bounds Check
+        ├── Is x within [x_min, x_max]?
+        ├── Is y within [y_min, y_max]?
+        └── Is z within [z_min, z_max]?
 
         Args:
-            request: ROS2-Service-Request mit Positionsdaten
-            current_position: Aktuelle Position [x,y,z,rx,ry,rz] oder None
-            motion_type: Art der Bewegung:
-                - "linear": Nur X, Y
-                - "6dof": Alle 6 Achsen
-                - "rotary": Nur Rz
-                - "arc", "arc_si": Bogenförmig
+            request: The ROS2 service request containing position data.
+            current_position: The current position [x,y,z,rx,ry,rz] or None.
+            motion_type: The type of motion:
+                - "linear": X, Y only.
+                - "6dof": All 6 axes.
+                - "rotary": Rz only.
+                - "arc", "arc_si": Arc-shaped.
 
         Returns:
-            list: Zielposition [x, y, z, rx, ry, rz] in SI-Einheiten (m, rad)
+            list: The target position [x, y, z, rx, ry, rz] in SI units (m, rad).
 
         Raises:
-            ParameterValidationError: Ungültige Parameter
-            PositionOutOfBoundsError: Zielposition außerhalb erlaubter Grenzen
+            ParameterValidationError: If parameters are invalid.
+            PositionOutOfBoundsError: If the target position is outside allowed limits.
 
-        Beispiel:
+        Example:
             >>> # Request: target_x=100mm, target_y=50mm
             >>> target = self._process_motion_input(request, motion_type="linear")
             >>> # target = [0.1, 0.05, current_z, current_rx, current_ry, current_rz]
         """
         # ══════════════════════════════════════════════════════════════════════
-        # PHASE 1: Parameter-Validierung
+        # PHASE 1: Parameter Validation
         # ══════════════════════════════════════════════════════════════════════
 
-        # XBot-ID muss nicht-negativ sein
+        # XBot ID must be non-negative
         if hasattr(request, 'xbot_id') and request.xbot_id < 0:
             raise ParameterValidationError(
                 f"XBot ID must be non-negative, got: {request.xbot_id}",
@@ -184,7 +183,7 @@ class ServiceCallbacks:
                 }
             )
 
-        # Motion-Type-spezifische Validierungen
+        # Motion-type-specific validations
         if motion_type == "rotary":
             if hasattr(request, 'rot_mode') and request.rot_mode not in [0, 1, 2]:
                 raise ParameterValidationError(
@@ -340,44 +339,44 @@ class ServiceCallbacks:
 
     def callback_linear_motion_si(self, request, response):
         """
-        Führt eine lineare XY-Bewegung aus.
+        Executes a linear XY motion.
 
         Service: /mover_node/linear_motion_si
 
-        Ablauf (Schritt für Schritt):
-        =============================
-        1. Request validieren und Zielposition berechnen
-           └── _process_motion_input() konvertiert mm → m
+        Flow (Step-by-Step):
+        =====================
+        1. Validate request and calculate target position.
+           └── _process_motion_input() converts mm → m.
 
-        2. Bounds-Check
-           └── Ist Zielposition in erlaubtem Bereich?
+        2. Bounds Check
+           └── Is the target position within the allowed area?
 
-        3. Bewegung an PMC senden
+        3. Send motion command to PMC
            └── linear_motion_si(xbot_id, x, y, velocity, accel)
 
-        4. Auf Abschluss warten
-           └── wait_for_motion_completion() mit Timeout
+        4. Wait for completion
+           └── wait_for_motion_completion() with a timeout.
 
-        5. Ergebnis zurückgeben
+        5. Return the result
            └── success=True/False, status_message
 
         Args:
-            request: LinearMotionSi mit xbot_id, x_pos, y_pos (in mm)
-            response: Response mit success und status_message
+            request: LinearMotionSi with xbot_id, x_pos, y_pos (in mm).
+            response: Response with success and status_message.
 
         Returns:
-            Response mit Ergebnis der Bewegung
+            Response with the result of the motion.
 
         Raises (in response.status_message):
-            PositionOutOfBoundsError: Ziel außerhalb Grenzen
-            HardwareError: PMC-Fehler
+            PositionOutOfBoundsError: If the target is outside limits.
+            HardwareError: If there is a PMC error.
         """
         try:
-            # ── Schritt 1: Input verarbeiten (mm → m) ──
+            # ── Step 1: Process Input (mm → m) ──
             target_pos = self._process_motion_input(
                 request, motion_type="linear")
 
-            # ── Schritt 2: Bounds-Check ──
+            # ── Step 2: Bounds Check ──
             if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
                 raise PositionOutOfBoundsError(
                     "Target position outside valid bounds",
@@ -389,21 +388,21 @@ class ServiceCallbacks:
                     }
                 )
 
-            # ── Schritt 3: Bewegung ausführen ──
+            # ── Step 3: Execute Motion ──
             speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.linear_motion_si(
                 request.xbot_id, target_pos[0], target_pos[1],
                 speed_params['xy_vel'], speed_params['xy_max_accel']
             )
 
-            # ── Schritt 4: Auf Abschluss warten ──
+            # ── Step 4: Wait for Completion ──
             timeout = max((travel_time * 1.5 + 3.0)
                           if travel_time else 5.0, 5.0)
             motion_result = self.mover_utils.wait_for_motion_completion(
-                request.xbot_id, target_pos, self.config.xy_tolerance, timeout
+                request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
             )
 
-            # ── Schritt 5: Ergebnis zurückgeben ──
+            # ── Step 5: Return Result ──
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
 
@@ -434,40 +433,40 @@ class ServiceCallbacks:
 
     def callback_six_d_motion(self, request, response):
         """
-        Führt eine 6-DOF Bewegung aus (X, Y, Z, Rx, Ry, Rz).
+        Executes a 6-DOF motion (X, Y, Z, Rx, Ry, Rz).
 
         Service: /mover_node/six_dof_motion
 
-        Diese Bewegung steuert alle 6 Freiheitsgrade gleichzeitig:
+        This motion controls all 6 degrees of freedom simultaneously:
         - X, Y, Z: Position in mm
-        - Rx, Ry, Rz: Rotation in Grad
+        - Rx, Ry, Rz: Rotation in degrees
 
-        Spezialwert NO_CHANGE (-999999):
-        --------------------------------
-        Wenn ein Wert auf NO_CHANGE gesetzt ist, bleibt die
-        aktuelle Position dieser Achse unverändert.
+        Special Value NO_CHANGE (-999999):
+        ----------------------------------
+        If a value is set to NO_CHANGE, the current position of that
+        axis will be maintained.
 
-        Beispiel:
-            # Nur Z ändern, Rest beibehalten:
+        Example:
+            # Change only Z, keep others the same:
             request.x_pos = -999999  # NO_CHANGE
             request.y_pos = -999999  # NO_CHANGE  
-            request.z_pos = 2.0      # Auf 2mm heben
+            request.z_pos = 2.0      # Lift to 2mm
             ...
 
-        Ablauf:
-        -------
-        1. _process_motion_input() verarbeitet alle 6 Achsen
-        2. Bounds-Check für X, Y, Z
-        3. six_d_of_motion_si() an PMC senden
-        4. Auf Abschluss warten
-        5. Ergebnis zurückgeben
+        Flow:
+        -----
+        1. _process_motion_input() processes all 6 axes.
+        2. Bounds check for X, Y, Z.
+        3. Send six_d_of_motion_si() to the PMC.
+        4. Wait for completion.
+        5. Return the result.
         """
         try:
-            # ── Schritt 1: Input verarbeiten ──
+            # ── Step 1: Process Input ──
             target_pos = self._process_motion_input(
                 request, motion_type="6dof")
 
-            # ── Schritt 2: Bounds-Check ──
+            # ── Step 2: Bounds Check ──
             if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
                 raise PositionOutOfBoundsError(
                     "Target position outside valid bounds",
@@ -482,7 +481,7 @@ class ServiceCallbacks:
                     }
                 )
 
-            # ── Schritt 3: 6-DOF Bewegung ausführen ──
+            # ── Step 3: Execute 6-DOF Motion ──
             speed_params = self.mover_utils.get_speed_params(request.xbot_id)
             travel_time = self.pmc.bot.six_d_of_motion_si(
                 request.xbot_id,
@@ -493,14 +492,14 @@ class ServiceCallbacks:
                 speed_params['ry_vel'], speed_params['rz_vel']
             )
 
-            # ── Schritt 4: Auf Abschluss warten ──
+            # ── Step 4: Wait for Completion ──
             timeout = max(travel_time * 1.5 + 5.0,
                           8.0) if travel_time else 10.0
             motion_result = self.mover_utils.wait_for_motion_completion(
-                request.xbot_id, target_pos, self.config.six_d_tolerance, timeout
+                request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout
             )
 
-            # ── Schritt 5: Ergebnis ──
+            # ── Step 5: Result ──
             response.success = (motion_result == MotionStatus.COMPLETED)
             response.status_message = f"Motion status: {motion_result.value}"
 
@@ -531,15 +530,15 @@ class ServiceCallbacks:
 
     def callback_activate_xbot(self, request, response):
         """
-        Aktiviert oder deaktiviert die XBots.
+        Activates or deactivates the XBots.
 
         Service: /mover_node/activate_xbots
 
-        Aktivierung = XBot bereit für Befehle, aber noch keine Levitation.
-        Deaktivierung = XBot in Ruhezustand.
+        Activation makes the XBot ready for commands but does not start levitation.
+        Deactivation puts the XBot into an idle state.
 
         Args:
-            request.activation_status: True = aktivieren, False = deaktivieren
+            request.activation_status: True to activate, False to deactivate.
         """
         try:
             if request.activation_status:
@@ -571,23 +570,23 @@ class ServiceCallbacks:
 
     def callback_levitation_xbot(self, request, response):
         """
-        Startet oder stoppt die Levitation (Schweben über Stator).
+        Starts or stops levitation (floating above the stator).
 
         Service: /mover_node/levitation_xbots
 
-        WICHTIG: XBot muss vorher aktiviert sein (via activate_xbots).
+        IMPORTANT: The XBot must be activated first (via activate_xbots).
 
-        Levitation = Elektromagnetisches Schweben in ca. 1mm Höhe.
-        Ohne Levitation liegt der XBot auf dem Stator auf.
+        Levitation is the electromagnetic floating at ~1mm height.
+        Without levitation, the XBot rests on the stator.
 
         Args:
-            request.levitation: True = Levitation starten, False = stoppen
+            request.levitation: True to start levitation, False to stop.
         """
         try:
             command = 1 if request.levitation else 0
             self.logger.debug(f"Calling levitation_command(0, {command})")
 
-            self.pmc.bot.levitation_command(0, command)  # 0 = alle XBots
+            self.pmc.bot.levitation_command(0, command)  # 0 = all XBots
 
             response.status_message = f"Levitation command sent: {'enable' if request.levitation else 'disable'}"
             response.success = True
@@ -615,20 +614,20 @@ class ServiceCallbacks:
 
     def callback_rotary_motion(self, request, response):
         """
-        Führt eine Rotationsbewegung um die Z-Achse aus.
+        Executes a rotational motion around the Z-axis.
 
         Service: /mover_node/rotary_motion
 
-        Parameter:
-        ----------
-        - target_rz: Zielwinkel in Grad
-        - rot_mode: Rotationsmodus
-            - 0 = NO_ANGLE_WRAP: Direkter Weg
-            - 1 = WRAP_TO_2PI_CCW: Gegen Uhrzeigersinn
-            - 2 = WRAP_TO_2PI_CW: Im Uhrzeigersinn
+        Parameters:
+        -----------
+        - target_rz: Target angle in degrees.
+        - rot_mode: Rotation mode:
+            - 0 = NO_ANGLE_WRAP: Direct path.
+            - 1 = WRAP_TO_2PI_CCW: Counter-clockwise.
+            - 2 = WRAP_TO_2PI_CW: Clockwise.
         """
         try:
-            # Validierung und Umrechnung
+            # Validation and unit conversion
             target_pos = self._process_motion_input(
                 request, motion_type="rotary")
 
@@ -647,7 +646,7 @@ class ServiceCallbacks:
             timeout = max((travel_time * 1.5 + 2.0)
                           if travel_time else 4.0, 4.0)
             motion_result = self.mover_utils.wait_for_motion_completion(
-                request.xbot_id, target_pos, self.config.six_d_tolerance, timeout)
+                request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout)
 
             # Create descriptive status message
             rot_mode_names = {
@@ -683,15 +682,15 @@ class ServiceCallbacks:
 
     def callback_stop_motion(self, request, response):
         """
-        Stoppt die aktuelle Bewegung eines XBots sofort.
+        Stops the current motion of an XBot immediately.
 
         Service: /mover_node/stop_motion
 
-        NOTFALL-FUNKTION: Stoppt Bewegung sofort ohne Abbremsrampe.
-        Sollte bei unerwarteten Situationen verwendet werden.
+        EMERGENCY FUNCTION: Stops motion instantly without a deceleration ramp.
+        Should be used in unexpected situations.
 
         Args:
-            request.xbot_id: ID des zu stoppenden XBots
+            request.xbot_id: ID of the XBot to stop.
         """
         try:
             self.pmc.bot.stop_motion(request.xbot_id)
@@ -754,12 +753,18 @@ class ServiceCallbacks:
                     )
 
             # Set parameters
-            self.mover_utils.velocity_params[request.xbot_id] = {
-                'xy_vel': request.xy_vel, 'z_vel': request.z_vel,
-                'rx_vel': request.rx_vel, 'ry_vel': request.ry_vel,
-                'rz_vel': request.rz_vel, 'xy_max_accel': request.xy_max_accel,
-                'z_max_accel': request.z_max_accel
-            }
+            self.mover_utils.set_speed_params(
+                request.xbot_id,
+                {
+                    'xy_vel': request.xy_vel,
+                    'xy_max_accel': request.xy_max_accel,
+                    'z_vel': request.z_vel,
+                    'z_max_accel': request.z_max_accel,
+                    'rx_vel': request.rx_vel,
+                    'ry_vel': request.ry_vel,
+                    'rz_vel': request.rz_vel,
+                },
+            )
 
             self.logger.info(f"Velocity/acceleration parameters set for XBot {request.xbot_id}: "
                              f"xy_vel={request.xy_vel:.3f}m/s, xy_accel={request.xy_max_accel:.3f}m/s², "
@@ -820,7 +825,7 @@ class ServiceCallbacks:
             timeout = max((travel_time * 1.8 + 5.0)
                           if travel_time else 8.0, 8.0)
             motion_result = self.mover_utils.wait_for_motion_completion(
-                request.xbot_id, target_pos, self.config.xy_tolerance, timeout
+                request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
             )
 
             # Create descriptive status message

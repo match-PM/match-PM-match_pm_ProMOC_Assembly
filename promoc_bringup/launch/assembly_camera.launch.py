@@ -18,7 +18,6 @@ def generate_launch_description():
         emulate_tty=True,
         parameters=[
             {
-                # Driver-specific parameters
                 'guid': 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781',
                 'frame_id': 'camera_frame',
                 'stream_names': ['stream0'],
@@ -27,7 +26,6 @@ def generate_launch_description():
                     'config/camera_info_example_uv.yaml')],
                 'verbose': True,
 
-                # GenICam-specific parameters
                 'ImageFormatControl': {
                     'PixelFormat': ['RGB8'],
                     'Width': 2448,

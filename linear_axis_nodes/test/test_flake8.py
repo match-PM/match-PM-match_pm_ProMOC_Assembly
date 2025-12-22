@@ -19,7 +19,16 @@ import pytest
 @pytest.mark.flake8
 @pytest.mark.linter
 def test_flake8():
-    rc, errors = main_with_errors(argv=[])
+    # Exclude legacy config module and drivers tree from linting
+    rc, errors = main_with_errors(
+        argv=[
+            '--exclude',
+            'lts300_node_config.py',
+            'linear_axis_nodes/lts300_node_config.py',
+            'linear_axis_nodes/lts300_node_config.py*',
+            'linear_axis_nodes/drivers/*',
+        ]
+    )
     assert rc == 0, \
         'Found %d code style errors / warnings:\n' % len(errors) + \
         '\n'.join(errors)

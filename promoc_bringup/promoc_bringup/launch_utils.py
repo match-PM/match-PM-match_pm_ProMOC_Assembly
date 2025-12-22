@@ -1,11 +1,10 @@
 """
-Launch Utilities for ProMOC Bringup
-===================================
+Launch helper functions for ProMOC Bringup
 
-This module provides helper functions for launch files to reduce
+Provides reusable helper functions for launch files to reduce
 code duplication and improve maintainability.
 
-Usage in launch files:
+Usage:
     from promoc_bringup.launch_utils import (
         discover_thorlabs_devices,
         load_yaml_config,
@@ -22,18 +21,18 @@ from typing import Dict, Optional, Tuple
 
 def discover_thorlabs_devices() -> Dict[str, str]:
     """
-    Discover Thorlabs APT stepper motor controllers connected via USB.
+    Find Thorlabs APT stepper motor controllers connected via USB.
 
-    Scans /dev/serial/by-id/ for Thorlabs devices and returns a mapping
-    of serial numbers to stable device paths.
+    Searches `/dev/serial/by-id/` for Thorlabs APT controllers and returns
+    a mapping of serial number to stable device path.
 
-    How it works:
-        1. Scan /dev/serial/by-id/ for Thorlabs APT controllers
-        2. Extract serial number from device path
-        3. Return mapping: {serial_number: device_path}
+    Process:
+        1. Scan `/dev/serial/by-id/` for Thorlabs APT controllers
+        2. Extract serial number from device name
+        3. Return mapping: `{serial_number: device_path}`
 
     Returns:
-        Dictionary mapping serial numbers to device paths.
+        Dictionary mapping serial number to device path.
         Empty dict if no devices found.
 
     Example:
@@ -77,11 +76,11 @@ def load_yaml_config(config_path: str) -> Tuple[dict, Optional[str]]:
     Load a YAML configuration file.
 
     Args:
-        config_path: Full path to the YAML file
+        config_path: Full path to YAML file
 
     Returns:
-        Tuple of (config_dict, error_message)
-        error_message is None if successful
+        Tuple of (config_dict, error_message).
+        `error_message` is None if loading succeeded.
 
     Example:
         >>> config, error = load_yaml_config('/path/to/config.yaml')
@@ -102,27 +101,27 @@ def load_yaml_config(config_path: str) -> Tuple[dict, Optional[str]]:
 
 def get_config_path(package_share_dir: str, config_name: str) -> str:
     """
-    Get full path to a config file in the package's config directory.
+    Get full path to config file in 'config/' folder.
 
     Args:
         package_share_dir: Result of get_package_share_directory()
-        config_name: Name of the config file (e.g., 'mover_node_params.yaml')
+        config_name: Config filename (e.g., 'mover_node_params.yaml')
 
     Returns:
-        Full path to the config file
+        Full path to config file
     """
     return os.path.join(package_share_dir, 'config', config_name)
 
 
 def get_launch_path(package_share_dir: str, launch_name: str) -> str:
     """
-    Get full path to a launch file in the package's launch directory.
+    Get full path to launch file in 'launch/' folder.
 
     Args:
         package_share_dir: Result of get_package_share_directory()
-        launch_name: Name of the launch file (e.g., 'camera.launch.py')
+        launch_name: Launch filename (e.g., 'camera.launch.py')
 
     Returns:
-        Full path to the launch file
+        Full path to launch file
     """
     return os.path.join(package_share_dir, 'launch', launch_name)

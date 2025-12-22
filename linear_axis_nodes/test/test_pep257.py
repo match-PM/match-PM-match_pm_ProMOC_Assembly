@@ -19,5 +19,17 @@ import pytest
 @pytest.mark.linter
 @pytest.mark.pep257
 def test_pep257():
-    rc = main(argv=['.', 'test'])
+    rc = main(
+        argv=[
+            '.',
+            'test',
+            '--exclude',
+            # ignore legacy config module that is being removed
+            'lts300_node_config.py',
+            'linear_axis_nodes/lts300_node_config.py',
+            'linear_axis_nodes/lts300_node_config.py*',
+            # ignore the entire drivers tree (vendored / hardware-layer code)
+            'linear_axis_nodes/drivers',
+        ]
+    )
     assert rc == 0, 'Found code style errors / warnings'

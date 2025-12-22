@@ -9,13 +9,14 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 import launch
 
+
 def generate_launch_description():
     """
-    Consolidated launch file for the camera system.
-    Supports both simulation and real hardware via 'sim_mode' argument.
+    Consolidated camera system launch file.
+
+    Supports both simulation and hardware via 'sim_mode' argument.
     """
-    
-    # Declare arguments
+
     sim_mode_arg = DeclareLaunchArgument(
         'sim_mode',
         default_value='false',
@@ -27,22 +28,23 @@ def generate_launch_description():
         OpaqueFunction(function=launch_setup)
     ])
 
+
 def launch_setup(context, *args, **kwargs):
-    sim_mode = LaunchConfiguration('sim_mode').perform(context).lower() == 'true'
+    sim_mode = LaunchConfiguration(
+        'sim_mode').perform(context).lower() == 'true'
     launch_actions = []
-    
+
     bringup_pkg_share = get_package_share_directory('promoc_bringup')
-    
-    # Common configuration
-    camera_config_file = os.path.join(bringup_pkg_share, 'config', 'camera_node_params.yaml')
-    
-    # Hardware specific configuration
-    camera_ros_params_file = os.path.join(bringup_pkg_share, 'config', 'camera_node_ros_params.yaml')
+
+    camera_config_file = os.path.join(
+        bringup_pkg_share, 'config', 'camera_node_params.yaml')
+
+    camera_ros_params_file = os.path.join(
+        bringup_pkg_share, 'config', 'camera_node_ros_params.yaml')
 
     if sim_mode:
         launch.logging.get_logger().info("🚀 Launching Camera in SIMULATION mode")
-        
-        # Camera Simulator
+
         launch_actions.append(Node(
             package='camera_nodes',
             executable='camera_simulator',
@@ -50,8 +52,7 @@ def launch_setup(context, *args, **kwargs):
             output='screen',
             arguments=['--ros-args', '--log-level', 'INFO']
         ))
-        
-        # Camera Node (using simulator)
+
         launch_actions.append(Node(
             package='camera_nodes',
             executable='camera_node',
@@ -61,39 +62,39 @@ def launch_setup(context, *args, **kwargs):
             parameters=[camera_ros_params_file, {'use_simulator': True}],
             arguments=['--ros-args', '--log-level', 'INFO']
         ))
-        
+
     else:
         launch.logging.get_logger().info("📷 Launching Camera in HARDWARE mode")
-        
-        # Load camera configuration for pm_genicam
+
         try:
             camera_config = yaml.load(
                 open(camera_config_file),
                 Loader=yaml.SafeLoader
             )
             camera_params = camera_config["camera_params"]
-            
+
             driver = {
                 "usb3vision": "camera_driver_uv",
                 "gigevision": "camera_driver_gv",
             }[camera_params["driver"]]
-            
+
             driver_node_name = f"{camera_params['cameraname']}"
-            
-            # Create temporary files for camera info and dynamic parameters
+
             d = tempfile.mkdtemp()
             camera_info_yaml = os.path.join(d, "camera_info.yaml")
             with open(camera_info_yaml, "wt") as f:
                 f.write(yaml.dump(camera_config["camera_info"]))
 
-            dynamic_parameters_yaml = os.path.join(d, "dynamic_parameters.yaml")
+            dynamic_parameters_yaml = os.path.join(
+                d, "dynamic_parameters.yaml")
             with open(dynamic_parameters_yaml, "wt") as f:
                 f.write(yaml.dump(camera_config["dynamic_parameters"]))
-                
-            launch.logging.get_logger().info(f"Using config: {camera_config_file}")
-            launch.logging.get_logger().info(f"Camera GUID: {camera_params['guid']}")
-            
-            # Camera driver node (camera_aravis2)
+
+            launch.logging.get_logger().info(
+                f"Using config: {camera_config_file}")
+            launch.logging.get_logger().info(
+                f"Camera GUID: {camera_params['guid']}")
+
             launch_actions.append(Node(
                 name=driver_node_name,
                 namespace='promoc',
@@ -124,8 +125,7 @@ def launch_setup(context, *args, **kwargs):
                     },
                 }]
             ))
-            
-            # Controller node (pm_genicam_controller)
+
             launch_actions.append(Node(
                 name=f"{driver_node_name}_controller",
                 namespace='promoc',
@@ -138,8 +138,7 @@ def launch_setup(context, *args, **kwargs):
                     "driver_node": f"/promoc/{driver_node_name}",
                 }]
             ))
-            
-            # Camera Node (Hardware)
+
             launch_actions.append(Node(
                 package='camera_nodes',
                 executable='camera_node',
@@ -149,8 +148,9 @@ def launch_setup(context, *args, **kwargs):
                 arguments=['--ros-args', '--log-level', 'INFO'],
                 parameters=[camera_ros_params_file, {'use_simulator': False}],
             ))
-            
+
         except Exception as e:
-            launch.logging.get_logger().error(f"Failed to load camera configuration: {e}")
+            launch.logging.get_logger().error(
+                f"Failed to load camera configuration: {e}")
 
     return launch_actions

@@ -1,11 +1,11 @@
 """
-Aravis Kamera-Treiber für echte Hardware.
+Aravis camera driver for real hardware.
 
-Dieser Treiber kommuniziert mit dem camera_aravis2 ROS2-Treiber,
-der GigE Vision Kameras über die Aravis-Bibliothek steuert.
+This driver communicates with the `camera_aravis2` ROS2 driver, which controls
+GigE Vision cameras using the Aravis library.
 
-Architektur:
-============
+Architecture:
+=============
     ┌─────────────────────────────────────────────────────────┐
     │  AravisCameraDriver                                      │
     │                                                         │
@@ -22,20 +22,20 @@ Architektur:
                     │
                     ▼
     ┌─────────────────────────────────────────────────────────┐
-    │  camera_aravis2 Node (externer ROS2 Treiber)            │
-    │  - Aravis GigE Vision Interface                         │
-    │  - Publiziert Bilder, bietet Services                   │
+    │  camera_aravis2 Node (external ROS2 driver)             │
+    │  - Provides Aravis GigE Vision interface.               │
+    │  - Publishes images and offers control services.        │
     └─────────────────────────────────────────────────────────┘
 
-Abhängigkeiten:
-===============
-    - camera_aravis2: Muss als separate Node laufen
-    - pm_genicam_controller_interfaces: Service-Definitionen
+Dependencies:
+=============
+    - `camera_aravis2`: Must be running as a separate node.
+    - `pm_genicam_controller_interfaces`: Required for service definitions.
 
-Verwendung:
-===========
+Usage:
+======
     driver = AravisCameraDriver(node, logger)
-    
+
     if driver.connect():
         await driver.set_exposure(10000.0)  # 10ms
         image = driver.get_latest_image()
@@ -43,168 +43,167 @@ Verwendung:
 """
 
 from typing import Optional
+
 import numpy as np
 
-from .camera_driver import CameraDriver
 from promoc_core.promoc_exceptions import (
-    HardwareError,
     CommunicationError,
-    DriverNotAvailableError
+    DriverNotAvailableError,
+    HardwareError,
 )
+
+from .camera_driver import CameraDriver
 
 
 class AravisCameraDriver(CameraDriver):
     """
-    Kamera-Treiber für echte Hardware via camera_aravis2.
+    Camera driver for real hardware via the `camera_aravis2` package.
 
-    Dieser Treiber ist ein Wrapper um ROS2 Services und Topics,
-    die vom camera_aravis2 Treiber bereitgestellt werden.
+    This driver acts as a wrapper around the ROS2 services and topics
+    provided by the `camera_aravis2` driver node.
 
-    Attribute:
-        _node: Parent ROS2-Node für Service-Clients
-        _exposure_client: Service-Client für Belichtungssteuerung
-        _latest_image: Zuletzt empfangenes Bild (von Subscriber)
-        _current_exposure: Aktuelle Belichtungszeit
+    Attributes:
+        _node: The parent ROS2 node used for creating service clients.
+        _exposure_client: Service client for exposure control.
+        _latest_image: The most recently received image (from a subscriber).
+        _current_exposure: The current exposure time in microseconds.
     """
 
     def __init__(self, node, logger):
         """
-        Initialisiert den Aravis-Treiber.
+        Initializes the Aravis driver.
 
         Args:
-            node: Parent ROS2-Node (für Service-Clients)
-            logger: Logger für Ausgaben
+            node: The parent ROS2 node (for creating service clients).
+            logger: A logger instance for output.
         """
         super().__init__(logger)
         self._node = node
 
-        # ── Service-Client für Belichtung ──
+        # ── Service client for exposure control ──
         self._exposure_client = None
         self._SetExposureTime = None
 
-        # ── Bild-Cache ──
+        # ── Image cache ──
         self._latest_image: Optional[np.ndarray] = None
         self._current_exposure: float = 10000.0  # Default: 10ms
 
     # ══════════════════════════════════════════════════════════════════════════
-    # VERBINDUNG
+    # CONNECTION
     # ══════════════════════════════════════════════════════════════════════════
 
     def connect(self, camera_name: str = None) -> bool:
         """
-        Initialisiert die Verbindung zum camera_aravis2 Treiber.
+        Initializes the connection to the camera_aravis2 driver.
 
-        Ablauf:
-        -------
-        1. Service-Definitionen importieren
-        2. Service-Client erstellen
-        3. Auf Service warten (optional)
+        Steps:
+        ------
+        1. Import the required service definitions.
+        2. Create the service client.
+        3. (Optional) Wait for the service to become available.
 
         Args:
-            camera_name: Wird ignoriert (Kamera durch Treiber definiert)
+            camera_name: Ignored (the camera is defined by the driver node).
 
         Returns:
-            bool: True wenn Service-Client erstellt wurde
+            bool: True if the service client was created successfully.
 
         Raises:
-            DriverNotAvailableError: Interface-Package fehlt
+            DriverNotAvailableError: If the required interface package is not found.
         """
-        self._logger.info("Verbinde zu camera_aravis2 Treiber...")
+        self._logger.info('Connecting to camera_aravis2 driver...')
 
         try:
-            # ── Service-Typ importieren ──
+            # ── Import service type ──
             from pm_genicam_controller_interfaces.srv import SetExposureTime
             self._SetExposureTime = SetExposureTime
 
-            # ── Service-Client erstellen ──
+            # ── Create service client ──
             self._exposure_client = self._node.create_client(
                 self._SetExposureTime,
                 '/promoc/assembly_camera_controller/set_exposure_time'
             )
 
             self._connected = True
-            self._logger.info("✓ Aravis-Treiber verbunden")
+            self._logger.info('✓ Aravis driver connected')
             return True
 
         except ImportError as e:
             raise DriverNotAvailableError(
-                message="pm_genicam_controller_interfaces nicht verfügbar",
+                message='pm_genicam_controller_interfaces not available',
                 details={'error': str(e), 'driver': 'camera_aravis2'}
             )
 
     def disconnect(self):
-        """
-        Trennt die Verbindung (gibt Ressourcen frei).
-        """
+        """Disconnects and releases resources."""
         self._connected = False
         self._exposure_client = None
         self._latest_image = None
-        self._logger.info("Aravis-Treiber getrennt")
+        self._logger.info('Aravis driver disconnected')
 
     # ══════════════════════════════════════════════════════════════════════════
-    # BILDAUFNAHME
+    # IMAGE CAPTURE
     # ══════════════════════════════════════════════════════════════════════════
 
     def capture_image(self) -> Optional[np.ndarray]:
         """
-        Gibt das aktuelle Kamerabild zurück.
+        Returns the current camera image.
 
-        Hinweis: Da camera_aravis2 kontinuierlich streamt,
-        ist dies identisch mit get_latest_image().
+        Note: Since camera_aravis2 streams continuously, this is identical
+        to get_latest_image().
 
         Returns:
-            np.ndarray: BGR-Bild oder None
+            np.ndarray: BGR image as a NumPy array, or None.
         """
         return self.get_latest_image()
 
     def get_latest_image(self) -> Optional[np.ndarray]:
         """
-        Gibt das zuletzt empfangene Bild zurück.
+        Returns the most recently received image.
 
-        Das Bild wird vom Image-Subscriber in camera_node.py gesetzt.
+        The image is set by the image subscriber in `camera_node.py`.
 
         Returns:
-            np.ndarray: BGR-Bild oder None wenn kein Bild
+            np.ndarray: BGR image, or None if no image is available.
         """
         return self._latest_image
 
     def set_latest_image(self, image: np.ndarray):
         """
-        Setzt das neueste Bild (von Subscriber aufgerufen).
+        Sets the latest image (called from an image subscriber).
 
         Args:
-            image: BGR-Bild als NumPy-Array
+            image: BGR image as a NumPy array.
         """
         self._latest_image = image
 
     # ══════════════════════════════════════════════════════════════════════════
-    # KAMERA-EINSTELLUNGEN
+    # CAMERA SETTINGS
     # ══════════════════════════════════════════════════════════════════════════
 
     async def set_exposure(self, exposure_time: float) -> bool:
         """
-        Setzt die Belichtungszeit über den camera_aravis2 Service.
+        Sets the exposure time via the camera_aravis2 service.
 
         Args:
-            exposure_time: Belichtungszeit in µs
+            exposure_time: Exposure time in microseconds (µs).
 
         Returns:
-            bool: True wenn erfolgreich
+            bool: True if successful.
 
         Raises:
-            CommunicationError: Service nicht verfügbar
-            HardwareError: Kamera-Fehler
+            CommunicationError: If the service is not available.
+            HardwareError: If the camera reports an error.
         """
         if self._exposure_client is None:
-            raise CommunicationError("Belichtungs-Service nicht initialisiert")
+            raise CommunicationError('Exposure service client not initialized.')
 
         if not self._exposure_client.service_is_ready():
             raise CommunicationError(
-                "camera_aravis2 Service nicht bereit. "
-                "Ist der Treiber gestartet?"
+                'camera_aravis2 service not ready. Is the driver node running?'
             )
 
-        # ── Service aufrufen ──
+        # ── Call service ──
         request = self._SetExposureTime.Request()
         request.exposure_time = exposure_time
 
@@ -214,7 +213,7 @@ class AravisCameraDriver(CameraDriver):
 
             if not response.success:
                 raise HardwareError(
-                    message=f"Belichtung setzen fehlgeschlagen: {response.error}",
+                    message=f'Failed to set exposure: {response.error}',
                     details={'exposure_time': exposure_time}
                 )
 
@@ -225,31 +224,31 @@ class AravisCameraDriver(CameraDriver):
             if isinstance(e, (HardwareError, CommunicationError)):
                 raise
             raise HardwareError(
-                message=f"Fehler beim Setzen der Belichtung: {e}",
+                message=f'Error setting exposure: {e}',
                 details={'exposure_time': exposure_time}
             )
 
     def get_exposure(self) -> Optional[float]:
         """
-        Gibt die aktuell gesetzte Belichtungszeit zurück.
+        Returns the currently set exposure time.
 
         Returns:
-            float: Belichtungszeit in µs
+            float: Exposure time in microseconds (µs).
         """
         return self._current_exposure
 
     def set_roi(self, x: int, y: int, width: int, height: int) -> bool:
         """
-        Setzt die Region of Interest.
+        Sets the Region of Interest (ROI).
 
-        Hinweis: Aktuell nicht implementiert für camera_aravis2.
-        ROI wird über den Treiber-Launch konfiguriert.
+        Note: Currently not implemented for camera_aravis2. The ROI
+        should be configured via the driver's launch parameters.
 
         Returns:
-            bool: False (nicht unterstützt)
+            bool: False (not supported).
         """
         self._logger.warning(
-            "ROI-Änderung zur Laufzeit nicht unterstützt. "
-            "Konfiguriere ROI über camera_aravis2 Launch-Parameter."
+            'Changing ROI at runtime is not supported. '
+            'Configure the ROI via camera_aravis2 launch parameters.'
         )
         return False

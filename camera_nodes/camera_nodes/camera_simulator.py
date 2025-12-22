@@ -1,71 +1,70 @@
 #!/usr/bin/env python3
 """
-Kamera-Simulator Node fuer Test und Entwicklung.
+Camera Simulator Node for Testing and Development.
 
-Dieses Modul stellt eine eigenstaendige ROS2-Node bereit, die
-den SimulatedCameraDriver verwendet, um synthetische Bilder
-zu publizieren.
+This module provides a standalone ROS2 node that uses the
+`SimulatedCameraDriver` to publish synthetic camera images.
 
-Hinweis:
-    Die Bildgenerierung erfolgt ueber SimulatedCameraDriver in
-    drivers/simulated_camera_driver.py - KEINE Code-Duplizierung!
+Note:
+    Image generation is handled by `SimulatedCameraDriver` in
+    `drivers/simulated_camera_driver.py` to avoid code duplication.
 
-Verwendung:
+Usage:
     ros2 run camera_nodes camera_simulator
 
 Topics:
-    Publiziert: /assembly_camera/image_raw (sensor_msgs/Image)
-    Abonniert: /promoc_assembly/lts300_x_axis/position (LinearAxisInfo)
+    - Publishes: /promoc/assembly_camera/stream0/image_raw (sensor_msgs/Image)
+    - Subscribes: /promoc_assembly/lts300_x_axis/position (LinearAxisInfo)
 """
 
+from cv_bridge import CvBridge
+from promoc_assembly_interfaces.msg import LinearAxisInfo
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
 
-from promoc_assembly_interfaces.msg import LinearAxisInfo
 from .drivers import SimulatedCameraDriver
 
 
 class CameraSimulator(Node):
-    """Kamera-Simulator Node fuer Autofokus-Tests."""
+    """Camera simulator node for autofocus testing."""
 
     def __init__(self):
         super().__init__('camera_simulator')
 
-        # Treiber erstellen (wiederverwendet Code aus drivers/)
+        # Create the driver (reusing code from drivers/)
         self.driver = SimulatedCameraDriver(self.get_logger())
         self.driver.connect()
 
-        # ROS2-Kommunikation
+        # ROS2 Communication
         self.bridge = CvBridge()
 
         self.publisher = self.create_publisher(
-            Image, '/assembly_camera/image_raw', 10)
+            Image, '/promoc/assembly_camera/stream0/image_raw', 10)
 
         self.subscription = self.create_subscription(
             LinearAxisInfo,
             '/promoc_assembly/lts300_x_axis/position',
             self.position_callback, 10)
 
-        # Timer fuer Bild-Publikation (10 Hz)
+        # Timer for image publication (10 Hz)
         self.timer = self.create_timer(0.1, self.timer_callback)
 
-        self.get_logger().info("Camera Simulator gestartet")
+        self.get_logger().info('Camera Simulator started')
 
     def position_callback(self, msg):
-        """Aktualisiert Fokusposition im Treiber."""
+        """Updates the focus position in the driver."""
         self.driver.set_focus_position(msg.axis_position)
 
     def timer_callback(self):
-        """Holt Bild vom Treiber und publiziert es."""
+        """Gets an image from the driver and publishes it."""
         image = self.driver.capture_image()
         if image is None:
             return
 
-        ros_image = self.bridge.cv2_to_imgmsg(image, "bgr8")
+        ros_image = self.bridge.cv2_to_imgmsg(image, 'bgr8')
         ros_image.header.stamp = self.get_clock().now().to_msg()
-        ros_image.header.frame_id = "assembly_camera_frame"
+        ros_image.header.frame_id = 'assembly_camera_frame'
         self.publisher.publish(ros_image)
 
 

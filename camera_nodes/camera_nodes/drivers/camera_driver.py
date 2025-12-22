@@ -1,198 +1,180 @@
 """
-Abstrakte Basis-Klasse für Kamera-Treiber.
+Abstract base class for camera drivers.
 
-Dieses Modul definiert das Interface, das alle Kamera-Treiber
-implementieren müssen. Es bietet eine konsistente API für
-Kamerasteuerung unabhängig von der Hardware.
+Defines the interface that all camera drivers must implement, providing
+a consistent API for camera control independent of hardware type.
 
-Implementierungen:
-==================
-    - AravisCameraDriver: Echte Kamera via camera_aravis2
-    - SimulatedCameraDriver: Simulator für Tests ohne Hardware
+Implementations:
+- AravisCameraDriver: Real camera via camera_aravis2 ROS2 wrapper
+- SimulatedCameraDriver: Simulator for testing without hardware
 
-Interface-Übersicht:
-====================
-    ┌─────────────────────────────────────────────────────────┐
-    │  CameraDriver (ABC)                                      │
-    │                                                         │
-    │  Verbindung:                                            │
-    │    connect() → bool                                     │
-    │    disconnect()                                         │
-    │    is_connected → bool                                  │
-    │                                                         │
-    │  Bildaufnahme:                                          │
-    │    capture_image() → np.ndarray                        │
-    │    get_latest_image() → np.ndarray                     │
-    │                                                         │
-    │  Kamera-Einstellungen:                                  │
-    │    set_exposure(time) → bool                           │
-    │    get_exposure() → float                              │
-    │    set_roi(x, y, width, height) → bool                 │
-    └─────────────────────────────────────────────────────────┘
+Interface:
+- Connection: connect(), disconnect(), is_connected property
+- Image capture: capture_image(), get_latest_image()
+- Settings: set_exposure(), get_exposure(), set_roi()
 
-Verwendung:
-===========
-    # Nie direkt instanziieren - immer konkrete Implementierung:
+Usage:
     driver: CameraDriver = AravisCameraDriver(node, logger)
-    
     if driver.connect():
         image = driver.capture_image()
         driver.disconnect()
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+
+from typing import Optional
+
 import numpy as np
 
 
 class CameraDriver(ABC):
     """
-    Abstrakte Basis-Klasse für alle Kamera-Treiber.
+    Abstract base class for all camera drivers.
 
-    Alle konkreten Treiber-Implementierungen müssen von dieser Klasse
-    erben und alle abstrakten Methoden implementieren.
+    All concrete driver implementations must inherit from this class
+    and implement all abstract methods.
 
-    Attribute:
-        connected (bool): Verbindungsstatus zur Hardware
-        logger: Logger für Ausgaben
+    Attributes:
+        connected (bool): Connection status to the hardware.
+        logger: Logger for output.
     """
 
     def __init__(self, logger):
         """
-        Initialisiert den Basis-Treiber.
+        Initializes the base driver.
 
         Args:
-            logger: Logger-Instanz für Ausgaben
+            logger: Logger instance for output.
         """
         self._logger = logger
         self._connected = False
 
     @property
     def is_connected(self) -> bool:
-        """Gibt zurück ob die Kamera verbunden ist."""
+        """Returns whether the camera is connected."""
         return self._connected
 
     # ══════════════════════════════════════════════════════════════════════════
-    # VERBINDUNG
+    # CONNECTION
     # ══════════════════════════════════════════════════════════════════════════
 
     @abstractmethod
     def connect(self, camera_name: str = None) -> bool:
         """
-        Verbindet zur Kamera.
+        Connects to the camera.
 
         Args:
-            camera_name: Kamera-Identifikator (z.B. IP-Adresse, Serial)
-                         Kann None sein für Simulator.
+            camera_name: Camera identifier (e.g., IP address, serial number).
+                         Can be None for the simulator.
 
         Returns:
-            bool: True wenn Verbindung erfolgreich
+            bool: True if the connection is successful.
 
         Raises:
-            DeviceNotFoundError: Kamera nicht gefunden
-            DriverNotAvailableError: Treiber-Bibliothek fehlt
-            HardwareError: Verbindungsfehler
+            DeviceNotFoundError: If the camera cannot be found.
+            DriverNotAvailableError: If a required driver library is missing.
+            HardwareError: For any other connection failure.
         """
         pass
 
     @abstractmethod
     def disconnect(self):
         """
-        Trennt die Verbindung und gibt Ressourcen frei.
+        Disconnects from the camera and releases resources.
 
-        Sollte beim Node-Shutdown aufgerufen werden.
+        Should be called on node shutdown.
         """
         pass
 
     # ══════════════════════════════════════════════════════════════════════════
-    # BILDAUFNAHME
+    # IMAGE CAPTURE
     # ══════════════════════════════════════════════════════════════════════════
 
     @abstractmethod
     def capture_image(self) -> Optional[np.ndarray]:
         """
-        Nimmt ein Bild auf und gibt es zurück.
+        Captures and returns a single image.
 
         Returns:
-            np.ndarray: BGR-Bild als NumPy-Array, oder None bei Fehler
+            np.ndarray: BGR image as a NumPy array, or None on failure.
 
         Raises:
-            CommunicationError: Keine Verbindung
-            HardwareError: Aufnahme-Fehler
+            CommunicationError: If not connected to the camera.
+            HardwareError: If an error occurs during capture.
         """
         pass
 
     @abstractmethod
     def get_latest_image(self) -> Optional[np.ndarray]:
         """
-        Gibt das zuletzt aufgenommene Bild zurück.
+        Returns the most recently captured image.
 
-        Im Gegensatz zu capture_image() wird hier kein neues Bild
-        aufgenommen, sondern das letzte gecachte Bild.
+        Unlike capture_image(), this method does not trigger a new capture
+        but returns the last cached image.
 
         Returns:
-            np.ndarray: BGR-Bild oder None wenn kein Bild verfügbar
+            np.ndarray: BGR image as a NumPy array, or None if no image is available.
         """
         pass
 
     # ══════════════════════════════════════════════════════════════════════════
-    # KAMERA-EINSTELLUNGEN
+    # CAMERA SETTINGS
     # ══════════════════════════════════════════════════════════════════════════
 
     @abstractmethod
     async def set_exposure(self, exposure_time: float) -> bool:
         """
-        Setzt die Belichtungszeit.
+        Sets the camera's exposure time.
 
         Args:
-            exposure_time: Belichtungszeit in Mikrosekunden (µs)
+            exposure_time: Exposure time in microseconds (µs).
 
         Returns:
-            bool: True wenn erfolgreich
+            bool: True if successful.
 
         Raises:
-            CommunicationError: Service nicht verfügbar
-            HardwareError: Kamera-Fehler
+            CommunicationError: If the control service is not available.
+            HardwareError: If the camera reports an error.
         """
         pass
 
     @abstractmethod
     def get_exposure(self) -> Optional[float]:
         """
-        Gibt die aktuelle Belichtungszeit zurück.
+        Returns the current exposure time.
 
         Returns:
-            float: Belichtungszeit in µs, oder None bei Fehler
+            float: Exposure time in microseconds (µs), or None on failure.
         """
         pass
 
     @abstractmethod
     def set_roi(self, x: int, y: int, width: int, height: int) -> bool:
         """
-        Setzt die Region of Interest (ROI).
+        Sets the Region of Interest (ROI).
 
         Args:
-            x: X-Offset in Pixeln
-            y: Y-Offset in Pixeln
-            width: Breite in Pixeln
-            height: Höhe in Pixeln
+            x: X-offset in pixels.
+            y: Y-offset in pixels.
+            width: Width in pixels.
+            height: Height in pixels.
 
         Returns:
-            bool: True wenn erfolgreich
+            bool: True if successful.
         """
         pass
 
     # ══════════════════════════════════════════════════════════════════════════
-    # SIMULATOR-SPEZIFISCH
+    # SIMULATOR-SPECIFIC
     # ══════════════════════════════════════════════════════════════════════════
 
     def set_focus_position(self, position: float):
         """
-        Setzt die simulierte Fokusposition (nur für Simulator).
+        Sets the simulated focus position (for simulator only).
 
-        Bei echten Treibern hat diese Methode keine Wirkung.
+        This method has no effect on real camera drivers.
 
         Args:
-            position: Simulierte Z-Position für Fokus-Berechnung
+            position: Simulated Z-position for focus calculation.
         """
-        pass  # Standard-Implementierung tut nichts
+        pass  # Default implementation does nothing.
