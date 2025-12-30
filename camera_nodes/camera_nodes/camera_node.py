@@ -234,7 +234,27 @@ class CameraNode(Node):
         Processing is triggered by services, not automatically. This callback
         only stores the image for later access.
         """
-        # self.get_logger().info("Received image") # Uncomment for debugging
+        # Enhanced debugging with connection monitoring
+        if not hasattr(self, '_image_count'):
+            self._image_count = 0
+            self._last_log_time = 0.0
+            import time
+            self._start_time = time.time()
+        
+        self._image_count += 1
+        
+        # Log every 50 images or every 10 seconds for connection verification
+        import time
+        current_time = time.time()
+        if (self._image_count % 50 == 0) or (current_time - self._last_log_time > 10.0):
+            runtime = current_time - self._start_time
+            fps = self._image_count / runtime if runtime > 0 else 0
+            self.get_logger().info(
+                f"📷 Camera active: {self._image_count} images, "
+                f"{fps:.1f} FPS, Size: {msg.width}x{msg.height}"
+            )
+            self._last_log_time = current_time
+        
         self.latest_image_msg = msg
 
         # For the Aravis driver, pass the image to the driver to be cached.
@@ -259,7 +279,10 @@ def main(args=None):
         pass
     finally:
         camera_node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass  # Already shut down
 
 
 if __name__ == '__main__':

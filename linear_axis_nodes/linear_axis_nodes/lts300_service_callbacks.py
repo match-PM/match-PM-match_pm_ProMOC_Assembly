@@ -592,11 +592,6 @@ class ServiceCallbacks:
                 response.max_velocity = self._device_units_to_mm_per_s(
                     params[2])
 
-                # Also set actual values (same as regular values for get)
-                response.actual_min_velocity = response.min_velocity
-                response.actual_acceleration = response.acceleration
-                response.actual_max_velocity = response.max_velocity
-
                 self.logger.info(
                     f'Retrieved velocity parameters: '
                     f'min={response.min_velocity:.2f}mm/s, '

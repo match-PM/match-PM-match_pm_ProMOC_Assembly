@@ -191,7 +191,8 @@ class LTS300Node(Node):
         Returns:
             dict: A dictionary containing all configuration values.
         """
-        self.declare_parameter('use_sim_time', False)
+        if not self.has_parameter('use_sim_time'):
+            self.declare_parameter('use_sim_time', False)
         self.declare_parameter('serial_port', '/dev/ttyUSB0')
         self.declare_parameter('serial_number', '00000000')
         self.declare_parameter('collision_threshold', 300.0)

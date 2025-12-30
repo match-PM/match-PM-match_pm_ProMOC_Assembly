@@ -5,12 +5,12 @@ ProMOC Autofocus System Launch File
 Starts all required nodes for autofocus testing:
 1. assembly_camera - Camera driver (camera_aravis2)
 2. camera_node - Image processing and autofocus service
-3. lts300_z_axis - Z-axis for focus movement
+3. lts300_x_axis - X-axis for focus movement
 
 Usage:
     ros2 launch promoc_bringup autofocus_system.launch.py
     ros2 launch promoc_bringup autofocus_system.launch.py use_simulator:=true
-    ros2 launch promoc_bringup autofocus_system.launch.py z_axis_port:=/dev/ttyUSB1
+    ros2 launch promoc_bringup autofocus_system.launch.py x_axis_port:=/dev/ttyUSB1
 
 Start autofocus:
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \\
@@ -38,16 +38,16 @@ def generate_launch_description():
         description='Use simulated camera instead of real hardware'
     )
 
-    z_axis_port_arg = DeclareLaunchArgument(
-        'z_axis_port',
+    x_axis_port_arg = DeclareLaunchArgument(
+        'x_axis_port',
         default_value='/dev/ttyUSB0',
-        description='Serial port for Z-axis (LTS300)'
+        description='Serial port for X-axis (LTS300)'
     )
 
-    z_axis_name_arg = DeclareLaunchArgument(
-        'z_axis_name',
-        default_value='lts300_z_axis',
-        description='Node name for Z-axis'
+    x_axis_name_arg = DeclareLaunchArgument(
+        'x_axis_name',
+        default_value='lts300_x_axis',
+        description='Node name for X-axis'
     )
 
     camera_driver_node = Node(
@@ -89,7 +89,7 @@ def generate_launch_description():
         parameters=[
             {
                 'use_simulator': LaunchConfiguration('use_simulator'),
-                'z_axis_node_name': LaunchConfiguration('z_axis_name'),
+                'z_axis_node_name': LaunchConfiguration('x_axis_name'),
                 'pixel_size_um': 3.45,
                 'mtf_csv_path': '/tmp/mtf_results.csv',
                 # Autofocus: Multi-level refinement down to 10µm by default
@@ -106,15 +106,15 @@ def generate_launch_description():
         actions=[camera_node]
     )
 
-    z_axis_node = Node(
+    x_axis_node = Node(
         package='linear_axis_nodes',
         executable='lts300_node',
-        name=LaunchConfiguration('z_axis_name'),
+        name=LaunchConfiguration('x_axis_name'),
         output='screen',
         emulate_tty=True,
         parameters=[
             {
-                'serial_port': LaunchConfiguration('z_axis_port'),
+                'serial_port': LaunchConfiguration('x_axis_port'),
                 'serial_number': '45456044',
                 'debug_mode': False,
             }
@@ -129,7 +129,7 @@ def generate_launch_description():
             "║  Starting:                                                        ║\n"
             "║    1. Camera Driver (camera_aravis2)                              ║\n"
             "║    2. Camera Node (autofocus service)                             ║\n"
-            "║    3. Z-Axis (lts300_z_axis)                                      ║\n"
+            "║    3. X-Axis (lts300_x_axis)                                      ║\n"
             "╠═══════════════════════════════════════════════════════════════════╣\n"
             "║  Start autofocus:                                                 ║\n"
             "║    ros2 service call /camera_node/autofocus \\                     ║\n"
@@ -140,12 +140,12 @@ def generate_launch_description():
 
     return LaunchDescription([
         use_simulator_arg,
-        z_axis_port_arg,
-        z_axis_name_arg,
+        x_axis_port_arg,
+        x_axis_name_arg,
 
         startup_info,
 
         camera_driver_node,
-        z_axis_node,
+        x_axis_node,
         camera_node_delayed,
     ])

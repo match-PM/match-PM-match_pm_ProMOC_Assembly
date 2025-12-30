@@ -1,9 +1,10 @@
 import os
 import yaml
 import tempfile
+import subprocess
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
@@ -41,6 +42,43 @@ def launch_setup(context, *args, **kwargs):
 
     camera_ros_params_file = os.path.join(
         bringup_pkg_share, 'config', 'camera_node_ros_params.yaml')
+
+    # Pre-launch camera reset for hardware mode
+    if not sim_mode:
+        # Try to find reset script in source directory
+        reset_script_locations = [
+            os.path.join(os.path.dirname(__file__), '..', 'promoc_bringup', 'camera_reset_hook.py'),
+            os.path.join(bringup_pkg_share, '..', '..', '..', 'src',
+                        'match-PM-match_pm_ProMOC_Assembly', 'promoc_bringup',
+                        'promoc_bringup', 'camera_reset_hook.py'),
+        ]
+        
+        reset_script = None
+        for loc in reset_script_locations:
+            if os.path.exists(loc):
+                reset_script = loc
+                break
+        
+        if reset_script:
+            launch.logging.get_logger().info(f"🔄 Executing pre-launch camera reset from {reset_script}...")
+            try:
+                # Execute reset synchronously before launching nodes
+                result = subprocess.run(
+                    ['python3', reset_script],
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                if result.stdout:
+                    for line in result.stdout.split('\n'):
+                        if line.strip():
+                            launch.logging.get_logger().info(f"  {line}")
+            except Exception as e:
+                launch.logging.get_logger().warn(
+                    f"Pre-launch reset failed: {e}, continuing anyway...")
+        else:
+            launch.logging.get_logger().warn(
+                "Pre-launch reset script not found, skipping automatic reset")
 
     if sim_mode:
         launch.logging.get_logger().info("🚀 Launching Camera in SIMULATION mode")
@@ -147,6 +185,22 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 arguments=['--ros-args', '--log-level', 'INFO'],
                 parameters=[camera_ros_params_file, {'use_simulator': False}],
+            ))
+
+            # Add camera watchdog for automatic recovery
+            launch_actions.append(Node(
+                package='camera_nodes',
+                executable='camera_watchdog',
+                name='camera_watchdog',
+                namespace='promoc',
+                output='screen',
+                arguments=['--ros-args', '--log-level', 'INFO'],
+                parameters=[{
+                    'image_topic': '/promoc/assembly_camera/stream0/image_raw',
+                    'timeout_seconds': 10.0,
+                    'enable_auto_reset': True,
+                    'reset_cooldown_seconds': 30.0
+                }]
             ))
 
         except Exception as e:

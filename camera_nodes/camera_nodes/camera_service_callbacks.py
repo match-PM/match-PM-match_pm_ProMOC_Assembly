@@ -33,7 +33,13 @@ Exception Handling:
 import time
 
 import cv2
-from promoc_assembly_interfaces.srv import GetOperationStatus, JogAxis, MoveAbsolute
+from promoc_assembly_interfaces.srv import (
+    GetOperationStatus,
+    GetVelocityParameters,
+    JogAxis,
+    MoveAbsolute,
+    SetVelocityParameters,
+)
 from promoc_core.algorithms import (
     AutofocusConfig,
     HybridAutofocus,
@@ -275,6 +281,8 @@ class CameraServiceCallbacks:
             move_service = f'/{z_axis_name}/move_absolute'
             jog_service = f'/{z_axis_name}/jog_axis'
             status_service = f'/{z_axis_name}/get_operation_status'
+            get_velocity_service = f'/{z_axis_name}/get_velocity_parameters'
+            set_velocity_service = f'/{z_axis_name}/set_velocity_parameters'
 
             move_abs_client = self._node.create_client(
                 MoveAbsolute, move_service)
@@ -282,6 +290,10 @@ class CameraServiceCallbacks:
                 JogAxis, jog_service)
             status_client = self._node.create_client(
                 GetOperationStatus, status_service)
+            get_velocity_client = self._node.create_client(
+                GetVelocityParameters, get_velocity_service)
+            set_velocity_client = self._node.create_client(
+                SetVelocityParameters, set_velocity_service)
 
             if not move_abs_client.wait_for_service(timeout_sec=1.0):
                 raise ServiceCallFailedError(
@@ -301,6 +313,42 @@ class CameraServiceCallbacks:
                     'Linear axis get_operation_status service not available',
                     details={'service': status_service, 'timeout': 1.0}
                 )
+
+            if not get_velocity_client.wait_for_service(timeout_sec=1.0):
+                raise ServiceCallFailedError(
+                    'Linear axis get_velocity_parameters service not available',
+                    details={'service': get_velocity_service, 'timeout': 1.0}
+                )
+
+            if not set_velocity_client.wait_for_service(timeout_sec=1.0):
+                raise ServiceCallFailedError(
+                    'Linear axis set_velocity_parameters service not available',
+                    details={'service': set_velocity_service, 'timeout': 1.0}
+                )
+
+            # Get current velocity parameters for later restoration
+            get_vel_req = GetVelocityParameters.Request()
+            get_vel_resp = get_velocity_client.call(get_vel_req)
+            if get_vel_resp is None or not get_vel_resp.success:
+                raise ServiceCallFailedError(
+                    'Failed to get current velocity parameters',
+                    details={'service': get_velocity_service}
+                )
+            original_max_velocity = get_vel_resp.max_velocity
+            original_min_velocity = get_vel_resp.min_velocity
+            original_acceleration = get_vel_resp.acceleration
+            reduced_max_velocity = original_max_velocity * (2.0 / 3.0)  # 2/3 speed for backward
+            self._node.get_logger().info(
+                f'Velocity settings: normal={original_max_velocity:.2f}mm/s, '
+                f'reduced (backward)={reduced_max_velocity:.2f}mm/s')
+
+            def _set_velocity(max_vel: float) -> None:
+                """Helper to set axis velocity."""
+                set_vel_req = SetVelocityParameters.Request()
+                set_vel_req.min_velocity = original_min_velocity
+                set_vel_req.acceleration = original_acceleration
+                set_vel_req.max_velocity = max_vel
+                set_velocity_client.call(set_vel_req)
 
             # Configure the HybridAutofocus algorithm from promoc_core.
             # Multi-level refinement can be enabled via ROS parameters
@@ -419,11 +467,21 @@ class CameraServiceCallbacks:
 
                 # Move to next requested position
                 next_pos = float(af_result.next_z_mm)
+
+                # Reduce velocity when moving backward (decreasing position)
+                # to prevent axis issues (loud beeping)
+                is_backward = next_pos < current_pos
+                if is_backward:
+                    _set_velocity(reduced_max_velocity)
+                else:
+                    _set_velocity(original_max_velocity)
+
                 move_req = MoveAbsolute.Request()
                 move_req.axis_position = next_pos
                 move_response = move_abs_client.call(move_req)
 
                 if move_response is None or not move_response.success:
+                    _set_velocity(original_max_velocity)  # Restore on error
                     raise ServiceCallFailedError(
                         f'Failed to move axis to {next_pos}',
                         details={'target_position': next_pos}
@@ -450,6 +508,8 @@ class CameraServiceCallbacks:
                 )
 
             # Ensure we end at best position
+            # Restore normal velocity for final move
+            _set_velocity(original_max_velocity)
             move_req = MoveAbsolute.Request()
             move_req.axis_position = float(best_position)
             move_response = move_abs_client.call(move_req)
