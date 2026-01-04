@@ -194,7 +194,7 @@ class ServiceCallbacks:
                     f'Moving {move_type} to {position:.2f}mm...'
                 )
 
-            self.logger.info(
+            self.logger.debug(
                 f'🎯 Starting {move_type} movement to {position:.2f}mm...'
             )
 
@@ -203,14 +203,14 @@ class ServiceCallbacks:
             else:
                 self.driver.move_relative(position)
 
-            self.logger.info(
+            self.logger.debug(
                 f'Hardware {move_type} movement command completed'
             )
 
             # Get final position for confirmation
             try:
                 final_pos = self.driver.get_position()
-                self.logger.info(
+                self.logger.debug(
                     f'Final position after {move_type} movement: {final_pos:.2f}mm'
                 )
             except Exception as pos_e:
@@ -225,7 +225,7 @@ class ServiceCallbacks:
                     f'Movement completed - final position: {final_pos}mm'
                 )
 
-            self.logger.info(
+            self.logger.debug(
                 f'{move_type.capitalize()} movement completed successfully'
             )
 
@@ -347,7 +347,7 @@ class ServiceCallbacks:
             self._collision_check(other_axis_position)
 
             # Start movement in background thread
-            self.logger.info(
+            self.logger.debug(
                 f'Starting asynchronous absolute movement to: {request.axis_position} mm')
             move_thread = threading.Thread(
                 target=self._async_move_operation,
@@ -409,7 +409,7 @@ class ServiceCallbacks:
             self._collision_check(other_axis_position)
 
             # Start movement in background thread
-            self.logger.info(
+            self.logger.debug(
                 f'Starting asynchronous relative movement by: {request.axis_position} mm')
             move_thread = threading.Thread(
                 target=self._async_move_operation,
@@ -534,10 +534,10 @@ class ServiceCallbacks:
             max_vel = None if request.max_velocity < 0 else self._mm_per_s_to_device_units(
                 request.max_velocity)
 
-            self.logger.info(
+            self.logger.debug(
                 f'Setting velocity parameters: min={min_vel}, accel={accel}, '
                 f'max={max_vel} (device units)')
-            self.logger.info(
+            self.logger.debug(
                 f'Converted from mm/s: min={request.min_velocity}, '
                 f'accel={request.acceleration}, max={request.max_velocity}')
 
@@ -556,7 +556,7 @@ class ServiceCallbacks:
                 response.actual_max_velocity = self._device_units_to_mm_per_s(
                     result[2])
 
-                self.logger.info(
+                self.logger.debug(
                     f'Actual velocity parameters set: '
                     f'min={response.actual_min_velocity:.2f}mm/s, '
                     f'accel={response.actual_acceleration:.2f}mm/s², '
@@ -592,7 +592,7 @@ class ServiceCallbacks:
                 response.max_velocity = self._device_units_to_mm_per_s(
                     params[2])
 
-                self.logger.info(
+                self.logger.debug(
                     f'Retrieved velocity parameters: '
                     f'min={response.min_velocity:.2f}mm/s, '
                     f'accel={response.acceleration:.2f}mm/s², '
@@ -739,7 +739,7 @@ class ServiceCallbacks:
             try:
                 step_size = request.step_size
                 direction_str = 'positive' if step_size >= 0 else 'negative'
-                self.logger.info(
+                self.logger.debug(
                     f'🕹️ Jog step: {step_size:+.2f}mm ({direction_str} direction)'
                 )
 

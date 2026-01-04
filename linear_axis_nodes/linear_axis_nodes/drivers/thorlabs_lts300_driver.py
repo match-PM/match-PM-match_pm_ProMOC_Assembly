@@ -475,7 +475,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             if max_velocity is None:
                 max_velocity = current_params[2]
 
-            self.logger.info(
+            self.logger.debug(
                 f'Setting velocity parameters: min={min_velocity:.3f}mm/s, '
                 f'accel={acceleration:.3f}mm/s², max={max_velocity:.3f}mm/s'
             )
@@ -493,7 +493,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 scale=False
             )
 
-            self.logger.info('Velocity parameters updated successfully')
+            self.logger.debug('Velocity parameters updated successfully')
 
             return self.get_velocity_parameters()
 

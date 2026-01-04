@@ -243,13 +243,13 @@ class CameraNode(Node):
         
         self._image_count += 1
         
-        # Log every 50 images or every 10 seconds for connection verification
+        # Log every 50 images or every 10 seconds for connection verification (DEBUG level)
         import time
         current_time = time.time()
         if (self._image_count % 50 == 0) or (current_time - self._last_log_time > 10.0):
             runtime = current_time - self._start_time
             fps = self._image_count / runtime if runtime > 0 else 0
-            self.get_logger().info(
+            self.get_logger().debug(
                 f"📷 Camera active: {self._image_count} images, "
                 f"{fps:.1f} FPS, Size: {msg.width}x{msg.height}"
             )

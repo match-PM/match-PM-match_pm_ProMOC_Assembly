@@ -30,6 +30,9 @@ Exception Handling:
 - ServiceCallFailedError: Z-axis service unavailable
 """
 
+import csv
+from datetime import datetime
+from pathlib import Path
 import time
 
 import cv2
@@ -114,6 +117,62 @@ class CameraServiceCallbacks:
             self._node.get_logger().warn(
                 f"Unsupported sharpness metric '{metric}', using 'tenengrad' instead")
         return tenengrad(image)
+
+    # CSV EXPORT
+
+    def _export_autofocus_csv(
+        self,
+        measurements: list[dict],
+        best_position: float,
+        best_score: float
+    ) -> str | None:
+        """
+        Export autofocus measurements to a CSV file.
+
+        Args:
+            measurements: List of measurement dictionaries
+            best_position: Best focus position in mm
+            best_score: Best tenengrad score
+
+        Returns:
+            Path to the created CSV file, or None on error
+        """
+        if not measurements:
+            return None
+
+        try:
+            # Create output directory in home folder
+            output_dir = Path.home() / 'autofocus_logs'
+            output_dir.mkdir(exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            csv_filename = f'autofocus_{timestamp}.csv'
+            csv_path = output_dir / csv_filename
+
+            # Write CSV file
+            fieldnames = [
+                'timestamp_s', 'z_position_mm', 'tenengrad_score',
+                'best_score', 'phase', 'step_mm', 'range_mm'
+            ]
+
+            with open(csv_path, 'w', newline='') as csvfile:
+                # Write header comment with summary
+                csvfile.write(f'# Autofocus Results - {datetime.now().isoformat()}\n')
+                csvfile.write(f'# Best Position: {best_position:.4f} mm\n')
+                csvfile.write(f'# Best Tenengrad Score: {best_score:.2f}\n')
+                csvfile.write(f'# Total Measurements: {len(measurements)}\n')
+                csvfile.write('#\n')
+
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(measurements)
+
+            return str(csv_path)
+
+        except Exception as e:
+            self._node.get_logger().warn(f'Failed to export autofocus CSV: {e}')
+            return None
 
     # ROI SELECTION
 
@@ -418,6 +477,10 @@ class CameraServiceCallbacks:
             best_score: float = 0.0
             max_iterations = 1000
 
+            # Collect measurements for CSV export
+            af_measurements: list[dict] = []
+            af_start_time = time.time()
+
             for _ in range(max_iterations):
                 if self._node.latest_image_msg is None:
                     # give the image subscriber a moment
@@ -435,7 +498,20 @@ class CameraServiceCallbacks:
                 af_result = af.process_image(current_pos, cv_image)
                 best_score = af_result.best_score
 
-                # Logging (lightweight)
+                # Collect measurement data for CSV export
+                measurement_time = time.time() - af_start_time
+                if af_result.current_score:
+                    af_measurements.append({
+                        'timestamp_s': round(measurement_time, 3),
+                        'z_position_mm': round(current_pos, 4),
+                        'tenengrad_score': round(af_result.current_score, 2),
+                        'best_score': round(best_score, 2),
+                        'phase': af_result.phase.name,
+                        'step_mm': af_result.refinement_step_mm,
+                        'range_mm': af_result.refinement_range_mm,
+                    })
+
+                # Logging with Tenengrad score
                 if af_result.current_score:
                     level_info = ''
                     if (
@@ -448,11 +524,11 @@ class CameraServiceCallbacks:
                         )
                     self._node.get_logger().info(
                         f'AF {af_result.phase.name}: z={current_pos:.3f}mm '
-                        f'score={af_result.current_score:.2f} best={best_score:.2f}{level_info}'
+                        f'tenengrad={af_result.current_score:.0f} best={best_score:.0f}{level_info}'
                     )
                 else:
                     self._node.get_logger().debug(
-                        f'AF {af_result.phase.name}: z={current_pos:.3f}mm best={best_score:.2f}')
+                        f'AF {af_result.phase.name}: z={current_pos:.3f}mm best={best_score:.0f}')
 
                 if af_result.finished:
                     best_position = float(
@@ -497,7 +573,12 @@ class CameraServiceCallbacks:
                 )
 
             self._node.get_logger().info(
-                f'📷 Best focus position: {best_position:.3f}mm (score: {best_score:.2f})')
+                f'📷 Best focus position: {best_position:.3f}mm (tenengrad: {best_score:.0f})')
+
+            # Export measurements to CSV
+            csv_path = self._export_autofocus_csv(af_measurements, best_position, best_score)
+            if csv_path:
+                self._node.get_logger().info(f'📄 Autofocus data saved to: {csv_path}')
 
             final_step = getattr(af_result, 'refinement_step_mm', None)
             final_range = getattr(af_result, 'refinement_range_mm', None)

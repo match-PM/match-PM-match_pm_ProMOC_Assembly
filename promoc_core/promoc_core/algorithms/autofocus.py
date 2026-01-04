@@ -167,6 +167,13 @@ class AutofocusConfig:
     min_step_mm: float = 0.01
     refinement_shrink_factor: float = 0.35
 
+    # Early Stopping: Stop the fine search early if the focus score decreases
+    # for a consecutive number of measurements. This saves time when the
+    # maximum has been passed.
+    early_stopping_enabled: bool = True
+    early_stopping_count: int = 3  # Stop after N consecutive decreasing scores
+    early_stopping_threshold: float = 0.95  # Stop if score drops below 95% of best
+
     # Focus Metric: Tenengrad has proven robust for single-image analysis.
     # We keep the parameter for backward compatibility (e.g., in config files)
     # but only allow 'tenengrad'.
@@ -366,6 +373,10 @@ class HybridAutofocus:
         # Multi-Level Refinement State
         self._refine_current_step_mm: float = self.config.fine_step_mm
         self._refine_current_range_mm: float = self.config.fine_range_mm
+
+        # Early Stopping State
+        self._consecutive_decreasing: int = 0  # Count of consecutive decreasing scores
+        self._fine_best_score: float = 0.0  # Best score in current fine search level
 
         # Bidirectional: results from both directions
         self._forward_measurements: List[_FocusMeasurement] = []
@@ -657,6 +668,10 @@ class HybridAutofocus:
         self._phase = FocusPhase.FINE_SEARCH
         self._fine_index = 0
 
+        # Reset early stopping state for the new fine search level
+        self._consecutive_decreasing = 0
+        self._fine_best_score = 0.0
+
         return AutofocusResult(
             finished=False,
             next_z_mm=self._fine_positions[0],
@@ -671,6 +686,7 @@ class HybridAutofocus:
         Processes an image during the unidirectional fine search.
 
         Moves in one direction only through the fine search range.
+        Supports early stopping when focus score decreases consistently.
         """
         # Calculate focus score
         score = self._compute_focus_score(image)
@@ -679,10 +695,27 @@ class HybridAutofocus:
         self._measurements.append(
             _FocusMeasurement(z_mm=current_z_mm, score=score))
 
-        # Track best result
+        # Track best result (global)
         if score > self._best_score:
             self._best_score = score
             self._best_z = current_z_mm
+
+        # Track best in current fine search level for early stopping
+        if score > self._fine_best_score:
+            self._fine_best_score = score
+            self._consecutive_decreasing = 0
+        else:
+            self._consecutive_decreasing += 1
+
+        # Early stopping check: if score drops significantly below best
+        should_early_stop = False
+        if self.config.early_stopping_enabled and self._fine_best_score > 0:
+            # Check if we've seen enough consecutive decreasing scores
+            if self._consecutive_decreasing >= self.config.early_stopping_count:
+                # Also verify the score has dropped below threshold
+                relative_score = score / self._fine_best_score
+                if relative_score < self.config.early_stopping_threshold:
+                    should_early_stop = True
 
         # Progress: 50% (coarse) + 50% (fine)
         progress = 0.5 + (self._fine_index + 1) / \
@@ -691,7 +724,8 @@ class HybridAutofocus:
         # Move to next position
         self._fine_index += 1
 
-        if self._fine_index < len(self._fine_positions):
+        # Continue fine search if not at end and not early stopping
+        if self._fine_index < len(self._fine_positions) and not should_early_stop:
             next_z = self._fine_positions[self._fine_index]
             return AutofocusResult(
                 finished=False,
@@ -705,7 +739,11 @@ class HybridAutofocus:
                 message=f"Fine search: {self._fine_index}/{len(self._fine_positions)}"
             )
 
-        # Fine search level complete → possibly continue with refinement
+        # Fine search level complete (or early stopped) → possibly continue with refinement
+        # Reset early stopping state for next level
+        self._consecutive_decreasing = 0
+        self._fine_best_score = 0.0
+
         if self.config.enable_multilevel and self._refine_current_step_mm > self.config.min_step_mm:
             # Narrow the range and choose a step size appropriate for the new range,
             # such that approximately `refinement_samples` points are scanned.
