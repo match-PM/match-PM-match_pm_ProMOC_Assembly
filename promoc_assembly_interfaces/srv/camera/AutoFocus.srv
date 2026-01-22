@@ -1,13 +1,26 @@
 # Request: Define the search range for autofocus
 
 # Start position for the scan (in mm)
-float32 start_position
+float64 start_position
 
 # End position for the scan (in mm)
-float32 end_position
+float64 end_position
 
 # Step size for each move (in mm)
-float32 step_size
+float64 step_size
+
+# --- OPTIONAL: Expected Peak Value ---
+# Expected peak Tenengrad score in millions (e.g., 80.0 for 80M)
+# Used by HillClimbing algorithm to determine when to stop coarse scan
+# If 0 or not provided, default threshold (100M) is used
+float64 estimated_peak_millions
+
+# --- OPTIONAL MEASUREMENT CONDITIONS ---
+# If values are not provided (empty/zero), the configured node parameters are used.
+float64 coaxial_light_voltage
+float64 coaxial_light_current
+string camera_objective
+string notes
 
 ---
 
@@ -20,4 +33,16 @@ bool success
 string message
 
 # Best focus position found (in mm)
-float32 best_focus_position
+float64 best_focus_position
+
+# Best focus value (e.g., sharpness metric)
+float64 best_focus_value
+
+# Total number of measurements taken during the autofocus process
+int32 total_measurements_taken
+
+# Duration of the autofocus operation in seconds
+float64 duration_seconds
+
+
+

@@ -13,7 +13,7 @@ The algorithm works as follows:
 6. Extract MTF50, MTF20, MTF10 values
 
 Usage:
-    from promoc_core.algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
+    from camera_nodes.algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
     
     config = MTFConfig(pixel_size_um=3.45)
     analyzer = MTFAnalyzer(config)

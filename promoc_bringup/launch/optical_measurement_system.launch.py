@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 """
-ProMOC Autofocus System Launch File
+ProMOC Optical Measurement System Launch File
 
-Starts all required nodes for autofocus testing:
-1. assembly_camera - Camera driver (camera_aravis2)
-2. camera_node - Image processing and autofocus service
-3. lts300_x_axis - X-axis for focus movement
+Starts complete optical measurement station with:
+1. assembly_camera - Camera driver (camera_aravis2) 
+2. camera_node - Image processing with services:
+   - Autofocus (multi-level refinement algorithm)
+   - MTF measurement (ISO 12233 slanted edge)
+   - ROI selection
+3. lts300_x_axis - X-axis linear stage for focus positioning
 
 Usage:
-    ros2 launch promoc_bringup autofocus_system.launch.py
-    ros2 launch promoc_bringup autofocus_system.launch.py use_simulator:=true
-    ros2 launch promoc_bringup autofocus_system.launch.py x_axis_port:=/dev/ttyUSB1
+    ros2 launch promoc_bringup optical_measurement_system.launch.py
+    ros2 launch promoc_bringup optical_measurement_system.launch.py use_simulator:=true
+    ros2 launch promoc_bringup optical_measurement_system.launch.py x_axis_port:=/dev/ttyUSB1
 
-Start autofocus:
+Available Services:
+    # Autofocus
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \\
-        "{start_position: 100.0, end_position: 150.0, step_size: 0.5}"
+        "{start_position: 100.0, end_position: 150.0, step_size: 5.0}"
+    
+    # MTF Measurement
+    ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF "{}"
 """
 
 import os
+import yaml
 from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, TimerAction
@@ -29,8 +37,54 @@ from launch_ros.actions import Node
 os.environ['RCUTILS_CONSOLE_OUTPUT_FORMAT'] = '{time}: [{name}] [{severity}]\t{message}'
 
 
+def load_user_config():
+    """Load user configuration from user_config.yaml with fallback to defaults."""
+    config_dir = os.path.join(
+        get_package_share_directory('promoc_bringup'), 'config')
+    user_config_path = os.path.join(config_dir, 'user_config.yaml')
+    
+    defaults = {
+        'user': {'name': 'default_user'},
+        'autofocus': {
+            'refinement_samples': 51,
+            'min_step_mm': 0.010,
+            'refinement_shrink_factor': 0.25,
+        },
+        'camera': {
+            'pixel_size_um': 3.45,
+            'mtf_csv_path': '/tmp/mtf_results.csv',
+        },
+        'measurement_conditions': {
+            'coaxial_light_voltage': 0.0,
+            'coaxial_light_current': 0.0,
+            'camera_objective': 'unknown',
+            'notes': '',
+        }
+    }
+    
+    if os.path.exists(user_config_path):
+        try:
+            with open(user_config_path, 'r') as f:
+                user_config = yaml.safe_load(f) or {}
+            # Merge user config with defaults
+            for section in defaults:
+                if section in user_config:
+                    defaults[section].update(user_config[section])
+            print(f"✓ Loaded user config: {user_config_path}")
+        except Exception as e:
+            print(f"⚠ Failed to load user config: {e}, using defaults")
+    else:
+        print(f"ℹ No user config found at {user_config_path}, using defaults")
+        print(f"  Create one with: cp user_config.example.yaml user_config.yaml")
+    
+    return defaults
+
+
 def generate_launch_description():
-    """Generate launch description for autofocus system."""
+    """Generate launch description for optical measurement system."""
+
+    # Load user configuration
+    config = load_user_config()
 
     use_simulator_arg = DeclareLaunchArgument(
         'use_simulator',
@@ -88,15 +142,20 @@ def generate_launch_description():
         emulate_tty=True,
         parameters=[
             {
+                'measurement.username': config['user']['name'],
                 'use_simulator': LaunchConfiguration('use_simulator'),
                 'z_axis_node_name': LaunchConfiguration('x_axis_name'),
-                'pixel_size_um': 3.45,
-                'mtf_csv_path': '/tmp/mtf_results.csv',
-                # Autofocus: Multi-level refinement down to 10µm by default
-                'autofocus.enable_multilevel': True,
-                'autofocus.refinement_samples': 51,
-                'autofocus.min_step_mm': 0.01,
-                'autofocus.refinement_shrink_factor': 0.35,
+                'pixel_size_um': config['camera']['pixel_size_um'],
+                'mtf_csv_path': config['camera']['mtf_csv_path'],
+                # Autofocus: Multi-level refinement down to 10µm (LTS300: 4µm repeatable, 70µm DOF)
+                'autofocus.refinement_samples': config['autofocus']['refinement_samples'],
+                'autofocus.min_step_mm': config['autofocus']['min_step_mm'],
+                'autofocus.refinement_shrink_factor': config['autofocus']['refinement_shrink_factor'],
+                # Measurement conditions for CSV documentation
+                'measurement_conditions.coaxial_light_voltage': config['measurement_conditions']['coaxial_light_voltage'],
+                'measurement_conditions.coaxial_light_current': config['measurement_conditions']['coaxial_light_current'],
+                'measurement_conditions.camera_objective': config['measurement_conditions']['camera_objective'],
+                'measurement_conditions.notes': config['measurement_conditions']['notes'],
             }
         ]
     )
@@ -124,17 +183,17 @@ def generate_launch_description():
     startup_info = LogInfo(
         msg="\n"
             "╔═══════════════════════════════════════════════════════════════════╗\n"
-            "║  ProMOC Autofocus System                                          ║\n"
+            "║  ProMOC Optical Measurement System                                ║\n"
             "╠═══════════════════════════════════════════════════════════════════╣\n"
-            "║  Starting:                                                        ║\n"
+            "║  Components:                                                      ║\n"
             "║    1. Camera Driver (camera_aravis2)                              ║\n"
-            "║    2. Camera Node (autofocus service)                             ║\n"
-            "║    3. X-Axis (lts300_x_axis)                                      ║\n"
+            "║    2. Camera Node (image processing + services)                   ║\n"
+            "║    3. X-Axis Linear Stage (LTS300)                                ║\n"
             "╠═══════════════════════════════════════════════════════════════════╣\n"
-            "║  Start autofocus:                                                 ║\n"
-            "║    ros2 service call /camera_node/autofocus \\                     ║\n"
-            "║      promoc_assembly_interfaces/srv/AutoFocus \\                   ║\n"
-            "║      \"{start_position: 100.0, end_position: 150.0, step_size: 5}\"║\n"
+            "║  Available Services:                                              ║\n"
+            "║    • Autofocus: /camera_node/autofocus                            ║\n"
+            "║    • MTF Measurement: /camera_node/measure_mtf                    ║\n"
+            "║    • ROI Selection: /camera_node/select_roi                       ║\n"
             "╚═══════════════════════════════════════════════════════════════════╝\n"
     )
 

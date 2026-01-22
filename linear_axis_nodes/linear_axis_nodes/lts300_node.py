@@ -157,6 +157,27 @@ class LTS300Node(Node):
             self.other_axis_position = None
             self._setup_ros_communication()
 
+            # ══════════════════════════════════════════════════════════════════
+            # PHASE 5: Post-Initialization Setup
+            # ══════════════════════════════════════════════════════════════════
+            try:
+                # Set initial velocity parameters beim Start
+                self.get_logger().info('Setting initial velocity parameters: min_vel=0.0, accel=0.002, max_vel=10')
+                request = SetVelocityParameters.Request()
+                request.min_velocity = 0.0
+                request.acceleration = 0.002
+                request.max_velocity = 10.0
+                response = SetVelocityParameters.Response()
+                self.callbacks.callback_set_velocity_parameters(request, response)
+                
+                if response.success:
+                    self.get_logger().info(f'Initial velocity parameters set successfully: {response.status_message}')
+                else:
+                    self.get_logger().warn(f'Failed to set initial velocity parameters: {response.status_message}')
+
+            except Exception as e:
+                self.get_logger().warn(f'Failed to set initial velocity parameters: {e}')
+
             self.get_logger().info(
                 f"{self.get_name()} with S/N {self.config['serial_number']} is running.")
             self.get_logger().info('Node initialization complete!')
@@ -375,13 +396,54 @@ class LTS300Node(Node):
 
     def shutdown_device(self):
         """Performs a clean shutdown of the device."""
-        self.get_logger().info('Homing device before shutdown...')
+        self.get_logger().info('Shutting down device...')
         try:
-            self.interface.driver.home()
+            # Check if interface exists and driver is connected
+            if not hasattr(self, 'interface'):
+                self.get_logger().warn('No interface found during shutdown')
+                return
+                
+            if not hasattr(self.interface, 'driver'):
+                self.get_logger().warn('No driver found during shutdown')
+                return
+            
+            # Check connection status
+            if not self.interface.driver.connected:
+                self.get_logger().warn('Driver not connected during shutdown')
+                return
+            
+            self.get_logger().info('Device is connected, starting shutdown sequence...')
+            
+            # Move to 15mm before homing (to speed up shutdown)
+            try:
+                current_pos = self.interface.driver.get_position()
+                self.get_logger().info(f'Current position: {current_pos:.2f}mm')
+                self.get_logger().info('Moving to 15.0mm before homing...')
+                
+                success = self.interface.driver.move_absolute(15.0, wait=True)
+                if success:
+                    final_pos = self.interface.driver.get_position()
+                    self.get_logger().info(f'Successfully moved to 15.0mm (actual: {final_pos:.2f}mm)')
+                else:
+                    self.get_logger().warn('move_absolute returned False')
+            except Exception as e:
+                self.get_logger().error(f'Failed to move to 15.0mm: {e}', exc_info=True)
+
+            # Homing
+            try:
+                self.get_logger().info('Starting homing sequence...')
+                self.interface.driver.home()
+                self.get_logger().info('Homing completed')
+            except Exception as e:
+                self.get_logger().error(f'Homing failed: {e}', exc_info=True)
+                
         except Exception as e:
-            self.get_logger().error(f'Error during homing on shutdown: {e}')
+            self.get_logger().error(f'Error during shutdown sequence: {e}', exc_info=True)
         finally:
-            self.interface.disconnect()
+            if hasattr(self, 'interface'):
+                self.get_logger().info('Disconnecting interface...')
+                self.interface.disconnect()
+                self.get_logger().info('Interface disconnected')
 
 
 def main(args=None):

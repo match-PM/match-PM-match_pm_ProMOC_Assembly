@@ -38,10 +38,7 @@ def launch_setup(context, *args, **kwargs):
     bringup_pkg_share = get_package_share_directory('promoc_bringup')
 
     camera_config_file = os.path.join(
-        bringup_pkg_share, 'config', 'camera_node_params.yaml')
-
-    camera_ros_params_file = os.path.join(
-        bringup_pkg_share, 'config', 'camera_node_ros_params.yaml')
+        bringup_pkg_share, 'config', 'ids_camera_params.yaml')
 
     # Pre-launch camera reset for hardware mode
     if not sim_mode:
@@ -97,7 +94,10 @@ def launch_setup(context, *args, **kwargs):
             name='camera_node',
             namespace='promoc',
             output='screen',
-            parameters=[camera_ros_params_file, {'use_simulator': True}],
+            parameters=[{
+                'use_simulator': True,
+                'mtf_csv_path': '/tmp/mtf_results.csv'
+            }],
             arguments=['--ros-args', '--log-level', 'INFO']
         ))
 
@@ -184,7 +184,10 @@ def launch_setup(context, *args, **kwargs):
                 namespace='promoc',
                 output='screen',
                 arguments=['--ros-args', '--log-level', 'INFO'],
-                parameters=[camera_ros_params_file, {'use_simulator': False}],
+                parameters=[{
+                    'use_simulator': False,
+                    'mtf_csv_path': '/tmp/mtf_results.csv'
+                }],
             ))
 
             # Add camera watchdog for automatic recovery

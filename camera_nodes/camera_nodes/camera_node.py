@@ -130,12 +130,20 @@ class CameraNode(Node):
         self.declare_parameter('default_roi_height', 200)
         # Name of z-axis node for autofocus
         self.declare_parameter('z_axis_node_name', 'lts300_z_axis')
+        
+        # Measurement parameters
+        self.declare_parameter('measurement.username', '')
 
-        # Autofocus refinement (optional, keeps stable defaults)
-        self.declare_parameter('autofocus.enable_multilevel', True)
+        # Autofocus refinement parameters
         self.declare_parameter('autofocus.refinement_samples', 51)
         self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
         self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
+        
+        # Measurement conditions for scientific documentation
+        self.declare_parameter('measurement_conditions.coaxial_light_voltage', 0.0)
+        self.declare_parameter('measurement_conditions.coaxial_light_current', 0.0)
+        self.declare_parameter('measurement_conditions.camera_objective', 'unknown')
+        self.declare_parameter('measurement_conditions.notes', '')
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value
@@ -185,6 +193,24 @@ class CameraNode(Node):
             AutoFocus,
             '~/autofocus',
             self.service_callbacks.autofocus_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_parabolic_service = self.create_service(
+            AutoFocus,
+            '~/autofocus_parabolic',
+            self.service_callbacks.autofocus_parabolic_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_fast_service = self.create_service(
+            AutoFocus,
+            '~/autofocus_fast',
+            self.service_callbacks.autofocus_fast_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_comparison_service = self.create_service(
+            AutoFocus,
+            '~/autofocus_comparison_test',
+            self.service_callbacks.autofocus_comparison_test_callback,
             callback_group=self.cb_group,
         )
         self.mtf_service = self.create_service(

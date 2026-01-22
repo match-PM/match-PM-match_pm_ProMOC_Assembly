@@ -19,6 +19,9 @@ src/match-PM-match_pm_ProMOC_Assembly/planar_motor_nodes/planar_motor_nodes/driv
 # Environment files
 .env
 
+# User-specific configuration (not tracked)
+promoc_bringup/config/user_config.yaml
+
 # IDE files
 .vscode/
 .idea/

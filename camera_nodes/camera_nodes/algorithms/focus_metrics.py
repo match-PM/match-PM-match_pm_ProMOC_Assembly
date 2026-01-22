@@ -13,7 +13,7 @@ Which metric to use?
     - `sml`: Sum of Modified Laplacian (second derivative, often good edge sensitivity).
 
 Quickstart:
-    from promoc_core.algorithms.focus_metrics import laplacian_variance, tenengrad
+    from camera_nodes.algorithms.focus_metrics import laplacian_variance, tenengrad
 
     score = laplacian_variance(image)
     score = tenengrad(image, threshold=0.0)

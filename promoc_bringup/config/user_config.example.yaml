@@ -1,0 +1,41 @@
+# ============================================================================
+# ProMOC User Configuration Template
+# ============================================================================
+# Copy this file to 'user_config.yaml' and fill in your personal settings.
+# The user_config.yaml file is ignored by Git and won't be committed.
+#
+# Quick Start:
+#   cp user_config.example.yaml user_config.yaml
+#   nano user_config.yaml  # Edit with your name
+#
+# ============================================================================
+
+user:
+  # Your name for measurement logs (e.g., 'M.Mustermann', 'A.Schmidt')
+  # Logs will be saved to: ~/Dokumente/Messungen/{name}/autofocus_logs/
+  name: 'YourName'
+
+  # Optional: Measurement base directory (default: ~/Dokumente/Messungen)
+  # measurement_base_path: '~/Dokumente/Messungen'
+
+  # Optional: Enable debug image saving during autofocus
+  # save_debug_images: false
+
+# Autofocus algorithm tuning (optional overrides)
+# autofocus:
+#   refinement_samples: 51            # Number of samples per refinement level
+#   min_step_mm: 0.010                # Minimum step size (10µm, LTS300 limit: 4µm)
+#   refinement_shrink_factor: 0.25    # Range reduction per level (smaller = faster)
+
+# Camera settings (optional overrides)
+# camera:
+#   pixel_size_um: 3.45               # Sensor pixel size in micrometers
+#   exposure_time_us: 5000            # Default exposure time
+
+# Measurement conditions for scientific documentation
+# These values will be written to CSV headers for reproducibility
+measurement_conditions:
+  coaxial_light_voltage: 18.15    # Coaxial light voltage in Volts
+  coaxial_light_current: 0.18     # Coaxial light current in Amperes
+  camera_objective: '4x'          # Used objective lens (e.g., '4x', '10x', '20x')
+  notes: ''                        # Additional notes (e.g., 'new lens', 'calibration run')

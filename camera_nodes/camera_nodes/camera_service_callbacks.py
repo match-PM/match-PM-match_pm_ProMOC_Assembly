@@ -2,22 +2,22 @@
 Service callbacks for camera node - business logic for image processing.
 
 Implements ROS2 service callbacks for:
-- Autofocus: Hybrid algorithm with coarse search and multi-level refinement
+- Autofocus: Multi-level refinement algorithm with coarse search and iterative refinement
 - MTF measurement: ISO 12233 slanted edge method
 - ROI selection: Interactive selection with MTF calculation
 - Exposure control: Manual setting of camera exposure time
 
 Architecture:
-Service Requests → CameraServiceCallbacks → promoc_core algorithms → ROS2 Services
+Service Requests → CameraServiceCallbacks → camera_nodes.algorithms → ROS2 Services
 
 Services:
 - select_roi_callback: Interactive ROI selection and MTF measurement
-- autofocus_callback: Automatic focus optimization with Z-axis control
+- autofocus_callback: Automatic focus optimization with X-axis control
 - measure_mtf_callback: ISO 12233 MTF measurement from image
 - manual_set_exposure_callback: Set camera exposure time
 
 Autofocus Algorithm:
-Hybrid multi-level refinement approach:
+Multi-level refinement approach:
 1. Coarse search: Scan full range with large steps, find approximate maximum
 2. Refinement (Phase 2+): Narrow search range, reduce step size, repeat
 
@@ -27,7 +27,7 @@ Exception Handling:
 - ImageProcessingError: Image processing failures
 - InvalidParameterError: Invalid input values  
 - ConfigurationError: Missing configuration
-- ServiceCallFailedError: Z-axis service unavailable
+- ServiceCallFailedError: X-axis service unavailable
 """
 
 import csv
@@ -43,13 +43,6 @@ from promoc_assembly_interfaces.srv import (
     MoveAbsolute,
     SetVelocityParameters,
 )
-from promoc_core.algorithms import (
-    AutofocusConfig,
-    HybridAutofocus,
-    MTFAnalyzer,
-    MTFConfig,
-    tenengrad,
-)
 from promoc_core.promoc_exceptions import (
     ConfigurationError,
     HardwareError,
@@ -57,6 +50,17 @@ from promoc_core.promoc_exceptions import (
     InvalidParameterError,
     ParameterValidationError,
     ServiceCallFailedError,
+)
+
+from .algorithms import (
+    Autofocus, 
+    ParabolicAutofocus,
+    HillClimbingAutofocus,
+    AutofocusConfig,
+    Phase,
+    MTFAnalyzer, 
+    MTFConfig, 
+    tenengrad
 )
 
 
@@ -122,32 +126,71 @@ class CameraServiceCallbacks:
 
     def _export_autofocus_csv(
         self,
-        measurements: list[dict],
-        best_position: float,
-        best_score: float
+        username_or_measurements,
+        service_type_or_best_position=None,
+        request_or_best_score=None,
+        config=None
     ) -> str | None:
         """
         Export autofocus measurements to a CSV file.
+        
+        Two call modes:
+        1. Legacy: (measurements, best_position, best_score)
+        2. New: (username, service_type, request, config)
 
         Args:
-            measurements: List of measurement dictionaries
-            best_position: Best focus position in mm
-            best_score: Best tenengrad score
+            username_or_measurements: Username string or measurements list
+            service_type_or_best_position: Service type ("standard"/"parabolic") or best position
+            request_or_best_score: Request object or best score
+            config: AutofocusConfig (for new mode only)
 
         Returns:
-            Path to the created CSV file, or None on error
+            Path to the created CSV file
         """
-        if not measurements:
-            return None
-
-        try:
-            # Create output directory in home folder
-            output_dir = Path.home() / 'autofocus_logs'
-            output_dir.mkdir(exist_ok=True)
-
-            # Generate filename with timestamp
+        # Determine call mode
+        if isinstance(username_or_measurements, list):
+            # Legacy mode: (measurements, best_position, best_score)
+            measurements = username_or_measurements
+            best_position = service_type_or_best_position
+            best_score = request_or_best_score
+            
+            if not measurements:
+                return None
+                
+            # Get username from node parameter
+            username = ''
+            if self._node.has_parameter('measurement.username'):
+                username = self._node.get_parameter(
+                    'measurement.username').get_parameter_value().string_value.strip()
+            
+            # Create filename without parameters (legacy)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             csv_filename = f'autofocus_{timestamp}.csv'
+            
+        else:
+            # New mode: (username, service_type, request, config)
+            username = username_or_measurements
+            service_type = service_type_or_best_position
+            request = request_or_best_score
+            
+            # Create filename with parameters
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            csv_filename = (
+                f'autofocus_{service_type}_'
+                f'{request.start_position:.0f}-{request.end_position:.0f}mm_'
+                f'step{request.step_size:.1f}mm_'
+                f'{timestamp}.csv'
+            )
+            measurements = None  # Will be written incrementally
+            best_position = None
+            best_score = None
+
+        try:
+            # Create output directory
+            base_dir = Path.home() / 'Dokumente' / 'Messungen'
+            output_dir = (base_dir / username / 'autofocus_logs') if username else (base_dir / 'autofocus_logs')
+            output_dir.mkdir(parents=True, exist_ok=True)
+
             csv_path = output_dir / csv_filename
 
             # Write CSV file
@@ -159,14 +202,63 @@ class CameraServiceCallbacks:
             with open(csv_path, 'w', newline='') as csvfile:
                 # Write header comment with summary
                 csvfile.write(f'# Autofocus Results - {datetime.now().isoformat()}\n')
-                csvfile.write(f'# Best Position: {best_position:.4f} mm\n')
-                csvfile.write(f'# Best Tenengrad Score: {best_score:.2f}\n')
-                csvfile.write(f'# Total Measurements: {len(measurements)}\n')
+                if best_position is not None:
+                    csvfile.write(f'# Best Position: {best_position:.4f} mm\n')
+                    csvfile.write(f'# Best Tenengrad Score: {best_score:.2f}\n')
+                    csvfile.write(f'# Total Measurements: {len(measurements)}\n')
+                elif config is not None:
+                    csvfile.write(f'# Service: {service_type_or_best_position}\n')
+                    csvfile.write(f'# Range: {request_or_best_score.start_position:.1f} - {request_or_best_score.end_position:.1f} mm\n')
+                    csvfile.write(f'# Step Size: {request_or_best_score.step_size:.2f} mm\n')
+                    csvfile.write(f'# Refinement Samples: {config.refinement_samples}\n')
+                    csvfile.write(f'# Min Step: {config.min_step_mm:.4f} mm\n')
+                    csvfile.write(f'# Shrink Factor: {config.shrink_factor:.2f}\n')
+                
+                # Write measurement conditions
+                try:
+                    # Prefer request overrides if available (and not empty/zero)
+                    req = request  # Alias for brevity
+                    
+                    # 1. Voltage
+                    if hasattr(req, 'coaxial_light_voltage') and req.coaxial_light_voltage > 0.001:
+                        coaxial_v = req.coaxial_light_voltage
+                    else:
+                        coaxial_v = self._node.get_parameter('measurement_conditions.coaxial_light_voltage').value
+                    
+                    # 2. Current
+                    if hasattr(req, 'coaxial_light_current') and req.coaxial_light_current > 0.001:
+                        coaxial_a = req.coaxial_light_current
+                    else:
+                        coaxial_a = self._node.get_parameter('measurement_conditions.coaxial_light_current').value
+                    
+                    # 3. Objective
+                    if hasattr(req, 'camera_objective') and req.camera_objective:
+                        objective = req.camera_objective
+                    else:
+                        objective = self._node.get_parameter('measurement_conditions.camera_objective').value
+                    
+                    # 4. Notes
+                    if hasattr(req, 'notes') and req.notes:
+                        notes_val = req.notes
+                    else:
+                        notes_val = self._node.get_parameter('measurement_conditions.notes').value
+
+                    csvfile.write(f'#\n# Measurement Conditions:\n')
+                    csvfile.write(f'#   Coaxial Light: {coaxial_v}V, {coaxial_a}A\n')
+                    csvfile.write(f'#   Camera Objective: {objective}\n')
+                    if notes_val:
+                        csvfile.write(f'#   Notes: {notes_val}\n')
+                except Exception as e:
+                    self._node.get_logger().warn(f'Could not write measurement conditions to CSV: {e}')
+                
                 csvfile.write('#\n')
 
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
-                writer.writerows(measurements)
+                
+                # Write data if legacy mode
+                if measurements:
+                    writer.writerows(measurements)
 
             return str(csv_path)
 
@@ -208,10 +300,33 @@ class CameraServiceCallbacks:
                     details={'encoding': 'bgr8', 'error': str(e)}
                 )
 
+            # Resize image for ROI selection if it's too large
+            display_image = cv_image.copy()
+            height, width = display_image.shape[:2]
+            max_height = 800  # Reasonable height for most screens
+            scale_factor = 1.0
+
+            if height > max_height:
+                scale_factor = max_height / height
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+                display_image = cv2.resize(display_image, (new_width, new_height))
+                self._node.get_logger().info(f'Resizing selection window: {width}x{height} -> {new_width}x{new_height} (scale: {scale_factor:.2f})')
+
             # User selects ROI
-            roi = cv2.selectROI('Select ROI', cv_image,
+            # Note: selectROI can hang if not handled correctly in ROS context
+            # Adding a named window with autosize can help
+            window_name = 'Select ROI'
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, display_image.shape[1], display_image.shape[0])
+            
+            # Using selectROI on the (possibly resized) image
+            roi = cv2.selectROI(window_name, display_image,
                                 fromCenter=False, showCrosshair=True)
-            cv2.destroyWindow('Select ROI')
+            cv2.destroyWindow(window_name)
+            
+            # Process events to ensure window closes properly
+            cv2.waitKey(1)
 
             if roi == (0, 0, 0, 0):
                 self._node.get_logger().info('ROI selection cancelled by user.')
@@ -220,8 +335,23 @@ class CameraServiceCallbacks:
                 return response
 
             # Extract and validate ROI
-            x, y, w, h = roi
-            self._node.get_logger().info(f'Selected ROI (x, y, w, h): {roi}')
+            x_scaled, y_scaled, w_scaled, h_scaled = roi
+            
+            # Scale back to original coordinates
+            x = int(x_scaled / scale_factor)
+            y = int(y_scaled / scale_factor)
+            w = int(w_scaled / scale_factor)
+            h = int(h_scaled / scale_factor)
+            
+            # Clamp to image boundaries just in case
+            img_h, img_w = cv_image.shape[:2]
+            x = max(0, min(x, img_w - 1))
+            y = max(0, min(y, img_h - 1))
+            w = max(1, min(w, img_w - x))
+            h = max(1, min(h, img_h - y))
+            
+            roi = (x, y, w, h)
+            self._node.get_logger().info(f'Selected ROI (scaled back): {roi}')
 
             if w <= 0 or h <= 0:
                 raise ParameterValidationError(
@@ -296,16 +426,16 @@ class CameraServiceCallbacks:
         """
         Executes an automatic focus sequence.
 
-        This implements a hybrid autofocus algorithm (promoc_core.algorithms.HybridAutofocus):
-        - Coarse search across the full range.
-        - Fine search around the detected maximum (unidirectional to minimize hysteresis).
-        - Sharpness Metric: Tenengrad.
+        Scans the X-axis range and finds the sharpest focus position using Tenengrad metric.
 
         Args:
-            start_position (float): The starting Z-axis position for the focus search.
-            end_position (float): The ending Z-axis position for the focus search.
+            start_position (float): The starting X-axis position for the focus search.
+            end_position (float): The ending X-axis position for the focus search.
             step_size (float): The step size for the coarse search phase.
         """
+
+        start_time = time.time()   #Starting a timer to measure duration of autofocus
+
         self._node.get_logger().info(
             f'Autofocus service called with range {request.start_position} '
             f'to {request.end_position} with step {request.step_size}'
@@ -333,15 +463,13 @@ class CameraServiceCallbacks:
                     }
                 )
 
-            # Create service clients for the Z-axis linear stage.
-            # The node name of the Z-axis is retrieved from a ROS parameter.
-            z_axis_name = self._node.get_parameter(
+            # Create service clients for the X-axis linear stage.
+            # The node name of the X-axis is retrieved from a ROS parameter.
+            x_axis_name = self._node.get_parameter(
                 'z_axis_node_name').get_parameter_value().string_value
-            move_service = f'/{z_axis_name}/move_absolute'
-            jog_service = f'/{z_axis_name}/jog_axis'
-            status_service = f'/{z_axis_name}/get_operation_status'
-            get_velocity_service = f'/{z_axis_name}/get_velocity_parameters'
-            set_velocity_service = f'/{z_axis_name}/set_velocity_parameters'
+            move_service = f'/{x_axis_name}/move_absolute'
+            jog_service = f'/{x_axis_name}/jog_axis'
+            status_service = f'/{x_axis_name}/get_operation_status'
 
             move_abs_client = self._node.create_client(
                 MoveAbsolute, move_service)
@@ -349,10 +477,6 @@ class CameraServiceCallbacks:
                 JogAxis, jog_service)
             status_client = self._node.create_client(
                 GetOperationStatus, status_service)
-            get_velocity_client = self._node.create_client(
-                GetVelocityParameters, get_velocity_service)
-            set_velocity_client = self._node.create_client(
-                SetVelocityParameters, set_velocity_service)
 
             if not move_abs_client.wait_for_service(timeout_sec=1.0):
                 raise ServiceCallFailedError(
@@ -373,68 +497,30 @@ class CameraServiceCallbacks:
                     details={'service': status_service, 'timeout': 1.0}
                 )
 
-            if not get_velocity_client.wait_for_service(timeout_sec=1.0):
-                raise ServiceCallFailedError(
-                    'Linear axis get_velocity_parameters service not available',
-                    details={'service': get_velocity_service, 'timeout': 1.0}
-                )
-
-            if not set_velocity_client.wait_for_service(timeout_sec=1.0):
-                raise ServiceCallFailedError(
-                    'Linear axis set_velocity_parameters service not available',
-                    details={'service': set_velocity_service, 'timeout': 1.0}
-                )
-
-            # Get current velocity parameters for later restoration
-            get_vel_req = GetVelocityParameters.Request()
-            get_vel_resp = get_velocity_client.call(get_vel_req)
-            if get_vel_resp is None or not get_vel_resp.success:
-                raise ServiceCallFailedError(
-                    'Failed to get current velocity parameters',
-                    details={'service': get_velocity_service}
-                )
-            original_max_velocity = get_vel_resp.max_velocity
-            original_min_velocity = get_vel_resp.min_velocity
-            original_acceleration = get_vel_resp.acceleration
-            reduced_max_velocity = original_max_velocity * (2.0 / 3.0)  # 2/3 speed for backward
-            self._node.get_logger().info(
-                f'Velocity settings: normal={original_max_velocity:.2f}mm/s, '
-                f'reduced (backward)={reduced_max_velocity:.2f}mm/s')
-
-            def _set_velocity(max_vel: float) -> None:
-                """Helper to set axis velocity."""
-                set_vel_req = SetVelocityParameters.Request()
-                set_vel_req.min_velocity = original_min_velocity
-                set_vel_req.acceleration = original_acceleration
-                set_vel_req.max_velocity = max_vel
-                set_velocity_client.call(set_vel_req)
-
-            # Configure the HybridAutofocus algorithm from promoc_core.
-            # Multi-level refinement can be enabled via ROS parameters
-            # to avoid changing the service interface.
-            enable_multilevel = self._node.get_parameter(
-                'autofocus.enable_multilevel').get_parameter_value().bool_value
+            # Configure the autofocus algorithm
             refinement_samples = self._node.get_parameter(
                 'autofocus.refinement_samples').get_parameter_value().integer_value
             min_step_mm = self._node.get_parameter(
                 'autofocus.min_step_mm').get_parameter_value().double_value
-            refinement_shrink_factor = self._node.get_parameter(
+            shrink_factor = self._node.get_parameter(
                 'autofocus.refinement_shrink_factor').get_parameter_value().double_value
 
             af_config = AutofocusConfig(
-                z_min_mm=float(request.start_position),
-                z_max_mm=float(request.end_position),
-                coarse_step_mm=float(request.step_size),
-                # Other params like fine_step_mm use defaults from AutofocusConfig.
-                metric='tenengrad',
-                enable_multilevel=bool(enable_multilevel),
-                refinement_samples=int(
-                    refinement_samples) if refinement_samples else 41,
+                start_mm=float(request.start_position),
+                end_mm=float(request.end_position),
+                step_mm=float(request.step_size),
+                refinement_samples=int(refinement_samples) if refinement_samples else 51,
                 min_step_mm=float(min_step_mm) if min_step_mm else 0.01,
-                refinement_shrink_factor=float(
-                    refinement_shrink_factor) if refinement_shrink_factor else 0.25,
+                shrink_factor=float(shrink_factor) if shrink_factor else 0.35,
+                disable_coarse_early_termination=True  # Scan full range in standard mode
             )
-            af = HybridAutofocus(af_config)
+            af = Autofocus(af_config)
+            
+            # Setup CSV logging
+            username = self._node.get_parameter(
+                'measurement.username').get_parameter_value().string_value
+            csv_path = self._export_autofocus_csv(username, "standard", request, af_config)
+            self._node.get_logger().info(f'📊 CSV log: {csv_path}')
 
             # Move to initial position
             current_pos = float(af.start())
@@ -476,10 +562,17 @@ class CameraServiceCallbacks:
             best_position: float | None = None
             best_score: float = 0.0
             max_iterations = 1000
+            is_first_refinement_move = True  # Track first refinement move
 
             # Collect measurements for CSV export
             af_measurements: list[dict] = []
             af_start_time = time.time()
+            last_logged_level = -1  # Track level changes for logging
+            
+            # Log coarse scan parameters at the very beginning
+            self._node.get_logger().info(
+                f'→ Starting Coarse Scan: step={request.step_size:.4f}mm range={request.start_position:.1f}-{request.end_position:.1f}mm'
+            )
 
             for _ in range(max_iterations):
                 if self._node.latest_image_msg is None:
@@ -489,7 +582,7 @@ class CameraServiceCallbacks:
                 if self._node.latest_image_msg is None:
                     raise ImageProcessingError(
                         'No image available during autofocus',
-                        details={'z_mm': current_pos}
+                        details={'x_mm': current_pos}
                     )
 
                 cv_image = self._node.bridge.imgmsg_to_cv2(
@@ -498,66 +591,69 @@ class CameraServiceCallbacks:
                 af_result = af.process_image(current_pos, cv_image)
                 best_score = af_result.best_score
 
-                # Collect measurement data for CSV export
-                measurement_time = time.time() - af_start_time
+                # Write measurement to CSV incrementally
+                measurement_time = time.time()
                 if af_result.current_score:
-                    af_measurements.append({
-                        'timestamp_s': round(measurement_time, 3),
-                        'z_position_mm': round(current_pos, 4),
-                        'tenengrad_score': round(af_result.current_score, 2),
-                        'best_score': round(best_score, 2),
-                        'phase': af_result.phase.name,
-                        'step_mm': af_result.refinement_step_mm,
-                        'range_mm': af_result.refinement_range_mm,
-                    })
+                    with open(csv_path, 'a', newline='') as f:
+                        csv.writer(f).writerow([
+                            measurement_time - af_start_time,  # Relative timestamp
+                            round(current_pos, 4),
+                            round(af_result.current_score, 2),
+                            round(best_score, 2),
+                            af_result.phase.name,
+                            af_result.current_step_mm,
+                            af_result.current_range_mm,
+                        ])
 
                 # Logging with Tenengrad score
                 if af_result.current_score:
-                    level_info = ''
-                    if (
-                        af_result.refinement_step_mm is not None
-                        and af_result.refinement_range_mm is not None
-                    ):
-                        level_info = (
-                            f' step={af_result.refinement_step_mm:.4f}mm'
-                            f' range=±{af_result.refinement_range_mm:.4f}mm'
-                        )
                     self._node.get_logger().info(
-                        f'AF {af_result.phase.name}: z={current_pos:.3f}mm '
-                        f'tenengrad={af_result.current_score:.0f} best={best_score:.0f}{level_info}'
+                        f'AF {af_result.phase.name}: x={current_pos:.3f}mm '
+                        f'tenengrad={af_result.current_score:.0f} best={best_score:.0f}'
                     )
+                    
+                    # Show level info AFTER measurement, when level changes for NEXT iteration
+                    # Skip Level 0 (coarse scan) - only show refinement levels
+                    if af_result.current_level != last_logged_level and af_result.current_level > 0:
+                        last_logged_level = af_result.current_level
+                        if af_result.current_step_mm is not None and af_result.current_range_mm is not None:
+                            self._node.get_logger().info(
+                                f'→ Level {af_result.current_level}: step={af_result.current_step_mm:.4f}mm range=±{af_result.current_range_mm:.4f}mm'
+                            )
                 else:
                     self._node.get_logger().debug(
-                        f'AF {af_result.phase.name}: z={current_pos:.3f}mm best={best_score:.0f}')
+                        f'AF {af_result.phase.name}: x={current_pos:.3f}mm best={best_score:.0f}')
 
                 if af_result.finished:
-                    best_position = float(
-                        af_result.best_z_mm) if af_result.best_z_mm is not None else None
+                    best_position = af_result.best_position_mm
                     break
 
-                if af_result.next_z_mm is None:
+                if af_result.next_position_mm is None:
                     raise ImageProcessingError(
                         'Autofocus did not provide next position',
                         details={'phase': af_result.phase.name}
                     )
 
                 # Move to next requested position
-                next_pos = float(af_result.next_z_mm)
+                next_pos = float(af_result.next_position_mm)
 
-                # Reduce velocity when moving backward (decreasing position)
-                # to prevent axis issues (loud beeping)
-                is_backward = next_pos < current_pos
-                if is_backward:
-                    _set_velocity(reduced_max_velocity)
+                # Use jog for refinement (more precise), but use move_absolute for first refinement point
+                # (could be far from last coarse scan position)
+                if af_result.phase == Phase.REFINEMENT and not is_first_refinement_move:
+                    # Subsequent refinement moves: use jog (precise, small steps)
+                    distance = next_pos - current_pos
+                    jog_req = JogAxis.Request()
+                    jog_req.step_size = distance
+                    move_response = jog_client.call(jog_req)
                 else:
-                    _set_velocity(original_max_velocity)
-
-                move_req = MoveAbsolute.Request()
-                move_req.axis_position = next_pos
-                move_response = move_abs_client.call(move_req)
+                    # Coarse scan OR first refinement point: use absolute positioning
+                    if af_result.phase == Phase.REFINEMENT:
+                        is_first_refinement_move = False  # Mark that we've done first refinement move
+                    move_req = MoveAbsolute.Request()
+                    move_req.axis_position = next_pos
+                    move_response = move_abs_client.call(move_req)
 
                 if move_response is None or not move_response.success:
-                    _set_velocity(original_max_velocity)  # Restore on error
                     raise ServiceCallFailedError(
                         f'Failed to move axis to {next_pos}',
                         details={'target_position': next_pos}
@@ -575,22 +671,10 @@ class CameraServiceCallbacks:
             self._node.get_logger().info(
                 f'📷 Best focus position: {best_position:.3f}mm (tenengrad: {best_score:.0f})')
 
-            # Export measurements to CSV
-            csv_path = self._export_autofocus_csv(af_measurements, best_position, best_score)
-            if csv_path:
-                self._node.get_logger().info(f'📄 Autofocus data saved to: {csv_path}')
-
-            final_step = getattr(af_result, 'refinement_step_mm', None)
-            final_range = getattr(af_result, 'refinement_range_mm', None)
-            final_level_info = ''
-            if final_step is not None and final_range is not None:
-                final_level_info = (
-                    f' final_step={final_step:.4f}mm final_range=±{final_range:.4f}mm'
-                )
+            # CSV already written incrementally
+            self._node.get_logger().info(f'📄 Autofocus data saved to: {csv_path}')
 
             # Ensure we end at best position
-            # Restore normal velocity for final move
-            _set_velocity(original_max_velocity)
             move_req = MoveAbsolute.Request()
             move_req.axis_position = float(best_position)
             move_response = move_abs_client.call(move_req)
@@ -601,11 +685,16 @@ class CameraServiceCallbacks:
                 )
             _wait_for_axis_idle()
 
+            duration = time.time() - start_time
             response.success = True
             response.message = (
                 f'Autofocus successful. Best position: {best_position:.3f}mm '
-                f'(tenengrad score: {best_score:.2f}){final_level_info}'
+                f'(tenengrad: {best_score:.0f}, duration: {duration:.1f}s)'
             )
+            response.best_focus_position = best_position
+            response.best_focus_value = best_score
+            response.total_measurements_taken = len(af_measurements)
+            response.duration_seconds = duration
 
         except InvalidParameterError as e:
             response.success = False
@@ -633,6 +722,188 @@ class CameraServiceCallbacks:
             response.message = f'❌ Autofocus failed: {str(e)}'
             self._node.get_logger().error(
                 f'{response.message}\n{type(e).__name__}: {str(e)}')
+
+        return response
+
+    def autofocus_parabolic_callback(self, request, response):
+        """
+        Enhanced autofocus with parabolic interpolation and peak validation.
+        
+        Uses ParabolicAutofocus for sub-sample accuracy and faster convergence.
+        """
+        start_time = time.time()
+        
+        self._node.get_logger().info(
+            f'🔬 Parabolic Autofocus: range {request.start_position}-{request.end_position}mm, step {request.step_size}mm'
+        )
+        
+        try:
+            # Parameter validation
+            if request.start_position >= request.end_position:
+                raise InvalidParameterError(
+                    'Start position must be less than end position',
+                    details={'start': request.start_position, 'end': request.end_position}
+                )
+
+            if request.step_size <= 0:
+                raise InvalidParameterError('Step size must be positive')
+
+            # Service clients
+            x_axis_name = self._node.get_parameter('z_axis_node_name').value
+            move_abs_client = self._node.create_client(MoveAbsolute, f'/{x_axis_name}/move_absolute')
+            jog_client = self._node.create_client(JogAxis, f'/{x_axis_name}/jog_axis')
+            status_client = self._node.create_client(GetOperationStatus, f'/{x_axis_name}/get_operation_status')
+
+            if not move_abs_client.wait_for_service(timeout_sec=5.0):
+                raise ServiceCallFailedError('Move service not available')
+            if not jog_client.wait_for_service(timeout_sec=5.0):
+                raise ServiceCallFailedError('Jog service not available')
+            if not status_client.wait_for_service(timeout_sec=5.0):
+                raise ServiceCallFailedError('Status service not available')
+
+            # Autofocus configuration
+            config = AutofocusConfig(
+                start_mm=request.start_position,
+                end_mm=request.end_position,
+                step_mm=request.step_size,
+                refinement_samples=self._node.get_parameter('autofocus.refinement_samples').value,
+                min_step_mm=self._node.get_parameter('autofocus.min_step_mm').value,
+                shrink_factor=self._node.get_parameter('autofocus.refinement_shrink_factor').value,
+                disable_coarse_early_termination=True  # Scan full range for parabolic fit
+            )
+
+            # Initialize ParabolicAutofocus
+            autofocus = ParabolicAutofocus(config)
+            position_mm = autofocus.start()
+
+            # CSV logging
+            username = self._node.get_parameter('measurement.username').value
+            csv_path = self._export_autofocus_csv(username, "parabolic", request, config)
+            
+            measurement_count = 0
+            self._node.get_logger().info(f'📊 CSV log: {csv_path}')
+            
+            # Log coarse scan parameters at the very beginning
+            self._node.get_logger().info(
+                f'→ Starting Coarse Scan: step={config.step_mm:.4f}mm range={config.start_mm:.1f}-{config.end_mm:.1f}mm'
+            )
+
+            # Main loop
+            prev_position = position_mm
+            current_level = 0
+            last_logged_level = -1  # Track level changes for logging
+            is_first_level_move = [True] * 10  # Track first move for each level
+            while True:
+                # Move - use jog for refinement (L1+), but move_absolute for first move of each level
+                if current_level > 0 and measurement_count > 0 and not is_first_level_move[current_level]:
+                    # Refinement: use jog (more precise) for subsequent moves in level
+                    distance = position_mm - prev_position
+                    jog_req = JogAxis.Request()
+                    jog_req.step_size = distance
+                    move_future = jog_client.call_async(jog_req)
+                else:
+                    # Coarse or first move of refinement level: use absolute
+                    if current_level > 0:
+                        is_first_level_move[current_level] = False
+                    move_req = MoveAbsolute.Request(axis_position=position_mm)
+                    move_future = move_abs_client.call_async(move_req)
+                
+                while not move_future.done():
+                    pass
+                if not move_future.result().success:
+                    raise ServiceCallFailedError(f'Move to {position_mm}mm failed')
+                
+                prev_position = position_mm
+
+                # Wait for motion complete
+                while True:
+                    status_future = status_client.call_async(GetOperationStatus.Request())
+                    while not status_future.done():
+                        pass
+                    status_response = status_future.result()
+                    if status_response.operation_status not in ['moving', 'homing', 'jogging']:
+                        break
+                    time.sleep(0.05)
+
+                # Capture & process
+                if self._node.latest_image_msg is None:
+                    time.sleep(0.1)
+                
+                if self._node.latest_image_msg is None:
+                    raise ImageProcessingError(
+                        'No image available during autofocus',
+                        details={'x_mm': position_mm}
+                    )
+
+                cv_image = self._node.bridge.imgmsg_to_cv2(
+                    self._node.latest_image_msg, 'bgr8')
+
+                result = autofocus.process_image(position_mm, cv_image)
+                measurement_count += 1
+                current_level = result.current_level  # Update for next iteration
+
+                # Logging - show measurement first
+                phase_name = "COARSE_SCAN" if result.current_level == 0 else "REFINEMENT"
+                
+                self._node.get_logger().info(
+                    f'AF {phase_name}: x={position_mm:.3f}mm tenengrad={int(result.current_score)} '
+                    f'best={int(result.best_score)}'
+                )
+                
+                # Show level info AFTER measurement, when level changes for next iteration
+                # Skip Level 0 (coarse scan) - only show refinement levels
+                if result.current_level != last_logged_level and result.current_level > 0:
+                    last_logged_level = result.current_level
+                    self._node.get_logger().info(
+                        f'→ Level {result.current_level}: step={result.current_step_mm:.4f}mm range=±{result.current_range_mm:.4f}mm'
+                    )
+
+                # CSV
+                with open(csv_path, 'a', newline='') as f:
+                    csv.writer(f).writerow([
+                        time.time() - start_time,  # Relative timestamp
+                        position_mm, int(result.current_score),
+                        int(result.best_score), phase_name,
+                        result.current_step_mm, result.current_range_mm
+                    ])
+
+                # Done?
+                if result.finished:
+                    duration = time.time() - start_time
+                    self._node.get_logger().info(
+                        f'✅ Parabolic AF complete: {result.best_position_mm:.3f}mm '
+                        f'(score: {int(result.best_score)}, {measurement_count} measurements, {duration:.1f}s)'
+                    )
+
+                    response.success = True
+                    response.message = f'Parabolic autofocus completed: {result.best_position_mm:.3f}mm'
+                    response.best_focus_position = result.best_position_mm
+                    response.best_focus_value = result.best_score
+                    response.total_measurements_taken = measurement_count
+                    response.duration_seconds = duration
+                    break
+
+                position_mm = result.next_position_mm
+
+        except InvalidParameterError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().error(response.message)
+
+        except ServiceCallFailedError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().error(response.message)
+
+        except ImageProcessingError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().warn(response.message)
+
+        except Exception as e:
+            response.success = False
+            response.message = f'❌ Parabolic AF failed: {str(e)}'
+            self._node.get_logger().error(f'{response.message}\n{type(e).__name__}: {str(e)}')
 
         return response
 
@@ -809,4 +1080,330 @@ class CameraServiceCallbacks:
             response.message = f'❌ MTF measurement failed: {str(e)}'
             self._node.get_logger().error(response.message, exc_info=True)
 
+        return response
+
+    def autofocus_fast_callback(self, request, response):
+        """
+        Executes a FAST focus sequence using Hill Climbing.
+        
+        Aborts coarse scan early when peak is crossed.
+        """
+        start_time = time.time()
+        self._node.get_logger().info(
+            f'FAST Autofocus service called with range {request.start_position} '
+            f'to {request.end_position} with step {request.step_size}'
+        )
+
+        try:
+            # Reuse logic from standard callback but with HillClimbingAutofocus class
+            # We copy key parts to avoid massive code duplication if we refactored,
+            # but for now duplication is safer than breaking standard callback.
+            
+            # --- SETUP ---
+            # Create service clients
+            x_axis_name = self._node.get_parameter('z_axis_node_name').get_parameter_value().string_value
+            move_abs_client = self._node.create_client(MoveAbsolute, f'/{x_axis_name}/move_absolute')
+            jog_client = self._node.create_client(JogAxis, f'/{x_axis_name}/jog_axis')
+            status_client = self._node.create_client(GetOperationStatus, f'/{x_axis_name}/get_operation_status')
+
+            if not move_abs_client.wait_for_service(timeout_sec=1.0):
+                raise ServiceCallFailedError('Linear axis move_absolute service not available')
+            if not jog_client.wait_for_service(timeout_sec=1.0):
+                raise ServiceCallFailedError('Linear axis jog_axis service not available')
+
+            # Configure
+            refinement_samples = self._node.get_parameter('autofocus.refinement_samples').get_parameter_value().integer_value
+            min_step_mm = self._node.get_parameter('autofocus.min_step_mm').get_parameter_value().double_value
+            
+            # Get estimated peak from request (optional)
+            estimated_peak_millions = request.estimated_peak_millions if hasattr(request, 'estimated_peak_millions') and request.estimated_peak_millions > 0 else 100.0
+            
+            af_config = AutofocusConfig(
+                start_mm=float(request.start_position),
+                end_mm=float(request.end_position),
+                step_mm=float(request.step_size),
+                refinement_samples=int(refinement_samples) if refinement_samples else 31,
+                min_step_mm=float(min_step_mm) if min_step_mm else 0.01
+            )
+            
+            # USE HILL CLIMBING with estimated peak
+            af = HillClimbingAutofocus(af_config, estimated_peak_millions)
+            
+            # Logging
+            username = self._node.get_parameter('measurement.username').get_parameter_value().string_value
+            csv_path = self._export_autofocus_csv(username, "fast_hillclimb", request, af_config)
+            
+            # --- MOVEMENT LOOP ---
+            current_pos = float(af.start())
+            
+            # Move to start
+            move_req = MoveAbsolute.Request()
+            move_req.axis_position = current_pos
+            if not move_abs_client.call(move_req).success:
+                 raise ServiceCallFailedError('Failed to move to start position')
+
+            # Wait for idle
+            while True:
+                if status_client.call(GetOperationStatus.Request()).operation_status == 'idle': break
+                time.sleep(0.05)
+                
+            best_position = None
+            best_score = 0.0
+            af_start_time = time.time()
+            is_first_refinement_move = True  # Track first refinement move
+            last_logged_level = -1  # Track level changes for logging
+            
+            # Log coarse scan parameters at the very beginning
+            self._node.get_logger().info(
+                f'→ Starting Coarse Scan: step={request.step_size:.4f}mm range={request.start_position:.1f}-{request.end_position:.1f}mm'
+            )
+            
+            for _ in range(500): # max iterations
+                # Get Image
+                if self._node.latest_image_msg is None: time.sleep(0.1)
+                if self._node.latest_image_msg is None: raise ImageProcessingError('No image')
+                cv_image = self._node.bridge.imgmsg_to_cv2(self._node.latest_image_msg, 'bgr8')
+                
+                # Process
+                af_result = af.process_image(current_pos, cv_image)
+                best_score = af_result.best_score
+                
+                # CSV & Log
+                if af_result.current_score:
+                    with open(csv_path, 'a', newline='') as f:
+                        csv.writer(f).writerow([
+                            time.time() - af_start_time,
+                            round(current_pos, 4),
+                            round(af_result.current_score, 2),
+                            round(best_score, 2),
+                            af_result.phase.name,
+                            af_result.current_step_mm,
+                            af_result.current_range_mm,
+                        ])
+                    
+                    # Logging - show measurement first
+                    self._node.get_logger().info(
+                        f'AF {af_result.phase.name}: x={current_pos:.3f}mm '
+                        f'tenengrad={af_result.current_score:.0f} best={best_score:.0f}'
+                    )
+                    
+                    # Show level info AFTER measurement, when level changes for next iteration
+                    # Skip Level 0 (coarse scan) - only show refinement levels
+                    if af_result.current_level != last_logged_level and af_result.current_level > 0:
+                        last_logged_level = af_result.current_level
+                        if af_result.current_step_mm is not None and af_result.current_range_mm is not None:
+                            self._node.get_logger().info(
+                                f'→ Level {af_result.current_level}: step={af_result.current_step_mm:.4f}mm range=±{af_result.current_range_mm:.4f}mm'
+                            )
+
+                if af_result.finished:
+                    best_position = af_result.best_position_mm
+                    break
+                    
+                # Move Next - use move_absolute for first refinement point, then jog
+                next_pos = float(af_result.next_position_mm)
+                
+                if af_result.phase == Phase.REFINEMENT and not is_first_refinement_move:
+                    # Subsequent refinement moves: use jog (precise)
+                    distance = next_pos - current_pos
+                    jog_req = JogAxis.Request()
+                    jog_req.step_size = distance
+                    move_response = jog_client.call(jog_req)
+                else:
+                    # Coarse scan or first refinement point: use absolute
+                    if af_result.phase == Phase.REFINEMENT:
+                        is_first_refinement_move = False
+                    move_req.axis_position = next_pos
+                    move_response = move_abs_client.call(move_req)
+                
+                if move_response is None or not move_response.success:
+                    raise ServiceCallFailedError(
+                        f'Failed to move axis to {next_pos}mm',
+                        details={'target_position': next_pos}
+                    )
+                
+                # Wait for axis to become idle
+                while True:
+                    status_req = GetOperationStatus.Request()
+                    status_resp = status_client.call(status_req)
+                    if status_resp and status_resp.operation_status == 'idle':
+                        break
+                    if status_resp and status_resp.operation_status == 'error':
+                        raise ServiceCallFailedError(
+                            f'Axis reported error during movement: {status_resp.status_message}')
+                    time.sleep(0.05)
+                    
+                current_pos = next_pos
+
+            # --- FINISH ---
+            if best_position is None:
+                raise ImageProcessingError('Autofocus did not converge')
+                
+            # Move to Best
+            move_req.axis_position = float(best_position)
+            move_abs_client.call(move_req)
+            while True:
+                if status_client.call(GetOperationStatus.Request()).operation_status == 'idle': break
+                time.sleep(0.1)
+
+            duration = time.time() - start_time
+            response.success = True
+            response.message = f'Fast AF successful: {best_position:.3f}mm ({duration:.1f}s)'
+            response.best_focus_position = best_position
+            response.best_focus_value = best_score
+            response.duration_seconds = duration
+            return response
+
+        except Exception as e:
+            response.success = False
+            response.message = f'Fast AF failed: {str(e)}'
+            self._node.get_logger().error(response.message)
+            return response
+
+    def autofocus_comparison_test_callback(self, request, response):
+        """
+        Test service that runs all 3 autofocus algorithms sequentially for comparison.
+        
+        Calls in order:
+        1. Standard Autofocus
+        2. Parabolic Autofocus  
+        3. Fast Autofocus (HillClimbing)
+        
+        Returns combined results with timing and accuracy comparison.
+        """
+        self._node.get_logger().info('='*60)
+        self._node.get_logger().info('🧪 AUTOFOCUS COMPARISON TEST STARTED')
+        self._node.get_logger().info(f'Range: {request.start_position}-{request.end_position}mm, Step: {request.step_size}mm')
+        self._node.get_logger().info('='*60)
+        
+        results = []
+        test_start = time.time()
+        
+        # Test 1: Standard Autofocus
+        self._node.get_logger().info('\n📊 Test 1/3: Standard Autofocus')
+        self._node.get_logger().info('-'*60)
+        try:
+            from promoc_assembly_interfaces.srv import AutoFocus
+            req = AutoFocus.Request()
+            req.start_position = request.start_position
+            req.end_position = request.end_position
+            req.step_size = request.step_size
+            res = AutoFocus.Response()
+            
+            res = self.autofocus_callback(req, res)
+            
+            if res.success:
+                results.append({
+                    'name': 'Standard',
+                    'position': res.best_focus_position,
+                    'score': res.best_focus_value,
+                    'duration': res.duration_seconds,
+                    'measurements': res.total_measurements_taken
+                })
+                self._node.get_logger().info(f'✓ Standard: {res.best_focus_position:.3f}mm, score={res.best_focus_value:.0f}, time={res.duration_seconds:.1f}s')
+            else:
+                self._node.get_logger().error(f'✗ Standard failed: {res.message}')
+        except Exception as e:
+            self._node.get_logger().error(f'✗ Standard exception: {e}')
+        
+        time.sleep(1.0)  # Brief pause between tests
+        
+        # Test 2: Parabolic Autofocus
+        self._node.get_logger().info('\n📊 Test 2/3: Parabolic Autofocus')
+        self._node.get_logger().info('-'*60)
+        try:
+            req = AutoFocus.Request()
+            req.start_position = request.start_position
+            req.end_position = request.end_position
+            req.step_size = request.step_size
+            res = AutoFocus.Response()
+            
+            res = self.autofocus_parabolic_callback(req, res)
+            
+            if res.success:
+                results.append({
+                    'name': 'Parabolic',
+                    'position': res.best_focus_position,
+                    'score': res.best_focus_value,
+                    'duration': res.duration_seconds,
+                    'measurements': res.total_measurements_taken
+                })
+                self._node.get_logger().info(f'✓ Parabolic: {res.best_focus_position:.3f}mm, score={res.best_focus_value:.0f}, time={res.duration_seconds:.1f}s')
+            else:
+                self._node.get_logger().error(f'✗ Parabolic failed: {res.message}')
+        except Exception as e:
+            self._node.get_logger().error(f'✗ Parabolic exception: {e}')
+        
+        time.sleep(1.0)
+        
+        # Test 3: Fast Autofocus
+        self._node.get_logger().info('\n📊 Test 3/3: Fast Autofocus (HillClimbing)')
+        self._node.get_logger().info('-'*60)
+        try:
+            req = AutoFocus.Request()
+            req.start_position = request.start_position
+            req.end_position = request.end_position
+            req.step_size = request.step_size
+            req.estimated_peak_millions = 500.0  # Set high threshold to scan full range
+            res = AutoFocus.Response()
+            
+            res = self.autofocus_fast_callback(req, res)
+            
+            if res.success:
+                results.append({
+                    'name': 'Fast',
+                    'position': res.best_focus_position,
+                    'score': res.best_focus_value,
+                    'duration': res.duration_seconds,
+                    'measurements': 0  # Fast doesn't report this
+                })
+                self._node.get_logger().info(f'✓ Fast: {res.best_focus_position:.3f}mm, score={res.best_focus_value:.0f}, time={res.duration_seconds:.1f}s')
+            else:
+                self._node.get_logger().error(f'✗ Fast failed: {res.message}')
+        except Exception as e:
+            self._node.get_logger().error(f'✗ Fast exception: {e}')
+        
+        # Summary
+        total_duration = time.time() - test_start
+        self._node.get_logger().info('\n' + '='*60)
+        self._node.get_logger().info('📊 COMPARISON SUMMARY')
+        self._node.get_logger().info('='*60)
+        
+        if len(results) > 0:
+            # Calculate statistics
+            positions = [r['position'] for r in results]
+            scores = [r['score'] for r in results]
+            durations = [r['duration'] for r in results]
+            
+            mean_pos = sum(positions) / len(positions)
+            max_deviation = max(abs(p - mean_pos) for p in positions)
+            
+            self._node.get_logger().info(f'\nResults:')
+            for r in results:
+                self._node.get_logger().info(
+                    f"  {r['name']:10s}: {r['position']:7.3f}mm  "
+                    f"score={r['score']:11.0f}  time={r['duration']:5.1f}s"
+                )
+            
+            self._node.get_logger().info(f'\nStatistics:')
+            self._node.get_logger().info(f'  Mean position:    {mean_pos:.3f}mm')
+            self._node.get_logger().info(f'  Max deviation:    {max_deviation:.3f}mm')
+            self._node.get_logger().info(f'  Total test time:  {total_duration:.1f}s')
+            
+            # Best score
+            best_result = max(results, key=lambda x: x['score'])
+            self._node.get_logger().info(f'\n🏆 Best score: {best_result["name"]} ({best_result["score"]:.0f})')
+            
+            # Fastest
+            fastest_result = min(results, key=lambda x: x['duration'])
+            self._node.get_logger().info(f'⚡ Fastest: {fastest_result["name"]} ({fastest_result["duration"]:.1f}s)')
+            
+            response.success = True
+            response.message = f'Comparison complete: {len(results)}/3 algorithms succeeded. Mean={mean_pos:.3f}mm, deviation={max_deviation:.3f}mm'
+        else:
+            self._node.get_logger().error('❌ All autofocus algorithms failed!')
+            response.success = False
+            response.message = 'All autofocus algorithms failed'
+        
+        self._node.get_logger().info('='*60)
         return response
