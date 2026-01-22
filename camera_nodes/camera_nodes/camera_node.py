@@ -69,7 +69,7 @@ Example Service Calls:
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
 from cv_bridge import CvBridge
-from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure
+from promoc_assembly_interfaces.srv import AutoFocus, FlyOverAutofocus, MeasureMTF, SetExposure
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -138,6 +138,29 @@ class CameraNode(Node):
         self.declare_parameter('autofocus.refinement_samples', 51)
         self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
         self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
+
+        # Fly-over autofocus parameters (defaults)
+        self.declare_parameter('autofocus.fly_over.scan_speed_fast', 10.0)
+        self.declare_parameter('autofocus.fly_over.step_size_coarse', 0.5)
+        self.declare_parameter('autofocus.fly_over.step_size_fine', 0.01)
+        self.declare_parameter('autofocus.fly_over.detection_stddev_threshold', 15.0)
+        self.declare_parameter('autofocus.fly_over.roi_size', 512)
+        self.declare_parameter('autofocus.fly_over.backtrack_mm', 2.0)
+        self.declare_parameter('autofocus.fly_over.coarse_scan_range_mm', 10.0)
+        self.declare_parameter('autofocus.fly_over.fine_scan_range_mm', 0.3)
+        self.declare_parameter('autofocus.fly_over.coarse_drop_ratio', 0.6)
+        self.declare_parameter('autofocus.fly_over.fine_drop_ratio', 0.8)
+        self.declare_parameter('autofocus.fly_over.settle_coarse_s', 0.2)
+        self.declare_parameter('autofocus.fly_over.settle_fine_s', 0.3)
+        self.declare_parameter('autofocus.fly_over.use_sift_weighting', False)
+        self.declare_parameter('autofocus.fly_over.detection_poll_s', 0.05)
+        self.declare_parameter('autofocus.fly_over.full_scan_for_peak', True)
+        self.declare_parameter('autofocus.fly_over.peak_window_ratio', 0.9)
+        self.declare_parameter('autofocus.fly_over.peak_window_margin_mm', 1.0)
+        # Refinement strategy: 'linear' (default, fine scan), 'standard' (Autofocus), 'fast' (HillClimbing), 'parabolic'
+        self.declare_parameter('autofocus.fly_over.refinement_strategy', 'linear')
+        # Numeric refinement mode: 1=standard, 2=fast, 3=parabolic (overrides refinement_strategy when set)
+        self.declare_parameter('autofocus.fly_over.refinement_mode', 0)
         
         # Measurement conditions for scientific documentation
         self.declare_parameter('measurement_conditions.coaxial_light_voltage', 0.0)
@@ -205,6 +228,12 @@ class CameraNode(Node):
             AutoFocus,
             '~/autofocus_fast',
             self.service_callbacks.autofocus_fast_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_fly_over_service = self.create_service(
+            FlyOverAutofocus,
+            '~/autofocus_fly_over',
+            self.service_callbacks.autofocus_fly_over_callback,
             callback_group=self.cb_group,
         )
         self.autofocus_comparison_service = self.create_service(

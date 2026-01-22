@@ -105,6 +105,7 @@ class AutofocusConfig:
     shrink_factor: float = 0.45   # Increased from 0.35 for safety (wider range)
     early_termination_threshold: float = 0.7
     early_termination_count: int = 3
+    use_sift_weighting: bool = False
     
     # Coarse scan optimization
     coarse_terminate_threshold: float = 0.6  # Drop below 60% of peak triggers check
@@ -193,6 +194,7 @@ class Autofocus:
         self._phase = Phase.IDLE
         self._measurements: list[_Measurement] = []
         self._best_measurement: _Measurement | None = None
+        self._sift = None
         
         # Coarse scan state
         self._coarse_positions: list[float] = []
@@ -255,7 +257,7 @@ class Autofocus:
             AutofocusResult with next action
         """
         # Calculate sharpness
-        score = tenengrad(image)
+        score = self._calculate_score(image)
         
         # Store measurement
         measurement = _Measurement(position_mm, score)
@@ -277,6 +279,45 @@ class Autofocus:
                 best_score=self._best_measurement.score if self._best_measurement else 0.0,
                 phase=Phase.FINISHED
             )
+
+    def _get_sift(self):
+        if self._sift is None:
+            if hasattr(cv2, 'SIFT_create'):
+                self._sift = cv2.SIFT_create()
+            else:
+                self._sift = False
+        return self._sift
+
+    def _sift_weight(self, gray: np.ndarray) -> float:
+        sift = self._get_sift()
+        if sift is False:
+            return 1.0
+
+        if gray.size == 0:
+            return 1.0
+
+        roi_small = cv2.resize(gray, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        if roi_small.size == 0:
+            return 1.0
+
+        keypoints = sift.detect(roi_small, None)
+        area = float(roi_small.shape[0] * roi_small.shape[1])
+        density = (len(keypoints) / area) if area > 0 else 0.0
+        return 1.0 + (density * 1000.0)
+
+    def _calculate_score(self, image: np.ndarray) -> float:
+        base_score = tenengrad(image)
+
+        if self.config.use_sift_weighting and self._phase == Phase.REFINEMENT:
+            try:
+                gray = image
+                if len(image.shape) == 3:
+                    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                return base_score * self._sift_weight(gray)
+            except Exception:
+                return base_score
+
+        return base_score
     
     def _handle_coarse_scan(self) -> AutofocusResult:
         """Handle coarse scan phase."""

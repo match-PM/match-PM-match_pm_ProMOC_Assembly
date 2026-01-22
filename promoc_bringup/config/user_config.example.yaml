@@ -27,6 +27,11 @@ user:
 #   min_step_mm: 0.010                # Minimum step size (10µm, LTS300 limit: 4µm)
 #   refinement_shrink_factor: 0.25    # Range reduction per level (smaller = faster)
 
+# Fly-over autofocus selection (optional overrides)
+# fly_over:
+#   refinement_mode: 0                # 0=use refinement_strategy, 1=standard, 2=fast, 3=parabolic
+#   refinement_strategy: 'linear'     # 'linear' | 'standard' | 'fast' | 'parabolic'
+
 # Camera settings (optional overrides)
 # camera:
 #   pixel_size_um: 3.45               # Sensor pixel size in micrometers

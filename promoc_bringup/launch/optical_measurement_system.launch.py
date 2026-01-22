@@ -50,6 +50,10 @@ def load_user_config():
             'min_step_mm': 0.010,
             'refinement_shrink_factor': 0.25,
         },
+        'fly_over': {
+            'refinement_mode': 0,
+            'refinement_strategy': 'linear',
+        },
         'camera': {
             'pixel_size_um': 3.45,
             'mtf_csv_path': '/tmp/mtf_results.csv',
@@ -146,11 +150,14 @@ def generate_launch_description():
                 'use_simulator': LaunchConfiguration('use_simulator'),
                 'z_axis_node_name': LaunchConfiguration('x_axis_name'),
                 'pixel_size_um': config['camera']['pixel_size_um'],
-                'mtf_csv_path': config['camera']['mtf_csv_path'],
+                'mtf_csv_path': '',
                 # Autofocus: Multi-level refinement down to 10µm (LTS300: 4µm repeatable, 70µm DOF)
                 'autofocus.refinement_samples': config['autofocus']['refinement_samples'],
                 'autofocus.min_step_mm': config['autofocus']['min_step_mm'],
                 'autofocus.refinement_shrink_factor': config['autofocus']['refinement_shrink_factor'],
+                # Fly-over refinement selection
+                'autofocus.fly_over.refinement_mode': config['fly_over']['refinement_mode'],
+                'autofocus.fly_over.refinement_strategy': config['fly_over']['refinement_strategy'],
                 # Measurement conditions for CSV documentation
                 'measurement_conditions.coaxial_light_voltage': config['measurement_conditions']['coaxial_light_voltage'],
                 'measurement_conditions.coaxial_light_current': config['measurement_conditions']['coaxial_light_current'],

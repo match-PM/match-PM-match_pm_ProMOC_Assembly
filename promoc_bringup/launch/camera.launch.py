@@ -96,7 +96,7 @@ def launch_setup(context, *args, **kwargs):
             output='screen',
             parameters=[{
                 'use_simulator': True,
-                'mtf_csv_path': '/tmp/mtf_results.csv'
+                'mtf_csv_path': ''
             }],
             arguments=['--ros-args', '--log-level', 'INFO']
         ))
@@ -186,7 +186,7 @@ def launch_setup(context, *args, **kwargs):
                 arguments=['--ros-args', '--log-level', 'INFO'],
                 parameters=[{
                     'use_simulator': False,
-                    'mtf_csv_path': '/tmp/mtf_results.csv'
+                        'mtf_csv_path': ''
                 }],
             ))
 

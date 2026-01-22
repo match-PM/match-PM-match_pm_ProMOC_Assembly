@@ -1,0 +1,26 @@
+# Fly-over autofocus service
+# Phase 1: fast scan until object detected via ROI stddev
+# Phase 2: coarse scan with variance
+# Phase 3: fine scan with Tenengrad (optional SIFT weighting)
+
+# Start position for the scan (in mm)
+float64 start_position
+
+# End position for the scan (in mm)
+float64 end_position
+
+# Enable SIFT-based weighting for fine metric
+bool use_sift_weighting
+
+# Refinement mode: 0=use node parameter, 1=standard, 2=fast, 3=parabolic
+int32 refinement_mode
+
+---
+
+# Response: Result of the autofocus operation
+bool success
+string message
+float64 best_focus_position
+float64 best_focus_value
+int32 total_measurements_taken
+float64 duration_seconds

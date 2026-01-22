@@ -15,6 +15,10 @@ float64 step_size
 # If 0 or not provided, default threshold (100M) is used
 float64 estimated_peak_millions
 
+# --- OPTIONAL: Use SIFT weighting in fine search ---
+# Applied only during refinement/fine search phases
+bool use_sift_weighting
+
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
 # If values are not provided (empty/zero), the configured node parameters are used.
 float64 coaxial_light_voltage

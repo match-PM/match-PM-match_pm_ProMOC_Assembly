@@ -59,6 +59,9 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self._comm_lock = threading.Lock()
         self._last_position_cache = 0.0
         self._last_position_time = 0.0
+        self._poll_interval_s = 0.1
+        self._poll_stop_event = threading.Event()
+        self._poll_thread = None
 
     def connect(self, port: str = None) -> bool:
         """Connect to the Thorlabs LTS300 device"""
@@ -123,12 +126,59 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         """Disconnect from the device and cleanup resources."""
         if self.connected and self.device:
             try:
+                self.stop_position_polling()
                 self.device.close()
                 self.connected = False
                 self.logger.info('Device disconnected')
             except Exception as e:
                 self.logger.error(
                     f'Error during disconnect: {e}')
+
+    # POSITION POLLING
+
+    def start_position_polling(self, interval_s: float = 0.1):
+        """Start a background thread to poll the device position regularly."""
+        if interval_s <= 0:
+            return
+
+        self._poll_interval_s = float(interval_s)
+
+        if self._poll_thread and self._poll_thread.is_alive():
+            return
+
+        self._poll_stop_event.clear()
+
+        import threading
+
+        def _poll_loop():
+            while not self._poll_stop_event.is_set():
+                if not self.connected or not self.device:
+                    time.sleep(self._poll_interval_s)
+                    continue
+
+                acquired = self._comm_lock.acquire(timeout=0.05)
+                if acquired:
+                    try:
+                        position = self.device.get_position() / self.device_units_per_mm
+                        self._last_position_cache = position
+                        self._last_position_time = time.time()
+                    except Exception as e:
+                        self.logger.debug(f'Position polling error: {e}')
+                    finally:
+                        self._comm_lock.release()
+                time.sleep(self._poll_interval_s)
+
+        self._poll_thread = threading.Thread(target=_poll_loop, daemon=True)
+        self._poll_thread.start()
+        self.logger.info(
+            f'Position polling started ({self._poll_interval_s:.3f}s interval)')
+
+    def stop_position_polling(self):
+        """Stop the background position polling thread."""
+        self._poll_stop_event.set()
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._poll_thread.join(timeout=1.0)
+        self._poll_thread = None
 
     def move_absolute(self, position: float):
         """Move to absolute position in millimeters."""
@@ -141,52 +191,55 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
         self.logger.debug(f'Moving to absolute position: {position} mm')
 
-        with self._comm_lock:
-            try:
-                # Start the movement
+        try:
+            # Start the movement
+            with self._comm_lock:
                 self.device.move_to(
                     position * self.device_units_per_mm, scale=False)
-            except Exception as e:
-                raise HardwareError(
-                    f"Failed to start movement: {str(e)}",
-                    details={'target_position': position, 'error': str(e)}
-                )
+        except Exception as e:
+            raise HardwareError(
+                f"Failed to start movement: {str(e)}",
+                details={'target_position': position, 'error': str(e)}
+            )
 
-            # Wait for movement completion with robust error handling
-            import time
-            max_wait_time = 300.0  # 5 minutes maximum wait
-            start_time = time.time()
-            check_interval = 0.5   # Check every 500ms
+        # Wait for movement completion with robust error handling
+        import time
+        max_wait_time = 300.0  # 5 minutes maximum wait
+        start_time = time.time()
+        check_interval = 0.5   # Check every 500ms
 
-            while time.time() - start_time < max_wait_time:
-                try:
-                    if not self.device.is_moving():
-                        break
-                except Exception as e:
-                    self.logger.warn(
-                        f'Error checking movement status, continuing: {e}')
-                    # If we can't check status, wait a bit and try again
-                    time.sleep(check_interval * 2)
-
-                time.sleep(check_interval)
-            else:
-                # Timeout occurred
-                raise MovementTimeoutError(
-                    f"Movement timeout after {max_wait_time}s",
-                    details={
-                        'target_position': position,
-                        'timeout': max_wait_time,
-                        'elapsed_time': time.time() - start_time
-                    }
-                )
-
-            # Update position cache
+        while time.time() - start_time < max_wait_time:
             try:
-                current_pos = self.device.get_position() / self.device_units_per_mm
-                self._last_position_cache = current_pos
-                self._last_position_time = time.time()
+                with self._comm_lock:
+                    moving = self.device.is_moving()
+                if not moving:
+                    break
             except Exception as e:
-                self.logger.warn(f'Error updating position cache: {e}')
+                self.logger.warn(
+                    f'Error checking movement status, continuing: {e}')
+                # If we can't check status, wait a bit and try again
+                time.sleep(check_interval * 2)
+
+            time.sleep(check_interval)
+        else:
+            # Timeout occurred
+            raise MovementTimeoutError(
+                f"Movement timeout after {max_wait_time}s",
+                details={
+                    'target_position': position,
+                    'timeout': max_wait_time,
+                    'elapsed_time': time.time() - start_time
+                }
+            )
+
+        # Update position cache
+        try:
+            with self._comm_lock:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+            self._last_position_cache = current_pos
+            self._last_position_time = time.time()
+        except Exception as e:
+            self.logger.warn(f'Error updating position cache: {e}')
 
     def move_relative(self, distance: float):
         """Move relative distance from current position in millimeters."""
@@ -199,55 +252,58 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
         self.logger.debug(f'Moving relatively by: {distance} mm')
 
-        with self._comm_lock:
-            try:
+        try:
+            with self._comm_lock:
                 current_position = self.device.get_position()
                 target_position = current_position + \
                     (distance * self.device_units_per_mm)
 
                 # Start the movement
                 self.device.move_to(target_position, scale=False)
-            except Exception as e:
-                raise HardwareError(
-                    f"Failed to start relative movement: {str(e)}",
-                    details={'distance': distance, 'error': str(e)}
-                )
+        except Exception as e:
+            raise HardwareError(
+                f"Failed to start relative movement: {str(e)}",
+                details={'distance': distance, 'error': str(e)}
+            )
 
-            # Wait for movement completion with robust error handling
-            import time
-            max_wait_time = 300.0  # 5 minutes maximum wait
-            start_time = time.time()
-            check_interval = 0.5   # Check every 500ms
+        # Wait for movement completion with robust error handling
+        import time
+        max_wait_time = 300.0  # 5 minutes maximum wait
+        start_time = time.time()
+        check_interval = 0.5   # Check every 500ms
 
-            while time.time() - start_time < max_wait_time:
-                try:
-                    if not self.device.is_moving():
-                        break
-                except Exception as e:
-                    self.logger.warn(
-                        f'Error checking movement status, continuing: {e}')
-                    # If we can't check status, wait a bit and try again
-                    time.sleep(check_interval * 2)
-
-                time.sleep(check_interval)
-            else:
-                # Timeout occurred
-                raise MovementTimeoutError(
-                    f"Relative movement timeout after {max_wait_time}s",
-                    details={
-                        'distance': distance,
-                        'timeout': max_wait_time,
-                        'elapsed_time': time.time() - start_time
-                    }
-                )
-
-            # Update position cache
+        while time.time() - start_time < max_wait_time:
             try:
-                current_pos = self.device.get_position() / self.device_units_per_mm
-                self._last_position_cache = current_pos
-                self._last_position_time = time.time()
+                with self._comm_lock:
+                    moving = self.device.is_moving()
+                if not moving:
+                    break
             except Exception as e:
-                self.logger.warn(f'Error updating position cache: {e}')
+                self.logger.warn(
+                    f'Error checking movement status, continuing: {e}')
+                # If we can't check status, wait a bit and try again
+                time.sleep(check_interval * 2)
+
+            time.sleep(check_interval)
+        else:
+            # Timeout occurred
+            raise MovementTimeoutError(
+                f"Relative movement timeout after {max_wait_time}s",
+                details={
+                    'distance': distance,
+                    'timeout': max_wait_time,
+                    'elapsed_time': time.time() - start_time
+                }
+            )
+
+        # Update position cache
+        try:
+            with self._comm_lock:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+            self._last_position_cache = current_pos
+            self._last_position_time = time.time()
+        except Exception as e:
+            self.logger.warn(f'Error updating position cache: {e}')
 
     def home(self, timeout: float = 180.0):
         """
@@ -424,7 +480,8 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
         try:
             # Get velocity parameters from device (returns in device units)
-            params = self.device.get_velocity_parameters(scale=False)
+            with self._comm_lock:
+                params = self.device.get_velocity_parameters(scale=False)
 
             # Convert from device units to mm/s and mm/s^2
             min_velocity = params.min_velocity / self.device_units_per_mm
@@ -486,12 +543,13 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             max_vel_device = int(max_velocity * self.device_units_per_mm)
 
             # Set the parameters (scale=False means we're providing device units)
-            self.device.setup_velocity(
-                min_velocity=min_vel_device,
-                acceleration=accel_device,
-                max_velocity=max_vel_device,
-                scale=False
-            )
+            with self._comm_lock:
+                self.device.setup_velocity(
+                    min_velocity=min_vel_device,
+                    acceleration=accel_device,
+                    max_velocity=max_vel_device,
+                    scale=False
+                )
 
             self.logger.debug('Velocity parameters updated successfully')
 

@@ -1,19 +1,10 @@
 # Request: Parameters for MTF measurement
 
-# ROI center X position (pixels, -1 for image center)
-int32 roi_center_x -1
-
-# ROI center Y position (pixels, -1 for image center)
-int32 roi_center_y -1
-
-# ROI width (pixels, 0 for default 200px)
-int32 roi_width 0
-
-# ROI height (pixels, 0 for default 200px)
-int32 roi_height 0
-
 # Pixel size in micrometers (0 for default 3.45µm)
 float32 pixel_size_um 0.0
+
+# Auto ROI selection (true=automatic ROI, false=manual ROI selection)
+bool auto_roi
 
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
 # If values are not provided (empty/zero), the configured node parameters are used.

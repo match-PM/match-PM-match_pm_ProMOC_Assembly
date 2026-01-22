@@ -77,6 +77,10 @@ class Lts300Interface:
                         f'Connected to Thorlabs LTS300 (S/N: {device_serial})'
                     )
 
+                    poll_interval = self.config.get('position_poll_interval_s', 0.1)
+                    if hasattr(self.driver, 'start_position_polling') and poll_interval and poll_interval > 0:
+                        self.driver.start_position_polling(poll_interval)
+
             self.is_connected = connected
             return connected
 

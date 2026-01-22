@@ -71,6 +71,7 @@ from promoc_assembly_interfaces.srv import (
     JogAxis,
     MoveAbsolute,
     MoveRelativ,
+    Stop,
     SetVelocityParameters,
     ShutdownLinearAxis,
 )
@@ -223,6 +224,7 @@ class LTS300Node(Node):
         self.declare_parameter('max_single_move', 300.0)
         self.declare_parameter('homing_timeout', 180.0)
         self.declare_parameter('velocity_conversion_factor', 0.018)
+        self.declare_parameter('position_poll_interval_s', 0.1)
 
         return {
             'use_sim_time': self.get_parameter('use_sim_time').value,
@@ -235,6 +237,7 @@ class LTS300Node(Node):
             'max_single_move': self.get_parameter('max_single_move').value,
             'homing_timeout': self.get_parameter('homing_timeout').value,
             'velocity_conversion_factor': self.get_parameter('velocity_conversion_factor').value,
+            'position_poll_interval_s': self.get_parameter('position_poll_interval_s').value,
         }
 
     def _setup_ros_communication(self):
@@ -331,6 +334,11 @@ class LTS300Node(Node):
                 EmergencyStop,
                 f'{node_name}/emergency_stop',
                 self.callbacks.callback_emergency_stop,
+            )
+            self.create_service(
+                Stop,
+                f'{node_name}/stop',
+                self.callbacks.callback_stop,
             )
             self.create_service(
                 JogAxis, f'{node_name}/jog_axis', self.callbacks.callback_jog_axis)

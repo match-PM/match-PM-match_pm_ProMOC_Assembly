@@ -703,6 +703,32 @@ class ServiceCallbacks:
 
         return response
 
+    def callback_stop(self, request, response):
+        """Handle stop requests (non-emergency)."""
+        try:
+            was_moving = False
+            try:
+                was_moving = self.driver.is_moving()
+            except Exception:
+                pass
+
+            self.driver.stop()
+            self.logger.info('Stop requested - movement halted')
+
+            with self.operation_lock:
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = 'Stopped by request'
+
+            response.success = True
+            response.status_message = f'✅ Stop executed (was_moving: {was_moving})'
+
+        except Exception as e:
+            response.success = False
+            response.status_message = f'❌ Stop failed: {str(e)}'
+            self.logger.error(response.status_message)
+
+        return response
+
     def callback_jog_axis(self, request, response):
         """Handle axis jogging requests with simplified step-based movement."""
         try:

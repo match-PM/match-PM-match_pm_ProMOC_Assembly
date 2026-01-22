@@ -95,10 +95,29 @@ class CameraImageProcessing:
         gray_roi = cv2.cvtColor(
             roi_image, cv2.COLOR_BGR2GRAY).astype(np.float64)
 
-        # Detect edge
-        edges = cv2.Canny(np.uint8(gray_roi), 50, 150)
-        points = np.argwhere(edges > 0)
-        if len(points) < 10:
+        # Light blur to stabilize edge detection
+        gray_u8 = np.uint8(gray_roi)
+        gray_u8 = cv2.GaussianBlur(gray_u8, (3, 3), 0)
+
+        # Detect edge: try multiple Canny thresholds
+        points = None
+        for low, high in [(30, 100), (50, 150), (10, 40)]:
+            edges = cv2.Canny(gray_u8, low, high)
+            pts = np.argwhere(edges > 0)
+            if len(pts) >= 20:
+                points = pts
+                break
+
+        # Fallback: Sobel magnitude threshold
+        if points is None:
+            gx = cv2.Sobel(gray_u8, cv2.CV_64F, 1, 0, ksize=3)
+            gy = cv2.Sobel(gray_u8, cv2.CV_64F, 0, 1, ksize=3)
+            mag = np.sqrt(gx * gx + gy * gy)
+            thresh = np.percentile(mag, 90)
+            edges = (mag >= thresh).astype(np.uint8)
+            points = np.argwhere(edges > 0)
+
+        if points is None or len(points) < 20:
             return None  # Too few edge points
 
         # Fit line through edge points. OpenCV fitLine expects (x,y) format.

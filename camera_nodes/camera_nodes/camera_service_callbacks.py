@@ -36,11 +36,14 @@ from pathlib import Path
 import time
 
 import cv2
+import numpy as np
 from promoc_assembly_interfaces.srv import (
     GetOperationStatus,
+    GetPosition,
     GetVelocityParameters,
     JogAxis,
     MoveAbsolute,
+    Stop,
     SetVelocityParameters,
 )
 from promoc_core.promoc_exceptions import (
@@ -94,6 +97,56 @@ class CameraServiceCallbacks:
 
         # MTF analyzer created on first use
         self._mtf_analyzer = None
+        self._sift = None
+
+    # IMAGE HELPERS
+
+    def _get_latest_cv_image(self):
+        if self._node.latest_image_msg is None:
+            return None
+        try:
+            return self._node.bridge.imgmsg_to_cv2(
+                self._node.latest_image_msg, 'bgr8')
+        except Exception as e:
+            self._node.get_logger().warn(f'Failed to convert image: {e}')
+            return None
+
+    @staticmethod
+    def _get_center_roi(image: np.ndarray, size: int) -> np.ndarray:
+        h, w = image.shape[:2]
+        cy, cx = h // 2, w // 2
+        half = max(1, size // 2)
+        start_y = max(0, cy - half)
+        end_y = min(h, cy + half)
+        start_x = max(0, cx - half)
+        end_x = min(w, cx + half)
+        return image[start_y:end_y, start_x:end_x]
+
+    def _get_sift(self):
+        if self._sift is None:
+            if hasattr(cv2, 'SIFT_create'):
+                self._sift = cv2.SIFT_create()
+            else:
+                self._sift = False
+                self._node.get_logger().warn('SIFT not available in this OpenCV build. Using Tenengrad only.')
+        return self._sift
+
+    def _sift_weight(self, roi_gray: np.ndarray) -> float:
+        sift = self._get_sift()
+        if sift is False:
+            return 1.0
+
+        if roi_gray.size == 0:
+            return 1.0
+
+        roi_small = cv2.resize(roi_gray, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        if roi_small.size == 0:
+            return 1.0
+
+        keypoints = sift.detect(roi_small, None)
+        area = float(roi_small.shape[0] * roi_small.shape[1])
+        density = (len(keypoints) / area) if area > 0 else 0.0
+        return 1.0 + (density * 1000.0)
 
     # SHARPNESS CALCULATION
 
@@ -268,6 +321,51 @@ class CameraServiceCallbacks:
 
     # ROI SELECTION
 
+    def _select_roi_interactive(self, cv_image):
+        """Open a window to select an ROI and return (roi, roi_image)."""
+        display_image = cv_image.copy()
+        height, width = display_image.shape[:2]
+        max_height = 800  # Reasonable height for most screens
+        scale_factor = 1.0
+
+        if height > max_height:
+            scale_factor = max_height / height
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            display_image = cv2.resize(display_image, (new_width, new_height))
+            self._node.get_logger().info(
+                f'Resizing selection window: {width}x{height} -> {new_width}x{new_height} (scale: {scale_factor:.2f})'
+            )
+
+        window_name = 'Select ROI'
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, display_image.shape[1], display_image.shape[0])
+
+        roi = cv2.selectROI(window_name, display_image,
+                            fromCenter=False, showCrosshair=True)
+        cv2.destroyWindow(window_name)
+        cv2.waitKey(1)
+
+        if roi == (0, 0, 0, 0):
+            return None, None
+
+        x_scaled, y_scaled, w_scaled, h_scaled = roi
+
+        x = int(x_scaled / scale_factor)
+        y = int(y_scaled / scale_factor)
+        w = int(w_scaled / scale_factor)
+        h = int(h_scaled / scale_factor)
+
+        img_h, img_w = cv_image.shape[:2]
+        x = max(0, min(x, img_w - 1))
+        y = max(0, min(y, img_h - 1))
+        w = max(1, min(w, img_w - x))
+        h = max(1, min(h, img_h - y))
+
+        roi = (x, y, w, h)
+        roi_image = cv_image[y:y+h, x:x+w]
+        return roi, roi_image
+
     def select_roi_callback(self, request, response):
         """
         Select ROI interactively and calculate MTF.
@@ -300,57 +398,14 @@ class CameraServiceCallbacks:
                     details={'encoding': 'bgr8', 'error': str(e)}
                 )
 
-            # Resize image for ROI selection if it's too large
-            display_image = cv_image.copy()
-            height, width = display_image.shape[:2]
-            max_height = 800  # Reasonable height for most screens
-            scale_factor = 1.0
-
-            if height > max_height:
-                scale_factor = max_height / height
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
-                display_image = cv2.resize(display_image, (new_width, new_height))
-                self._node.get_logger().info(f'Resizing selection window: {width}x{height} -> {new_width}x{new_height} (scale: {scale_factor:.2f})')
-
-            # User selects ROI
-            # Note: selectROI can hang if not handled correctly in ROS context
-            # Adding a named window with autosize can help
-            window_name = 'Select ROI'
-            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(window_name, display_image.shape[1], display_image.shape[0])
-            
-            # Using selectROI on the (possibly resized) image
-            roi = cv2.selectROI(window_name, display_image,
-                                fromCenter=False, showCrosshair=True)
-            cv2.destroyWindow(window_name)
-            
-            # Process events to ensure window closes properly
-            cv2.waitKey(1)
-
-            if roi == (0, 0, 0, 0):
+            roi, roi_image = self._select_roi_interactive(cv_image)
+            if roi is None or roi_image is None:
                 self._node.get_logger().info('ROI selection cancelled by user.')
                 response.success = False
                 response.message = 'ROI selection cancelled.'
                 return response
 
-            # Extract and validate ROI
-            x_scaled, y_scaled, w_scaled, h_scaled = roi
-            
-            # Scale back to original coordinates
-            x = int(x_scaled / scale_factor)
-            y = int(y_scaled / scale_factor)
-            w = int(w_scaled / scale_factor)
-            h = int(h_scaled / scale_factor)
-            
-            # Clamp to image boundaries just in case
-            img_h, img_w = cv_image.shape[:2]
-            x = max(0, min(x, img_w - 1))
-            y = max(0, min(y, img_h - 1))
-            w = max(1, min(w, img_w - x))
-            h = max(1, min(h, img_h - y))
-            
-            roi = (x, y, w, h)
+            x, y, w, h = roi
             self._node.get_logger().info(f'Selected ROI (scaled back): {roi}')
 
             if w <= 0 or h <= 0:
@@ -359,8 +414,6 @@ class CameraServiceCallbacks:
                     details={'roi': roi, 'width': w, 'height': h,
                              'constraint': 'width and height must be positive'}
                 )
-
-            roi_image = cv_image[y:y+h, x:x+w]
 
             # Calculate MTF
             self._node.get_logger().info('Calculating MTF from selected ROI...')
@@ -376,15 +429,20 @@ class CameraServiceCallbacks:
             # Export results
             output_filename = self._node.get_parameter(
                 'mtf_csv_path').get_parameter_value().string_value
-            if not output_filename:
-                raise ConfigurationError(
-                    'MTF CSV output path not configured',
-                    details={'parameter': 'mtf_csv_path',
-                             'value': output_filename}
-                )
 
-            self._node.image_processor.export_to_csv(
-                mtf_results, output_filename)
+            if not output_filename:
+                username = ''
+                if self._node.has_parameter('measurement.username'):
+                    username = self._node.get_parameter(
+                        'measurement.username').get_parameter_value().string_value.strip()
+
+                base_dir = Path.home() / 'Dokumente' / 'Messungen'
+                output_dir = (base_dir / username / 'mtf_messungen') if username else (base_dir / 'mtf_messungen')
+                output_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_filename = str(output_dir / f'mtf_{timestamp}.csv')
+
+            self._node.image_processor.export_to_csv(mtf_results, output_filename)
 
             response.success = True
             response.message = (
@@ -512,7 +570,8 @@ class CameraServiceCallbacks:
                 refinement_samples=int(refinement_samples) if refinement_samples else 51,
                 min_step_mm=float(min_step_mm) if min_step_mm else 0.01,
                 shrink_factor=float(shrink_factor) if shrink_factor else 0.35,
-                disable_coarse_early_termination=True  # Scan full range in standard mode
+                disable_coarse_early_termination=True,  # Scan full range in standard mode
+                use_sift_weighting=bool(request.use_sift_weighting)
             )
             af = Autofocus(af_config)
             
@@ -550,7 +609,7 @@ class CameraServiceCallbacks:
                     status_resp = status_client.call(status_req)
                     if status_resp and status_resp.operation_status == 'idle':
                         return
-                    if status_resp and status_resp.operation_status == 'error':
+                    if status_resp and status_resp.operation_status in ['error', 'emergency_stop']:
                         raise ServiceCallFailedError(
                             f'Axis reported error during movement: {status_resp.status_message}')
                     time.sleep(0.1)
@@ -769,7 +828,8 @@ class CameraServiceCallbacks:
                 refinement_samples=self._node.get_parameter('autofocus.refinement_samples').value,
                 min_step_mm=self._node.get_parameter('autofocus.min_step_mm').value,
                 shrink_factor=self._node.get_parameter('autofocus.refinement_shrink_factor').value,
-                disable_coarse_early_termination=True  # Scan full range for parabolic fit
+                disable_coarse_early_termination=True,  # Scan full range for parabolic fit
+                use_sift_weighting=bool(request.use_sift_weighting)
             )
 
             # Initialize ParabolicAutofocus
@@ -997,50 +1057,60 @@ class CameraServiceCallbacks:
                 if pixel_size_um <= 0:
                     pixel_size_um = 3.45  # Default
 
-            # Get ROI dimensions from request or parameter
-            roi_width = request.roi_width
-            if roi_width <= 0:
+            use_auto_roi = True
+            if hasattr(request, 'auto_roi'):
+                use_auto_roi = bool(request.auto_roi)
+
+            roi_bounds = None
+            roi_center_x = None
+            roi_center_y = None
+            if use_auto_roi:
+                # Get ROI dimensions from parameters
                 roi_width = self._node.get_parameter(
                     'default_roi_width').get_parameter_value().integer_value
                 if roi_width <= 0:
                     roi_width = 200
 
-            roi_height = request.roi_height
-            if roi_height <= 0:
                 roi_height = self._node.get_parameter(
                     'default_roi_height').get_parameter_value().integer_value
                 if roi_height <= 0:
                     roi_height = 200
 
-            # Get ROI center
-            h, w = cv_image.shape[:2]
-            if request.roi_center_x < 0:
+                # ROI center = image center
+                h, w = cv_image.shape[:2]
                 roi_center_x = w // 2
-            else:
-                roi_center_x = request.roi_center_x
-
-            if request.roi_center_y < 0:
                 roi_center_y = h // 2
             else:
-                roi_center_y = request.roi_center_y
+                roi, _ = self._select_roi_interactive(cv_image)
+                if roi is None:
+                    response.success = False
+                    response.message = 'ROI selection cancelled.'
+                    return response
+                x, y, rw, rh = roi
+                roi_bounds = (x, y, x + rw, y + rh)
 
             # Configure MTF analyzer
             config = MTFConfig(
                 pixel_size_um=pixel_size_um,
-                roi_width=roi_width,
-                roi_height=roi_height,
-                roi_center=(roi_center_x, roi_center_y)
+                roi_width=roi_width if use_auto_roi else 200,
+                roi_height=roi_height if use_auto_roi else 200,
+                roi_center=(roi_center_x, roi_center_y) if use_auto_roi else None
             )
 
             analyzer = MTFAnalyzer(config)
 
             # Compute MTF
-            self._node.get_logger().info(
-                f'Computing MTF: ROI=({roi_center_x}, {roi_center_y}) '
-                f'{roi_width}x{roi_height}px, pixel_size={pixel_size_um}µm'
-            )
+            if use_auto_roi:
+                self._node.get_logger().info(
+                    f'Computing MTF: ROI=({roi_center_x}, {roi_center_y}) '
+                    f'{roi_width}x{roi_height}px, pixel_size={pixel_size_um}µm'
+                )
+            else:
+                self._node.get_logger().info(
+                    f'Computing MTF: ROI=manual {roi_bounds}, pixel_size={pixel_size_um}µm'
+                )
 
-            result = analyzer.compute_mtf(cv_image)
+            result = analyzer.compute_mtf(cv_image, roi=roi_bounds)
 
             if not result.valid:
                 raise ImageProcessingError(
@@ -1078,7 +1148,7 @@ class CameraServiceCallbacks:
         except Exception as e:
             response.success = False
             response.message = f'❌ MTF measurement failed: {str(e)}'
-            self._node.get_logger().error(response.message, exc_info=True)
+            self._node.get_logger().error(response.message)
 
         return response
 
@@ -1123,7 +1193,8 @@ class CameraServiceCallbacks:
                 end_mm=float(request.end_position),
                 step_mm=float(request.step_size),
                 refinement_samples=int(refinement_samples) if refinement_samples else 31,
-                min_step_mm=float(min_step_mm) if min_step_mm else 0.01
+                min_step_mm=float(min_step_mm) if min_step_mm else 0.01,
+                use_sift_weighting=bool(request.use_sift_weighting)
             )
             
             # USE HILL CLIMBING with estimated peak
@@ -1406,4 +1477,361 @@ class CameraServiceCallbacks:
             response.message = 'All autofocus algorithms failed'
         
         self._node.get_logger().info('='*60)
+        return response
+
+    def autofocus_fly_over_callback(self, request, response):
+        """
+        Fly-over autofocus:
+        1) Fast scan to detect object via ROI stddev
+        2) Coarse scan with variance
+        3) Fine scan with Tenengrad (optional SIFT weighting)
+        """
+        start_time = time.time()
+        self._node.get_logger().info(
+            f'Fly-Over Autofocus: range {request.start_position}-{request.end_position}mm'
+        )
+
+        # Resolve parameters (from node defaults)
+        scan_speed_fast = self._node.get_parameter('autofocus.fly_over.scan_speed_fast').value
+        step_size_coarse = self._node.get_parameter('autofocus.fly_over.step_size_coarse').value
+        step_size_fine = self._node.get_parameter('autofocus.fly_over.step_size_fine').value
+        detection_threshold = self._node.get_parameter('autofocus.fly_over.detection_stddev_threshold').value
+        roi_size = self._node.get_parameter('autofocus.fly_over.roi_size').value
+        backtrack_mm = self._node.get_parameter('autofocus.fly_over.backtrack_mm').value
+        coarse_scan_range_mm = self._node.get_parameter('autofocus.fly_over.coarse_scan_range_mm').value
+        fine_scan_range_mm = self._node.get_parameter('autofocus.fly_over.fine_scan_range_mm').value
+        coarse_drop_ratio = self._node.get_parameter('autofocus.fly_over.coarse_drop_ratio').value
+        fine_drop_ratio = self._node.get_parameter('autofocus.fly_over.fine_drop_ratio').value
+        settle_coarse_s = self._node.get_parameter('autofocus.fly_over.settle_coarse_s').value
+        settle_fine_s = self._node.get_parameter('autofocus.fly_over.settle_fine_s').value
+        detection_poll_s = self._node.get_parameter('autofocus.fly_over.detection_poll_s').value
+        full_scan_for_peak = self._node.get_parameter('autofocus.fly_over.full_scan_for_peak').value
+        peak_window_ratio = self._node.get_parameter('autofocus.fly_over.peak_window_ratio').value
+        peak_window_margin_mm = self._node.get_parameter('autofocus.fly_over.peak_window_margin_mm').value
+        refinement_strategy = self._node.get_parameter('autofocus.fly_over.refinement_strategy').value
+        refinement_mode = self._node.get_parameter('autofocus.fly_over.refinement_mode').value
+        if hasattr(request, 'refinement_mode') and request.refinement_mode in [1, 2, 3]:
+            refinement_mode = int(request.refinement_mode)
+        use_sift_weighting = bool(request.use_sift_weighting)
+
+        try:
+            # Basic validation
+            if request.start_position >= request.end_position:
+                raise InvalidParameterError(
+                    'Start position must be less than end position',
+                    details={'start': request.start_position, 'end': request.end_position}
+                )
+            if step_size_coarse <= 0 or step_size_fine <= 0:
+                raise InvalidParameterError('Step size must be positive')
+            if scan_speed_fast <= 0:
+                raise InvalidParameterError('Scan speed must be positive')
+
+            self._node.get_logger().info(
+                'Fly-Over params: '
+                f'start={request.start_position:.2f} end={request.end_position:.2f} '
+                f'scan_speed={scan_speed_fast:.2f}mm/s coarse_step={step_size_coarse:.3f}mm '
+                f'fine_step={step_size_fine:.4f}mm stddev_thr={detection_threshold:.2f} '
+                f'roi={roi_size}px backtrack={backtrack_mm:.2f}mm '
+                f'coarse_range={coarse_scan_range_mm:.2f}mm fine_range={fine_scan_range_mm:.2f}mm '
+                f'coarse_drop={coarse_drop_ratio:.2f} fine_drop={fine_drop_ratio:.2f} '
+                f'settle_coarse={settle_coarse_s:.2f}s settle_fine={settle_fine_s:.2f}s '
+                f'use_sift={use_sift_weighting} full_scan={bool(full_scan_for_peak)}'
+            )
+
+            # Service clients
+            x_axis_name = self._node.get_parameter('z_axis_node_name').value
+            move_abs_client = self._node.create_client(MoveAbsolute, f'/{x_axis_name}/move_absolute')
+            status_client = self._node.create_client(GetOperationStatus, f'/{x_axis_name}/get_operation_status')
+            get_pos_client = self._node.create_client(GetPosition, f'/{x_axis_name}/get_position')
+            stop_client = self._node.create_client(Stop, f'/{x_axis_name}/stop')
+            get_vel_client = self._node.create_client(GetVelocityParameters, f'/{x_axis_name}/get_velocity_parameters')
+            set_vel_client = self._node.create_client(SetVelocityParameters, f'/{x_axis_name}/set_velocity_parameters')
+
+            for client, name in [
+                (move_abs_client, 'move_absolute'),
+                (status_client, 'get_operation_status'),
+                (get_pos_client, 'get_position'),
+                (stop_client, 'stop'),
+                (get_vel_client, 'get_velocity_parameters'),
+                (set_vel_client, 'set_velocity_parameters'),
+            ]:
+                if not client.wait_for_service(timeout_sec=2.0):
+                    raise ServiceCallFailedError(f'Linear axis {name} service not available')
+
+            def _wait_for_axis_idle() -> None:
+                while True:
+                    status_resp = status_client.call(GetOperationStatus.Request())
+                    if status_resp and status_resp.operation_status == 'idle':
+                        return
+                    if status_resp and status_resp.operation_status == 'error':
+                        raise ServiceCallFailedError(
+                            f'Axis reported error during movement: {status_resp.status_message}')
+                    time.sleep(0.05)
+
+            def _get_position() -> float:
+                pos_resp = get_pos_client.call(GetPosition.Request())
+                if not pos_resp or not pos_resp.success:
+                    raise ServiceCallFailedError('Failed to read axis position')
+                return float(pos_resp.axis_position)
+
+            # Move to start position
+            move_resp = move_abs_client.call(MoveAbsolute.Request(axis_position=request.start_position))
+            if not move_resp or not move_resp.success:
+                raise ServiceCallFailedError('Failed to move to start position')
+            _wait_for_axis_idle()
+
+            # Save current velocity parameters
+            vel_backup = get_vel_client.call(GetVelocityParameters.Request())
+            if not vel_backup or not vel_backup.success:
+                raise ServiceCallFailedError('Failed to read velocity parameters')
+
+            # Clamp scan speed to current hardware max velocity
+            if vel_backup.max_velocity > 0 and scan_speed_fast > vel_backup.max_velocity:
+                self._node.get_logger().warn(
+                    f'Fly-over scan speed {scan_speed_fast:.2f}mm/s exceeds max {vel_backup.max_velocity:.2f}mm/s. Clamping.'
+                )
+                scan_speed_fast = float(vel_backup.max_velocity)
+
+            # Set fast scan velocity
+            vel_req = SetVelocityParameters.Request()
+            vel_req.min_velocity = vel_backup.min_velocity
+            vel_req.acceleration = vel_backup.acceleration
+            vel_req.max_velocity = float(scan_speed_fast)
+            vel_resp = set_vel_client.call(vel_req)
+            if not vel_resp or not vel_resp.success:
+                raise ServiceCallFailedError('Failed to set scan velocity')
+
+            detected_pos = None
+            total_measurements = 0
+            detection_log_every = 1
+            missing_image_count = 0
+            max_stddev = -1.0
+            max_stddev_pos = None
+            peak_window_min = None
+            peak_window_max = None
+
+            # Start fly-over scan
+            move_resp = move_abs_client.call(MoveAbsolute.Request(axis_position=request.end_position))
+            if not move_resp or not move_resp.success:
+                raise ServiceCallFailedError('Failed to start fly-over scan')
+
+            scan_start_time = time.time()
+            scan_start_pos = float(request.start_position)
+
+            def _estimate_position() -> float:
+                elapsed = time.time() - scan_start_time
+                est = scan_start_pos + (float(scan_speed_fast) * elapsed)
+                return min(float(request.end_position), max(scan_start_pos, est))
+
+            last_pos = None
+            last_pos_change_time = time.time()
+
+            while True:
+                status_resp = status_client.call(GetOperationStatus.Request())
+                if status_resp and status_resp.operation_status in ['error', 'emergency_stop']:
+                    raise ServiceCallFailedError('Axis reported error during fly-over')
+
+                cv_image = self._get_latest_cv_image()
+                if cv_image is not None:
+                    green = cv_image[:, :, 1] if len(cv_image.shape) == 3 else cv_image
+                    roi = self._get_center_roi(green, int(roi_size))
+                    std_dev = float(np.std(roi)) if roi.size > 0 else 0.0
+                    total_measurements += 1
+
+                    current_pos = None
+                    try:
+                        current_pos = _get_position()
+                    except Exception:
+                        current_pos = None
+
+                    if current_pos is not None and current_pos >= 0:
+                        if last_pos is None or abs(current_pos - last_pos) > 1e-6:
+                            last_pos = current_pos
+                            last_pos_change_time = time.time()
+
+                    use_estimate = False
+                    if status_resp and status_resp.operation_status in ['moving', 'jogging']:
+                        if current_pos is None or current_pos < 0:
+                            use_estimate = True
+                        elif time.time() - last_pos_change_time > 1.0:
+                            use_estimate = True
+
+                    if use_estimate:
+                        current_pos = _estimate_position()
+
+                    # Track max stddev across the scan
+                    if std_dev > max_stddev:
+                        max_stddev = std_dev
+                        max_stddev_pos = current_pos
+                        peak_window_min = current_pos
+                        peak_window_max = current_pos
+                    elif max_stddev > 0 and std_dev >= (max_stddev * float(peak_window_ratio)):
+                        if peak_window_min is None or current_pos < peak_window_min:
+                            peak_window_min = current_pos
+                        if peak_window_max is None or current_pos > peak_window_max:
+                            peak_window_max = current_pos
+
+                    if total_measurements % detection_log_every == 0:
+                        if use_estimate:
+                            self._node.get_logger().info(
+                                f'Fly-Over: x≈{current_pos:.2f}mm stddev={std_dev:.2f} '
+                                f'(thr={detection_threshold:.2f})'
+                            )
+                        else:
+                            self._node.get_logger().info(
+                                f'Fly-Over: x={current_pos:.2f}mm stddev={std_dev:.2f} '
+                                f'(thr={detection_threshold:.2f})'
+                            )
+
+                    # Threshold-based early stop (optional)
+                    if not full_scan_for_peak and std_dev >= detection_threshold:
+                        self._node.get_logger().info(
+                            f'Object detected (stddev={std_dev:.2f}). Stopping axis.'
+                        )
+                        try:
+                            detected_pos = _get_position()
+                        except Exception:
+                            detected_pos = None
+
+                        if detected_pos is None or detected_pos < 0:
+                            detected_pos = _estimate_position()
+
+                        stop_resp = stop_client.call(Stop.Request())
+                        if not stop_resp or not stop_resp.success:
+                            raise ServiceCallFailedError('Failed to stop axis after detection')
+                        _wait_for_axis_idle()
+                        break
+
+                else:
+                    missing_image_count += 1
+                    if missing_image_count % 20 == 0:
+                        self._node.get_logger().warn(
+                            f'Fly-Over: no image received yet (count={missing_image_count})'
+                        )
+
+                if status_resp and status_resp.operation_status == 'idle':
+                    break
+
+                time.sleep(float(detection_poll_s))
+
+            if detected_pos is None and full_scan_for_peak and max_stddev_pos is not None:
+                detected_pos = float(max_stddev_pos)
+                if peak_window_min is None or peak_window_max is None:
+                    peak_window_min = detected_pos
+                    peak_window_max = detected_pos
+                self._node.get_logger().info(
+                    f'Fly-Over full scan peak: x={detected_pos:.2f}mm stddev={max_stddev:.2f} '
+                    f'window={peak_window_min:.2f}-{peak_window_max:.2f}mm'
+                )
+
+            if detected_pos is None:
+                self._node.get_logger().warn(
+                    f'Fly-Over finished without detection after {total_measurements} measurements.'
+                )
+                response.success = False
+                response.message = 'No object detected during fly-over scan'
+                response.duration_seconds = time.time() - start_time
+                response.total_measurements_taken = total_measurements
+                return response
+
+            # Determine refinement strategy
+            if isinstance(refinement_mode, int) and refinement_mode in [1, 2, 3]:
+                refinement_strategy = {1: 'standard', 2: 'fast', 3: 'parabolic'}[refinement_mode]
+            if refinement_strategy not in ['standard', 'fast', 'parabolic']:
+                self._node.get_logger().warn(
+                    f'Unknown refinement strategy "{refinement_strategy}", defaulting to standard'
+                )
+                refinement_strategy = 'standard'
+
+            # Determine peak window for refinement range
+            if peak_window_min is None or peak_window_max is None:
+                peak_window_min = max(float(request.start_position), detected_pos - float(coarse_scan_range_mm) * 0.5)
+                peak_window_max = min(float(request.end_position), detected_pos + float(coarse_scan_range_mm) * 0.5)
+
+            algo_start = max(float(request.start_position), peak_window_min - float(peak_window_margin_mm))
+            algo_end = min(float(request.end_position), peak_window_max + float(peak_window_margin_mm))
+
+            if algo_end <= algo_start:
+                raise InvalidParameterError(
+                    'Invalid refinement range after peak window clamp',
+                    details={'algo_start': algo_start, 'algo_end': algo_end}
+                )
+
+            # Restore scan velocity before running autofocus
+            try:
+                restore_req = SetVelocityParameters.Request()
+                restore_req.min_velocity = vel_backup.min_velocity
+                restore_req.acceleration = vel_backup.acceleration
+                restore_req.max_velocity = vel_backup.max_velocity
+                set_vel_client.call(restore_req)
+            except Exception:
+                pass
+
+            self._node.get_logger().info(
+                f'Fly-Over refinement range: {algo_start:.2f}-{algo_end:.2f}mm '
+                f'(strategy={refinement_strategy})'
+            )
+
+            # Build request for autofocus services
+            from promoc_assembly_interfaces.srv import AutoFocus
+            algo_req = AutoFocus.Request()
+            algo_req.start_position = float(algo_start)
+            algo_req.end_position = float(algo_end)
+            algo_req.step_size = float(step_size_coarse)
+            algo_req.estimated_peak_millions = 0.0
+            algo_req.use_sift_weighting = bool(use_sift_weighting)
+
+            algo_res = AutoFocus.Response()
+
+            if refinement_strategy == 'fast':
+                algo_req.step_size = 0.5
+                algo_res = self.autofocus_fast_callback(algo_req, algo_res)
+            elif refinement_strategy == 'parabolic':
+                algo_res = self.autofocus_parabolic_callback(algo_req, algo_res)
+            else:
+                algo_res = self.autofocus_callback(algo_req, algo_res)
+
+            duration = time.time() - start_time
+            response.success = bool(algo_res.success)
+            response.message = (
+                f'Fly-over + {refinement_strategy} complete: '
+                f'{algo_res.message}'
+            )
+            response.best_focus_position = float(algo_res.best_focus_position)
+            response.best_focus_value = float(algo_res.best_focus_value)
+            response.total_measurements_taken = int(total_measurements + algo_res.total_measurements_taken)
+            response.duration_seconds = float(duration)
+
+        except InvalidParameterError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().warn(response.message)
+
+        except ServiceCallFailedError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().error(response.message)
+
+        except ImageProcessingError as e:
+            response.success = False
+            response.message = f'⚠️ {str(e)}'
+            self._node.get_logger().warn(response.message)
+
+        except Exception as e:
+            response.success = False
+            response.message = f'❌ Fly-over autofocus failed: {str(e)}'
+            self._node.get_logger().error(response.message, exc_info=True)
+
+        finally:
+            # Restore velocity parameters if possible
+            try:
+                if 'vel_backup' in locals() and 'set_vel_client' in locals():
+                    restore_req = SetVelocityParameters.Request()
+                    restore_req.min_velocity = vel_backup.min_velocity
+                    restore_req.acceleration = vel_backup.acceleration
+                    restore_req.max_velocity = vel_backup.max_velocity
+                    set_vel_client.call(restore_req)
+            except Exception:
+                pass
+
         return response

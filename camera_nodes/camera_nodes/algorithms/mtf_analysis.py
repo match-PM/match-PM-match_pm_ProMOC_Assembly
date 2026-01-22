@@ -321,16 +321,47 @@ class MTFAnalyzer:
         else:
             roi_u8 = roi
 
-        # Canny edge detection
-        edges = cv2.Canny(roi_u8, self.config.canny_low,
-                          self.config.canny_high)
+        # Canny edge detection (try multiple thresholds)
+        edges = None
+        lines = None
+        canny_pairs = [
+            (self.config.canny_low, self.config.canny_high),
+            (max(5, self.config.canny_low // 2), max(20, self.config.canny_high // 2)),
+            (10, 40),
+        ]
 
-        # Hough transform
-        lines = cv2.HoughLines(edges, 1, np.pi/180,
-                               threshold=self.config.hough_threshold)
+        hough_thresholds = [
+            self.config.hough_threshold,
+            max(10, int(self.config.hough_threshold * 0.7)),
+            max(5, int(self.config.hough_threshold * 0.4)),
+        ]
+
+        roi_blur = cv2.GaussianBlur(roi_u8, (3, 3), 0)
+
+        for low, high in canny_pairs:
+            edges = cv2.Canny(roi_blur, low, high)
+            for ht in hough_thresholds:
+                lines = cv2.HoughLines(edges, 1, np.pi/180, threshold=ht)
+                if lines is not None and len(lines) > 0:
+                    break
+            if lines is not None and len(lines) > 0:
+                break
 
         if lines is None or len(lines) == 0:
-            return None
+            # Fallback: estimate angle from gradient orientation
+            gx = cv2.Sobel(roi_blur, cv2.CV_64F, 1, 0, ksize=3)
+            gy = cv2.Sobel(roi_blur, cv2.CV_64F, 0, 1, ksize=3)
+            mag = np.sqrt(gx * gx + gy * gy)
+            if np.max(mag) <= 0:
+                return None
+            thresh = np.percentile(mag, 95)
+            mask = mag >= thresh
+            if not np.any(mask):
+                return None
+            angles = np.degrees(np.arctan2(gy[mask], gx[mask]))
+            # Normalize to [-90, 90]
+            angles = ((angles + 90) % 180) - 90
+            return float(np.median(angles))
 
         # Collect angles
         angles = []
@@ -341,7 +372,13 @@ class MTFAnalyzer:
             angles.append(angle_deg)
 
         # Use median for robustness
-        return float(np.median(angles))
+        angle = float(np.median(angles))
+        # Normalize to [-90, 90]
+        angle = ((angle + 90) % 180) - 90
+        # Fold to smallest deviation (treat near-vertical/horizontal equivalently)
+        if abs(angle) > 45.0:
+            angle = angle - (90.0 * np.sign(angle))
+        return angle
 
     def _compute_esf(self, roi: np.ndarray, edge_angle: float) -> np.ndarray:
         """
