@@ -63,23 +63,24 @@ Example Service Calls:
 ======================
     # Perform autofocus:
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \
-        "{start_position: 0.0, end_position: 30.0, step_size: 1.0}"
+        "{start_position: 0.0, end_position: 30.0, refinement_mode: 0}"
 
     # Measure MTF:
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
 from cv_bridge import CvBridge
-from promoc_assembly_interfaces.srv import AutoFocus, FlyOverAutofocus, MeasureMTF, SetExposure
+from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure, DetectRois
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 
 # Local imports
 from .camera_image_processing import CameraImageProcessing
-from .camera_service_callbacks import CameraServiceCallbacks
+from .callbacks import CameraServiceCallbacks
 
 # Driver abstraction
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
@@ -138,6 +139,8 @@ class CameraNode(Node):
         self.declare_parameter('autofocus.refinement_samples', 51)
         self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
         self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
+        # Autofocus mode selection: 0=standard, 1=fast (hillclimb), 2=parabolic
+        self.declare_parameter('autofocus.refinement_mode', 0)
 
         # Fly-over autofocus parameters (defaults)
         self.declare_parameter('autofocus.fly_over.scan_speed_fast', 10.0)
@@ -191,12 +194,21 @@ class CameraNode(Node):
             self, self.camera_driver)
 
         self.latest_image_msg = None
+        self.current_axis_position = -1.0
 
 
         # Phase 4: Register subscribers/publishers
 
         self.assembly_image_sub = self.create_subscription(
             Image, '/promoc/assembly_camera/stream0/image_raw', self.assembly_image_callback, 10)
+
+        axis_name = self.get_parameter('z_axis_node_name').value
+        self.axis_pos_sub = self.create_subscription(
+            Float64,
+            f'/{axis_name}/position',
+            self.axis_position_callback,
+            10
+        )
 
         self.processed_assembly_pub = self.create_publisher(
             Image, '/camera/assembly/processed', 10)
@@ -218,34 +230,22 @@ class CameraNode(Node):
             self.service_callbacks.autofocus_callback,
             callback_group=self.cb_group,
         )
-        self.autofocus_parabolic_service = self.create_service(
-            AutoFocus,
-            '~/autofocus_parabolic',
-            self.service_callbacks.autofocus_parabolic_callback,
-            callback_group=self.cb_group,
-        )
-        self.autofocus_fast_service = self.create_service(
-            AutoFocus,
-            '~/autofocus_fast',
-            self.service_callbacks.autofocus_fast_callback,
-            callback_group=self.cb_group,
-        )
-        self.autofocus_fly_over_service = self.create_service(
-            FlyOverAutofocus,
-            '~/autofocus_fly_over',
-            self.service_callbacks.autofocus_fly_over_callback,
-            callback_group=self.cb_group,
-        )
         self.autofocus_comparison_service = self.create_service(
             AutoFocus,
-            '~/autofocus_comparison_test',
-            self.service_callbacks.autofocus_comparison_test_callback,
+            '~/autofocus_comparison',
+            self.service_callbacks.autofocus_comparison_callback,
             callback_group=self.cb_group,
         )
         self.mtf_service = self.create_service(
             MeasureMTF,
             '~/measure_mtf',
             self.service_callbacks.measure_mtf_callback,
+            callback_group=self.cb_group,
+        )
+        self.detect_rois_service = self.create_service(
+            DetectRois,
+            '~/detect_rois',
+            self.service_callbacks.detect_rois_callback,
             callback_group=self.cb_group,
         )
 
@@ -258,7 +258,7 @@ class CameraNode(Node):
                 callback_group=self.cb_group,
             )
 
-        self.get_logger().info('✓ Camera Node initialized')
+        self.get_logger().info('Camera Node initialized successfully')
 
 
     # DRIVER CREATION
@@ -311,6 +311,10 @@ class CameraNode(Node):
             self._last_log_time = current_time
         
         self.latest_image_msg = msg
+
+    def axis_position_callback(self, msg: Float64):
+        """Receive and cache axis position."""
+        self.current_axis_position = msg.data
 
         # For the Aravis driver, pass the image to the driver to be cached.
         if hasattr(self.camera_driver, 'set_latest_image'):
