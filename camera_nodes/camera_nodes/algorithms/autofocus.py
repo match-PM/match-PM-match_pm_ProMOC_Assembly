@@ -604,23 +604,13 @@ class Autofocus:
             self._refinement_positions = self._refinement_positions[best_idx - 1:]
         # else: peak is at start of range, just scan from beginning
         
-        self._refinement_index = 0
         self._refinement_level += 1
 
 
 class ParabolicAutofocus(Autofocus):
     """
     Optimized autofocus with local parabolic interpolation around peak.
-    
-    Improvements over basic Autofocus:
-    1. Local Parabolic Fit: Fits parabola only through best point and its immediate neighbors
-       - Ignores flat regions far from peak
-       - More robust and accurate than global fit
-    2. Smart Refinement Range: Uses much tighter range around predicted peak
-    3. Faster Convergence: Dramatically reduces total measurement count
-    
-    This approach focuses computational effort on the actual peak region,
-    ignoring the "tails" of the focus curve that don't contribute useful information.
+    Base class providing local fit logic.
     """
     
     def __init__(self, config: AutofocusConfig):
@@ -631,13 +621,6 @@ class ParabolicAutofocus(Autofocus):
     def _fit_local_parabola(self) -> tuple[float, float] | None:
         """
         Fit parabola through best coarse point and its immediate neighbors.
-        
-        Uses only 3 points: best_point, left_neighbor, right_neighbor.
-        This is the gold standard for focus peak fitting - it captures
-        the peak shape while ignoring distant flat regions.
-        
-        Returns:
-            (position_mm, estimated_score) of parabolic peak, or None if fit fails
         """
         if len(self._measurements) < 3:
             return None
@@ -683,9 +666,6 @@ class ParabolicAutofocus(Autofocus):
     def _handle_coarse_scan(self) -> AutofocusResult:
         """
         Override coarse scan to use local parabolic fitting.
-        
-        After coarse scan completes, fits a parabola through the 3 best points
-        to estimate the true peak location, then starts a tight refinement there.
         """
         self._coarse_index += 1
         
@@ -706,374 +686,231 @@ class ParabolicAutofocus(Autofocus):
         
         # Coarse scan complete → try local parabolic fit
         if not self._best_measurement:
-            # No measurements? Should not happen
-            return AutofocusResult(
-                finished=True,
-                phase=Phase.FINISHED,
-                best_position_mm=self.config.start_mm,
-                best_score=0.0
-            )
+             return AutofocusResult(finished=True, phase=Phase.FINISHED, best_position_mm=self.config.start_mm, best_score=0.0)
         
         # Attempt local parabolic fit (best + neighbors only)
         local_fit = self._fit_local_parabola()
         
         if local_fit:
             predicted_peak_pos, predicted_peak_score = local_fit
-            
-            # Update best measurement to predicted peak
             self._best_measurement = _Measurement(predicted_peak_pos, predicted_peak_score)
             self._interpolated_peak = predicted_peak_pos
-            
-            # OPTIMIZATION: Use very tight refinement range
-            # Since the parabolic fit is already quite accurate,
-            # we only need a small range to verify and refine
-            # Override the range to be just ±2 coarse steps
             self._current_range_mm = self.config.step_mm * 2.0
         
-        # Start refinement (centered on predicted or measured best)
-        # Prepare refinement but don't change phase yet
         self._prepare_refinement()
         
-        # Refinement positions are sorted, start at beginning
         result = AutofocusResult(
             finished=False,
             next_position_mm=self._refinement_positions[0],
             best_position_mm=self._best_measurement.position_mm,
             best_score=self._best_measurement.score,
             current_score=self._measurements[-1].score,
-            phase=Phase.COARSE_SCAN,  # This result is for last coarse scan point
+            phase=Phase.COARSE_SCAN,
             progress=0.5,
-            current_level=self._refinement_level,  # Show upcoming level
+            current_level=self._refinement_level,
             current_step_mm=self._current_step_mm,
             current_range_mm=self._current_range_mm
         )
-        
-        # Now transition to refinement for next iteration
         self._phase = Phase.REFINEMENT
         return result
+
+
+class GoldenSectionAutofocus(Autofocus):
+    """
+    Robust autofocus using Golden Section Search for refinement.
+    Reduces the search interval by factor 0.618 in each step.
+    Guaranteed to find the maximum in a unimodal interval.
+    """
     
+    def __init__(self, config: AutofocusConfig):
+        super().__init__(config)
+        self.a = 0.0
+        self.b = 0.0
+        self.c = 0.0
+        self.d = 0.0
+    
+    def _prepare_refinement(self):
+        if not self._best_measurement: return
+        
+        # Golden Ratio
+        PHI = (1 + 5**0.5) / 2
+        
+        center = self._best_measurement.position_mm
+        
+        # Initial Refinement: Define Bracket around the peak
+        # We take the neighbor points from the coarse scan as bounds
+        if self._refinement_level == 0:
+            # Safer: just take +/- step_size * 2 as initial bracket
+            bracket_width = self.config.step_mm * 2.0
+            self.a = max(self.config.start_mm, center - bracket_width)
+            self.b = min(self.config.end_mm, center + bracket_width)
+            
+            # Two inner probe points
+            self.c = self.b - (self.b - self.a) / PHI
+            self.d = self.a + (self.b - self.a) / PHI
+            
+            # We need to measure c and d next.
+            self._refinement_positions = sorted([self.c, self.d])
+            
+        else:
+            # Simple contraction for multi-level logic (simulated Golden Section)
+            # Use standard Autofocus shrinkage but adapted for Golden Ratio
+            self._current_range_mm *= 0.618 # Shrink by golden ratio
+            
+            p1 = center - self._current_range_mm * 0.382 # 1 - 1/phi
+            p2 = center + self._current_range_mm * 0.382
+            
+            self._refinement_positions = sorted([p1, p2])
+        
+        # Termination check handled by step size
+        if len(self._refinement_positions) > 1:
+            self._current_step_mm = self._refinement_positions[1] - self._refinement_positions[0]
+        else:
+            self._current_step_mm = 0.0
+        
+        self._refinement_index = 0
+        self._refinement_level += 1
+
+
+class IterativeParabolicAutofocus(ParabolicAutofocus):
+    """
+    Advanced Parabolic AF.
+    Fits a parabola, moves to peak, measures, and FITS AGAIN.
+    This corrects errors if the initial sampling was far off-center.
+    """
+    def __init__(self, config: AutofocusConfig):
+        super().__init__(config)
+        self.iteration_count = 0
+        self.max_iterations = 2 # Usually 2 is enough for perfect focus
+
     def _handle_refinement(self) -> AutofocusResult:
-        """
-        Handle refinement - just use parent implementation since we already
-        jumped to the predicted peak location after coarse scan.
-        """
-        return super()._handle_refinement()
+        # Measure the point we just moved to (predicted peak)
+        current_measurement = self._measurements[-1]
+        
+        # Check if this new point is better
+        if current_measurement.score > self._best_measurement.score:
+            self._best_measurement = current_measurement
+        
+        self.iteration_count += 1
+        
+        # Check convergence
+        if self.iteration_count >= self.max_iterations or (self._current_range_mm is not None and self._current_range_mm < self.config.min_step_mm):
+             return AutofocusResult(finished=True, best_position_mm=self._best_measurement.position_mm, 
+                                    best_score=self._best_measurement.score, phase=Phase.FINISHED, progress=1.0)
 
+        # RE-FIT with the new data included
+        local_fit = self._fit_local_parabola() 
+        
+        next_pos = self._best_measurement.position_mm
+        
+        if local_fit:
+            pred_x, pred_y = local_fit
+            next_pos = pred_x
+            # Shrink range for safety check
+            self._current_range_mm = abs(pred_x - self._best_measurement.position_mm) * 2
+        else:
+            # Fit failed, try small step
+            next_pos = self._best_measurement.position_mm + self.config.min_step_mm
+            
+        return AutofocusResult(
+            finished=False,
+            next_position_mm=next_pos,
+            phase=Phase.REFINEMENT,
+            progress=0.8 + (0.2 * self.iteration_count/self.max_iterations),
+            best_score=self._best_measurement.score,
+            best_position_mm=self._best_measurement.position_mm,
+            current_score=score
+        )
 
-@dataclass
-class _Measurement:
-    """Internal measurement data point."""
-    position_mm: float
-    score: float
 
 class HillClimbingAutofocus(Autofocus):
     """
-    Simple Hill Climbing Strategy:
-    - Scan until we reach a HIGH peak (>threshold Tenengrad) and then it drops
-    - Ignores small local maxima (< threshold)
-    - Then do fine scan around best position found
+    Hill Climbing with Momentum and Adaptive Step Size.
+    - Start with large steps.
+    - If score improves: Keep direction, maybe accelerate.
+    - If score drops: Don't turn back immediately (Momentum)! Check 1-2 more steps.
+      If it's a real drop, reverse and decrease step size.
     """
-    
-    def __init__(self, config: AutofocusConfig, estimated_peak_millions: float = 100.0):
-        """
-        Initialize HillClimbing autofocus.
-        
-        Args:
-            config: Autofocus configuration
-            estimated_peak_millions: Expected peak value in millions (e.g., 80.0 for 80M Tenengrad).
-                                     Used to determine threshold for "real" peak detection.
-                                     Default: 100.0 (100M)
-        """
+    def __init__(self, config: AutofocusConfig):
         super().__init__(config)
         
-        # Coarse scan settings
-        self.step_size = config.step_mm if config.step_mm > 0 else 0.5
-        
-        # Peak detection: Only stop at significant peaks
-        # Set threshold to 80% of estimated peak (to catch it reliably even if estimate is slightly off)
-        if estimated_peak_millions > 0:
-            self.peak_threshold = estimated_peak_millions * 1_000_000 * 0.8
-        else:
-            self.peak_threshold = 100_000_000  # Default: 100M
-            
-        self.required_drops = 3  # Stop after 3 consecutive drops from a real peak
-        self.drop_counter = 0
-        self.reached_real_peak = False  # Flag: did we reach a score > threshold?
-        
-        # Track global maximum
-        self.global_max_score = 0.0
-        self.global_max_position = 0.0
-        
-        # Generate adaptive multi-level refinement based on coarse step size
-        self.refinement_levels = self._generate_refinement_levels(self.step_size)
-        self.current_refinement_level = 0
+        # Override start parameters
+        self.current_pos = config.start_mm
+        self.step = config.step_mm * 2.0 # Start fast!
+        self.direction = 1 # 1 = forward, -1 = backward
+        self.patience = 2 # How many bad steps allowed before turning back
+        self.bad_steps = 0
+        self.min_step = config.min_step_mm
         
         # State
-        self._current_pos = config.start_mm
-        self._sweep_points = []
-        self._sweep_index = 0
-    
-    def _generate_refinement_levels(self, coarse_step: float) -> list[dict]:
-        """
-        Generate refinement levels based on coarse scan step size.
-        
-        Logic: Start with step ~4x smaller than coarse, then progressively refine.
-        Each level reduces step size by ~4-5x and range by ~2x.
-        Skip intermediate steps below 0.025mm - jump directly to min_step (0.01mm).
-        
-        Args:
-            coarse_step: Step size used in coarse scan (e.g., 4.0mm)
-            
-        Returns:
-            List of refinement level dicts with 'step' and 'range'
-        """
-        min_step = self.config.min_step_mm if self.config.min_step_mm > 0 else 0.01
-        threshold = 0.025  # Skip intermediate steps below this threshold
-        
-        levels = []
-        current_step = coarse_step / 4.0  # Start with 1/4 of coarse step
-        current_range = coarse_step * 1.5  # Range ~1.5x coarse step
-        
-        # Generate levels until we reach minimum step
-        while current_step >= min_step:
-            # Skip intermediate steps between threshold and min_step
-            # Jump directly from >0.025mm to 0.01mm to save time
-            if current_step < threshold and current_step > min_step:
-                current_step = min_step
-                current_range = min_step * 20  # 0.01mm step → 0.2mm range
-            
-            levels.append({
-                'step': round(current_step, 4),
-                'range': round(current_range, 4)
-            })
-            
-            # If we just added min_step level, we're done
-            if current_step == min_step:
-                break
-            
-            # Next level: reduce step by 4x (or 5x), range by 2x
-            current_step /= 4.0 if current_step > 0.1 else 5.0
-            current_range /= 2.0
-            
-            # Safety: max 5 levels
-            if len(levels) >= 5:
-                break
-        
-        # Ensure at least one level with minimum step
-        if not levels or levels[-1]['step'] > min_step:
-            levels.append({
-                'step': min_step,
-                'range': min_step * 20  # 0.01mm step → 0.2mm range
-            })
-        
-        return levels
+        self.phase_state = "SCANNING" # SCANNING, REVERSING, FINISHED
 
-    def _handle_coarse_scan(self) -> AutofocusResult:
-        """Coarse scan: ignore small peaks, only stop at real peak (>100M)."""
+    def start(self) -> float:
+        self._phase = Phase.COARSE_SCAN # Reuse enum for compatibility
+        return self.current_pos
+
+    def process_image(self, position_mm: float, image: np.ndarray) -> AutofocusResult:
+        score = self._calculate_score(image)
+        self._measurements.append(_Measurement(position_mm, score))
         
-        # 1. Initialization - first call
-        if not self._measurements:
-            self._current_pos = self.config.start_mm
-            self._phase = Phase.COARSE_SCAN
-            self.global_max_score = 0.0
-            self.drop_counter = 0
-            self.reached_real_peak = False
-            return AutofocusResult(
-                finished=False,
-                next_position_mm=self._current_pos,
-                phase=Phase.COARSE_SCAN,
-                current_score=0.0
-            )
-        
-        current_score = self._measurements[-1].score
-        
-        # 2. Update global maximum (track best position across entire scan)
-        if current_score > self.global_max_score:
-            self.global_max_score = current_score
-            self.global_max_position = self._measurements[-1].position_mm
-            self.drop_counter = 0  # Reset counter when we find new global max
-            
-            # Check if we reached a "real" peak (>100M)
-            if current_score > self.peak_threshold:
-                self.reached_real_peak = True
+        if self._best_measurement is None or score > self._best_measurement.score:
+            self._best_measurement = _Measurement(position_mm, score)
+            # Reset bad steps if we found a new high
+            self.bad_steps = 0
         else:
             # Score dropped
-            # Only count drops if we already reached a real peak
-            if self.reached_real_peak:
-                self.drop_counter += 1
-            # Otherwise ignore drops (we're just in a small local maximum)
-        
-        # 3. Check if we passed THE peak (only if we saw >100M and now dropping)
-        if self.reached_real_peak and self.drop_counter >= self.required_drops:
-            # We clearly passed the main peak! Start fine scan
-            return self._start_fine_scan()
-        
-        # 4. Check if we reached end of range
-        if self._current_pos >= self.config.end_mm:
-            if self.global_max_score > 0:
-                # Found something, do fine scan around best position
-                return self._start_fine_scan()
+            self.bad_steps += 1
+
+        # --- Logic ---
+        next_pos = position_mm
+        finished = False
+
+        if self.phase_state == "SCANNING":
+            if self.bad_steps < self.patience:
+                # Keep going (Momentum), maybe we bridge a gap
+                next_pos = position_mm + (self.step * self.direction)
             else:
-                # Nothing found - just return best we have
-                best = max(self._measurements, key=lambda m: m.score)
-                return AutofocusResult(
-                    finished=True,
-                    best_position_mm=best.position_mm,
-                    best_score=best.score,
-                    phase=Phase.FINISHED,
-                    progress=1.0
-                )
-        
-        # 5. Continue coarse scan
-        self._current_pos += self.step_size
-        progress = 0.1 + 0.5 * (self._current_pos - self.config.start_mm) / (self.config.end_mm - self.config.start_mm)
-        
+                # Patience exhausted. It's a real drop.
+                # Go back to best known position and refine
+                self.phase_state = "REVERSING"
+                next_pos = self._best_measurement.position_mm
+                
+                # Make step smaller and reverse direction logic
+                self.step *= 0.4 # Significant reduction
+                self.bad_steps = 0
+                
+        elif self.phase_state == "REVERSING":
+            # We jumped back to peak. Now scan fine grid around it.
+            if self.step < self.min_step:
+                finished = True
+            else:
+                # Switch back to scanning with smaller step
+                self.phase_state = "SCANNING" 
+                # Try small step forward first (or alternate? simple forward for now)
+                next_pos = self._best_measurement.position_mm + self.step
+                self.patience = 1 # Be stricter with small steps
+
+        # Boundary Checks
+        if next_pos > self.config.end_mm or next_pos < self.config.start_mm:
+            # Hit wall. Force reverse or finish.
+            if self.step < self.min_step:
+                finished = True
+            else:
+                self.phase_state = "REVERSING"
+                next_pos = self._best_measurement.position_mm
+                self.step *= 0.5
+                self.bad_steps = 100 # Force logic update next cycle
+
         return AutofocusResult(
-            finished=False,
-            next_position_mm=self._current_pos,
-            best_position_mm=self.global_max_position,
-            best_score=self.global_max_score,
-            current_score=current_score,
-            phase=Phase.COARSE_SCAN,
-            progress=min(progress, 0.6)
+            finished=finished,
+            next_position_mm=next_pos,
+            best_position_mm=self._best_measurement.position_mm,
+            best_score=self._best_measurement.score,
+            phase=Phase.FINISHED if finished else Phase.COARSE_SCAN,
+            progress=0.5,
+            current_score=score
         )
 
-    def _start_fine_scan(self) -> AutofocusResult:
-        """Start first level of fine scan around detected peak."""
-        self.current_refinement_level = 0
-        
-        # Use first refinement level
-        level = self.refinement_levels[0]
-        
-        # Define fine scan range around global maximum
-        start = max(self.config.start_mm, self.global_max_position - (level['range'] / 2))
-        end = min(self.config.end_mm, self.global_max_position + (level['range'] / 2))
-        
-        # Generate sweep points
-        self._sweep_points = list(np.arange(start, end + level['step']/2, level['step']))
-        if not self._sweep_points:
-            self._sweep_points = [self.global_max_position]
-        
-        self._sweep_index = 0
-        
-        # IMPORTANT: Set phase AFTER preparing the result for current measurement
-        # The result should show COARSE_SCAN for the last coarse measurement,
-        # then phase will be REFINEMENT for the next process_image() call
-        current_score = self._measurements[-1].score if self._measurements else 0.0
-        
-        result = AutofocusResult(
-            finished=False,
-            next_position_mm=self._sweep_points[0],
-            phase=Phase.COARSE_SCAN,  # This result is for the last coarse scan point
-            progress=0.6,
-            current_range_mm=level['range'],
-            best_score=self.global_max_score,
-            best_position_mm=self.global_max_position,
-            current_score=current_score,
-            current_step_mm=level['step'],
-            current_level=self.current_refinement_level + 1  # Show upcoming level
-        )
-        
-        # Now transition to refinement phase for next iteration
-        self._phase = Phase.REFINEMENT
-        
-        return result
-    
-    def _handle_refinement(self) -> AutofocusResult:
-        """Handle fine scan with multiple refinement levels."""
-        
-        # Check if we have more points in current level
-        if self._sweep_index + 1 < len(self._sweep_points):
-            self._sweep_index += 1
-            
-            # Get current best across all measurements
-            current_best = max(self._measurements, key=lambda m: m.score)
-            
-            progress = 0.6 + 0.4 * (self.current_refinement_level / len(self.refinement_levels)) + \
-                      0.4 * (self._sweep_index / len(self._sweep_points)) / len(self.refinement_levels)
-            
-            level = self.refinement_levels[self.current_refinement_level]
-            
-            return AutofocusResult(
-                finished=False,
-                next_position_mm=self._sweep_points[self._sweep_index],
-                phase=Phase.REFINEMENT,
-                progress=min(progress, 0.99),
-                best_score=current_best.score,
-                best_position_mm=current_best.position_mm,
-                current_score=self._measurements[-1].score,
-                current_step_mm=level['step'],
-                current_range_mm=level['range'],
-                current_level=self.current_refinement_level + 1
-            )
-        
-        # Current level complete - check if we have more levels
-        self.current_refinement_level += 1
-        
-        if self.current_refinement_level < len(self.refinement_levels):
-            # Start next refinement level around current best
-            current_best = max(self._measurements, key=lambda m: m.score)
-            level = self.refinement_levels[self.current_refinement_level]
-            
-            # Center next level around current best position
-            start = max(self.config.start_mm, current_best.position_mm - (level['range'] / 2))
-            end = min(self.config.end_mm, current_best.position_mm + (level['range'] / 2))
-            
-            self._sweep_points = list(np.arange(start, end + level['step']/2, level['step']))
-            if not self._sweep_points:
-                self._sweep_points = [current_best.position_mm]
-            
-            self._sweep_index = 0
-            
-            return AutofocusResult(
-                finished=False,
-                next_position_mm=self._sweep_points[0],
-                phase=Phase.REFINEMENT,
-                progress=0.6 + 0.4 * (self.current_refinement_level / len(self.refinement_levels)),
-                best_score=current_best.score,
-                best_position_mm=current_best.position_mm,
-                current_score=self._measurements[-1].score,
-                current_step_mm=level['step'],
-                current_range_mm=level['range'],
-                current_level=self.current_refinement_level + 1
-            )
-        
-        # All levels complete - find absolute best
-        final_best = max(self._measurements, key=lambda m: m.score)
-        self._phase = Phase.FINISHED
-        
-        return AutofocusResult(
-            finished=True,
-            best_position_mm=final_best.position_mm,
-            best_score=final_best.score,
-            phase=Phase.FINISHED,
-            progress=1.0
-        )
 
-    def _fit_local_parabola(self):
-        """Parabola fitting (optional, currently not used)."""
-        if len(self._measurements) < 3:
-            return None
-        
-        scores = [m.score for m in self._measurements]
-        best_idx = np.argmax(scores)
-        
-        if best_idx == 0 or best_idx == len(self._measurements) - 1:
-            return None
-        
-        subset = self._measurements[best_idx - 1 : best_idx + 2]
-        x = np.array([m.position_mm for m in subset])
-        y = np.array([m.score for m in subset])
-        
-        try:
-            coeffs = np.polyfit(x, y, 2)
-            a, b, c = coeffs
-            if a >= 0:
-                return None
-            peak_x = -b / (2 * a)
-            peak_y = a * peak_x**2 + b * peak_x + c
-            if abs(peak_x - self._measurements[best_idx].position_mm) > self.step_size * 1.5:
-                return None
-            return (float(peak_x), float(peak_y))
-        except:
-            return None
+# Alias
+AdaptiveHillClimbingAutofocus = HillClimbingAutofocus

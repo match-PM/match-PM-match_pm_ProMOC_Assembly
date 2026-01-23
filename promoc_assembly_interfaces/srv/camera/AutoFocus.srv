@@ -1,4 +1,4 @@
-# Request: Define the search range for autofocus
+# Request: Autofocus mit Algorithmus-Auswahl
 
 # Start position for the scan (in mm)
 float64 start_position
@@ -7,20 +7,24 @@ float64 start_position
 float64 end_position
 
 # Step size for each move (in mm)
-float64 step_size
+
+# --- ALGORITHMUS-AUSWAHL ---
+# 0 = Standard (vollständiger Scan + iterative Verfeinerung)
+# 1 = HillClimbing (schnell, early termination bei Peak)
+# 2 = Parabolic (parabolische Interpolation für Sub-Sample-Genauigkeit)
+# 3 = Comparison (alle 3 Modi nacheinander, exportiert Vergleichsdaten)
+int32 refinement_mode
 
 # --- OPTIONAL: Expected Peak Value ---
-# Expected peak Tenengrad score in millions (e.g., 80.0 for 80M)
-# Used by HillClimbing algorithm to determine when to stop coarse scan
-# If 0 or not provided, default threshold (100M) is used
+# Used by HillClimbing to determine early termination
+# If 0, default threshold is used
 float64 estimated_peak_millions
 
 # --- OPTIONAL: Use SIFT weighting in fine search ---
-# Applied only during refinement/fine search phases
 bool use_sift_weighting
 
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
-# If values are not provided (empty/zero), the configured node parameters are used.
+# If empty/zero, node parameters are used
 float64 coaxial_light_voltage
 float64 coaxial_light_current
 string camera_objective
@@ -30,23 +34,9 @@ string notes
 
 # Response: Result of the autofocus operation
 
-# True if autofocus was successful, false otherwise
 bool success
-
-# A message indicating the result
 string message
-
-# Best focus position found (in mm)
 float64 best_focus_position
-
-# Best focus value (e.g., sharpness metric)
 float64 best_focus_value
-
-# Total number of measurements taken during the autofocus process
 int32 total_measurements_taken
-
-# Duration of the autofocus operation in seconds
 float64 duration_seconds
-
-
-

@@ -74,7 +74,7 @@ class CameraWatchdog(Node):
             # Connection restored after loss
             if self.connection_lost:
                 self.get_logger().info(
-                    f'✅ Camera connection restored! Images flowing again.'
+                    f'SUCCESS: Camera connection restored! Images flowing again.'
                 )
                 self.connection_lost = False
 
@@ -101,7 +101,7 @@ class CameraWatchdog(Node):
             # Connection lost
             if not self.connection_lost:
                 self.get_logger().error(
-                    f'❌ CAMERA CONNECTION LOST! No images for {time_since_last:.1f}s'
+                    f'ERROR: CAMERA CONNECTION LOST! No images for {time_since_last:.1f}s'
                 )
                 self.connection_lost = True
                 
@@ -111,7 +111,7 @@ class CameraWatchdog(Node):
             else:
                 # Still lost, log periodically
                 self.get_logger().error(
-                    f'❌ Camera still disconnected ({time_since_last:.1f}s)'
+                    f'ERROR: Camera still disconnected ({time_since_last:.1f}s)'
                 )
 
     def attempt_auto_recovery(self):
@@ -127,7 +127,7 @@ class CameraWatchdog(Node):
             return
         
         if self.reset_in_progress:
-            self.get_logger().warn('🔄 Reset already in progress, skipping')
+            self.get_logger().warn('Reset already in progress, skipping')
             return
         
         # Start reset in background thread
@@ -140,7 +140,7 @@ class CameraWatchdog(Node):
         """Perform USB reset in background thread."""
         IDS_VENDOR_PRODUCT = "1409:8000"
         
-        self.get_logger().info('🔄 Attempting automatic camera recovery...')
+        self.get_logger().info('Attempting automatic camera recovery...')
         self.get_logger().info('   Executing: sudo usbreset 1409:8000')
         
         try:
@@ -152,26 +152,26 @@ class CameraWatchdog(Node):
             )
             
             if result.returncode == 0:
-                self.get_logger().info('✅ USB reset successful')
+                self.get_logger().info('SUCCESS: USB reset successful')
                 self.get_logger().info('⏳ Waiting for camera to reinitialize...')
                 time.sleep(5)
                 self.last_reset_time = time.time()
             else:
                 self.get_logger().error(
-                    f'❌ USB reset failed: {result.stderr}'
+                    f'ERROR: USB reset failed: {result.stderr}'
                 )
                 self.get_logger().error(
                     '   Manual intervention required: sudo usbreset 1409:8000'
                 )
                 
         except subprocess.TimeoutExpired:
-            self.get_logger().error('❌ USB reset timeout')
+            self.get_logger().error('ERROR: USB reset timeout')
         except FileNotFoundError:
             self.get_logger().error(
-                '❌ usbreset command not found! Install: sudo apt-get install usbutils'
+                'ERROR: usbreset command not found! Install: sudo apt-get install usbutils'
             )
         except Exception as e:
-            self.get_logger().error(f'❌ USB reset error: {e}')
+            self.get_logger().error(f'ERROR: USB reset error: {e}')
         finally:
             self.reset_in_progress = False
 

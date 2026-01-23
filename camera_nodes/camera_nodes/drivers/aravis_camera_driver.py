@@ -125,7 +125,7 @@ class AravisCameraDriver(CameraDriver):
             )
 
             self._connected = True
-            self._logger.info('✓ Aravis driver connected')
+            self._logger.info('Aravis driver connected successfully')
             return True
 
         except ImportError as e:

@@ -18,7 +18,7 @@ Usage:
 Available Services:
     # Autofocus
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \\
-        "{start_position: 100.0, end_position: 150.0, step_size: 5.0}"
+        "{start_position: 100.0, end_position: 150.0, refinement_mode: 0}"
     
     # MTF Measurement
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF "{}"

@@ -13,6 +13,11 @@ float64 coaxial_light_current
 string camera_objective
 string notes
 
+# Target Edge Selection (for squares)
+# Options: "any" (default), "top", "right", "bottom", "left"
+string target_edge
+
+
 ---
 
 # Response: MTF measurement results

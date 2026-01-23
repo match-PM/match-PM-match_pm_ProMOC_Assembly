@@ -10,6 +10,9 @@ Image processing algorithms for camera_nodes:
 from .autofocus import (
     Autofocus, 
     ParabolicAutofocus,
+    IterativeParabolicAutofocus,
+    GoldenSectionAutofocus,
+    AdaptiveHillClimbingAutofocus,
     HillClimbingAutofocus,
     AutofocusConfig, 
     AutofocusResult, 
@@ -29,6 +32,10 @@ __all__ = [
     # Autofocus
     'Autofocus',
     'ParabolicAutofocus',
+    'IterativeParabolicAutofocus',
+    'GoldenSectionAutofocus',
+    'AdaptiveHillClimbingAutofocus',
+    'HillClimbingAutofocus',
     'AutofocusConfig',
     'AutofocusResult',
     'Phase',
