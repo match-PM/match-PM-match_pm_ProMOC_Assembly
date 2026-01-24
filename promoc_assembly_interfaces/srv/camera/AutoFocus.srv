@@ -1,4 +1,4 @@
-# Request: Autofocus mit Algorithmus-Auswahl
+# Request: Autofocus with algorithm selection
 
 # Start position for the scan (in mm)
 float64 start_position
@@ -8,11 +8,12 @@ float64 end_position
 
 # Step size for each move (in mm)
 
-# --- ALGORITHMUS-AUSWAHL ---
-# 0 = Standard (vollständiger Scan + iterative Verfeinerung)
-# 1 = HillClimbing (schnell, early termination bei Peak)
-# 2 = Parabolic (parabolische Interpolation für Sub-Sample-Genauigkeit)
-# 3 = Comparison (alle 3 Modi nacheinander, exportiert Vergleichsdaten)
+# --- ALGORITHM SELECTION ---
+# 0 = Standard (Golden Section search, robust default)
+# 1 = HillClimbing (fast, adaptive step size with early termination)
+# 2 = Parabolic (iterative parabolic interpolation for sub-sample precision)
+# 3 = Fibonacci (efficient Fibonacci sequence based search)
+# 4 = Exhaustive (brute-force with minimum step, maximum precision reference)
 int32 refinement_mode
 
 # --- OPTIONAL: Expected Peak Value ---
@@ -35,7 +36,7 @@ string notes
 # Response: Result of the autofocus operation
 
 bool success
-string message
+string status_message
 float64 best_focus_position
 float64 best_focus_value
 int32 total_measurements_taken

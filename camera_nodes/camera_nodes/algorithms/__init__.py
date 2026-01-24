@@ -14,6 +14,9 @@ from .autofocus import (
     GoldenSectionAutofocus,
     AdaptiveHillClimbingAutofocus,
     HillClimbingAutofocus,
+    ExhaustiveAutofocus,
+    FibonacciAutofocus,
+    BruteForceAutofocus,
     AutofocusConfig, 
     AutofocusResult, 
     Phase, 
@@ -28,18 +31,34 @@ from .focus_metrics import (
 )
 from .mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig
 
+
+# Centralized algorithm definitions for autofocus
+# Used by autofocus callbacks and verification services
+AUTOFOCUS_ALGORITHMS = [
+    (0, 'goldensection', GoldenSectionAutofocus),
+    (1, 'hillclimbing', AdaptiveHillClimbingAutofocus),
+    (2, 'parabolic', IterativeParabolicAutofocus),
+    (3, 'fibonacci', FibonacciAutofocus),
+    (4, 'exhaustive', ExhaustiveAutofocus),  # Reference algorithm
+]
+
+
 __all__ = [
-    # Autofocus
+    # Autofocus algorithms
     'Autofocus',
     'ParabolicAutofocus',
     'IterativeParabolicAutofocus',
     'GoldenSectionAutofocus',
     'AdaptiveHillClimbingAutofocus',
     'HillClimbingAutofocus',
+    'ExhaustiveAutofocus',
+    'FibonacciAutofocus',
+    'BruteForceAutofocus',
     'AutofocusConfig',
     'AutofocusResult',
     'Phase',
     'tenengrad',
+    'AUTOFOCUS_ALGORITHMS',  # Centralized algorithm list
     
     # Focus metrics
     'laplacian_variance',

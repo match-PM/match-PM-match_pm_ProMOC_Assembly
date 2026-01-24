@@ -69,7 +69,10 @@ Example Service Calls:
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
 from cv_bridge import CvBridge
-from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure, DetectRois
+from promoc_assembly_interfaces.srv import (
+    AutoFocus, MeasureMTF, SetExposure, DetectRois,
+    VerifyAutofocus, VerifyMTF
+)
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -84,6 +87,8 @@ from .callbacks import CameraServiceCallbacks
 
 # Driver abstraction
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
+
+from promoc_core.logging import TaggedLogger, LogTags
 
 
 class CameraNode(Node):
@@ -120,17 +125,20 @@ class CameraNode(Node):
         6. Register services
         """
         super().__init__('camera_node')
+        
+        # Setup TaggedLogger for this node
+        self.log = TaggedLogger(self.get_logger(), LogTags.CAM)
 
 
         # Phase 1: Load parameters
 
         self.declare_parameter('use_simulator', False)
         self.declare_parameter('mtf_csv_path', '')
-        self.declare_parameter('pixel_size_um', 3.45)
+        self.declare_parameter('pixel_size_um', 2.40)  # IDS U3-3800CP (Sony IMX183)
         self.declare_parameter('default_roi_width', 200)
         self.declare_parameter('default_roi_height', 200)
-        # Name of z-axis node for autofocus
-        self.declare_parameter('z_axis_node_name', 'lts300_z_axis')
+        # Name of x-axis node for autofocus
+        self.declare_parameter('x_axis_node_name', 'lts300_x_axis')
         
         # Measurement parameters
         self.declare_parameter('measurement.username', '')
@@ -174,7 +182,7 @@ class CameraNode(Node):
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value
 
-        self.get_logger().info(
+        self.log.info(
             f"Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode...")
 
 
@@ -189,7 +197,7 @@ class CameraNode(Node):
 
         # Phase 3: Create components
 
-        self.image_processor = CameraImageProcessing(self.get_logger())
+        self.image_processor = CameraImageProcessing(self.log)
         self.service_callbacks = CameraServiceCallbacks(
             self, self.camera_driver)
 
@@ -202,7 +210,7 @@ class CameraNode(Node):
         self.assembly_image_sub = self.create_subscription(
             Image, '/promoc/assembly_camera/stream0/image_raw', self.assembly_image_callback, 10)
 
-        axis_name = self.get_parameter('z_axis_node_name').value
+        axis_name = self.get_parameter('x_axis_node_name').value
         self.axis_pos_sub = self.create_subscription(
             Float64,
             f'/{axis_name}/position',
@@ -258,7 +266,21 @@ class CameraNode(Node):
                 callback_group=self.cb_group,
             )
 
-        self.get_logger().info('Camera Node initialized successfully')
+        # Verification services
+        self.verify_autofocus_service = self.create_service(
+            VerifyAutofocus,
+            '~/verify_autofocus',
+            self.service_callbacks.verify_autofocus_callback,
+            callback_group=self.cb_group,
+        )
+        self.verify_mtf_service = self.create_service(
+            VerifyMTF,
+            '~/verify_mtf',
+            self.service_callbacks.verify_mtf_callback,
+            callback_group=self.cb_group,
+        )
+
+        self.log.info('Camera Node initialized successfully')
 
 
     # DRIVER CREATION
@@ -272,11 +294,11 @@ class CameraNode(Node):
             CameraDriver: An instance of the selected driver (Simulated or Aravis).
         """
         if self.use_simulator:
-            self.get_logger().info('📷 Using SimulatedCameraDriver')
-            return SimulatedCameraDriver(self.get_logger())
+            self.log.info('📷 Using SimulatedCameraDriver')
+            return SimulatedCameraDriver(TaggedLogger(self.get_logger(), LogTags.MOCK))
         else:
-            self.get_logger().info('📷 Using AravisCameraDriver')
-            return AravisCameraDriver(self, self.get_logger())
+            self.log.info('📷 Using AravisCameraDriver')
+            return AravisCameraDriver(self, self.log)
 
 
     # IMAGE CALLBACKS
@@ -304,7 +326,7 @@ class CameraNode(Node):
         if (self._image_count % 50 == 0) or (current_time - self._last_log_time > 10.0):
             runtime = current_time - self._start_time
             fps = self._image_count / runtime if runtime > 0 else 0
-            self.get_logger().debug(
+            self.log.debug(
                 f"📷 Camera active: {self._image_count} images, "
                 f"{fps:.1f} FPS, Size: {msg.width}x{msg.height}"
             )
@@ -312,19 +334,17 @@ class CameraNode(Node):
         
         self.latest_image_msg = msg
 
+        # Pass the image to the driver for caching (used by Aravis driver)
+        if hasattr(self.camera_driver, 'set_latest_image'):
+            try:
+                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                self.camera_driver.set_latest_image(cv_image)
+            except Exception as e:
+                self.get_logger().warning(f'Image conversion failed: {e}')
+
     def axis_position_callback(self, msg: Float64):
         """Receive and cache axis position."""
         self.current_axis_position = msg.data
-
-        # For the Aravis driver, pass the image to the driver to be cached.
-        if hasattr(self.camera_driver, 'set_latest_image'):
-            try:
-                cv_image = self.bridge.imgmsg_to_cv2(
-                    msg, desired_encoding='bgr8')
-                self.camera_driver.set_latest_image(cv_image)
-            except Exception as e:
-                self.get_logger().warning(
-                    f'Image conversion failed: {e}')
 
 
 def main(args=None):

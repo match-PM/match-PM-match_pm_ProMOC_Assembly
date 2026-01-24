@@ -1,28 +1,30 @@
 """Camera Service Callbacks - Modular Structure.
 
 Modules:
-    - autofocus: Autofocus with 3 modes (Standard, HillClimbing, Parabolic) + Comparison service
+    - autofocus: Autofocus with 5 algorithms (GoldenSection, HillClimbing, Parabolic, Fibonacci, Exhaustive)
     - mtf: MTF measurements and ROI selection
     - exposure: Exposure control
+    - verification: Scientific verification of autofocus and MTF
 """
 
 from .autofocus import AutofocusCallbacks
 from .mtf import MTFCallbacks
 from .exposure import ExposureCallbacks
+from .verification import VerificationCallbacks
 from .base import CallbackBase
 
 
-class CameraServiceCallbacks(AutofocusCallbacks, MTFCallbacks, ExposureCallbacks):
+class CameraServiceCallbacks(AutofocusCallbacks, MTFCallbacks, ExposureCallbacks, VerificationCallbacks):
     """Combined service callbacks for the camera node.
     
     Inherits from all specialized callback classes:
-    - AutofocusCallbacks: autofocus_callback (with refinement_mode 0-2), autofocus_comparison_callback
-    - MTFCallbacks: select_roi_callback, measure_mtf_callback
+    - AutofocusCallbacks: autofocus_callback (modes 0-4), autofocus_comparison_callback
+    - MTFCallbacks: select_roi_callback, measure_mtf_callback, detect_rois_callback
     - ExposureCallbacks: manual_set_exposure_callback
+    - VerificationCallbacks: verify_autofocus_callback, verify_mtf_callback
     
     Usage:
         callbacks = CameraServiceCallbacks(node, camera_driver)
-        # ... register services with callbacks
     """
 
     def __init__(self, node, camera_driver):
@@ -44,5 +46,6 @@ __all__ = [
     'AutofocusCallbacks',
     'MTFCallbacks', 
     'ExposureCallbacks',
+    'VerificationCallbacks',
     'CallbackBase',
 ]

@@ -18,6 +18,7 @@ from promoc_core.promoc_exceptions import (
     SoftLimitViolationError,
 )
 from promoc_core.validation import check_collision_risk, is_in_range
+from promoc_core.logging import TaggedLogger, LogTags
 
 from .lts300_interface import Lts300Interface
 
@@ -38,7 +39,7 @@ class ServiceCallbacks:
 
     def __init__(self, logger, interface: Lts300Interface, config: dict):
         """Initialize the callbacks with their dependencies."""
-        self.logger = logger
+        self.logger = TaggedLogger(logger, LogTags.LTS_MOVE)
         self.interface = interface
         self.config = config
         self.driver = self.interface.driver
@@ -281,7 +282,7 @@ class ServiceCallbacks:
                 )
                 self.logger.warn(f'⏰ {error_msg}')
                 # Wrap in HomingFailedError for consistent error handling
-                HomingFailedError(
+                raise HomingFailedError(
                     error_msg,
                     details={
                         'timeout': self.config['homing_timeout'],
@@ -296,7 +297,7 @@ class ServiceCallbacks:
                 self.logger.error(
                     f'❌ Homing operation failed: {error_msg}'
                 )
-                HomingFailedError(
+                raise HomingFailedError(
                     error_msg,
                     details={
                         'original_error': str(e),

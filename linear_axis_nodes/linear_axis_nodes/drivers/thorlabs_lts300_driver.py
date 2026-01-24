@@ -180,8 +180,71 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             self._poll_thread.join(timeout=1.0)
         self._poll_thread = None
 
-    def move_absolute(self, position: float):
-        """Move to absolute position in millimeters."""
+    # ══════════════════════════════════════════════════════════════════════════
+    # HELPER METHODS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _wait_for_movement_complete(self, timeout_s: float = 300.0,
+                                     check_interval_s: float = 0.5,
+                                     operation_name: str = "Movement") -> None:
+        """
+        Wait for movement to complete with robust error handling.
+
+        Args:
+            timeout_s: Maximum wait time in seconds (default: 300s = 5 min)
+            check_interval_s: Interval between status checks (default: 0.5s)
+            operation_name: Name for error messages (default: "Movement")
+
+        Raises:
+            MovementTimeoutError: If movement doesn't complete within timeout
+        """
+        start_time = time.time()
+
+        while time.time() - start_time < timeout_s:
+            try:
+                with self._comm_lock:
+                    moving = self.device.is_moving()
+                if not moving:
+                    return  # Movement complete
+            except Exception as e:
+                self.logger.warn(f'Error checking movement status, continuing: {e}')
+                time.sleep(check_interval_s * 2)  # Wait longer on error
+
+            time.sleep(check_interval_s)
+
+        # Timeout occurred
+        raise MovementTimeoutError(
+            f"{operation_name} timeout after {timeout_s}s",
+            details={
+                'timeout': timeout_s,
+                'elapsed_time': time.time() - start_time
+            }
+        )
+
+    def _update_position_cache(self) -> float:
+        """
+        Update the position cache from hardware.
+
+        Returns:
+            Current position in mm, or cached value on error
+        """
+        try:
+            with self._comm_lock:
+                current_pos = self.device.get_position() / self.device_units_per_mm
+            self._last_position_cache = current_pos
+            self._last_position_time = time.time()
+            return current_pos
+        except Exception as e:
+            self.logger.warn(f'Error updating position cache: {e}')
+            return self._last_position_cache
+
+    def _ensure_connected(self) -> None:
+        """
+        Ensure device is connected.
+
+        Raises:
+            CommunicationError: If device is not connected
+        """
         if not self.connected or not self.device:
             raise CommunicationError(
                 "Device not connected",
@@ -189,76 +252,32 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                          'device_initialized': self.device is not None}
             )
 
+    def move_absolute(self, position: float):
+        """Move to absolute position in millimeters."""
+        self._ensure_connected()
         self.logger.debug(f'Moving to absolute position: {position} mm')
 
         try:
-            # Start the movement
             with self._comm_lock:
-                self.device.move_to(
-                    position * self.device_units_per_mm, scale=False)
+                self.device.move_to(position * self.device_units_per_mm, scale=False)
         except Exception as e:
             raise HardwareError(
                 f"Failed to start movement: {str(e)}",
                 details={'target_position': position, 'error': str(e)}
             )
 
-        # Wait for movement completion with robust error handling
-        import time
-        max_wait_time = 300.0  # 5 minutes maximum wait
-        start_time = time.time()
-        check_interval = 0.5   # Check every 500ms
-
-        while time.time() - start_time < max_wait_time:
-            try:
-                with self._comm_lock:
-                    moving = self.device.is_moving()
-                if not moving:
-                    break
-            except Exception as e:
-                self.logger.warn(
-                    f'Error checking movement status, continuing: {e}')
-                # If we can't check status, wait a bit and try again
-                time.sleep(check_interval * 2)
-
-            time.sleep(check_interval)
-        else:
-            # Timeout occurred
-            raise MovementTimeoutError(
-                f"Movement timeout after {max_wait_time}s",
-                details={
-                    'target_position': position,
-                    'timeout': max_wait_time,
-                    'elapsed_time': time.time() - start_time
-                }
-            )
-
-        # Update position cache
-        try:
-            with self._comm_lock:
-                current_pos = self.device.get_position() / self.device_units_per_mm
-            self._last_position_cache = current_pos
-            self._last_position_time = time.time()
-        except Exception as e:
-            self.logger.warn(f'Error updating position cache: {e}')
+        self._wait_for_movement_complete(operation_name="Absolute movement")
+        self._update_position_cache()
 
     def move_relative(self, distance: float):
         """Move relative distance from current position in millimeters."""
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
-
+        self._ensure_connected()
         self.logger.debug(f'Moving relatively by: {distance} mm')
 
         try:
             with self._comm_lock:
                 current_position = self.device.get_position()
-                target_position = current_position + \
-                    (distance * self.device_units_per_mm)
-
-                # Start the movement
+                target_position = current_position + (distance * self.device_units_per_mm)
                 self.device.move_to(target_position, scale=False)
         except Exception as e:
             raise HardwareError(
@@ -266,44 +285,8 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 details={'distance': distance, 'error': str(e)}
             )
 
-        # Wait for movement completion with robust error handling
-        import time
-        max_wait_time = 300.0  # 5 minutes maximum wait
-        start_time = time.time()
-        check_interval = 0.5   # Check every 500ms
-
-        while time.time() - start_time < max_wait_time:
-            try:
-                with self._comm_lock:
-                    moving = self.device.is_moving()
-                if not moving:
-                    break
-            except Exception as e:
-                self.logger.warn(
-                    f'Error checking movement status, continuing: {e}')
-                # If we can't check status, wait a bit and try again
-                time.sleep(check_interval * 2)
-
-            time.sleep(check_interval)
-        else:
-            # Timeout occurred
-            raise MovementTimeoutError(
-                f"Relative movement timeout after {max_wait_time}s",
-                details={
-                    'distance': distance,
-                    'timeout': max_wait_time,
-                    'elapsed_time': time.time() - start_time
-                }
-            )
-
-        # Update position cache
-        try:
-            with self._comm_lock:
-                current_pos = self.device.get_position() / self.device_units_per_mm
-            self._last_position_cache = current_pos
-            self._last_position_time = time.time()
-        except Exception as e:
-            self.logger.warn(f'Error updating position cache: {e}')
+        self._wait_for_movement_complete(operation_name="Relative movement")
+        self._update_position_cache()
 
     def home(self, timeout: float = 180.0):
         """

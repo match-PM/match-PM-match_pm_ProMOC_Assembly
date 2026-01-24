@@ -15,7 +15,7 @@ The algorithm works as follows:
 Usage:
     from camera_nodes.algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
     
-    config = MTFConfig(pixel_size_um=3.45)
+    config = MTFConfig(pixel_size_um=2.40)  # IDS U3-3800CP (Sony IMX183)
     analyzer = MTFAnalyzer(config)
     
     result = analyzer.compute_mtf(image)
@@ -54,7 +54,7 @@ class MTFConfig:
         canny_high: Canny edge detector high threshold
         hough_threshold: Hough transform vote threshold
     """
-    pixel_size_um: float = 3.45
+    pixel_size_um: float = 2.40  # IDS U3-3800CP (Sony IMX183)
     roi_width: int = 200
     roi_height: int = 200
     roi_center: Optional[Tuple[int, int]] = None
@@ -141,7 +141,7 @@ class MTFAnalyzer:
     - Computing MTF via FFT of LSF
 
     Usage:
-        config = MTFConfig(pixel_size_um=3.45)
+        config = MTFConfig(pixel_size_um=2.40)  # IDS U3-3800CP (Sony IMX183)
         analyzer = MTFAnalyzer(config)
 
         # Compute MTF from image containing slanted edge
@@ -461,7 +461,7 @@ class MTFAnalyzer:
 
 
 def compute_mtf(image: np.ndarray,
-                pixel_size_um: float = 3.45,
+                pixel_size_um: float = 2.40,  # IDS U3-3800CP (Sony IMX183)
                 roi: Optional[Tuple[int, int, int, int]] = None) -> MTFResult:
     """
     Convenience function to compute MTF with default settings.
@@ -475,7 +475,7 @@ def compute_mtf(image: np.ndarray,
         MTFResult with computed values
 
     Example:
-        result = compute_mtf(image, pixel_size_um=3.45)
+        result = compute_mtf(image, pixel_size_um=2.40)
         if result.valid:
             print(f"MTF50: {result.mtf50:.2f} lp/mm")
     """

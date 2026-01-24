@@ -25,21 +25,21 @@ class ExposureCallbacks(CallbackBase):
             self._driver.set_exposure(request.exposure_time)
             
             response.success = True
-            response.message = f'Exposure set to {request.exposure_time} µs'
+            response.status_message = f'Exposure set to {request.exposure_time} µs'
 
         except ConfigurationError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except HardwareError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         except Exception as e:
             response.success = False
-            response.message = f'ERROR: Failed to set exposure: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'ERROR: Failed to set exposure: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         return response

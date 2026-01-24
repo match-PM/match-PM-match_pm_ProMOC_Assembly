@@ -70,7 +70,7 @@ from promoc_assembly_interfaces.srv import (
     Home,
     JogAxis,
     MoveAbsolute,
-    MoveRelativ,
+    MoveRelative,
     Stop,
     SetVelocityParameters,
     ShutdownLinearAxis,
@@ -80,6 +80,7 @@ from rclpy.node import Node
 
 from .lts300_interface import Lts300Interface
 from .lts300_service_callbacks import ServiceCallbacks
+from promoc_core.logging import TaggedLogger, LogTags
 
 
 class LTS300Node(Node):
@@ -129,6 +130,9 @@ class LTS300Node(Node):
         5. Sets up ROS2 communication.
         """
         super().__init__('lts300_node')
+        
+        # Setup TaggedLogger for this node
+        self.log = TaggedLogger(self.get_logger(), LogTags.LTS)
 
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 1: Load Configuration
@@ -138,19 +142,24 @@ class LTS300Node(Node):
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 2: Create Components
         # ══════════════════════════════════════════════════════════════════════
-        self.interface = Lts300Interface(self.get_logger(), self.config)
+        # Interface gets [LTS:CONN] logger
+        self.interface = Lts300Interface(
+            TaggedLogger(self.get_logger(), LogTags.LTS_CONN), 
+            self.config
+        )
+        # Callbacks gets raw logger (wraps it internally with [LTS:MOVE])
         self.callbacks = ServiceCallbacks(
-            self.get_logger(), self.interface, self.config)
+            self.log, self.interface, self.config)
 
         try:
             # ══════════════════════════════════════════════════════════════════
             # PHASE 3: Establish Connection
             # ══════════════════════════════════════════════════════════════════
             if not self.interface.connect():
-                self.get_logger().error('Shutting down node due to connection failure.')
-                self.get_logger().error('Node initialization failed, exiting...')
+                self.log.error('Shutting down node due to connection failure.')
+                self.log.error('Node initialization failed, exiting...')
                 return
-            self.get_logger().info('Connection successful, continuing initialization...')
+            self.log.info('Connection successful, continuing initialization...')
 
             # ══════════════════════════════════════════════════════════════════
             # PHASE 4: Set up ROS2 Communication
@@ -163,7 +172,7 @@ class LTS300Node(Node):
             # ══════════════════════════════════════════════════════════════════
             try:
                 # Set initial velocity parameters beim Start
-                self.get_logger().info('Setting initial velocity parameters: min_vel=0.0, accel=0.002, max_vel=10')
+                self.log.info('Setting initial velocity parameters: min_vel=0.0, accel=0.002, max_vel=10')
                 request = SetVelocityParameters.Request()
                 request.min_velocity = 0.0
                 request.acceleration = 0.002
@@ -172,20 +181,20 @@ class LTS300Node(Node):
                 self.callbacks.callback_set_velocity_parameters(request, response)
                 
                 if response.success:
-                    self.get_logger().info(f'Initial velocity parameters set successfully: {response.status_message}')
+                    self.log.info(f'Initial velocity parameters set successfully: {response.status_message}')
                 else:
-                    self.get_logger().warn(f'Failed to set initial velocity parameters: {response.status_message}')
+                    self.log.warn(f'Failed to set initial velocity parameters: {response.status_message}')
 
             except Exception as e:
-                self.get_logger().warn(f'Failed to set initial velocity parameters: {e}')
+                self.log.warn(f'Failed to set initial velocity parameters: {e}')
 
-            self.get_logger().info(
+            self.log.info(
                 f"{self.get_name()} with S/N {self.config['serial_number']} is running.")
-            self.get_logger().info('Node initialization complete!')
+            self.log.info('Node initialization complete!')
 
         except Exception as e:
-            self.get_logger().error(f'Exception during initialization: {e}')
-            self.get_logger().error('Node initialization failed, exiting...')
+            self.log.error(f'Exception during initialization: {e}')
+            self.log.error('Node initialization failed, exiting...')
             raise
 
     def _load_config(self) -> dict:
@@ -265,7 +274,7 @@ class LTS300Node(Node):
         """
         try:
             node_name = self.get_name()
-            self.get_logger().info(
+            self.log.info(
                 f'Setting up ROS communication for {node_name}...'
             )
 
@@ -276,7 +285,7 @@ class LTS300Node(Node):
                 10,
             )
             self.create_timer(0.1, self.publish_position)
-            self.get_logger().info('Publisher and timer created')
+            self.log.info('Publisher and timer created')
 
             # ── Subscriber for Collision Avoidance ──
             # Subscribes to the position of the other axis (X↔Z).
@@ -287,7 +296,7 @@ class LTS300Node(Node):
                 f"/{self.config['namespace']}/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
                 10)
-            self.get_logger().info(f'Subscriber created for {other_axis}-axis')
+            self.log.info(f'Subscriber created for {other_axis}-axis')
 
             # ── Services ──
             # The other_axis_position is passed to move callbacks for collision checking.
@@ -301,7 +310,7 @@ class LTS300Node(Node):
                 ),
             )
             self.create_service(
-                MoveRelativ,
+                MoveRelative,
                 f'{node_name}/move_relative',
                 lambda req, res: self.callbacks.callback_move_relative(
                     req,
@@ -342,10 +351,10 @@ class LTS300Node(Node):
             )
             self.create_service(
                 JogAxis, f'{node_name}/jog_axis', self.callbacks.callback_jog_axis)
-            self.get_logger().info('All services created')
+            self.log.info('All services created')
 
         except Exception as e:
-            self.get_logger().error(
+            self.log.error(
                 f'Error in _setup_ros_communication: {e}'
             )
             raise
@@ -353,7 +362,7 @@ class LTS300Node(Node):
     def publish_position(self):
         """Publishes the current axis position."""
         if not self.interface.is_connected:
-            self.get_logger().debug('Skipping position publish - interface not connected')
+            self.log.debug('Skipping position publish - interface not connected')
             return
         try:
             msg = LinearAxisInfo()
@@ -377,7 +386,7 @@ class LTS300Node(Node):
             msg.operation_status = operation_status.value
 
             self.position_publisher.publish(msg)
-            self.get_logger().debug(
+            self.log.debug(
                 f'Published position: {msg.axis_position:.2f}mm, '
                 f'status: {operation_status.value}'
             )
@@ -391,10 +400,10 @@ class LTS300Node(Node):
             current_time = time.time()
             if current_time - self._last_publish_error_time > 5.0:
                 # Log the error at most once every 5 seconds.
-                self.get_logger().error(f'Error publishing position: {e}')
+                self.log.error(f'Error publishing position: {e}')
                 self._last_publish_error_time = current_time
             else:
-                self.get_logger().debug(
+                self.log.debug(
                     f'Position publish error (suppressed): {e}'
                 )
 
@@ -404,44 +413,44 @@ class LTS300Node(Node):
 
     def shutdown_device(self):
         """Performs a clean shutdown of the device."""
-        self.get_logger().info('Shutting down device...')
+        self.log.info('Shutting down device...')
         try:
             # Check if interface exists and driver is connected
             if not hasattr(self, 'interface'):
-                self.get_logger().warn('No interface found during shutdown')
+                self.log.warn('No interface found during shutdown')
                 return
                 
             if not hasattr(self.interface, 'driver'):
-                self.get_logger().warn('No driver found during shutdown')
+                self.log.warn('No driver found during shutdown')
                 return
             
             # Check connection status
             if not self.interface.driver.connected:
-                self.get_logger().warn('Driver not connected during shutdown')
+                self.log.warn('Driver not connected during shutdown')
                 return
             
-            self.get_logger().info('Device is connected, starting shutdown sequence...')
+            self.log.info('Device is connected, starting shutdown sequence...')
             
             # Move to 15mm before homing (to speed up shutdown)
             try:
                 current_pos = self.interface.driver.get_position()
-                self.get_logger().info(f'Current position: {current_pos:.2f}mm')
-                self.get_logger().info('Moving to 15.0mm before homing...')
+                self.log.info(f'Current position: {current_pos:.2f}mm')
+                self.log.info('Moving to 15.0mm before homing...')
                 
                 success = self.interface.driver.move_absolute(15.0, wait=True)
                 if success:
                     final_pos = self.interface.driver.get_position()
-                    self.get_logger().info(f'Successfully moved to 15.0mm (actual: {final_pos:.2f}mm)')
+                    self.log.info(f'Successfully moved to 15.0mm (actual: {final_pos:.2f}mm)')
                 else:
-                    self.get_logger().warn('move_absolute returned False')
+                    self.log.warn('move_absolute returned False')
             except Exception as e:
-                self.get_logger().error(f'Failed to move to 15.0mm: {e}', exc_info=True)
+                self.log.error(f'Failed to move to 15.0mm: {e}', exc_info=True)
 
             # Homing
             try:
-                self.get_logger().info('Starting homing sequence...')
+                self.log.info('Starting homing sequence...')
                 self.interface.driver.home()
-                self.get_logger().info('Homing completed')
+                self.log.info('Homing completed')
             except Exception as e:
                 self.get_logger().error(f'Homing failed: {e}', exc_info=True)
                 
@@ -467,13 +476,13 @@ def main(args=None):
             and node.interface.driver.connected
         )
         if connected:
-            node.get_logger().info('Node successfully initialized, starting spin...')
+            node.log.info('Node successfully initialized, starting spin...')
             try:
                 rclpy.spin(node)
             except KeyboardInterrupt:
-                node.get_logger().info('Keyboard interrupt, shutting down...')
+                node.log.info('Keyboard interrupt, shutting down...')
             finally:
-                node.get_logger().info('Final shutdown procedure...')
+                node.log.info('Final shutdown procedure...')
                 node.shutdown_device()
                 node.destroy_node()
                 if rclpy.ok():

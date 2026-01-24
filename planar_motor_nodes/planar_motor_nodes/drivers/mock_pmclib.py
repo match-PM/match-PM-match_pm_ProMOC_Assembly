@@ -4,6 +4,21 @@ import threading
 import time
 import math
 
+# Global logger instance
+logger = None
+
+def set_logger(log_instance):
+    """Set the logger to use for output instead of print."""
+    global logger
+    logger = log_instance
+
+def log_msg(msg):
+    """Log a message using the configured logger or print as fallback."""
+    if logger:
+        logger.info(msg)
+    else:
+        print(msg)
+
 class SimulatedXBot:
     def __init__(self):
         # Initialize default position and orientation values
@@ -138,7 +153,7 @@ class system_commands:
     @staticmethod
     def connect_to_pmc(ip):
         # Simulate connecting to the PMC system
-        print(f"Mock: Connecting to PMC at {ip}")
+        log_msg(f"Mock: Connecting to PMC at {ip}")
         return True  # Always return success in mock version
 
     @staticmethod
@@ -176,12 +191,12 @@ class xbot_commands:
     @staticmethod
     def activate_xbots():
         # Simulate activating all XBots
-        print("Mock: Activating XBots")
+        log_msg("Mock: Activating XBots")
 
     @staticmethod
     def deactivate_xbots():
         # Simulate deactivating all XBots
-        print("Mock: Deactivating XBots")
+        log_msg("Mock: Deactivating XBots")
 
     @staticmethod
     def levitation_command(xbot_id, lev_mode):
@@ -203,7 +218,7 @@ class xbot_commands:
         action = "levitate" if lev_mode_int == 1 else "land"
         
         if xbot_id == 0:
-            print(f"Mock: {action.capitalize()} all XBots (xbot_id: {xbot_id}, mode: {lev_mode_int})")
+            log_msg(f"Mock: {action.capitalize()} all XBots (xbot_id: {xbot_id}, mode: {lev_mode_int})")
             # Apply to all existing XBots
             for xbot in simulated_xbots.values():
                 if lev_mode_int == 1:  # LEVITATE
@@ -211,7 +226,7 @@ class xbot_commands:
                 else:  # LAND
                     xbot.xbot_state = XbotState.XBOT_LANDED
         else:
-            print(f"Mock: {action.capitalize()} XBot {xbot_id} (mode: {lev_mode_int})")
+            log_msg(f"Mock: {action.capitalize()} XBot {xbot_id} (mode: {lev_mode_int})")
             xbot = get_or_create_xbot(xbot_id)
             # Update XBot state based on levitation command
             if lev_mode_int == 1:  # LEVITATE
@@ -222,7 +237,7 @@ class xbot_commands:
     @staticmethod
     def linear_motion_si(xbot_id, x_pos, y_pos, xy_max_speed, xy_max_accl):
         # Simulate linear motion by updating XBot position
-        print(f"Mock: Linear motion for XBot {xbot_id}")
+        log_msg(f"Mock: Linear motion for XBot {xbot_id}")
         xbot = get_or_create_xbot(xbot_id)
         xbot.is_moving = True
         xbot.xbot_state = XbotState.XBOT_MOTION
@@ -240,7 +255,7 @@ class xbot_commands:
             xbot.y_pos = y_pos
             xbot.is_moving = False
             xbot.xbot_state = XbotState.XBOT_IDLE
-            print(f"Mock: Linear motion completed for XBot {xbot_id}")
+            log_msg(f"Mock: Linear motion completed for XBot {xbot_id}")
         
         threading.Thread(target=complete_motion, daemon=True).start()
         return travel_time
@@ -249,7 +264,7 @@ class xbot_commands:
     def six_d_of_motion_si(xbot_id, x_pos, y_pos, z_pos, rx_pos, ry_pos, rz_pos,
                            xy_max_speed, xy_max_accl, z_max_speed, rx_max_speed, ry_max_speed, rz_max_speed):
         # Simulate 6-degree-of-freedom motion by updating all position and orientation values
-        print(f"Mock: 6D motion for XBot {xbot_id}")
+        log_msg(f"Mock: 6D motion for XBot {xbot_id}")
         xbot = get_or_create_xbot(xbot_id)
         xbot.is_moving = True
         xbot.xbot_state = XbotState.XBOT_MOTION
@@ -272,7 +287,7 @@ class xbot_commands:
     def arc_motion_target_radius(xbot_id, x_pos, y_pos, arc_type, postion_mode, arc_dir,
                                  radius_meters, xy_max_speed, xy_max_accl, final_speed):
         # Simulate arc motion by updating final XBot position
-        print(f"Mock: Arc motion for XBot {xbot_id}")
+        log_msg(f"Mock: Arc motion for XBot {xbot_id}")
         xbot = get_or_create_xbot(xbot_id)
         xbot.is_moving = True
         xbot.xbot_state = XbotState.XBOT_MOTION
@@ -290,7 +305,7 @@ class xbot_commands:
             xbot.y_pos = y_pos
             xbot.is_moving = False
             xbot.xbot_state = XbotState.XBOT_IDLE
-            print(f"Mock: Arc motion completed for XBot {xbot_id}")
+            log_msg(f"Mock: Arc motion completed for XBot {xbot_id}")
         
         threading.Thread(target=complete_motion, daemon=True).start()
         return travel_time
@@ -298,7 +313,7 @@ class xbot_commands:
     @staticmethod
     def rotary_motion(xbot_id, target_rz, max_speed, max_accel):
         # Simulate rotary motion by updating Z-rotation
-        print(f"Mock: Rotary motion for XBot {xbot_id}")
+        log_msg(f"Mock: Rotary motion for XBot {xbot_id}")
         xbot = get_or_create_xbot(xbot_id)
         xbot.is_moving = True
         xbot.xbot_state = XbotState.XBOT_MOTION
@@ -313,7 +328,7 @@ class xbot_commands:
             xbot.rz_pos = target_rz
             xbot.is_moving = False
             xbot.xbot_state = XbotState.XBOT_IDLE
-            print(f"Mock: Rotary motion completed for XBot {xbot_id}")
+            log_msg(f"Mock: Rotary motion completed for XBot {xbot_id}")
         
         threading.Thread(target=complete_motion, daemon=True).start()
         return travel_time
@@ -321,7 +336,7 @@ class xbot_commands:
     @staticmethod
     def stop_motion(xbot_id):
         # Simulate stopping XBot motion
-        print(f"Mock: Stop motion for XBot {xbot_id}")
+        log_msg(f"Mock: Stop motion for XBot {xbot_id}")
         if xbot_id == 0:
             # Stop all XBots
             for xbot in simulated_xbots.values():
@@ -332,7 +347,7 @@ class xbot_commands:
                 time.sleep(0.2)  # Realistic stop delay
                 for xbot in simulated_xbots.values():
                     xbot.xbot_state = XbotState.XBOT_IDLE
-                print(f"Mock: All XBots stopped and are now IDLE")
+                log_msg(f"Mock: All XBots stopped and are now IDLE")
             
             threading.Thread(target=complete_stop, daemon=True).start()
         else:
@@ -343,7 +358,7 @@ class xbot_commands:
             def complete_stop():
                 time.sleep(0.2)  # Realistic stop delay
                 xbot.xbot_state = XbotState.XBOT_IDLE
-                print(f"Mock: XBot {xbot_id} stopped and is now IDLE")
+                log_msg(f"Mock: XBot {xbot_id} stopped and is now IDLE")
             
             threading.Thread(target=complete_stop, daemon=True).start()
 

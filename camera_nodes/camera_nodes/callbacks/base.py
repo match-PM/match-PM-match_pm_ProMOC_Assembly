@@ -15,6 +15,8 @@ from promoc_core.promoc_exceptions import (
     ServiceError,
 )
 
+from promoc_core.logging import TaggedLogger, LogTags
+
 from ..algorithms import tenengrad
 
 
@@ -24,11 +26,13 @@ class CallbackBase:
     Attributes:
         _node: Parent ROS2 node
         _driver: Camera driver instance
+        logger: TaggedLogger instance
     """
 
     def __init__(self, node, camera_driver):
         self._node = node
         self._driver = camera_driver
+        self.logger = TaggedLogger(node.get_logger(), LogTags.CAM)
         self._sift = None
 
     # ==========================================================================
@@ -43,7 +47,7 @@ class CallbackBase:
             return self._node.bridge.imgmsg_to_cv2(
                 self._node.latest_image_msg, 'bgr8')
         except Exception as e:
-            self._node.get_logger().warn(f'Failed to convert image: {e}')
+            self.logger.warn(f'Failed to convert image: {e}')
             return None
 
     @staticmethod

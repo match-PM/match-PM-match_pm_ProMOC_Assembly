@@ -26,18 +26,22 @@ from enum import Enum
 try:
     from .promoc_exceptions import (
         ProMocError,
-        CommunicationTimeoutError,
-        DeviceDisconnectedError,
-        ConnectionError as ProMocConnectionError
+        ConnectionError as ProMocConnectionError,
+        MotionError,
+        SafetyError,
     )
 except ImportError:
     # Fallback if module is in the same directory
     from promoc_exceptions import (
         ProMocError,
-        CommunicationTimeoutError,
-        DeviceDisconnectedError,
-        ConnectionError as ProMocConnectionError
+        ConnectionError as ProMocConnectionError,
+        MotionError,
+        SafetyError,
     )
+
+# Aliases for backward compatibility with retry config
+CommunicationTimeoutError = ProMocConnectionError
+DeviceDisconnectedError = ProMocConnectionError
 
 
 # Type variable for generic functions
@@ -279,16 +283,9 @@ class HomingRecoveryStrategy(ErrorRecoveryStrategy):
     """
 
     def can_recover(self, error: Exception) -> bool:
-        from .promoc_exceptions import (
-            PositionOutOfBoundsError,
-            HomingRequiredError,
-            SoftLimitViolationError
-        )
-        return isinstance(error, (
-            PositionOutOfBoundsError,
-            HomingRequiredError,
-            SoftLimitViolationError
-        ))
+        # Recoverable for motion errors related to position/homing
+        # and safety errors related to soft limits
+        return isinstance(error, (MotionError, SafetyError))
 
     def recover(self, error: Exception, context: dict) -> bool:
         """

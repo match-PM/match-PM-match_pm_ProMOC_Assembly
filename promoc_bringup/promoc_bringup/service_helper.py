@@ -15,6 +15,8 @@ import rclpy
 from rclpy.node import Node
 from typing import Optional, Any, Callable
 
+from promoc_core.logging import TaggedLogger, LogTags
+
 
 class ServiceHelper:
     """
@@ -35,7 +37,7 @@ class ServiceHelper:
             node: ROS2 Node instance for logging and spinning.
         """
         self.node = node
-        self.logger = node.get_logger()
+        self.logger = TaggedLogger(node.get_logger(), LogTags.SYS)
 
     def call_service(
         self,

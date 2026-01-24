@@ -10,6 +10,7 @@ Configuration via ROS parameters:
 """
 
 from .drivers.simulated_linear_axis_driver import SimulatedLinearAxisDriver
+from promoc_core.logging import TaggedLogger, LogTags
 
 
 class Lts300Interface:
@@ -41,6 +42,9 @@ class Lts300Interface:
 
         if self.config['use_sim_time']:
             self.driver = SimulatedLinearAxisDriver()
+            # Create a specific logger for the mock driver
+            mock_logger = TaggedLogger(self.logger._logger, LogTags.MOCK)
+            self.driver.set_logger(mock_logger)
             self.logger.info('Using basic simulation driver for LTS300')
         else:
             from .drivers.thorlabs_lts300_driver import ThorlabsLTS300Driver

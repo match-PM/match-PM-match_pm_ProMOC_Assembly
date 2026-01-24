@@ -39,22 +39,20 @@ from promoc_core.promoc_exceptions import (
 )
 
 from ..algorithms import (
-    Autofocus,
-    ParabolicAutofocus,
-    IterativeParabolicAutofocus,
-    GoldenSectionAutofocus,
-    AdaptiveHillClimbingAutofocus,
-    HillClimbingAutofocus,
     AutofocusConfig,
     Phase,
+    AUTOFOCUS_ALGORITHMS,
 )
 from .base import CallbackBase
 
+# Build algorithm lookup from centralized list
+_ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
 
-# Konstanten
-COARSE_STEP_MM = 0.5  # Fixer Coarse-Schritt
-PEAK_WINDOW_RATIO = 0.85  # 85% des max stddev als Schwelle für Peak-Window
-FLY_OVER_SPEED = 10.0  # mm/s für schnellen Fly-Over
+
+# Constants
+COARSE_STEP_MM = 0.5  # Fixed coarse step size
+PEAK_WINDOW_RATIO = 0.85  # 85% of max stddev as threshold for peak window
+FLY_OVER_SPEED = 10.0  # mm/s for fast fly-over scan
 
 
 class AutofocusCallbacks(CallbackBase):
@@ -71,9 +69,11 @@ class AutofocusCallbacks(CallbackBase):
         
         Args:
             request.refinement_mode:
-                0 = Standard (Golden Search)
-                1 = HillClimbing (Adaptive)  
-                2 = Parabolic (Iterative)
+                0 = Standard (Golden Section)
+                1 = HillClimbing (Adaptive, fast)  
+                2 = Parabolic (Iterative, precise)
+                3 = Fibonacci (efficient search)
+                4 = Exhaustive (brute-force, maximum precision reference)
         """
         mode = getattr(request, 'refinement_mode', 0)
         start_time = time.time()
@@ -117,23 +117,23 @@ class AutofocusCallbacks(CallbackBase):
 
         except ConfigurationError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except ServiceError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         except ImageProcessingError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except Exception as e:
             response.success = False
-            response.message = f'ERROR: Autofocus failed: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'ERROR: Autofocus failed: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         return response
 
@@ -145,7 +145,7 @@ class AutofocusCallbacks(CallbackBase):
 
     def _get_all_axis_clients(self):
         """Creates all service clients for the linear axis."""
-        x_axis_name = self._node.get_parameter('z_axis_node_name').value
+        x_axis_name = self._node.get_parameter('x_axis_node_name').value
         
         clients = {
             'move': self._node.create_client(MoveAbsolute, f'/{x_axis_name}/move_absolute'),
@@ -244,23 +244,10 @@ class AutofocusCallbacks(CallbackBase):
             clients['move'].call(MoveAbsolute.Request(axis_position=float(end_pos)))
             
             # State tracking
-            scan_data = [] # List of (pos, stddev)
-            
+            scan_data = []  # List of (pos, stddev)
             scan_start_time = time.time()
             scan_start_pos = float(start_pos)
             end_tolerance = 0.1
-            
-            last_pos = None
-            last_pos_time = time.time()
-            last_log_time = time.time()
-            
-            # State tracking
-            scan_data = [] # List of (pos, stddev)
-            
-            scan_start_time = time.time()
-            scan_start_pos = float(start_pos)
-            end_tolerance = 0.1
-            
             last_pos = None
             last_pos_time = time.time()
             last_log_time = time.time()
@@ -375,16 +362,9 @@ class AutofocusCallbacks(CallbackBase):
             use_sift_weighting=bool(getattr(request, 'use_sift_weighting', False))
         )
         
-        # Wähle Algorithmus (Updated to new optimized classes)
-        if mode == 1:
-            af = AdaptiveHillClimbingAutofocus(config)
-            mode_name = "AdaptiveHillClimbing"
-        elif mode == 2:
-            af = IterativeParabolicAutofocus(config)
-            mode_name = "IterativeParabolic"
-        else:
-            af = GoldenSectionAutofocus(config)
-            mode_name = "GoldenSection"
+        # Select algorithm based on mode (using centralized lookup)
+        mode_name, algo_class = _ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])
+        af = algo_class(config)
         
         # Run autofocus algorithm
         best_position, best_score, measurements = self._run_autofocus_loop(af, clients)
@@ -396,7 +376,7 @@ class AutofocusCallbacks(CallbackBase):
         
         duration = time.time() - start_time
         response.success = best_position is not None
-        response.message = f'{mode_name}: pos={best_position:.3f}mm, score={best_score:.0f}'
+        response.status_message = f'{mode_name}: pos={best_position:.3f}mm, score={best_score:.0f}'
         response.best_focus_position = float(best_position or 0)
         response.best_focus_value = float(best_score)
         response.total_measurements_taken = measurements
@@ -459,14 +439,15 @@ class AutofocusCallbacks(CallbackBase):
 
     def _run_comparison(self, peak_start: float, peak_end: float,
                         request, response, clients, start_time: float):
-        """Runs all 3 modes sequentially and compares results."""
+        """Runs all 5 modes sequentially and compares results."""
         
-        self._node.get_logger().info('Comparison Test: Running all 3 modes...')
+        self._node.get_logger().info('Comparison Test: Running all 5 modes...')
         
         results = {}
         
-        for mode, name in [(0, 'standard'), (1, 'hillclimbing'), (2, 'parabolic')]:
-            self._node.get_logger().info(f'--- Running {name.upper()} ---')
+        # Use centralized algorithm list
+        for mode, name, algo_class in AUTOFOCUS_ALGORITHMS:
+            self._node.get_logger().info(f'--- Running {name.upper()} (mode {mode}) ---')
             
             config = AutofocusConfig(
                 start_mm=float(peak_start),
@@ -475,12 +456,7 @@ class AutofocusCallbacks(CallbackBase):
                 use_sift_weighting=bool(getattr(request, 'use_sift_weighting', False))
             )
             
-            if mode == 1:
-                af = AdaptiveHillClimbingAutofocus(config)
-            elif mode == 2:
-                af = IterativeParabolicAutofocus(config)
-            else:
-                af = GoldenSectionAutofocus(config)
+            af = algo_class(config)
             
             mode_start = time.time()
             best_pos, best_score, measurements = self._run_autofocus_loop(af, clients)
@@ -529,7 +505,7 @@ class AutofocusCallbacks(CallbackBase):
         total_measurements = sum(r['measurements'] for r in results.values())
         
         response.success = True
-        response.message = (
+        response.status_message = (
             f'Comparison: Best={best_algo} at {best["position"]:.3f}mm '
             f'(score={best["score"]:.0f}). CSV: {csv_path}'
         )
@@ -588,23 +564,23 @@ class AutofocusCallbacks(CallbackBase):
 
         except ConfigurationError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except ServiceError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         except ImageProcessingError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except Exception as e:
             response.success = False
-            response.message = f'ERROR: Comparison failed: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'ERROR: Comparison failed: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         return response
 

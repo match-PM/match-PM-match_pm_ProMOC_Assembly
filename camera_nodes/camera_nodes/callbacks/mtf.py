@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 import cv2
+import numpy as np
 
 from promoc_core.promoc_exceptions import (
     ConfigurationError,
@@ -71,7 +72,7 @@ class MTFCallbacks(CallbackBase):
             roi, roi_image = self._select_roi_interactive(cv_image)
             if roi is None:
                 response.success = False
-                response.message = 'ROI selection cancelled.'
+                response.status_message = 'ROI selection cancelled.'
                 return response
 
             x, y, w, h = roi
@@ -87,17 +88,17 @@ class MTFCallbacks(CallbackBase):
             self._node.image_processor.export_to_csv(mtf_results, output_filename)
 
             response.success = True
-            response.message = f'MTF saved to {output_filename}'
+            response.status_message = f'MTF saved to {output_filename}'
 
         except (ImageProcessingError, ConfigurationError) as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except Exception as e:
             response.success = False
-            response.message = f'ERROR: ROI selection failed: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'ERROR: ROI selection failed: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         return response
 
@@ -112,7 +113,7 @@ class MTFCallbacks(CallbackBase):
 
             pixel_size_um = self._node.get_parameter('pixel_size_um').value
             if not pixel_size_um or pixel_size_um <= 0:
-                pixel_size_um = 3.45
+                pixel_size_um = 2.40  # IDS U3-3800CP (Sony IMX183)
 
             # Auto ROI Detection
             roi_list = []
@@ -202,7 +203,7 @@ class MTFCallbacks(CallbackBase):
                     response.mtf10 = float(result.mtf10)
                     response.edge_angle = float(result.edge_angle)
                     response.nyquist_frequency = float(result.nyquist_frequency)
-                    response.message = (
+                    response.status_message = (
                         f"MTF50={response.mtf50:.2f} lp/mm ({target['name']}, {result.edge_angle:.1f}°, C:{contrast:.2f})"
                     )
                     return response
@@ -214,13 +215,13 @@ class MTFCallbacks(CallbackBase):
 
         except ImageProcessingError as e:
             response.success = False
-            response.message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.message)
+            response.status_message = f'WARNING: {str(e)}'
+            self._node.get_logger().warn(response.status_message)
 
         except Exception as e:
             response.success = False
-            response.message = f'ERROR: MTF measurement failed: {str(e)}'
-            self._node.get_logger().error(response.message)
+            response.status_message = f'ERROR: MTF measurement failed: {str(e)}'
+            self._node.get_logger().error(response.status_message)
 
         return response
 
@@ -253,7 +254,7 @@ class MTFCallbacks(CallbackBase):
                     idx = x // tile_w
                     if 0 <= idx < len(candidates):
                         selected_idx[0] = idx
-                        print(f"Selected candidate {idx}: {candidates[idx]['name']}")
+                        self.logger.info(f"Selected candidate {idx}: {candidates[idx]['name']}")
                         cv2.destroyWindow(window_name)
 
         cv2.namedWindow(window_name)
@@ -305,14 +306,14 @@ class MTFCallbacks(CallbackBase):
                 cv2.imwrite(filename_edges, vis_edges)
             
             response.success = True
-            response.message = f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
+            response.status_message = f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
             response.debug_image_path = filename_edges if filename_edges else filename_main
             response.bars_detected = len(bars)
             response.squares_detected = len(squares)
             
         except Exception as e:
             response.success = False
-            response.message = f"ERROR: ROI detection failed: {str(e)}"
-            self._node.get_logger().error(response.message)
+            response.status_message = f"ERROR: ROI detection failed: {str(e)}"
+            self._node.get_logger().error(response.status_message)
             
         return response

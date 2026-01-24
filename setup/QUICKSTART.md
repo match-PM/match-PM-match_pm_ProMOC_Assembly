@@ -102,8 +102,7 @@ cd setup/
 # Start LTS300 node (connect hardware first!)
 ros2 run linear_axis_nodes lts300_node --ros-args \
     -r __node:=lts300_x_axis \
-    -p serial_port:=/dev/ttyUSB0 \
-    -p debug_mode:=true
+    -p serial_port:=/dev/ttyUSB0
 ```
 
 ### IDS USB3 Camera

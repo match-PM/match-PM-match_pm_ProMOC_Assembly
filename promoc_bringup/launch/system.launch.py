@@ -31,32 +31,8 @@ import launch
 # Helper Functions
 # =============================================================================
 
-def discover_connected_devices():
-    """
-    Find Thorlabs APT stepper motor controllers under `/dev/serial/by-id`.
-
-    Returns:
-        Dict mapping serial number to device path
-    """
-    port_map = {}
-    search_pattern = '/dev/serial/by-id/usb-Thorlabs_APT_Stepper_Motor_Controller_*'
-
-    print("🛰️  Scanning for connected devices...")
-
-    for device_path in glob.glob(search_pattern):
-        try:
-            filename = os.path.basename(device_path)
-            match = re.search(
-                r'usb-Thorlabs_APT_Stepper_Motor_Controller_([0-9]+)', filename)
-            if match:
-                serial = match.group(1)
-                port_map[serial] = device_path
-                print(f"  ✅ Found: {serial}")
-        except Exception as e:
-            print(f"  ❌ Error: {e}")
-
-    print(f"  → {len(port_map)} device(s) found")
-    return port_map
+# Use shared helper from launch_utils
+from promoc_bringup.launch_utils import discover_thorlabs_devices as discover_connected_devices
 
 
 def load_axes_config(bringup_pkg_share):

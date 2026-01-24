@@ -22,7 +22,7 @@ def test_service_interfaces():
             RotaryMotion, SixDofMotion, StopMotion, SetVelocityAcceleration,
             ArcMotionSi,
             # Linear axis services
-            MoveAbsolute, MoveRelativ, Home, ShutdownLinearAxis,
+            MoveAbsolute, MoveRelative, Home, ShutdownLinearAxis,
             GetPosition, GetSetHomingParams, GetSetVelocityParams
         )
         print("✓ All service interfaces imported successfully")

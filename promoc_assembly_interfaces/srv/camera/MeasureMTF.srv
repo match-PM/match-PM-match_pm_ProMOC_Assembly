@@ -26,7 +26,7 @@ string target_edge
 bool success
 
 # Human-readable result message
-string message
+string status_message
 
 # MTF50 frequency (lp/mm) - frequency where MTF = 50%
 float32 mtf50

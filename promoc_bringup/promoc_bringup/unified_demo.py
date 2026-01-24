@@ -36,6 +36,7 @@ from promoc_assembly_interfaces.msg import LinearAxisInfo
 
 # Local helper
 from .service_helper import ServiceHelper
+from promoc_core.logging import TaggedLogger, LogTags
 
 
 class UnifiedDemoController(Node):
@@ -52,9 +53,12 @@ class UnifiedDemoController(Node):
 
     def __init__(self):
         super().__init__('unified_demo_controller')
-        self.get_logger().info('Unified Demo Controller starting...')
+        self.log = TaggedLogger(self.get_logger(), LogTags.SYS)
+        self.log.info('Unified Demo Controller starting...')
 
-        # Initialize helper
+        # Initialize helper (it handles its own logging, or use node's logger?)
+        # ServiceHelper gets 'node' and uses 'node.get_logger()'.
+        # If I want ServiceHelper to also use SYS tag, I should update ServiceHelper.
         self.helper = ServiceHelper(self)
 
         # Load parameters
@@ -65,11 +69,11 @@ class UnifiedDemoController(Node):
 
         # Wait for services
         if not self._wait_for_required_services():
-            self.get_logger().error('Required services not available. Exiting.')
+            self.log.error('Required services not available. Exiting.')
             return
 
         # Start demo thread
-        self.get_logger().info(f'Starting demo in {self.demo_mode} mode')
+        self.log.info(f'Starting demo in {self.demo_mode} mode')
         self._start_demo_thread()
 
     def _load_parameters(self):
@@ -79,7 +83,7 @@ class UnifiedDemoController(Node):
 
         valid_modes = ['full', 'planar_motor', 'linear_axes']
         if self.demo_mode not in valid_modes:
-            self.get_logger().warn(
+            self.log.warn(
                 f"Invalid demo_mode '{self.demo_mode}'. Using 'full'."
             )
             self.demo_mode = 'full'
@@ -93,11 +97,11 @@ class UnifiedDemoController(Node):
         self.declare_parameter('cycle_delay', 5.0)
         self.cycle_delay = self.get_parameter('cycle_delay').value
 
-        self.get_logger().info('Configuration:')
-        self.get_logger().info(f'   Demo mode: {self.demo_mode}')
-        self.get_logger().info(f'   XBot ID: {self.xbot_id}')
-        self.get_logger().info(f'   Axes: {self.axes_names}')
-        self.get_logger().info(f'   Cycle delay: {self.cycle_delay}s')
+        self.log.info('Configuration:')
+        self.log.info(f'   Demo mode: {self.demo_mode}')
+        self.log.info(f'   XBot ID: {self.xbot_id}')
+        self.log.info(f'   Axes: {self.axes_names}')
+        self.log.info(f'   Cycle delay: {self.cycle_delay}s')
 
     def _setup_clients(self):
         """Create service clients based on demo mode."""
@@ -120,7 +124,7 @@ class UnifiedDemoController(Node):
 
     def _setup_axis_clients(self):
         """Setup linear axis clients."""
-        self.get_logger().info('Searching for linear axis services...')
+        self.log.info('Searching for linear axis services...')
 
         for axis_name in self.axes_names:
             move_client = self.create_client(
@@ -134,7 +138,7 @@ class UnifiedDemoController(Node):
             if (move_client.wait_for_service(timeout_sec=2.0) and
                     home_client.wait_for_service(timeout_sec=2.0)):
 
-                self.get_logger().info(f"  Found '{axis_name}'")
+                self.log.info(f"  Found '{axis_name}'")
                 self.axis_clients[axis_name] = {
                     'move': move_client,
                     'home': home_client
@@ -148,7 +152,7 @@ class UnifiedDemoController(Node):
                     10
                 )
             else:
-                self.get_logger().warn(f"  '{axis_name}' not available")
+                self.log.warn(f"  '{axis_name}' not available")
 
     def _axis_position_callback(self, msg: LinearAxisInfo, axis_name: str):
         """Store axis position from subscriber."""
@@ -180,7 +184,7 @@ class UnifiedDemoController(Node):
 
     def _wait_for_pmc_connection(self, max_retries: int = 10) -> bool:
         """Test PMC connection with retries."""
-        self.get_logger().info('⏳ Testing PMC connection...')
+        self.log.info('⏳ Testing PMC connection...')
 
         for attempt in range(max_retries):
             if not rclpy.ok():
@@ -199,7 +203,7 @@ class UnifiedDemoController(Node):
             if self.helper.was_successful(result):
                 return True
 
-            self.get_logger().info(
+            self.log.info(
                 f'⏳ PMC not ready, retry {attempt + 1}/{max_retries}...'
             )
             time.sleep(2.0)
@@ -223,19 +227,19 @@ class UnifiedDemoController(Node):
         try:
             while rclpy.ok():
                 cycle_count += 1
-                self.get_logger().info(f'🔄 Demo cycle #{cycle_count}')
+                self.log.info(f'🔄 Demo cycle #{cycle_count}')
 
                 self._run_demo_cycle()
 
-                self.get_logger().info(
+                self.log.info(
                     f'✅ Cycle complete. Waiting {self.cycle_delay}s...'
                 )
                 self._interruptible_sleep(self.cycle_delay)
 
         except KeyboardInterrupt:
-            self.get_logger().info('🛑 Demo stopped by user')
+            self.log.info('🛑 Demo stopped by user')
         except Exception as e:
-            self.get_logger().error(f'❌ Demo error: {e}')
+            self.log.error(f'❌ Demo error: {e}')
 
     def _interruptible_sleep(self, seconds: float):
         """Sleep that can be cleanly interrupted on shutdown."""
@@ -262,7 +266,7 @@ class UnifiedDemoController(Node):
 
     def _run_planar_motor_demo(self):
         """Planar motor demo sequence."""
-        self.get_logger().info('🤖 Planar Motor Demo')
+        self.log.info('🤖 Planar Motor Demo')
 
         self._activate_xbots(True)
         time.sleep(1.0)
@@ -292,7 +296,7 @@ class UnifiedDemoController(Node):
         steps_per_corner = 8
 
         for corner_idx, (x, y) in enumerate(corners):
-            self.get_logger().info(f'📍 Corner {corner_idx + 1}: ({x}, {y})')
+            self.log.info(f'📍 Corner {corner_idx + 1}: ({x}, {y})')
 
             for step in range(steps_per_corner):
                 angle = (step / steps_per_corner) * 2 * math.pi
@@ -312,10 +316,10 @@ class UnifiedDemoController(Node):
 
     def _run_linear_axes_demo(self):
         """Linear axes demo sequence."""
-        self.get_logger().info('↕️ Linear Axes Demo')
+        self.log.info('↕️ Linear Axes Demo')
 
         for axis_name in self.axis_clients:
-            self.get_logger().info(f'  Moving {axis_name}...')
+            self.log.info(f'  Moving {axis_name}...')
             self._move_axis(axis_name, 250.0)
             time.sleep(2.0)
             self._move_axis(axis_name, 10.0)
@@ -327,7 +331,7 @@ class UnifiedDemoController(Node):
 
     def _run_full_demo(self):
         """Full system demo (planar motor + linear axes)."""
-        self.get_logger().info('🔧 Full System Demo')
+        self.log.info('🔧 Full System Demo')
 
         self._run_planar_motor_demo()
         time.sleep(2.0)
@@ -386,7 +390,7 @@ class UnifiedDemoController(Node):
     def _move_axis(self, axis_name: str, position: float):
         """Moves a linear axis to a target position."""
         if axis_name not in self.axis_clients:
-            self.get_logger().warn(f"⚠️ Axis '{axis_name}' not available")
+            self.log.warn(f"⚠️ Axis '{axis_name}' not available")
             return
 
         request = MoveAbsolute.Request()
@@ -409,7 +413,7 @@ def main(args=None):
     try:
         rclpy.spin(controller)
     except KeyboardInterrupt:
-        controller.get_logger().info('🛑 Shutting down...')
+        controller.log.info('🛑 Shutting down...')
     finally:
         controller.destroy_node()
         rclpy.shutdown()

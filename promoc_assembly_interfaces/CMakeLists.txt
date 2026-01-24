@@ -35,7 +35,7 @@ set(INTERFACE_FILES
   "msg/test/Test.msg"
   "msg/linear_axis/LinearAxisInfo.msg"
   "srv/linear_axis/MoveAbsolute.srv"
-  "srv/linear_axis/MoveRelativ.srv"
+  "srv/linear_axis/MoveRelative.srv"
   "srv/linear_axis/Home.srv"
   "srv/linear_axis/ShutdownLinearAxis.srv"
   "srv/linear_axis/GetPosition.srv"
@@ -52,6 +52,8 @@ set(INTERFACE_FILES
   "srv/camera/AutoFocus.srv"
   "srv/camera/MeasureMTF.srv"
   "srv/camera/DetectRois.srv"
+  "srv/camera/VerifyAutofocus.srv"
+  "srv/camera/VerifyMTF.srv"
 )
 
 # CRITICAL: Generate the interfaces (this was missing!)

@@ -25,6 +25,19 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
         # Dummy jog parameters
         self._jog_step_size: float = 1.0
         self._jog_speed: float = 10.0
+        
+        self.logger = None
+
+    def set_logger(self, logger):
+        """Set logger for output."""
+        self.logger = logger
+        
+    def _log(self, msg: str):
+        """Log message to logger or print if no logger set."""
+        if self.logger:
+            self.logger.info(msg)
+        elif self.debug_mode:
+            print(msg)
 
     def connect(self, port: str = None, x_axis_serial: str = None, z_axis_serial: str = None, debug_mode: bool = False) -> bool:
         """Connect to simulated device - compatible with real driver interface."""
@@ -48,12 +61,12 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
 
     def disconnect(self):
         if self.debug_mode:
-            print("Simulated driver disconnected.")
+            self._log("Simulated driver disconnected.")
         self._is_moving = False
 
     def move_absolute(self, position: float):
         if self.debug_mode:
-            print(f"Simulating absolute move to: {position} mm")
+            self._log(f"Simulating absolute move to: {position} mm")
         self._target_position = position
         self._move_start_time = time.time()
         # Simulate a fixed duration for movement, e.g., 1 second per 100mm
@@ -63,12 +76,12 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
 
     def move_relative(self, distance: float):
         if self.debug_mode:
-            print(f"Simulating relative move by: {distance} mm")
+            self._log(f"Simulating relative move by: {distance} mm")
         self.move_absolute(self._position + distance)
 
     def home(self, timeout: float = 180.0):
         if self.debug_mode:
-            print(f"Simulating homing (timeout: {timeout}s).")
+            self._log(f"Simulating homing (timeout: {timeout}s).")
         self.move_absolute(0.0)  # Home to 0.0
 
     def get_position(self) -> float:
@@ -112,17 +125,17 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
             self._max_velocity = max(0.1, max_velocity)  # Minimum 0.1 mm/s
 
         if self.debug_mode:
-            print(f"🔧 Simulated velocity parameters updated:")
-            print(f"   Min velocity: {self._min_velocity:.3f} mm/s")
-            print(f"   Acceleration: {self._acceleration:.3f} mm/s²")
-            print(f"   Max velocity: {self._max_velocity:.3f} mm/s")
+            self._log(f"🔧 Simulated velocity parameters updated:")
+            self._log(f"   Min velocity: {self._min_velocity:.3f} mm/s")
+            self._log(f"   Acceleration: {self._acceleration:.3f} mm/s²")
+            self._log(f"   Max velocity: {self._max_velocity:.3f} mm/s")
 
         return self.get_velocity_parameters()
 
     def stop(self):
         """Immediately stop any ongoing movement."""
         if self.debug_mode:
-            print('🛑 Simulated emergency stop - halting all movement')
+            self._log('🛑 Simulated emergency stop - halting all movement')
 
         self._is_moving = False
         self._target_position = self._position  # Stay at current position
@@ -130,7 +143,7 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
     def jog_positive(self, step_size: float = 1.0):
         """Jog the axis in positive direction by the specified step size."""
         if self.debug_mode:
-            print(f'🔧 Simulated jog positive by {step_size} mm')
+            self._log(f'🔧 Simulated jog positive by {step_size} mm')
 
         # Validate position
         target_pos = self._position + step_size
@@ -150,7 +163,7 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
     def jog_negative(self, step_size: float = 1.0):
         """Jog the axis in negative direction by the specified step size."""
         if self.debug_mode:
-            print(f'🔧 Simulated jog negative by {step_size} mm')
+            self._log(f'🔧 Simulated jog negative by {step_size} mm')
 
         # Validate position
         target_pos = self._position - step_size
@@ -174,7 +187,7 @@ class SimulatedLinearAxisDriver(LinearAxisDriver):
 
         if position < min_position or position > max_position:
             if self.debug_mode:
-                print(
+                self._log(
                     f"⚠ Position {position}mm outside limits [{min_position}, {max_position}]mm")
             return False
         return True

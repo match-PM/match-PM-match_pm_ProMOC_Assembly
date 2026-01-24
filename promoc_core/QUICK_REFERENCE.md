@@ -5,10 +5,13 @@
 ### 1. Import Exceptions
 ```python
 from promoc_core.promoc_exceptions import (
-    PositionOutOfBoundsError,
-    HomingRequiredError,
-    DeviceNotFoundError,
-    MovementTimeoutError
+    ProMocError,
+    MotionError,
+    SafetyError,
+    ConnectionError,
+    HardwareError,
+    ConfigurationError,
+    ServiceError
 )
 ```
 
@@ -18,7 +21,7 @@ from promoc_core.promoc_exceptions import (
 raise Exception("Position out of range")
 
 # ✅ DO
-raise PositionOutOfBoundsError(
+raise SafetyError(
     f"Position {pos}mm exceeds max {max_pos}mm",
     details={'requested': pos, 'max': max_pos}
 )
@@ -48,31 +51,15 @@ def connect(self, port: str):
 
 ## 📋 Exception Types Cheat Sheet
 
-| Category | Exception | Error Code | Use When |
-|----------|-----------|------------|----------|
-| **Connection** | `DeviceNotFoundError` | 1101 | Device can't be found |
-| | `DeviceDisconnectedError` | 1102 | Device unexpectedly disconnects |
-| | `CommunicationTimeoutError` | 1103 | Communication times out |
-| **Motion** | `MovementTimeoutError` | 1201 | Movement takes too long |
-| | `PositionOutOfBoundsError` | 1202 | Position outside valid range |
-| | `CollisionDetectedError` | 1203 | Collision detected/predicted |
-| | `HomingFailedError` | 1204 | Homing operation fails |
-| **Safety** | `SoftLimitViolationError` | 1301 | Software limit violated |
-| | `HardLimitViolationError` | 1302 | Hardware limit violated |
-| | `EmergencyStopError` | 1303 | Emergency stop triggered |
-| | `SafetyZoneViolationError` | 1304 | Safety zone violated |
-| **Calibration** | `HomingRequiredError` | 1401 | Operation needs homing first |
-| | `CalibrationFailedError` | 1402 | Calibration fails |
-| | `CalibrationDataInvalidError` | 1403 | Calibration data corrupted |
-| **Hardware** | `DriverNotAvailableError` | 1501 | Driver library not available |
-| | `HardwareInitializationError` | 1502 | Hardware init fails |
-| | `SensorReadError` | 1503 | Sensor reading fails |
-| **Configuration** | `InvalidParameterError` | 1601 | Parameter has invalid value |
-| | `MissingConfigurationError` | 1602 | Required config missing |
-| | `ValidationError` | 1603 | Config validation fails |
-| **Service** | `ServiceCallFailedError` | 1701 | Service call fails |
-| | `InvalidServiceRequestError` | 1702 | Request contains invalid data |
-| | `ServiceTimeoutError` | 1703 | Service call times out |
+| Exception | Use When |
+|-----------|----------|
+| `ConnectionError` | Device not found, disconnection, timeout |
+| `MotionError` | Movement timeout, position error, homing failure |
+| `SafetyError` | Limit violations, emergency stop, collision |
+| `HardwareError` | Driver unavailable, init failure, sensor error |
+| `ConfigurationError` | Invalid parameter, missing config |
+| `ServiceError` | Service call failure, invalid request |
+| `ImageProcessingError` | Camera/image processing errors |
 
 ## 🔧 Common Patterns
 
@@ -80,10 +67,10 @@ def connect(self, port: str):
 ```python
 def move_to_position(self, position: float):
     if not self.is_homed:
-        raise HomingRequiredError("Homing required before movement")
+        raise MotionError("Homing required before movement")
     
     if position < MIN or position > MAX:
-        raise PositionOutOfBoundsError(
+        raise SafetyError(
             f"Position {position} outside range [{MIN}, {MAX}]",
             details={'requested': position, 'min': MIN, 'max': MAX}
         )
@@ -93,12 +80,11 @@ def move_to_position(self, position: float):
 ```python
 try:
     self.driver.move(position)
-except HomingRequiredError:
+except MotionError:
     self.driver.home()
     self.driver.move(position)  # Retry
-except PositionOutOfBoundsError as e:
-    self.logger.error(f"Invalid position: {e}")
-    # Use safe position
+except SafetyError as e:
+    self.logger.error(f"Safety violation: {e}")
     safe_pos = clamp(position, MIN, MAX)
     self.driver.move(safe_pos)
 ```
@@ -147,7 +133,6 @@ def callback(self, request, response):
 - Use `@handle_service_errors` decorator for services
 - Log with appropriate level (error, warning, info, debug)
 - Catch specific exceptions before generic ones
-- Include error_code in responses
 
 ### ❌ DON'T:
 - Use bare `except:` or `except Exception:` without re-raising
@@ -156,23 +141,10 @@ def callback(self, request, response):
 - Use print() instead of logger
 - Forget to add context in `details`
 
-## 📞 Error Codes
-
-| Range | Category |
-|-------|----------|
-| 1000 | Generic Error |
-| 1100-1199 | Connection Errors |
-| 1200-1299 | Motion Errors |
-| 1300-1399 | Safety Violations |
-| 1400-1499 | Calibration Errors |
-| 1500-1599 | Hardware Errors |
-| 1600-1699 | Configuration Errors |
-| 1700-1799 | Service Errors |
-
 ## 📚 Full Documentation
 
 See `ERROR_HANDLING.md` for complete documentation and examples.
 
 ---
-**Version:** 0.1.0  
-**Updated:** 29. Oktober 2025
+**Version:** 0.2.0  
+**Updated:** January 2026

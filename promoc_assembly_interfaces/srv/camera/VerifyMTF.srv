@@ -1,0 +1,27 @@
+# Request: MTF verification with field test and configuration comparison
+# Measures MTF at multiple image positions for quality assessment
+
+# Test configuration
+bool field_test         # Test all 5 positions (center + 4 corners)
+string config_name      # Configuration name (e.g. "baseline", "with_filter")
+
+# Operator and metadata
+string operator_name    # Name of operator performing test
+string notes            # Additional notes about optical setup
+
+---
+# Response: MTF verification results
+
+bool success
+string status_message
+
+# Output file path
+string csv_path
+
+# Summary statistics (mean across all valid edges)
+float32 mtf50_mean      # Mean MTF50 in lp/mm
+float32 mtf50_std       # Standard deviation of MTF50
+float32 mtf20_mean      # Mean MTF20 in lp/mm
+float32 mtf10_mean      # Mean MTF10 in lp/mm
+int32 edges_measured    # Number of edges successfully measured
+int32 edges_failed      # Number of failed measurements

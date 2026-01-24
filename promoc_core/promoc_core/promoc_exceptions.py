@@ -1,26 +1,27 @@
 """
+ProMOC Exception Hierarchy
+==========================
 
-Exception-Hierarchie:
-    ProMocError (Basis)
-    ├── ConnectionError     # Verbindung, Timeout, Device not found
-    ├── MotionError         # Bewegung, Position, Kollision, Homing
+Exception Hierarchy:
+    ProMocError (Base)
+    ├── ConnectionError     # Connection, Timeout, Device not found
+    ├── MotionError         # Movement, Position, Collision, Homing
     ├── SafetyError         # Soft/Hard Limits, Emergency Stop
-    ├── HardwareError       # Driver, Sensor, Initialisierung
-    ├── ConfigurationError  # Parameter, Validierung
-    └── ServiceError        # ROS2 Service-Fehler
+    ├── HardwareError       # Driver, Sensor, Initialization
+    ├── ConfigurationError  # Parameters, Validation
+    └── ServiceError        # ROS2 Service errors
 
 """
-
 
 from typing import Optional, Dict, Any
 
 
 class ProMocError(Exception):
-    """Basis-Exception für alle ProMOC-Fehler.
+    """Base exception for all ProMOC errors.
     
     Attributes:
-        message: Beschreibung des Fehlers
-        details: Optionale zusätzliche Informationen (dict)
+        message: Description of the error
+        details: Optional additional information (dict)
     """
 
     def __init__(
@@ -40,132 +41,86 @@ class ProMocError(Exception):
 
 
 # =============================================================================
-# Verbindungsfehler
+# Connection Errors
 # =============================================================================
 
 class ConnectionError(ProMocError):
-    """Verbindungs- und Kommunikationsfehler.
+    """Connection and communication errors.
     
-    Ersetzt: DeviceNotFoundError, DeviceDisconnectedError, 
-             CommunicationTimeoutError, CommunicationError
+    Use for: device not found, disconnection, communication timeout.
     """
     pass
 
 
 # =============================================================================
-# Bewegungsfehler
+# Motion Errors
 # =============================================================================
 
 class MotionError(ProMocError):
-    """Fehler bei Bewegungsoperationen.
+    """Errors during motion operations.
     
-    Ersetzt: MovementTimeoutError, PositionOutOfBoundsError,
-             CollisionDetectedError, HomingFailedError
+    Use for: movement timeout, position out of bounds, collision, homing failure.
     """
     pass
 
 
 # =============================================================================
-# Sicherheitsfehler
+# Safety Errors
 # =============================================================================
 
 class SafetyError(ProMocError):
-    """Sicherheitsverletzungen.
+    """Safety violations.
     
-    Ersetzt: SoftLimitViolationError, HardLimitViolationError,
-             EmergencyStopError, SafetyZoneViolationError
+    Use for: soft/hard limit violations, emergency stop, safety zone violations.
     """
     pass
 
 
 # =============================================================================
-# Hardware-Fehler
+# Hardware Errors
 # =============================================================================
 
 class HardwareError(ProMocError):
-    """Hardware-bezogene Fehler.
+    """Hardware-related errors.
     
-    Ersetzt: DriverNotAvailableError, HardwareInitializationError,
-             SensorReadError, CalibrationError
+    Use for: driver unavailable, initialization failure, sensor read error.
     """
     pass
 
 
 # =============================================================================
-# Konfigurationsfehler
+# Configuration Errors
 # =============================================================================
 
 class ConfigurationError(ProMocError):
-    """Konfigurations- und Validierungsfehler.
+    """Configuration and validation errors.
     
-    Ersetzt: InvalidParameterError, MissingConfigurationError,
-             ValidationError, ParameterValidationError
+    Use for: invalid parameters, missing configuration, validation failure.
     """
     pass
 
 
 # =============================================================================
-# Service-Fehler
+# Service Errors
 # =============================================================================
 
 class ServiceError(ProMocError):
-    """ROS2 Service-bezogene Fehler.
+    """ROS2 service-related errors.
     
-    Ersetzt: ServiceCallFailedError, InvalidServiceRequestError,
-             ServiceTimeoutError
+    Use for: service call failure, invalid request, service timeout.
     """
     pass
 
 
 # =============================================================================
-# Bildverarbeitungsfehler (Kamera-spezifisch)
+# Image Processing Errors (Camera-specific)
 # =============================================================================
 
 class ImageProcessingError(ProMocError):
-    """Fehler bei der Bildverarbeitung."""
+    """Errors during image processing."""
     pass
 
-"""
-# =============================================================================
-# Abwärtskompatibilität - Aliase für häufig genutzte alte Namen
-# =============================================================================
 
-# Connection
-DeviceNotFoundError = ConnectionError
-DeviceDisconnectedError = ConnectionError
-CommunicationTimeoutError = ConnectionError
-CommunicationError = ConnectionError
-
-# Motion
-MovementTimeoutError = MotionError
-PositionOutOfBoundsError = MotionError
-CollisionDetectedError = MotionError
+# Convenience aliases for common specific errors
 HomingFailedError = MotionError
-
-# Safety
 SoftLimitViolationError = SafetyError
-HardLimitViolationError = SafetyError
-EmergencyStopError = SafetyError
-SafetyZoneViolationError = SafetyError
-SafetyViolation = SafetyError  # Alter Name
-
-# Hardware
-DriverNotAvailableError = HardwareError
-HardwareInitializationError = HardwareError
-SensorReadError = HardwareError
-CalibrationError = HardwareError
-CalibrationFailedError = HardwareError
-CalibrationDataInvalidError = HardwareError
-HomingRequiredError = HardwareError
-
-# Configuration
-InvalidParameterError = ConfigurationError
-MissingConfigurationError = ConfigurationError
-ValidationError = ConfigurationError
-ParameterValidationError = ConfigurationError
-
-# Service
-ServiceCallFailedError = ServiceError
-InvalidServiceRequestError = ServiceError
-ServiceTimeoutError = ServiceError
-"""

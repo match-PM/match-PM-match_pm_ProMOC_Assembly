@@ -99,7 +99,7 @@ ros2 service call /lts300_x_axis/move_absolute promoc_assembly_interfaces/srv/Mo
 
 **Move Relative Distance:**
 ```bash
-ros2 service call /lts300_x_axis/move_relative promoc_assembly_interfaces/srv/MoveRelativ "{
+ros2 service call /lts300_x_axis/move_relative promoc_assembly_interfaces/srv/MoveRelative "{
   axis_distance: 10.0
 }"
 ```

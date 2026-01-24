@@ -12,6 +12,13 @@ Which metric to use?
     - `normalized_variance`: Variance normalized by the mean (more robust to brightness changes).
     - `sml`: Sum of Modified Laplacian (second derivative, often good edge sensitivity).
 
+Bayer Sensor Optimization (Sony IMX183 / IDS U3-3800CP):
+    By default, color images are processed using only the GREEN channel (not
+    standard RGB→Gray conversion). This provides:
+    - 2x higher native resolution (RGGB pattern: green has 2x pixels)
+    - No interpolation blur from debayering
+    - Better MTF/sharpness response
+
 Quickstart:
     from camera_nodes.algorithms.focus_metrics import laplacian_variance, tenengrad
 
@@ -20,7 +27,7 @@ Quickstart:
 
 Important:
     - All functions expect a grayscale image as a NumPy array.
-    - Color images are automatically converted to grayscale.
+    - Color images are automatically converted (green channel by default).
     - OpenCV (`cv2`) is required for conversion and some filters.
 """
 
@@ -33,8 +40,20 @@ except ImportError:
     cv2 = None  # Will raise on usage
 
 
-def _ensure_grayscale(image: np.ndarray) -> np.ndarray:
-    """Converts an image to grayscale if necessary.
+def _ensure_grayscale(image: np.ndarray, use_green_channel: bool = True) -> np.ndarray:
+    """Converts an image to grayscale, optimized for Bayer sensors.
+
+    For Bayer sensors (like Sony IMX183), the green channel has 2x the pixel
+    count of red/blue (RGGB pattern). Using only the green channel provides:
+    - Higher native resolution (no interpolation blur from debayering)
+    - Better MTF/sharpness response
+    - Faster processing (1/3 of the data)
+
+    Args:
+        image: Input image (grayscale or color BGR).
+        use_green_channel: If True (default), extract green channel from color
+                           images instead of standard RGB→Gray conversion.
+                           Set to False for standard grayscale conversion.
 
     Raises:
         ImportError: if OpenCV (`cv2`) is not available.
@@ -47,12 +66,18 @@ def _ensure_grayscale(image: np.ndarray) -> np.ndarray:
         raise ValueError("Image is empty or None")
 
     if len(image.shape) == 3:
-        if image.shape[2] == 3:
-            return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        elif image.shape[2] == 4:
-            return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+        if use_green_channel:
+            # For Bayer sensors: Green channel has 2x resolution (RGGB pattern)
+            # BGR format: index 1 = Green
+            return image[:, :, 1]
         else:
-            return image[:, :, 0]
+            # Standard weighted grayscale conversion
+            if image.shape[2] == 3:
+                return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            elif image.shape[2] == 4:
+                return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+            else:
+                return image[:, :, 0]
     return image
 
 

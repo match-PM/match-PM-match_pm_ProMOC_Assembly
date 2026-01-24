@@ -169,20 +169,19 @@ fetch_optional_repos() {
     if [[ -z "$PMCLIB_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
         echo ""
         log_info "Optional: PMCLib (Match)"
-        echo "Wenn du eine Repo-URL hast, wird sie nach:"
+        echo "If you have a repo URL, it will be cloned/updated to:"
         echo "  $pmclib_target"
-        echo "geklont/aktualisiert."
-        echo "Leer lassen, um diesen Schritt zu überspringen."
+        echo "Leave empty to skip this step."
         read -p "PMCLib Repo-URL: " -r PMCLIB_REPO_URL
     fi
 
     if [[ -n "$PMCLIB_REPO_URL" ]]; then
         _git_clone_or_update "$PMCLIB_REPO_URL" "$pmclib_target" "main" || {
-            log_warning "PMCLib konnte nicht geklont/aktualisiert werden. (Weiter ohne PMCLib)"
+            log_warning "PMCLib could not be cloned/updated. (Continuing without PMCLib)"
         }
-        log_success "PMCLib (optional) verarbeitet"
+        log_success "PMCLib (optional) processed"
     else
-        log_info "PMCLib Repo-URL nicht angegeben → überspringe"
+        log_info "PMCLib repo URL not provided → skipping"
     fi
 
     # ---------------------------------------------------------------------
@@ -192,21 +191,20 @@ fetch_optional_repos() {
 
     if [[ -z "$FRAUNHOFER_CAMERA_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
         echo ""
-        log_info "Optional: Fraunhofer Kamera-Repo"
-        echo "Wenn du eine Repo-URL hast, wird sie nach:"
+        log_info "Optional: Fraunhofer Camera Repo"
+        echo "If you have a repo URL, it will be cloned/updated to:"
         echo "  $camera_target"
-        echo "geklont/aktualisiert."
-        echo "Leer lassen, um diesen Schritt zu überspringen."
-        read -p "Fraunhofer Kamera Repo-URL: " -r FRAUNHOFER_CAMERA_REPO_URL
+        echo "Leave empty to skip this step."
+        read -p "Fraunhofer Camera Repo-URL: " -r FRAUNHOFER_CAMERA_REPO_URL
     fi
 
     if [[ -n "$FRAUNHOFER_CAMERA_REPO_URL" ]]; then
         _git_clone_or_update "$FRAUNHOFER_CAMERA_REPO_URL" "$camera_target" "main" || {
-            log_warning "Fraunhofer Kamera-Repo konnte nicht geklont/aktualisiert werden. (Weiter ohne)"
+            log_warning "Fraunhofer camera repo could not be cloned/updated. (Continuing without)"
         }
-        log_success "Fraunhofer Kamera-Repo (optional) verarbeitet"
+        log_success "Fraunhofer camera repo (optional) processed"
     else
-        log_info "Fraunhofer Kamera Repo-URL nicht angegeben → überspringe"
+        log_info "Fraunhofer camera repo URL not provided → skipping"
     fi
 }
 
@@ -533,8 +531,7 @@ source $WORKSPACE_ROOT/install/setup.bash
 # Start LTS300 linear axis node
 ros2 run linear_axis_nodes lts300_node --ros-args \\
     -r __node:=lts300_x_axis \\
-    -p serial_port:=/dev/ttyUSB0 \\
-    -p debug_mode:=true
+    -p serial_port:=/dev/ttyUSB0
 
 # Start camera (requires camera_aravis2)
 ros2 launch promoc_bringup assembly_camera.launch.py
@@ -666,7 +663,7 @@ main() {
     echo "   source $WORKSPACE_ROOT/install/setup.bash"
     echo ""
     echo "   # Test LTS300 linear axis"
-    echo "   ros2 run linear_axis_nodes lts300_node --ros-args -p debug_mode:=true"
+    echo "   ros2 run linear_axis_nodes lts300_node"
     echo ""
     echo "   # Test camera (if installed)"
     echo "   ros2 launch promoc_bringup assembly_camera.launch.py"

@@ -73,9 +73,10 @@ from promoc_assembly_interfaces.srv import (
 # Import our new, clean components
 from .mover_pmc_interface import PmcInterface
 from .mover_utils import MoverUtils
-from .mover_service_callbacks import ServiceCallbacks
+from .callbacks import ServiceCallbacks
 from promoc_core.conversions import m_to_mm, mm_to_m, rad_to_deg, deg_to_rad
 from promoc_core.promoc_exceptions import ConnectionError
+from promoc_core.logging import TaggedLogger, LogTags
 
 
 class MoverServiceNode(Node):
@@ -140,6 +141,9 @@ class MoverServiceNode(Node):
         5. Start a connection timer (attempts to connect to PMC).
         """
         super().__init__("mover_node")
+        
+        # Setup TaggedLogger for this node
+        self.log = TaggedLogger(self.get_logger(), LogTags.PMC)
 
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 1: Load Configuration
@@ -153,11 +157,20 @@ class MoverServiceNode(Node):
         # ══════════════════════════════════════════════════════════════════════
         # Each component gets its dependencies passed in explicitly.
         # This makes the system testable and the dependencies clear.
+        
+        # PMC Interface gets specific [PMC:CONN] logger
         self.pmc = PmcInterface(
-            self.get_logger(), use_mock=self.config['use_mock'])
-        self.mover_utils = MoverUtils(self.get_logger(), self.pmc, self.config)
+            TaggedLogger(self.get_logger(), LogTags.PMC_CONN), 
+            use_mock=self.config['use_mock']
+        )
+        
+        # MoverUtils gets node logger [PMC]
+        self.mover_utils = MoverUtils(self.log, self.pmc, self.config)
+        
+        # ServiceCallbacks gets raw logger (it wraps it internally with [PMC:MOTION])
         self.callbacks = ServiceCallbacks(
             self.get_logger(), self.pmc, self.mover_utils, self.config)
+            
         self.xbot_pos_publisher = self.create_publisher(
             XBotInfo, "xbot_info", 10)
 
@@ -171,11 +184,11 @@ class MoverServiceNode(Node):
         # ══════════════════════════════════════════════════════════════════════
         # Timer tries to connect to the PMC controller every 100ms.
         # On success, it stops itself and activates the system.
-        self.get_logger().info(
+        self.log.info(
             f"Connecting to PMC at {self.config['pmc_ip']}...")
         self.connection_timer = self.create_timer(0.1, self._try_connect)
 
-        self.get_logger().info("Mover Service Node initialized. Waiting for PMC connection...")
+        self.log.info("Mover Service Node initialized. Waiting for PMC connection...")
 
     def _try_connect(self):
         """
@@ -197,7 +210,7 @@ class MoverServiceNode(Node):
         try:
             while not self.is_connected:
                 self.is_connected = self.pmc.connect(self.config['pmc_ip'])
-            self.get_logger().info("PMC Connected! Activating system.")
+            self.log.info("PMC Connected! Activating system.")
 
             # Stop the timer - connection is established
             self.connection_timer.cancel()
@@ -207,7 +220,7 @@ class MoverServiceNode(Node):
 
         except Exception as e:
             # Debug level to avoid spam during startup
-            self.get_logger().debug(f"Connection attempt failed: {e}")
+            self.log.debug(f"Connection attempt failed: {e}")
 
     def _activate_system(self):
         """
@@ -220,10 +233,10 @@ class MoverServiceNode(Node):
         """
         try:
             self.pmc.bot.activate_xbots()
-            self.get_logger().info("XBot Activated")
+            self.log.info("XBot Activated")
             self._start_publisher_timer()
         except Exception as e:
-            self.get_logger().error(
+            self.log.error(
                 f"Failed to activate XBots after connection: {e}")
 
     def _load_config(self) -> dict:
@@ -283,7 +296,7 @@ class MoverServiceNode(Node):
             'z_max': self.get_parameter('z_max').value,
         }
 
-        self.get_logger().info(f"Configuration loaded: {config}")
+        self.log.info(f"Configuration loaded: {config}")
         return config
 
     def _setup_services(self):
@@ -321,7 +334,7 @@ class MoverServiceNode(Node):
         for name, srv_type, callback in services:
             self.create_service(
                 srv_type, f"{self.get_name()}/{name}", callback)
-        self.get_logger().info("All services are created.")
+        self.log.info("All services are created.")
 
     def _start_publisher_timer(self):
         """
@@ -340,7 +353,7 @@ class MoverServiceNode(Node):
         if not self.pmc.status['is_mock']:
             self.xbot_diagnosis_timer = self.create_timer(
                 5.0, self.mover_utils.diagnose_xbot_availability)
-        self.get_logger().info("Timers started.")
+        self.log.info("Timers started.")
 
     def _publish_xbot_position(self):
         """
@@ -368,17 +381,17 @@ class MoverServiceNode(Node):
             msg.xbot_state = self.mover_utils.get_xbot_state_string(0)
             self.xbot_pos_publisher.publish(msg)
         except Exception as e:
-            self.get_logger().error(f"Position publishing error: {e}")
+            self.log.error(f"Position publishing error: {e}")
 
     def destroy_node(self):
         """Clean shutdown."""
-        self.get_logger().info("Shutting down MoverServiceNode...")
+        self.log.info("Shutting down MoverServiceNode...")
         if self.is_connected:
             try:
                 self.pmc.bot.deactivate_xbots()
-                self.get_logger().info("XBots deactivated.")
+                self.log.info("XBots deactivated.")
             except Exception as e:
-                self.get_logger().error(f"Error during deactivation: {e}")
+                self.log.error(f"Error during deactivation: {e}")
         super().destroy_node()
 
 

@@ -45,30 +45,27 @@ from enum import Enum, auto
 import numpy as np
 import cv2
 
+# Import tenengrad from focus_metrics to avoid duplication
+from .focus_metrics import tenengrad
 
-def tenengrad(image: np.ndarray) -> float:
-    """
-    Calculate Tenengrad sharpness metric (gradient-based).
-    
-    Args:
-        image: Input image (BGR or grayscale)
-        
-    Returns:
-        Sharpness score (higher = sharper)
-    """
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image
-    
-    # Sobel gradients
-    gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-    
-    # Gradient magnitude squared
-    gradient_magnitude = gx**2 + gy**2
-    
-    return float(np.sum(gradient_magnitude))
+
+# =============================================================================
+# MATHEMATICAL CONSTANTS
+# =============================================================================
+GOLDEN_RATIO = (1 + 5**0.5) / 2  # φ ≈ 1.618
+PHI_COMPLEMENT = 1 / GOLDEN_RATIO  # 1/φ ≈ 0.618 (golden section multiplier)
+PHI_SMALL = 2 - GOLDEN_RATIO  # 2-φ ≈ 0.382 (for probe point placement)
+
+
+# =============================================================================
+# ALGORITHM TUNING CONSTANTS  
+# =============================================================================
+DEFAULT_COARSE_STEP_MM = 0.5
+DEFAULT_MIN_STEP_MM = 0.01
+DEFAULT_SHRINK_FACTOR = 0.45
+DEFAULT_EARLY_TERM_THRESHOLD = 0.7
+DEFAULT_EARLY_TERM_COUNT = 3
+
 
 
 class Phase(Enum):
@@ -225,19 +222,8 @@ class Autofocus:
         ))
         
         # Clamp all positions to valid range [start_mm, end_mm]
-        self._coarse_positions = [
-            max(self.config.start_mm, min(self.config.end_mm, pos))
-            for pos in self._coarse_positions
-        ]
-        
-        # Remove duplicates that may occur from clamping
-        seen = set()
-        unique_positions = []
-        for pos in self._coarse_positions:
-            if pos not in seen:
-                seen.add(pos)
-                unique_positions.append(pos)
-        self._coarse_positions = unique_positions
+        # Clamp and deduplicate using helper
+        self._coarse_positions = self._clamp_positions(self._coarse_positions)
         
         self._coarse_index = 0
         self._coarse_drop_counter = 0
@@ -273,12 +259,7 @@ class Autofocus:
         elif self._phase == Phase.REFINEMENT:
             return self._handle_refinement()
         else:
-            return AutofocusResult(
-                finished=True,
-                best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                phase=Phase.FINISHED
-            )
+            return self._make_result(finished=True, phase=Phase.FINISHED)
 
     def _get_sift(self):
         if self._sift is None:
@@ -318,6 +299,74 @@ class Autofocus:
                 return base_score
 
         return base_score
+
+    # =========================================================================
+    # HELPER METHODS
+    # =========================================================================
+    
+    def _make_result(self, 
+                     finished: bool = False,
+                     next_position: float | None = None,
+                     phase: Phase | None = None,
+                     progress: float = 0.0) -> AutofocusResult:
+        """
+        Create an AutofocusResult with current state.
+        
+        Reduces boilerplate by auto-filling common fields from internal state.
+        
+        Args:
+            finished: Whether autofocus is complete
+            next_position: Next position to move to (None if finished)
+            phase: Current phase (defaults to self._phase)
+            progress: Progress 0.0-1.0
+            
+        Returns:
+            AutofocusResult with all fields populated
+        """
+        current_score = self._measurements[-1].score if self._measurements else 0.0
+        
+        return AutofocusResult(
+            finished=finished,
+            next_position_mm=next_position,
+            best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
+            best_score=self._best_measurement.score if self._best_measurement else 0.0,
+            current_score=current_score,
+            phase=phase or self._phase,
+            progress=progress,
+            current_level=self._refinement_level,
+            current_step_mm=self._current_step_mm,
+            current_range_mm=self._current_range_mm
+        )
+
+    def _clamp_positions(self, positions: list[float]) -> list[float]:
+        """
+        Clamp positions to valid range and remove duplicates.
+        
+        Args:
+            positions: List of positions to clamp
+            
+        Returns:
+            Sorted list of unique positions within [start_mm, end_mm]
+        """
+        # Clamp to valid range
+        clamped = [
+            max(self.config.start_mm, min(self.config.end_mm, pos))
+            for pos in positions
+        ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique = []
+        for pos in clamped:
+            # Round to avoid floating point duplicates
+            rounded = round(pos, 6)
+            if rounded not in seen:
+                seen.add(rounded)
+                unique.append(pos)
+        
+        # Sort ascending for unidirectional scanning
+        unique.sort()
+        return unique
     
     def _handle_coarse_scan(self) -> AutofocusResult:
         """Handle coarse scan phase."""
@@ -327,79 +376,42 @@ class Autofocus:
         current_score = self._measurements[-1].score
         best_score = self._best_measurement.score if self._best_measurement else 0.0
 
-        if not self.config.disable_coarse_early_termination and best_score > 0 and self._coarse_index > 3:  # Ensure we have some data
+        if not self.config.disable_coarse_early_termination and best_score > 0 and self._coarse_index > 3:
             if current_score < best_score * self.config.coarse_terminate_threshold:
                 self._coarse_drop_counter += 1
             else:
                 self._coarse_drop_counter = 0
 
             if self._coarse_drop_counter >= self.config.coarse_terminate_count:
-                # We crossed the peak! Abort coarse scan and start refinement
-                # Prepare refinement but don't change phase yet
+                # Peak crossed - transition to refinement
                 self._prepare_refinement()
-                
-                # Return result showing this was a COARSE_SCAN measurement
-                result = AutofocusResult(
-                    finished=False,
-                    next_position_mm=self._refinement_positions[0],
-                    best_position_mm=self._best_measurement.position_mm,
-                    best_score=self._best_measurement.score,
-                    current_score=current_score,
-                    phase=Phase.COARSE_SCAN,  # This result is for last coarse scan point
-                    progress=0.5,
-                    current_level=self._refinement_level,  # Show upcoming level
-                    current_step_mm=self._current_step_mm,
-                    current_range_mm=self._current_range_mm
+                result = self._make_result(
+                    next_position=self._refinement_positions[0],
+                    phase=Phase.COARSE_SCAN,
+                    progress=0.5
                 )
-                
-                # Now transition to refinement for next iteration
                 self._phase = Phase.REFINEMENT
                 return result
 
         # Continue coarse scan?
         if self._coarse_index < len(self._coarse_positions):
-            return AutofocusResult(
-                finished=False,
-                next_position_mm=self._coarse_positions[self._coarse_index],
-                best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                current_score=self._measurements[-1].score,
+            progress = self._coarse_index / len(self._coarse_positions)
+            return self._make_result(
+                next_position=self._coarse_positions[self._coarse_index],
                 phase=Phase.COARSE_SCAN,
-                progress=self._coarse_index / len(self._coarse_positions),
-                current_level=0,
-                current_step_mm=self.config.step_mm,
-                current_range_mm=(self.config.end_mm - self.config.start_mm) / 2
+                progress=progress
             )
         
         # Coarse scan complete → start refinement
         if not self._best_measurement:
-            # No measurements? Should not happen
-            return AutofocusResult(
-                finished=True,
-                phase=Phase.FINISHED,
-                best_position_mm=self.config.start_mm,
-                best_score=0.0
-            )
+            return self._make_result(finished=True, phase=Phase.FINISHED)
         
-        # Prepare refinement but don't change phase yet
         self._prepare_refinement()
-        
-        # Refinement positions are already sorted ascending (unidirectional scan)
-        # Always start at the beginning for consistent forward motion
-        result = AutofocusResult(
-            finished=False,
-            next_position_mm=self._refinement_positions[0],
-            best_position_mm=self._best_measurement.position_mm,
-            best_score=self._best_measurement.score,
-            current_score=self._measurements[-1].score,
-            phase=Phase.COARSE_SCAN,  # This result is for last coarse scan point
-            progress=0.5,  # Coarse done, refinement starting
-            current_level=self._refinement_level,  # Show upcoming level
-            current_step_mm=self._current_step_mm,
-            current_range_mm=self._current_range_mm
+        result = self._make_result(
+            next_position=self._refinement_positions[0],
+            phase=Phase.COARSE_SCAN,
+            progress=0.5
         )
-        
-        # Now transition to refinement for next iteration
         self._phase = Phase.REFINEMENT
         return result
     
@@ -408,8 +420,7 @@ class Autofocus:
         Handle refinement phase with early termination.
         
         Early termination saves time by skipping remaining measurements when
-        we're clearly past the peak. Asymmetric range focuses next level on
-        the side where the peak is located.
+        we're clearly past the peak.
         """
         current_score = self._measurements[-1].score
         best_score = self._best_measurement.score if self._best_measurement else 0.0
@@ -420,97 +431,48 @@ class Autofocus:
             if current_score < threshold:
                 self._low_score_counter += 1
             else:
-                self._low_score_counter = 0  # Reset if we get a good score
-            
-            # Early termination triggered?
-            if self._low_score_counter >= self.config.early_termination_count:
-                # Skip remaining positions, go to next refinement level
                 self._low_score_counter = 0
-                
-                # NOTE: Do NOT use asymmetric range after early termination
-                # We've already found the best position in this level,
-                # so the next level should be centered around it symmetrically
-                # The asymmetric logic is only useful during active scanning
+            
+            if self._low_score_counter >= self.config.early_termination_count:
+                self._low_score_counter = 0
                 
                 # Check if we need another level
                 if self._current_step_mm <= self.config.min_step_mm:
-                    # Refinement complete
                     self._phase = Phase.FINISHED
-                    return AutofocusResult(
-                        finished=True,
-                        best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                        best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                        current_score=current_score,
-                        phase=Phase.FINISHED,
-                        progress=1.0,
-                        current_level=self._refinement_level,
-                        current_step_mm=self._current_step_mm,
-                        current_range_mm=self._current_range_mm
-                    )
+                    return self._make_result(finished=True, phase=Phase.FINISHED, progress=1.0)
                 
-                # Start next refinement level (centered on current best)
+                # Start next refinement level
                 self._prepare_refinement()
-                
-                return AutofocusResult(
-                    finished=False,
-                    next_position_mm=self._refinement_positions[0],
-                    best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                    best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                    current_score=current_score,
+                progress = 0.6 + 0.1 * self._refinement_level
+                return self._make_result(
+                    next_position=self._refinement_positions[0],
                     phase=Phase.REFINEMENT,
-                    progress=0.6 + 0.1 * self._refinement_level,
-                    current_level=self._refinement_level,
-                    current_step_mm=self._current_step_mm,
-                    current_range_mm=self._current_range_mm
+                    progress=progress
                 )
         
         self._refinement_index += 1
         
         # Continue current refinement level?
         if self._refinement_index < len(self._refinement_positions):
-            return AutofocusResult(
-                finished=False,
-                next_position_mm=self._refinement_positions[self._refinement_index],
-                best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                current_score=self._measurements[-1].score,
+            progress = 0.5 + 0.5 * (self._refinement_index / len(self._refinement_positions))
+            return self._make_result(
+                next_position=self._refinement_positions[self._refinement_index],
                 phase=Phase.REFINEMENT,
-                progress=0.5 + 0.5 * (self._refinement_index / len(self._refinement_positions)),
-                current_level=self._refinement_level,
-                current_step_mm=self._current_step_mm,
-                current_range_mm=self._current_range_mm
+                progress=progress
             )
         
         # Current level complete → check if we need another level
         if self._current_step_mm <= self.config.min_step_mm:
-            # Refinement complete
             self._phase = Phase.FINISHED
-            return AutofocusResult(
-                finished=True,
-                best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-                best_score=self._best_measurement.score if self._best_measurement else 0.0,
-                current_score=self._measurements[-1].score,
-                phase=Phase.FINISHED,
-                progress=1.0,
-                current_level=self._refinement_level,
-                current_step_mm=self._current_step_mm,
-                current_range_mm=self._current_range_mm
-            )
+            return self._make_result(finished=True, phase=Phase.FINISHED, progress=1.0)
         
         # Start next refinement level
         self._prepare_refinement()
-        
-        return AutofocusResult(
-            finished=False,
-            next_position_mm=self._refinement_positions[0],
-            best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
-            best_score=self._best_measurement.score if self._best_measurement else 0.0,
-            current_score=self._measurements[-1].score,
+        progress = 0.6 + 0.1 * self._refinement_level
+        return self._make_result(
+            next_position=self._refinement_positions[0],
             phase=Phase.REFINEMENT,
-            progress=0.6 + 0.1 * self._refinement_level,  # Rough estimate
-            current_level=self._refinement_level,
-            current_step_mm=self._current_step_mm,
-            current_range_mm=self._current_range_mm
+            progress=progress
         )
     
     def _prepare_refinement(self):
@@ -567,42 +529,22 @@ class Autofocus:
             range_start, range_end = range_end, range_start
         
         # Generate positions
-        self._refinement_positions = list(np.arange(
+        raw_positions = list(np.arange(
             range_start,
             range_end + self._current_step_mm / 2,
             self._current_step_mm
         ))
         
-        # Clamp all positions to valid range [start_mm, end_mm]
-        self._refinement_positions = [
-            max(self.config.start_mm, min(self.config.end_mm, pos))
-            for pos in self._refinement_positions
-        ]
+        # Clamp and deduplicate using helper
+        self._refinement_positions = self._clamp_positions(raw_positions)
         
-        # Remove duplicates that may occur from clamping
-        seen = set()
-        unique_positions = []
-        for pos in self._refinement_positions:
-            if pos not in seen:
-                seen.add(pos)
-                unique_positions.append(pos)
-        self._refinement_positions = unique_positions
-        
-        # Ensure positions are sorted ascending
-        self._refinement_positions.sort()
-        
-        # **FIX: Start one step BEFORE the peak for unidirectional scanning**
-        # Find position of current best in the list
-        # Start scanning from one step before it (approaching from below)
-        best_in_list = min(self._refinement_positions, key=lambda p: abs(p - center))
-        best_idx = self._refinement_positions.index(best_in_list)
-        
-        if best_idx > 0:
-            # Move list so we start one step before the peak
-            # Example: [274.5, 274.6, ..., 276.9, 277.0, 277.1, ...]
-            #          Start at 276.9 (one step before 277.0) instead of 274.5
-            self._refinement_positions = self._refinement_positions[best_idx - 1:]
-        # else: peak is at start of range, just scan from beginning
+        # Start one step BEFORE the peak for unidirectional scanning
+        if self._refinement_positions:
+            best_in_list = min(self._refinement_positions, key=lambda p: abs(p - center))
+            best_idx = self._refinement_positions.index(best_in_list)
+            
+            if best_idx > 0:
+                self._refinement_positions = self._refinement_positions[best_idx - 1:]
         
         self._refinement_level += 1
 
@@ -732,33 +674,28 @@ class GoldenSectionAutofocus(Autofocus):
     def _prepare_refinement(self):
         if not self._best_measurement: return
         
-        # Golden Ratio
-        PHI = (1 + 5**0.5) / 2
-        
         center = self._best_measurement.position_mm
         
         # Initial Refinement: Define Bracket around the peak
-        # We take the neighbor points from the coarse scan as bounds
         if self._refinement_level == 0:
-            # Safer: just take +/- step_size * 2 as initial bracket
+            # Take +/- step_size * 2 as initial bracket
             bracket_width = self.config.step_mm * 2.0
             self.a = max(self.config.start_mm, center - bracket_width)
             self.b = min(self.config.end_mm, center + bracket_width)
             
-            # Two inner probe points
-            self.c = self.b - (self.b - self.a) / PHI
-            self.d = self.a + (self.b - self.a) / PHI
+            # Two inner probe points using Golden Ratio
+            self.c = self.b - (self.b - self.a) / GOLDEN_RATIO
+            self.d = self.a + (self.b - self.a) / GOLDEN_RATIO
             
-            # We need to measure c and d next.
             self._refinement_positions = sorted([self.c, self.d])
             
         else:
-            # Simple contraction for multi-level logic (simulated Golden Section)
-            # Use standard Autofocus shrinkage but adapted for Golden Ratio
-            self._current_range_mm *= 0.618 # Shrink by golden ratio
+            # Shrink by golden ratio complement (≈0.618)
+            self._current_range_mm *= PHI_COMPLEMENT
             
-            p1 = center - self._current_range_mm * 0.382 # 1 - 1/phi
-            p2 = center + self._current_range_mm * 0.382
+            # Probe points at ≈0.382 from center
+            p1 = center - self._current_range_mm * PHI_SMALL
+            p2 = center + self._current_range_mm * PHI_SMALL
             
             self._refinement_positions = sorted([p1, p2])
         
@@ -819,7 +756,7 @@ class IterativeParabolicAutofocus(ParabolicAutofocus):
             progress=0.8 + (0.2 * self.iteration_count/self.max_iterations),
             best_score=self._best_measurement.score,
             best_position_mm=self._best_measurement.position_mm,
-            current_score=score
+            current_score=current_measurement.score
         )
 
 
@@ -912,5 +849,302 @@ class HillClimbingAutofocus(Autofocus):
         )
 
 
-# Alias
+class ExhaustiveAutofocus(Autofocus):
+    """
+    Exhaustive (Brute-Force) Autofocus - Maximum Precision Reference.
+    
+    Scans EVERY position from start to end with minimum step size.
+    No early termination, no shortcuts - guaranteed to find the global maximum.
+    
+    Use this as a ground truth reference for comparing other algorithms.
+    
+    WARNING: This is SLOW! Only use for:
+    - Benchmarking other algorithms
+    - Validating focus positions
+    - Small search ranges
+    
+    Example:
+        For a 10mm range with 0.01mm step: 1000 measurements!
+        At 0.3s per measurement = ~5 minutes
+    """
+    
+    def __init__(self, config: AutofocusConfig):
+        """Initialize exhaustive autofocus with minimum step size."""
+        super().__init__(config)
+        # Override: use min_step_mm for the entire scan
+        self._scan_step = config.min_step_mm
+    
+    def start(self) -> float:
+        """
+        Start exhaustive scan with minimum step size.
+        
+        Returns:
+            Initial position to move to
+        """
+        # Generate ALL positions with minimum step size
+        self._coarse_positions = list(np.arange(
+            self.config.start_mm,
+            self.config.end_mm + self._scan_step / 2,
+            self._scan_step
+        ))
+        
+        # Clamp to valid range
+        self._coarse_positions = [
+            max(self.config.start_mm, min(self.config.end_mm, pos))
+            for pos in self._coarse_positions
+        ]
+        
+        # Remove duplicates
+        seen = set()
+        unique = []
+        for pos in self._coarse_positions:
+            rounded = round(pos, 6)  # Avoid floating point issues
+            if rounded not in seen:
+                seen.add(rounded)
+                unique.append(pos)
+        self._coarse_positions = unique
+        
+        self._coarse_index = 0
+        self._phase = Phase.COARSE_SCAN
+        
+        return self._coarse_positions[0]
+    
+    def _handle_coarse_scan(self) -> AutofocusResult:
+        """
+        Handle exhaustive scan - NO early termination.
+        
+        Simply measure every single position.
+        """
+        self._coarse_index += 1
+        
+        total = len(self._coarse_positions)
+        progress = self._coarse_index / total
+        
+        # Continue scanning?
+        if self._coarse_index < total:
+            return AutofocusResult(
+                finished=False,
+                next_position_mm=self._coarse_positions[self._coarse_index],
+                best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
+                best_score=self._best_measurement.score if self._best_measurement else 0.0,
+                current_score=self._measurements[-1].score,
+                phase=Phase.COARSE_SCAN,
+                progress=progress,
+                current_level=0,
+                current_step_mm=self._scan_step,
+                current_range_mm=(self.config.end_mm - self.config.start_mm) / 2
+            )
+        
+        # Scan complete - return best position directly (no refinement needed)
+        self._phase = Phase.FINISHED
+        return AutofocusResult(
+            finished=True,
+            best_position_mm=self._best_measurement.position_mm if self._best_measurement else None,
+            best_score=self._best_measurement.score if self._best_measurement else 0.0,
+            current_score=self._measurements[-1].score,
+            phase=Phase.FINISHED,
+            progress=1.0,
+            current_level=0,
+            current_step_mm=self._scan_step,
+            current_range_mm=0.0
+        )
+
+
+class FibonacciAutofocus(Autofocus):
+    """
+    Fibonacci Search Autofocus.
+    
+    Similar to Golden Section but uses Fibonacci numbers for interval reduction.
+    Slightly more efficient than Golden Section for discrete search problems.
+    
+    Properties:
+    - O(log(n)) measurements where n = range/min_step
+    - Requires unimodal focus curve (single peak)
+    - Robust against noise
+    
+    Algorithm:
+    1. Coarse scan to find approximate peak region
+    2. Use Fibonacci sequence to determine probe points
+    3. Iteratively shrink interval until min_step reached
+    """
+    
+    def __init__(self, config: AutofocusConfig):
+        """Initialize Fibonacci autofocus."""
+        super().__init__(config)
+        self._fib_cache: list[int] = []
+        self._fib_index = 0
+        self._a = 0.0  # Left bound
+        self._b = 0.0  # Right bound
+        self._c = 0.0  # Inner left probe
+        self._d = 0.0  # Inner right probe
+        self._fc: float | None = None  # Score at c
+        self._fd: float | None = None  # Score at d
+        self._state = "INIT"  # INIT, PROBE_C, PROBE_D, SHRINK
+    
+    def _generate_fibonacci(self, max_val: int) -> list[int]:
+        """Generate Fibonacci sequence up to max_val."""
+        fib = [1, 1]
+        while fib[-1] < max_val:
+            fib.append(fib[-1] + fib[-2])
+        return fib
+    
+    def _prepare_refinement(self):
+        """Prepare Fibonacci search refinement."""
+        if not self._best_measurement:
+            return
+        
+        center = self._best_measurement.position_mm
+        
+        # First refinement: set up initial bracket
+        if self._refinement_level == 0:
+            # Initial bracket: ± 2 * step_mm around peak
+            bracket_half = self.config.step_mm * 2.0
+            self._a = max(self.config.start_mm, center - bracket_half)
+            self._b = min(self.config.end_mm, center + bracket_half)
+            
+            # Calculate how many steps fit
+            n_steps = int((self._b - self._a) / self.config.min_step_mm)
+            n_steps = max(5, n_steps)  # Minimum 5 steps
+            
+            # Generate Fibonacci sequence
+            self._fib_cache = self._generate_fibonacci(n_steps)
+            self._fib_index = len(self._fib_cache) - 1
+            
+            # Initial probe points using Fibonacci ratios
+            self._c = self._a + (self._b - self._a) * self._fib_cache[-3] / self._fib_cache[-1]
+            self._d = self._a + (self._b - self._a) * self._fib_cache[-2] / self._fib_cache[-1]
+            
+            self._fc = None
+            self._fd = None
+            self._state = "PROBE_C"
+            
+            # Start by measuring c
+            self._refinement_positions = [self._c]
+        
+        else:
+            # Continue Fibonacci contraction
+            self._fib_index -= 1
+            
+            if self._fib_index < 2:
+                # Fibonacci exhausted - use simple midpoint
+                mid = (self._a + self._b) / 2
+                self._refinement_positions = [mid]
+            else:
+                ratio = self._fib_cache[self._fib_index - 1] / self._fib_cache[self._fib_index]
+                
+                if self._state == "SHRINK_LEFT":
+                    # Shrink from left (a moves right, c becomes new d)
+                    self._a = self._c
+                    self._fd = self._fc
+                    self._c = self._a + (self._b - self._a) * ratio
+                    self._refinement_positions = [self._c]
+                    self._state = "PROBE_C"
+                else:
+                    # Shrink from right (b moves left, d becomes new c)
+                    self._b = self._d
+                    self._fc = self._fd
+                    self._d = self._a + (self._b - self._a) * (1 - ratio)
+                    self._refinement_positions = [self._d]
+                    self._state = "PROBE_D"
+        
+        # Update step size
+        self._current_step_mm = self._b - self._a
+        self._current_range_mm = (self._b - self._a) / 2
+        
+        self._refinement_index = 0
+        self._refinement_level += 1
+    
+    def _handle_refinement(self) -> AutofocusResult:
+        """Handle Fibonacci refinement phase."""
+        current_score = self._measurements[-1].score
+        current_pos = self._measurements[-1].position_mm
+        
+        # Store score based on which probe we measured
+        if self._state == "PROBE_C":
+            self._fc = current_score
+        elif self._state == "PROBE_D":
+            self._fd = current_score
+        
+        # Need to measure the other probe point?
+        if self._fc is None:
+            self._refinement_positions = [self._c]
+            self._refinement_index = 0
+            self._state = "PROBE_C"
+            return AutofocusResult(
+                finished=False,
+                next_position_mm=self._c,
+                best_position_mm=self._best_measurement.position_mm,
+                best_score=self._best_measurement.score,
+                current_score=current_score,
+                phase=Phase.REFINEMENT,
+                progress=0.5 + 0.1 * self._refinement_level,
+                current_level=self._refinement_level,
+                current_step_mm=self._current_step_mm,
+                current_range_mm=self._current_range_mm
+            )
+        
+        if self._fd is None:
+            self._refinement_positions = [self._d]
+            self._refinement_index = 0
+            self._state = "PROBE_D"
+            return AutofocusResult(
+                finished=False,
+                next_position_mm=self._d,
+                best_position_mm=self._best_measurement.position_mm,
+                best_score=self._best_measurement.score,
+                current_score=current_score,
+                phase=Phase.REFINEMENT,
+                progress=0.5 + 0.1 * self._refinement_level,
+                current_level=self._refinement_level,
+                current_step_mm=self._current_step_mm,
+                current_range_mm=self._current_range_mm
+            )
+        
+        # Both probes measured - decide which side to keep
+        if self._fc > self._fd:
+            # Peak is in [a, d], shrink from right
+            self._state = "SHRINK_RIGHT"
+        else:
+            # Peak is in [c, b], shrink from left
+            self._state = "SHRINK_LEFT"
+        
+        # Check termination
+        interval_size = self._b - self._a
+        if interval_size <= self.config.min_step_mm * 2:
+            # Converged - return best position
+            best_pos = self._c if self._fc > self._fd else self._d
+            best_score = max(self._fc, self._fd)
+            
+            self._phase = Phase.FINISHED
+            return AutofocusResult(
+                finished=True,
+                best_position_mm=best_pos,
+                best_score=best_score,
+                current_score=current_score,
+                phase=Phase.FINISHED,
+                progress=1.0,
+                current_level=self._refinement_level,
+                current_step_mm=interval_size,
+                current_range_mm=interval_size / 2
+            )
+        
+        # Continue to next refinement level
+        self._prepare_refinement()
+        
+        return AutofocusResult(
+            finished=False,
+            next_position_mm=self._refinement_positions[0],
+            best_position_mm=self._best_measurement.position_mm,
+            best_score=self._best_measurement.score,
+            current_score=current_score,
+            phase=Phase.REFINEMENT,
+            progress=0.5 + 0.1 * self._refinement_level,
+            current_level=self._refinement_level,
+            current_step_mm=self._current_step_mm,
+            current_range_mm=self._current_range_mm
+        )
+
+
+# Aliases for convenience
 AdaptiveHillClimbingAutofocus = HillClimbingAutofocus
+BruteForceAutofocus = ExhaustiveAutofocus  # Alternative name

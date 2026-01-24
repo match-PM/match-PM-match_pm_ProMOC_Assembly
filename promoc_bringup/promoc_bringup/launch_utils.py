@@ -125,3 +125,96 @@ def get_launch_path(package_share_dir: str, launch_name: str) -> str:
         Full path to launch file
     """
     return os.path.join(package_share_dir, 'launch', launch_name)
+
+
+# =============================================================================
+# Optical Measurement System Helpers
+# =============================================================================
+
+def load_user_config(bringup_share_dir: str) -> dict:
+    """
+    Load user configuration with fallback to defaults.
+
+    Args:
+        bringup_share_dir: Path to promoc_bringup share directory
+
+    Returns:
+        Merged configuration dictionary
+    """
+    user_config_path = get_config_path(bringup_share_dir, 'user_config.yaml')
+
+    defaults = {
+        'user': {'name': 'default_user'},
+        'autofocus': {
+            'refinement_samples': 51,
+            'min_step_mm': 0.010,
+            'refinement_shrink_factor': 0.25,
+        },
+        'fly_over': {
+            'refinement_mode': 0,
+            'refinement_strategy': 'linear',
+        },
+        'camera': {
+            'pixel_size_um': 2.40,
+            'mtf_csv_path': '/tmp/mtf_results.csv',
+        },
+        'measurement_conditions': {
+            'coaxial_light_voltage': 0.0,
+            'coaxial_light_current': 0.0,
+            'camera_objective': 'unknown',
+            'notes': '',
+        }
+    }
+
+    if os.path.exists(user_config_path):
+        try:
+            config, error = load_yaml_config(user_config_path)
+            if not error:
+                for section in defaults:
+                    if section in config:
+                        defaults[section].update(config[section])
+                print(f"✓ Loaded user config: {user_config_path}")
+        except Exception as e:
+            print(f"⚠ Failed to load user config: {e}")
+    else:
+        print(f"ℹ No user config at {user_config_path}, using defaults")
+
+    return defaults
+
+
+def load_camera_config(bringup_share_dir: str) -> dict:
+    """
+    Load camera configuration from ids_camera_params.yaml.
+
+    Args:
+        bringup_share_dir: Path to promoc_bringup share directory
+
+    Returns:
+        Camera parameters dictionary
+    """
+    config_path = get_config_path(bringup_share_dir, 'ids_camera_params.yaml')
+    config, error = load_yaml_config(config_path)
+    if error:
+        print(f"⚠ Camera config error: {error}")
+        return {}
+    return config.get('camera_params', {})
+
+
+def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
+    """
+    Load linear axis configuration for a specific axis.
+
+    Args:
+        bringup_share_dir: Path to promoc_bringup share directory
+        axis_name: Axis name (e.g., 'lts300_x_axis')
+
+    Returns:
+        Axis parameters dictionary
+    """
+    config_path = get_config_path(bringup_share_dir, 'linear_axes_params.yaml')
+    config, error = load_yaml_config(config_path)
+    if error:
+        print(f"⚠ Linear axis config error: {error}")
+        return {}
+    axis_config = config.get(axis_name, {})
+    return axis_config.get('ros__parameters', {})
