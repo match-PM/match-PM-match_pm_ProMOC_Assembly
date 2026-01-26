@@ -434,6 +434,12 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            # Auto-detect logger from self (args[0]) if not provided
+            nonlocal logger
+            current_logger = logger
+            if current_logger is None and args and hasattr(args[0], 'logger'):
+                current_logger = args[0].logger
+
             start_time = time.time()
 
             try:
@@ -449,22 +455,22 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
             except ProMocError as e:
                 execution_time = time.time() - start_time
 
-                if logger:
-                    logger.error(f"Service error: {e}", exc_info=True)
+                if current_logger:
+                    current_logger.error(f"Service error: {e}", exc_info=True)
 
                 # Attempt recovery if a manager is available
                 if recovery_manager:
                     context = {'args': args, 'kwargs': kwargs}
                     if recovery_manager.attempt_recovery(e, context):
-                        if logger:
-                            logger.info(
+                        if current_logger:
+                            current_logger.info(
                                 "Recovery succeeded, retrying operation")
                         # Retry the operation after successful recovery
                         try:
                             return func(*args, **kwargs)
                         except Exception as retry_error:
-                            if logger:
-                                logger.error(
+                            if current_logger:
+                                current_logger.error(
                                     f"Retry after recovery failed: {retry_error}")
 
                 # Create an error response
@@ -481,8 +487,8 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
             except Exception as e:
                 execution_time = time.time() - start_time
 
-                if logger:
-                    logger.error(
+                if current_logger:
+                    current_logger.error(
                         f"Unexpected error in service: {type(e).__name__}: {e}",
                         exc_info=True
                     )

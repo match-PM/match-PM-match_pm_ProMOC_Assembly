@@ -53,11 +53,13 @@ _ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
 COARSE_STEP_MM = 0.5  # Fixed coarse step size
 PEAK_WINDOW_RATIO = 0.85  # 85% of max stddev as threshold for peak window
 FLY_OVER_SPEED = 10.0  # mm/s for fast fly-over scan
+from promoc_core.error_handling import handle_service_errors
 
 
 class AutofocusCallbacks(CallbackBase):
     """Callbacks for autofocus with fly-over detection."""
 
+    @handle_service_errors()
     def autofocus_callback(self, request, response):
         """Autofocus with fly-over detection and refinement.
         
@@ -82,60 +84,37 @@ class AutofocusCallbacks(CallbackBase):
             f'Autofocus: range {request.start_position}-{request.end_position}mm, mode={mode}'
         )
 
-        try:
-            # Validierung
-            if request.start_position >= request.end_position:
-                raise ConfigurationError('start_position must be < end_position')
+        # Validierung
+        if request.start_position >= request.end_position:
+            raise ConfigurationError('start_position must be < end_position')
 
-            # Service Clients erstellen
-            clients = self._get_all_axis_clients()
-            
-            # ══════════════════════════════════════════════════════════════
-            # PHASE 1: Fly-Over Detection
-            # ══════════════════════════════════════════════════════════════
-            self._node.get_logger().info('Phase 1: Fly-Over Detection...')
-            
-            peak_start, peak_end, max_stddev = self._fly_over_detection(
-                request.start_position, 
-                request.end_position,
-                clients
-            )
-            
-            if peak_start is None or peak_end is None:
-                raise ImageProcessingError('No target detected during fly-over')
-            
-            self._node.get_logger().info(
-                f'Peak detected: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
-            )
-            
-            # ══════════════════════════════════════════════════════════════
-            # PHASE 2-4: Refinement nach Modus
-            # ══════════════════════════════════════════════════════════════
-            return self._run_single_mode(
-                mode, peak_start, peak_end, request, response, clients, start_time
-            )
-
-        except ConfigurationError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except ServiceError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.status_message)
-
-        except ImageProcessingError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f'ERROR: Autofocus failed: {str(e)}'
-            self._node.get_logger().error(response.status_message)
-
-        return response
+        # Service Clients erstellen
+        clients = self._get_all_axis_clients()
+        
+        # ══════════════════════════════════════════════════════════════
+        # PHASE 1: Fly-Over Detection
+        # ══════════════════════════════════════════════════════════════
+        self._node.get_logger().info('Phase 1: Fly-Over Detection...')
+        
+        peak_start, peak_end, max_stddev = self._fly_over_detection(
+            request.start_position, 
+            request.end_position,
+            clients
+        )
+        
+        if peak_start is None or peak_end is None:
+            raise ImageProcessingError('No target detected during fly-over')
+        
+        self._node.get_logger().info(
+            f'Peak detected: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
+        )
+        
+        # ══════════════════════════════════════════════════════════════
+        # PHASE 2-4: Refinement nach Modus
+        # ══════════════════════════════════════════════════════════════
+        return self._run_single_mode(
+            mode, peak_start, peak_end, request, response, clients, start_time
+        )
 
     # ==========================================================================
     # AXIS CLIENT MANAGEMENT
@@ -518,6 +497,7 @@ class AutofocusCallbacks(CallbackBase):
         
         return response
 
+    @handle_service_errors()
     def autofocus_comparison_callback(self, request, response):
         """Separate service: Runs all 3 autofocus modes sequentially.
         
@@ -534,53 +514,30 @@ class AutofocusCallbacks(CallbackBase):
             f'Comparison Test: range {request.start_position}-{request.end_position}mm'
         )
 
-        try:
-            # Validierung
-            if request.start_position >= request.end_position:
-                raise ConfigurationError('start_position must be < end_position')
+        # Validierung
+        if request.start_position >= request.end_position:
+            raise ConfigurationError('start_position must be < end_position')
 
-            # Service Clients
-            clients = self._get_all_axis_clients()
-            
-            # Fly-Over Detection
-            self._node.get_logger().info('Phase 1: Fly-Over Detection...')
-            peak_start, peak_end, max_stddev = self._fly_over_detection(
-                request.start_position, 
-                request.end_position,
-                clients
-            )
-            
-            if peak_start is None or peak_end is None:
-                raise ImageProcessingError('No target detected during fly-over')
-            
-            self._node.get_logger().info(
-                f'Peak: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
-            )
-            
-            # Run comparison
-            return self._run_comparison(
-                peak_start, peak_end, request, response, clients, start_time
-            )
-
-        except ConfigurationError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except ServiceError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.status_message)
-
-        except ImageProcessingError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f'ERROR: Comparison failed: {str(e)}'
-            self._node.get_logger().error(response.status_message)
-
-        return response
+        # Service Clients
+        clients = self._get_all_axis_clients()
+        
+        # Fly-Over Detection
+        self._node.get_logger().info('Phase 1: Fly-Over Detection...')
+        peak_start, peak_end, max_stddev = self._fly_over_detection(
+            request.start_position, 
+            request.end_position,
+            clients
+        )
+        
+        if peak_start is None or peak_end is None:
+            raise ImageProcessingError('No target detected during fly-over')
+        
+        self._node.get_logger().info(
+            f'Peak: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
+        )
+        
+        # Run comparison
+        return self._run_comparison(
+            peak_start, peak_end, request, response, clients, start_time
+        )
 

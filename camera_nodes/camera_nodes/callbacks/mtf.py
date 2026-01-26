@@ -12,6 +12,7 @@ from promoc_core.promoc_exceptions import (
 from .base import CallbackBase
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector
+from promoc_core.error_handling import handle_service_errors
 
 
 class MTFCallbacks(CallbackBase):
@@ -58,170 +59,150 @@ class MTFCallbacks(CallbackBase):
         roi_image = cv_image[y:y+h, x:x+w]
         return roi, roi_image
 
+    @handle_service_errors()
     def select_roi_callback(self, request, response):
         """Interactive ROI selection with MTF calculation."""
         self._node.get_logger().info('ROI selection service called.')
 
-        try:
-            if self._node.latest_image_msg is None:
-                raise ImageProcessingError('No image received yet')
+        if self._node.latest_image_msg is None:
+            raise ImageProcessingError('No image received yet')
 
-            cv_image = self._node.bridge.imgmsg_to_cv2(
-                self._node.latest_image_msg, 'bgr8')
+        cv_image = self._node.bridge.imgmsg_to_cv2(
+            self._node.latest_image_msg, 'bgr8')
 
-            roi, roi_image = self._select_roi_interactive(cv_image)
-            if roi is None:
-                response.success = False
-                response.status_message = 'ROI selection cancelled.'
-                return response
-
-            x, y, w, h = roi
-            if w <= 0 or h <= 0:
-                raise ConfigurationError('Invalid ROI dimensions')
-
-            mtf_results = self._node.image_processor.calculate_mtf_from_roi(roi_image)
-            if not mtf_results:
-                raise ImageProcessingError('MTF calculation failed')
-
-            output_dir = self._get_output_dir('mtf_messungen')
-            output_filename = str(output_dir / f'mtf_{self._get_timestamp()}.csv')
-            self._node.image_processor.export_to_csv(mtf_results, output_filename)
-
-            response.success = True
-            response.status_message = f'MTF saved to {output_filename}'
-
-        except (ImageProcessingError, ConfigurationError) as e:
+        roi, roi_image = self._select_roi_interactive(cv_image)
+        if roi is None:
             response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
+            response.status_message = 'ROI selection cancelled.'
+            return response
 
-        except Exception as e:
-            response.success = False
-            response.status_message = f'ERROR: ROI selection failed: {str(e)}'
-            self._node.get_logger().error(response.status_message)
+        x, y, w, h = roi
+        if w <= 0 or h <= 0:
+            raise ConfigurationError('Invalid ROI dimensions')
+
+        mtf_results = self._node.image_processor.calculate_mtf_from_roi(roi_image)
+        if not mtf_results:
+            raise ImageProcessingError('MTF calculation failed')
+
+        output_dir = self._get_output_dir('mtf_messungen')
+        output_filename = str(output_dir / f'mtf_{self._get_timestamp()}.csv')
+        self._node.image_processor.export_to_csv(mtf_results, output_filename)
+
+        response.success = True
+        response.status_message = f'MTF saved to {output_filename}'
 
         return response
 
+    @handle_service_errors()
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
         self._node.get_logger().info('MTF measurement service called.')
 
-        try:
-            cv_image = self._get_latest_cv_image()
-            if cv_image is None:
-                raise ImageProcessingError('No image available')
+        cv_image = self._get_latest_cv_image()
+        if cv_image is None:
+            raise ImageProcessingError('No image available')
 
-            pixel_size_um = self._node.get_parameter('pixel_size_um').value
-            if not pixel_size_um or pixel_size_um <= 0:
-                pixel_size_um = 2.40  # IDS U3-3800CP (Sony IMX183)
+        pixel_size_um = self._node.get_parameter('pixel_size_um').value
+        if not pixel_size_um or pixel_size_um <= 0:
+            pixel_size_um = 2.40  # IDS U3-3800CP (Sony IMX183)
 
-            # Auto ROI Detection
-            roi_list = []
-            if getattr(request, 'auto_roi', False):
-                self._node.get_logger().info('Auto-ROI enabled: Detecting targets...')
-                _, bars, squares = RoiDetector.detect_targets(cv_image)
-                
-                # Priority 1: Squares (split into 4 edges)
-                if squares:
-                    # Take largest square
-                    largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-                    edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
-                    
-                    # Try all 4 edges (Top, Right, Bottom, Left)
-                    edge_names = ['Top', 'Right', 'Bottom', 'Left']
-                    for i, edge_img in enumerate(edges):
-                        roi_list.append({'image': edge_img, 'name': f'Square {edge_names[i]} Edge'})
-                    
-                # Priority 2: Bars
-                elif bars:
-                    # Take largest bar
-                    largest_bar = max(bars, key=lambda r: r[1][0] * r[1][1])
-                    # Simple fallback: Use the bounding box of the rotated rect.
-                    box = cv2.boxPoints(largest_bar)
-                    x, y, w, h = cv2.boundingRect(box)
-                    # Clamp to image bounds
-                    h_img, w_img = cv_image.shape[:2]
-                    x = max(0, x); y = max(0, y)
-                    w = min(w, w_img - x); h = min(h, h_img - y)
-                    
-                    roi_list.append({'roi': (x, y, w, h), 'name': 'Slanted Bar'})
-
-                if not roi_list:
-                    raise ImageProcessingError('Auto-ROI: No targets detected')
+        # Auto ROI Detection
+        roi_list = []
+        if getattr(request, 'auto_roi', False):
+            self._node.get_logger().info('Auto-ROI enabled: Detecting targets...')
+            _, bars, squares = RoiDetector.detect_targets(cv_image)
             
-            else:
-                # Manual mode: Interactive selection
-                # Note: This requires a GUI environment on the host
-                roi, roi_img = self._select_roi_interactive(cv_image)
-                if roi is None:
-                    raise ImageProcessingError("ROI selection cancelled")
-                roi_list = [{'image': roi_img, 'name': 'Manual ROI'}]
+            # Priority 1: Squares (split into 4 edges)
+            if squares:
+                # Take largest square
+                largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
+                edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
+                
+                # Try all 4 edges (Top, Right, Bottom, Left)
+                edge_names = ['Top', 'Right', 'Bottom', 'Left']
+                for i, edge_img in enumerate(edges):
+                    roi_list.append({'image': edge_img, 'name': f'Square {edge_names[i]} Edge'})
+                
+            # Priority 2: Bars
+            elif bars:
+                # Take largest bar
+                largest_bar = max(bars, key=lambda r: r[1][0] * r[1][1])
+                # Simple fallback: Use the bounding box of the rotated rect.
+                box = cv2.boxPoints(largest_bar)
+                x, y, w, h = cv2.boundingRect(box)
+                # Clamp to image bounds
+                h_img, w_img = cv_image.shape[:2]
+                x = max(0, x); y = max(0, y)
+                w = min(w, w_img - x); h = min(h, h_img - y)
+                
+                roi_list.append({'roi': (x, y, w, h), 'name': 'Slanted Bar'})
 
-            # Filter by requested edge (if specified)
-            if hasattr(request, 'target_edge') and request.target_edge:
-                requested = request.target_edge.lower().strip()
-                if requested == "select" or requested == "interactive":
-                     # Interactive Candidate Selection
-                     selected = self._select_candidate_interactive(roi_list)
-                     if selected:
-                         roi_list = [selected]
-                         self._node.get_logger().info(f"User selected target: {selected['name']}")
-                     else:
-                         raise ImageProcessingError("Interactive selection cancelled")
-                elif requested not in ["", "any"]:
-                    filtered = [t for t in roi_list if requested in t['name'].lower()]
-                    if filtered:
-                        roi_list = filtered
-                        self._node.get_logger().info(f"Filtered targets by edge '{requested}': {len(roi_list)} candidates")
+            if not roi_list:
+                raise ImageProcessingError('Auto-ROI: No targets detected')
+        
+        else:
+            # Manual mode: Interactive selection
+            # Note: This requires a GUI environment on the host
+            roi, roi_img = self._select_roi_interactive(cv_image)
+            if roi is None:
+                raise ImageProcessingError("ROI selection cancelled")
+            roi_list = [{'image': roi_img, 'name': 'Manual ROI'}]
+
+        # Filter by requested edge (if specified)
+        if hasattr(request, 'target_edge') and request.target_edge:
+            requested = request.target_edge.lower().strip()
+            if requested == "select" or requested == "interactive":
+                    # Interactive Candidate Selection
+                    selected = self._select_candidate_interactive(roi_list)
+                    if selected:
+                        roi_list = [selected]
+                        self._node.get_logger().info(f"User selected target: {selected['name']}")
                     else:
-                        raise ImageProcessingError(f"Requested edge '{requested}' not found in detected targets")
-
-            # Perform Measurement (Try all candidates)
-            last_error = "Unknown error"
-            
-            for target in roi_list:
-                # Check contrast if image available
-                contrast = 0.0
-                if 'image' in target:
-                    contrast = RoiDetector.calculate_michelson_contrast(target['image'])
-                    if contrast < 0.2:
-                        self._node.get_logger().warn(f"Low contrast ({contrast:.2f}) for {target['name']}")
-                
-                config = MTFConfig(pixel_size_um=pixel_size_um)
-                analyzer = MTFAnalyzer(config)
-                
-                if 'image' in target:
-                    result = analyzer.compute_mtf(target['image'])
+                        raise ImageProcessingError("Interactive selection cancelled")
+            elif requested not in ["", "any"]:
+                filtered = [t for t in roi_list if requested in t['name'].lower()]
+                if filtered:
+                    roi_list = filtered
+                    self._node.get_logger().info(f"Filtered targets by edge '{requested}': {len(roi_list)} candidates")
                 else:
-                    result = analyzer.compute_mtf(cv_image, roi=target['roi'])
+                    raise ImageProcessingError(f"Requested edge '{requested}' not found in detected targets")
 
-                if result.valid:
-                    # Success! Return this result
-                    response.success = True
-                    response.mtf50 = float(result.mtf50)
-                    response.mtf20 = float(result.mtf20)
-                    response.mtf10 = float(result.mtf10)
-                    response.edge_angle = float(result.edge_angle)
-                    response.nyquist_frequency = float(result.nyquist_frequency)
-                    response.status_message = (
-                        f"MTF50={response.mtf50:.2f} lp/mm ({target['name']}, {result.edge_angle:.1f}°, C:{contrast:.2f})"
-                    )
-                    return response
-                
-                last_error = result.error_msg
+        # Perform Measurement (Try all candidates)
+        last_error = "Unknown error"
+        
+        for target in roi_list:
+            # Check contrast if image available
+            contrast = 0.0
+            if 'image' in target:
+                contrast = RoiDetector.calculate_michelson_contrast(target['image'])
+                if contrast < 0.2:
+                    self._node.get_logger().warn(f"Low contrast ({contrast:.2f}) for {target['name']}")
             
-            # If we get here, no candidate worked
-            raise ImageProcessingError(f"MTF failed on all candidates. Last error: {last_error}")
+            config = MTFConfig(pixel_size_um=pixel_size_um)
+            analyzer = MTFAnalyzer(config)
+            
+            if 'image' in target:
+                result = analyzer.compute_mtf(target['image'])
+            else:
+                result = analyzer.compute_mtf(cv_image, roi=target['roi'])
 
-        except ImageProcessingError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f'ERROR: MTF measurement failed: {str(e)}'
-            self._node.get_logger().error(response.status_message)
+            if result.valid:
+                # Success! Return this result
+                response.success = True
+                response.mtf50 = float(result.mtf50)
+                response.mtf20 = float(result.mtf20)
+                response.mtf10 = float(result.mtf10)
+                response.edge_angle = float(result.edge_angle)
+                response.nyquist_frequency = float(result.nyquist_frequency)
+                response.status_message = (
+                    f"MTF50={response.mtf50:.2f} lp/mm ({target['name']}, {result.edge_angle:.1f}°, C:{contrast:.2f})"
+                )
+                return response
+            
+            last_error = result.error_msg
+        
+        # If we get here, no candidate worked
+        raise ImageProcessingError(f"MTF failed on all candidates. Last error: {last_error}")
 
         return response
 
@@ -275,45 +256,40 @@ class MTFCallbacks(CallbackBase):
             return candidates[selected_idx[0]]
         return None
 
+    @handle_service_errors()
     def detect_rois_callback(self, request, response):
         """Debug callback to visualize detected ROIs."""
         self._node.get_logger().info('Debugging ROI detection...')
         
-        try:
-            cv_image = self._get_latest_cv_image()
-            if cv_image is None:
-                raise ImageProcessingError('No image available')
-                
-            vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
+        cv_image = self._get_latest_cv_image()
+        if cv_image is None:
+            raise ImageProcessingError('No image available')
             
-            output_dir = self._get_output_dir('debug_rois')
-            timestamp = self._get_timestamp()
+        vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
+        
+        output_dir = self._get_output_dir('debug_rois')
+        timestamp = self._get_timestamp()
+        
+        # 1. Main visualization (Full Image)
+        filename_main = str(output_dir / f'rois_full_{timestamp}.jpg')
+        cv2.imwrite(filename_main, vis_img)
+        
+        # 2. Detailed Edge Visualization (if squares found)
+        filename_edges = ""
+        if squares:
+            largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
+            edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
             
-            # 1. Main visualization (Full Image)
-            filename_main = str(output_dir / f'rois_full_{timestamp}.jpg')
-            cv2.imwrite(filename_main, vis_img)
+            # Unpack tuple (canvas, tile_w)
+            vis_edges, _ = RoiDetector.create_debug_visualization(edges)
             
-            # 2. Detailed Edge Visualization (if squares found)
-            filename_edges = ""
-            if squares:
-                largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-                edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
-                
-                # Unpack tuple (canvas, tile_w)
-                vis_edges, _ = RoiDetector.create_debug_visualization(edges)
-                
-                filename_edges = str(output_dir / f'rois_edges_{timestamp}.jpg')
-                cv2.imwrite(filename_edges, vis_edges)
-            
-            response.success = True
-            response.status_message = f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
-            response.debug_image_path = filename_edges if filename_edges else filename_main
-            response.bars_detected = len(bars)
-            response.squares_detected = len(squares)
-            
-        except Exception as e:
-            response.success = False
-            response.status_message = f"ERROR: ROI detection failed: {str(e)}"
-            self._node.get_logger().error(response.status_message)
+            filename_edges = str(output_dir / f'rois_edges_{timestamp}.jpg')
+            cv2.imwrite(filename_edges, vis_edges)
+        
+        response.success = True
+        response.status_message = f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
+        response.debug_image_path = filename_edges if filename_edges else filename_main
+        response.bars_detected = len(bars)
+        response.squares_detected = len(squares)
             
         return response

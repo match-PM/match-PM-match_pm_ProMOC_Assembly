@@ -1,12 +1,14 @@
 """Exposure callbacks for camera control."""
 
 from promoc_core.promoc_exceptions import HardwareError, ConfigurationError
+from promoc_core.error_handling import handle_service_errors
 from .base import CallbackBase
 
 
 class ExposureCallbacks(CallbackBase):
     """Callbacks for exposure control."""
 
+    @handle_service_errors()
     def manual_set_exposure_callback(self, request, response):
         """Sets the manual exposure time.
         
@@ -16,30 +18,14 @@ class ExposureCallbacks(CallbackBase):
         self._node.get_logger().info(
             f'Setting exposure time to {request.exposure_time} µs')
 
-        try:
-            if request.exposure_time <= 0:
-                raise ConfigurationError(
-                    'Exposure time must be positive',
-                    details={'value': request.exposure_time})
+        if request.exposure_time <= 0:
+            raise ConfigurationError(
+                'Exposure time must be positive',
+                details={'value': request.exposure_time})
 
-            self._driver.set_exposure(request.exposure_time)
-            
-            response.success = True
-            response.status_message = f'Exposure set to {request.exposure_time} µs'
-
-        except ConfigurationError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().warn(response.status_message)
-
-        except HardwareError as e:
-            response.success = False
-            response.status_message = f'WARNING: {str(e)}'
-            self._node.get_logger().error(response.status_message)
-
-        except Exception as e:
-            response.success = False
-            response.status_message = f'ERROR: Failed to set exposure: {str(e)}'
-            self._node.get_logger().error(response.status_message)
+        self._driver.set_exposure(request.exposure_time)
+        
+        response.success = True
+        response.status_message = f'Exposure set to {request.exposure_time} µs'
 
         return response
