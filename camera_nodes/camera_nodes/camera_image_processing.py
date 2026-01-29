@@ -98,3 +98,81 @@ class CameraImageProcessing:
                 writer.writerows(rows)
 
         self.logger.info(f'Data successfully exported to {filename}')
+
+    def draw_crosshair(
+        self,
+        image: np.ndarray,
+        color: tuple = (0, 0, 255),
+        line_length: Optional[int] = None,
+        thickness: int = 2,
+        gap: int = 10
+    ) -> np.ndarray:
+        """
+        Draw a crosshair in the center of the image for alignment purposes.
+
+        Args:
+            image: Input image (will be copied, not modified)
+            color: BGR color tuple (default: red = (0, 0, 255))
+            line_length: Length of each crosshair arm in pixels.
+                        If None, defaults to 5% of the smaller image dimension.
+            thickness: Line thickness in pixels (default: 2)
+            gap: Small gap in the center in pixels (default: 10)
+
+        Returns:
+            Image with crosshair overlay (copy of input)
+        """
+        import cv2
+        
+        if image is None or image.size == 0:
+            self.logger.warning('Empty image provided to draw_crosshair')
+            return image
+
+        # Work on a copy to preserve the original
+        img_with_overlay = image.copy()
+        h, w = img_with_overlay.shape[:2]
+        center_x, center_y = w // 2, h // 2
+
+        # Auto-calculate line length if not provided (5% of image size)
+        if line_length is None:
+            line_length = min(w, h) // 20
+
+        # Draw horizontal line (left and right from center with gap)
+        cv2.line(
+            img_with_overlay,
+            (center_x - line_length, center_y),
+            (center_x - gap, center_y),
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+        cv2.line(
+            img_with_overlay,
+            (center_x + gap, center_y),
+            (center_x + line_length, center_y),
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
+        # Draw vertical line (top and bottom from center with gap)
+        cv2.line(
+            img_with_overlay,
+            (center_x, center_y - line_length),
+            (center_x, center_y - gap),
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+        cv2.line(
+            img_with_overlay,
+            (center_x, center_y + gap),
+            (center_x, center_y + line_length),
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
+        # Draw center circle for precise center marking
+        cv2.circle(img_with_overlay, (center_x, center_y), 3, color, -1, cv2.LINE_AA)
+
+        return img_with_overlay

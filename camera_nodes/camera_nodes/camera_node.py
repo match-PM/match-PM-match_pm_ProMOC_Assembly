@@ -142,6 +142,9 @@ class CameraNode(Node):
         
         # Measurement parameters
         self.declare_parameter('measurement.username', '')
+        
+        # Debug overlay parameter
+        self.declare_parameter('enable_debug_overlay', False)
 
         # Autofocus refinement parameters
         self.declare_parameter('autofocus.refinement_samples', 51)
@@ -220,6 +223,10 @@ class CameraNode(Node):
 
         self.processed_assembly_pub = self.create_publisher(
             Image, '/camera/assembly/processed', 10)
+        
+        # Debug image publisher with crosshair overlay
+        self.debug_image_pub = self.create_publisher(
+            Image, '/camera/image_debug', 10)
 
 
         # Phase 5: Register services
@@ -341,6 +348,17 @@ class CameraNode(Node):
                 self.camera_driver.set_latest_image(cv_image)
             except Exception as e:
                 self.get_logger().warning(f'Image conversion failed: {e}')
+        
+        # Publish debug image with crosshair overlay if enabled
+        if self.get_parameter('enable_debug_overlay').get_parameter_value().bool_value:
+            try:
+                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                cv_image_with_crosshair = self.image_processor.draw_crosshair(cv_image)
+                debug_msg = self.bridge.cv2_to_imgmsg(cv_image_with_crosshair, encoding='bgr8')
+                debug_msg.header = msg.header  # Preserve timestamp and frame_id
+                self.debug_image_pub.publish(debug_msg)
+            except Exception as e:
+                self.log.warning(f'Failed to publish debug image: {e}')
 
     def axis_position_callback(self, msg: Float64):
         """Receive and cache axis position."""

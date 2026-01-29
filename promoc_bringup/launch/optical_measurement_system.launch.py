@@ -135,6 +135,8 @@ def _create_camera_node(config: dict):
             'x_axis_node_name': LaunchConfiguration('x_axis_name'),
             'pixel_size_um': config['camera']['pixel_size_um'],
             'mtf_csv_path': '',
+            # Debug overlay for alignment
+            'enable_debug_overlay': False,
             # Autofocus parameters
             'autofocus.refinement_samples': config['autofocus']['refinement_samples'],
             'autofocus.min_step_mm': config['autofocus']['min_step_mm'],
