@@ -27,11 +27,13 @@ class ProMocError(Exception):
     def __init__(
         self,
         message: str,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        error_code: int = 1
     ):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+        self.error_code = error_code
 
     def __str__(self) -> str:
         if self.details:
@@ -52,6 +54,27 @@ class ConnectionError(ProMocError):
     pass
 
 
+class CommunicationError(ConnectionError):
+    """Low-level communication errors.
+
+    Use for: device not connected, transport failure, protocol errors.
+    """
+    pass
+
+
+class DeviceNotFoundError(ConnectionError):
+    """Device discovery errors.
+
+    Use for: missing device, invalid port, device not enumerated.
+    """
+    pass
+
+
+class CommunicationTimeoutError(ConnectionError):
+    """Communication timeout errors."""
+    pass
+
+
 # =============================================================================
 # Motion Errors
 # =============================================================================
@@ -61,6 +84,16 @@ class MotionError(ProMocError):
     
     Use for: movement timeout, position out of bounds, collision, homing failure.
     """
+    pass
+
+
+class MovementTimeoutError(MotionError):
+    """Movement timeout errors."""
+    pass
+
+
+class HomingRequiredError(MotionError):
+    """Raised when homing is required before a motion."""
     pass
 
 
@@ -76,6 +109,16 @@ class SafetyError(ProMocError):
     pass
 
 
+class PositionOutOfBoundsError(SafetyError):
+    """Position is outside allowed bounds."""
+    pass
+
+
+class CollisionDetectedError(SafetyError):
+    """Collision risk detected."""
+    pass
+
+
 # =============================================================================
 # Hardware Errors
 # =============================================================================
@@ -85,6 +128,11 @@ class HardwareError(ProMocError):
     
     Use for: driver unavailable, initialization failure, sensor read error.
     """
+    pass
+
+
+class DriverNotAvailableError(HardwareError):
+    """Required driver library or interface not available."""
     pass
 
 
@@ -112,6 +160,11 @@ class ServiceError(ProMocError):
     pass
 
 
+class ServiceCallFailedError(ServiceError):
+    """Service call failed or returned an error."""
+    pass
+
+
 # =============================================================================
 # Image Processing Errors (Camera-specific)
 # =============================================================================
@@ -124,3 +177,4 @@ class ImageProcessingError(ProMocError):
 # Convenience aliases for common specific errors
 HomingFailedError = MotionError
 SoftLimitViolationError = SafetyError
+PositionError = MotionError

@@ -73,29 +73,29 @@ class TaggedLogger:
         """Format message with tag prefix."""
         return f"{self._tag} {msg}"
     
-    def debug(self, msg: str) -> None:
+    def debug(self, msg: str, *args, **kwargs) -> None:
         """Log a debug message."""
-        self._logger.debug(self._format(msg))
+        self._logger.debug(self._format(msg), *args, **kwargs)
     
-    def info(self, msg: str) -> None:
+    def info(self, msg: str, *args, **kwargs) -> None:
         """Log an info message."""
-        self._logger.info(self._format(msg))
+        self._logger.info(self._format(msg), *args, **kwargs)
     
-    def warning(self, msg: str) -> None:
+    def warning(self, msg: str, *args, **kwargs) -> None:
         """Log a warning message."""
-        self._logger.warning(self._format(msg))
+        self._logger.warning(self._format(msg), *args, **kwargs)
     
-    def warn(self, msg: str) -> None:
+    def warn(self, msg: str, *args, **kwargs) -> None:
         """Log a warning message (alias for warning)."""
-        self.warning(msg)
+        self.warning(msg, *args, **kwargs)
     
-    def error(self, msg: str) -> None:
+    def error(self, msg: str, *args, **kwargs) -> None:
         """Log an error message."""
-        self._logger.error(self._format(msg))
+        self._logger.error(self._format(msg), *args, **kwargs)
     
-    def fatal(self, msg: str) -> None:
+    def fatal(self, msg: str, *args, **kwargs) -> None:
         """Log a fatal message."""
-        self._logger.fatal(self._format(msg))
+        self._logger.fatal(self._format(msg), *args, **kwargs)
 
 
 def get_tagged_logger(node, tag: str) -> TaggedLogger:

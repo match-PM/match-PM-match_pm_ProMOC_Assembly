@@ -328,6 +328,70 @@ class RoiDetector:
         return result
 
     @staticmethod
+    def split_square_into_edges_with_boxes(image: np.ndarray,
+                                           square_rect: tuple
+                                           ) -> List[Tuple[np.ndarray, Tuple[int, int, int, int], str]]:
+        """
+        Splits square into edges and returns ROIs with crop boxes.
+
+        Returns:
+            List of (roi_image, (x, y, w, h), edge_name)
+        """
+        (center_x, center_y), (w, h), angle = square_rect
+
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+
+        box = cv2.boxPoints(square_rect)
+        box = np.int32(box)
+
+        cnt_pts = sorted(box, key=lambda p: p[1])
+        top_pts = sorted(cnt_pts[:2], key=lambda p: p[0])
+        bot_pts = sorted(cnt_pts[2:], key=lambda p: p[0])
+
+        tl, tr = top_pts
+        bl, br = bot_pts
+
+        side_len = min(w, h)
+        crop_size = int(side_len * 0.4)
+        crop_size = max(16, crop_size)
+        half_crop = crop_size // 2
+
+        edge_pairs = [(tl, tr), (tr, br), (br, bl), (bl, tl)]
+        edge_names = ['top', 'right', 'bottom', 'left']
+
+        img_h, img_w = gray.shape[:2]
+        results = []
+
+        for idx, (p1, p2) in enumerate(edge_pairs):
+            cx = (p1[0] + p2[0]) / 2
+            cy = (p1[1] + p2[1]) / 2
+
+            ix = int(cx - half_crop)
+            iy = int(cy - half_crop)
+
+            if ix < 0:
+                ix = 0
+            if iy < 0:
+                iy = 0
+            if ix + crop_size > img_w:
+                ix = img_w - crop_size
+            if iy + crop_size > img_h:
+                iy = img_h - crop_size
+
+            if ix < 0 or iy < 0 or crop_size <= 0:
+                continue
+
+            roi = gray[iy:iy+crop_size, ix:ix+crop_size]
+            if roi.size > 0:
+                name = edge_names[idx] if idx < len(edge_names) else f'edge_{idx}'
+                results.append((roi, (ix, iy, crop_size, crop_size), name))
+
+        return results
+
+    @staticmethod
     def calculate_michelson_contrast(roi: np.ndarray) -> float:
         """Calculates Michelson contrast: (max - min) / (max + min)."""
         if roi.size == 0:

@@ -762,11 +762,10 @@ class IterativeParabolicAutofocus(ParabolicAutofocus):
 
 class HillClimbingAutofocus(Autofocus):
     """
-    Hill Climbing with Momentum and Adaptive Step Size.
-    - Start with large steps.
-    - If score improves: Keep direction, maybe accelerate.
-    - If score drops: Don't turn back immediately (Momentum)! Check 1-2 more steps.
-      If it's a real drop, reverse and decrease step size.
+        Advanced Hill Climbing.
+        1. Fast Search: Large steps until significant drop detected.
+        2. Recursive Refinement: Jump back, shrink step, re-scan peak.
+             Repeat until min_step is reached.
     """
     def __init__(self, config: AutofocusConfig):
         super().__init__(config)
@@ -775,12 +774,21 @@ class HillClimbingAutofocus(Autofocus):
         self.current_pos = config.start_mm
         self.step = config.step_mm * 2.0 # Start fast!
         self.direction = 1 # 1 = forward, -1 = backward
-        self.patience = 2 # How many bad steps allowed before turning back
         self.bad_steps = 0
         self.min_step = config.min_step_mm
+
+        # Drop detection settings
+        self.drop_threshold = 0.85
+        self.refine_drop_threshold = 0.95
+        self.drop_steps = 0
+        self._refine_start_pos = 0.0
+
+        # Blind zone: force forward motion to avoid early aborts
+        total_range = config.end_mm - config.start_mm
+        self.blind_zone_end = config.start_mm + (total_range * 0.3)
         
         # State
-        self.phase_state = "SCANNING" # SCANNING, REVERSING, FINISHED
+        self.phase_state = "SCANNING" # SCANNING, REVERSING, REFINING, FINISHED
 
     def start(self) -> float:
         self._phase = Phase.COARSE_SCAN # Reuse enum for compatibility
@@ -788,65 +796,210 @@ class HillClimbingAutofocus(Autofocus):
 
     def process_image(self, position_mm: float, image: np.ndarray) -> AutofocusResult:
         score = self._calculate_score(image)
+        if score <= 0 and self._measurements:
+            score = self._measurements[-1].score
         self._measurements.append(_Measurement(position_mm, score))
         
         if self._best_measurement is None or score > self._best_measurement.score:
             self._best_measurement = _Measurement(position_mm, score)
-            # Reset bad steps if we found a new high
-            self.bad_steps = 0
-        else:
-            # Score dropped
-            self.bad_steps += 1
 
         # --- Logic ---
         next_pos = position_mm
         finished = False
 
         if self.phase_state == "SCANNING":
-            if self.bad_steps < self.patience:
-                # Keep going (Momentum), maybe we bridge a gap
+            if position_mm < self.blind_zone_end:
                 next_pos = position_mm + (self.step * self.direction)
             else:
-                # Patience exhausted. It's a real drop.
-                # Go back to best known position and refine
-                self.phase_state = "REVERSING"
-                next_pos = self._best_measurement.position_mm
-                
-                # Make step smaller and reverse direction logic
-                self.step *= 0.4 # Significant reduction
-                self.bad_steps = 0
-                
-        elif self.phase_state == "REVERSING":
-            # We jumped back to peak. Now scan fine grid around it.
-            if self.step < self.min_step:
-                finished = True
+                if self._best_measurement is not None and score < (self._best_measurement.score * self.drop_threshold):
+                    self._start_refinement_cycle()
+                    next_pos = self._calculate_refine_start()
+                else:
+                    # Keep going (Momentum)
+                    next_pos = position_mm + (self.step * self.direction)
+        
+        elif self.phase_state == "REFINING":
+            if self._best_measurement is not None and score < (self._best_measurement.score * self.refine_drop_threshold):
+                if self.step <= self.min_step:
+                    finished = True
+                else:
+                    self.step = max(self.step * 0.5, self.min_step)
+                    next_pos = self._best_measurement.position_mm - (self.step * 3)
             else:
-                # Switch back to scanning with smaller step
-                self.phase_state = "SCANNING" 
-                # Try small step forward first (or alternate? simple forward for now)
-                next_pos = self._best_measurement.position_mm + self.step
-                self.patience = 1 # Be stricter with small steps
+                # Continue in same direction
+                next_pos = position_mm + self.step
+                if self._best_measurement is not None:
+                    dist = abs(next_pos - self._best_measurement.position_mm)
+                    if dist > (self.step * 10):
+                        if self.step <= self.min_step:
+                            finished = True
+                        else:
+                            self._start_refinement_cycle()
+                            next_pos = self._calculate_refine_start()
 
         # Boundary Checks
         if next_pos > self.config.end_mm or next_pos < self.config.start_mm:
-            # Hit wall. Force reverse or finish.
-            if self.step < self.min_step:
+            if self.step <= self.min_step:
                 finished = True
             else:
-                self.phase_state = "REVERSING"
-                next_pos = self._best_measurement.position_mm
-                self.step *= 0.5
-                self.bad_steps = 100 # Force logic update next cycle
+                self._start_refinement_cycle()
+                next_pos = self._calculate_refine_start()
 
         return AutofocusResult(
             finished=finished,
             next_position_mm=next_pos,
-            best_position_mm=self._best_measurement.position_mm,
-            best_score=self._best_measurement.score,
-            phase=Phase.FINISHED if finished else Phase.COARSE_SCAN,
+            best_position_mm=self._best_measurement.position_mm if self._best_measurement else 0.0,
+            best_score=self._best_measurement.score if self._best_measurement else 0.0,
+            phase=Phase.FINISHED if finished else (Phase.COARSE_SCAN if self.phase_state == "SCANNING" else Phase.REFINEMENT),
             progress=0.5,
             current_score=score
         )
+
+    def _start_refinement_cycle(self) -> None:
+        """Prepares the next finer pass."""
+        self.phase_state = "REFINING"
+        self.step = max(self.step * 0.4, self.min_step)
+        self.bad_steps = 0
+        self.drop_steps = 0
+
+    def _calculate_refine_start(self) -> float:
+        """Calculates a start position slightly before the peak."""
+        if self._best_measurement is None:
+            return self.current_pos
+        self._refine_start_pos = self._best_measurement.position_mm - (self.step * 4.0)
+        return self._refine_start_pos
+
+
+class ThreeStageAutofocus(Autofocus):
+    """
+    3-Stage Autofocus for 10µm Precision without Backlash.
+
+    Progression:
+    1. Coarse (0.4 mm) -> Scans full range. Finds the "Hill".
+    2. Fine   (0.1 mm) -> Scans +/- 0.6 mm. Finds the "Peak".
+    3. Ultra  (0.01 mm)-> Scans +/- 0.15 mm. Finds the "Summit".
+
+    Feature: Unidirectional Scan
+    Before each stage, the axis moves back to a start position and then
+    scans strictly forward. This eliminates mechanical play.
+    """
+
+    def __init__(self, config: AutofocusConfig):
+        super().__init__(config)
+
+        self.step_coarse = 0.4
+        self.step_fine = 0.1
+        self.step_ultra = 0.01
+
+        self.range_fine = 1.2
+        self.range_ultra = 0.3
+
+        self.scan_points: list[float] = []
+        self.scan_index = 0
+        self.stage = "COARSE"
+        self.drop_counter = 0
+
+    def start(self) -> float:
+        self._phase = Phase.COARSE_SCAN
+
+        self.scan_points = list(np.arange(
+            self.config.start_mm,
+            self.config.end_mm + 0.001,
+            self.step_coarse
+        ))
+        self.scan_points = self._clamp_positions(self.scan_points)
+        self.scan_index = 0
+        self.stage = "COARSE"
+
+        return self.scan_points[0] if self.scan_points else float(self.config.start_mm)
+
+    def process_image(self, position_mm: float, image: np.ndarray) -> AutofocusResult:
+        score = self._calculate_score(image)
+        if score <= 0 and self._measurements:
+            score = self._measurements[-1].score
+        self._measurements.append(_Measurement(position_mm, score))
+
+        if self._best_measurement is None or score > self._best_measurement.score:
+            self._best_measurement = _Measurement(position_mm, score)
+            self.drop_counter = 0
+        else:
+            if self.stage == "ULTRA":
+                self.drop_counter += 1
+
+        next_pos = position_mm
+        finished = False
+
+        if self.stage == "COARSE":
+            self.scan_index += 1
+            if self.scan_index < len(self.scan_points):
+                next_pos = self.scan_points[self.scan_index]
+            else:
+                self.stage = "FINE"
+                self._phase = Phase.REFINEMENT
+                self._setup_next_scan(self.step_fine, self.range_fine)
+                if self.scan_points:
+                    next_pos = self.scan_points[0]
+                else:
+                    finished = True
+
+        elif self.stage == "FINE":
+            self.scan_index += 1
+            if self.scan_index < len(self.scan_points):
+                next_pos = self.scan_points[self.scan_index]
+            else:
+                self.stage = "ULTRA"
+                self._setup_next_scan(self.step_ultra, self.range_ultra)
+                if self.scan_points:
+                    next_pos = self.scan_points[0]
+                else:
+                    finished = True
+
+        elif self.stage == "ULTRA":
+            if self.drop_counter >= 5:
+                finished = True
+            else:
+                self.scan_index += 1
+                if self.scan_index < len(self.scan_points):
+                    next_pos = self.scan_points[self.scan_index]
+                else:
+                    finished = True
+
+        return AutofocusResult(
+            finished=finished,
+            next_position_mm=next_pos,
+            best_position_mm=self._best_measurement.position_mm if self._best_measurement else 0.0,
+            best_score=self._best_measurement.score if self._best_measurement else 0.0,
+            phase=Phase.FINISHED if finished else self._phase,
+            progress=self._get_progress(),
+            current_score=score
+        )
+
+    def _setup_next_scan(self, step_size: float, window_width: float) -> None:
+        if self._best_measurement is None:
+            self.scan_points = []
+            self.scan_index = 0
+            return
+
+        center = self._best_measurement.position_mm
+        start = center - (window_width / 2)
+        end = center + (window_width / 2)
+
+        start = max(self.config.start_mm, start)
+        end = min(self.config.end_mm, end)
+
+        self.scan_points = list(np.arange(start, end + 0.00001, step_size))
+        self.scan_points = self._clamp_positions(self.scan_points)
+        self.scan_index = 0
+        self.drop_counter = 0
+
+    def _get_progress(self) -> float:
+        if self.stage == "COARSE":
+            return 0.3
+        if self.stage == "FINE":
+            return 0.6
+        if self.stage == "ULTRA":
+            return 0.9
+        return 1.0
 
 
 class ExhaustiveAutofocus(Autofocus):

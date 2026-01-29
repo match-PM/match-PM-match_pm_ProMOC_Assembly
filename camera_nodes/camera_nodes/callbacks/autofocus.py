@@ -333,16 +333,24 @@ class AutofocusCallbacks(CallbackBase):
             f'Phase 2: Coarse + Fine in {peak_start:.1f}-{peak_end:.1f}mm, mode={mode}'
         )
         
+        # Select algorithm based on mode (using centralized lookup)
+        mode_name, algo_class = _ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])
+
+        # Use full requested range for exhaustive/twostage, otherwise peak window
+        if mode_name in ['exhaustive', 'twostage']:
+            range_start = float(request.start_position)
+            range_end = float(request.end_position)
+        else:
+            range_start = float(peak_start)
+            range_end = float(peak_end)
+
         # Erstelle Config mit reduzierter Range und fixem Coarse-Step
         config = AutofocusConfig(
-            start_mm=float(peak_start),
-            end_mm=float(peak_end),
+            start_mm=range_start,
+            end_mm=range_end,
             step_mm=COARSE_STEP_MM,
             use_sift_weighting=bool(getattr(request, 'use_sift_weighting', False))
         )
-        
-        # Select algorithm based on mode (using centralized lookup)
-        mode_name, algo_class = _ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])
         af = algo_class(config)
         
         # Run autofocus algorithm
@@ -363,11 +371,12 @@ class AutofocusCallbacks(CallbackBase):
         
         return response
 
-    def _run_autofocus_loop(self, af, clients) -> tuple:
+    def _run_autofocus_loop(self, af, clients, return_best_image: bool = False) -> tuple:
         """Runs the autofocus state machine.
         
         Returns:
-            (best_position, best_score, measurements)
+            (best_position, best_score, measurements) or
+            (best_position, best_score, measurements, best_image)
         """
         current_pos = float(af.start())
         clients['move'].call(MoveAbsolute.Request(axis_position=current_pos))
@@ -376,9 +385,19 @@ class AutofocusCallbacks(CallbackBase):
         
         best_position = None
         best_score = 0.0
+        best_image = None
+        best_current_score = -1.0
         measurements = 0
         
-        for _ in range(500):
+        max_steps = 500
+        try:
+            step_size = getattr(af, '_scan_step', af.config.step_mm)
+            if step_size and af.config.end_mm > af.config.start_mm:
+                max_steps = max(max_steps, int((af.config.end_mm - af.config.start_mm) / float(step_size)) + 5)
+        except Exception:
+            pass
+
+        for _ in range(max_steps):
             cv_image = self._get_latest_cv_image()
             if cv_image is None:
                 time.sleep(0.1)
@@ -389,6 +408,11 @@ class AutofocusCallbacks(CallbackBase):
             result = af.process_image(current_pos, cv_image)
             best_score = result.best_score
             measurements += 1
+
+            if return_best_image and result.current_score is not None:
+                if result.current_score > best_current_score:
+                    best_current_score = result.current_score
+                    best_image = cv_image.copy()
 
             phase = getattr(result, 'phase', None)
             phase_name = phase.name if phase is not None else 'UNKNOWN'
@@ -414,6 +438,13 @@ class AutofocusCallbacks(CallbackBase):
             time.sleep(0.1) # Settling time for stability
             current_pos = next_pos
         
+        if best_position is None and hasattr(af, '_best_measurement') and af._best_measurement:
+            best_position = af._best_measurement.position_mm
+            best_score = af._best_measurement.score
+
+        if return_best_image:
+            return best_position, best_score, measurements, best_image
+
         return best_position, best_score, measurements
 
     def _run_comparison(self, peak_start: float, peak_end: float,

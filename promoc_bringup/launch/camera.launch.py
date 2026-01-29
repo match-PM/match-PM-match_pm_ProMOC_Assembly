@@ -16,6 +16,7 @@ def generate_launch_description():
     Consolidated camera system launch file.
 
     Supports both simulation and hardware via 'sim_mode' argument.
+    Allows flexible camera selection via 'camera_type' argument.
     """
 
     sim_mode_arg = DeclareLaunchArgument(
@@ -24,8 +25,15 @@ def generate_launch_description():
         description='Run in simulation mode'
     )
 
+    camera_type_arg = DeclareLaunchArgument(
+        'camera_type',
+        default_value='ids_u3_3800cp_hq',
+        description='Camera configuration to use (filename in config/cameras/ without .yaml extension). Default: ids_u3_3800cp_hq'
+    )
+
     return LaunchDescription([
         sim_mode_arg,
+        camera_type_arg,
         OpaqueFunction(function=launch_setup)
     ])
 
@@ -33,12 +41,31 @@ def generate_launch_description():
 def launch_setup(context, *args, **kwargs):
     sim_mode = LaunchConfiguration(
         'sim_mode').perform(context).lower() == 'true'
+    camera_type = LaunchConfiguration('camera_type').perform(context)
+    
     launch_actions = []
 
     bringup_pkg_share = get_package_share_directory('promoc_bringup')
 
+    # Construct camera config file path from camera_type parameter
+    # First, try new cameras/ subdirectory structure
     camera_config_file = os.path.join(
-        bringup_pkg_share, 'config', 'ids_camera_params.yaml')
+        bringup_pkg_share, 'config', 'cameras', f'{camera_type}.yaml')
+    
+    # Fallback to legacy config location if not found
+    if not os.path.exists(camera_config_file):
+        legacy_config = os.path.join(
+            bringup_pkg_share, 'config', 'ids_camera_params.yaml')
+        if os.path.exists(legacy_config):
+            launch.logging.get_logger().warn(
+                f"Camera config not found at {camera_config_file}, "
+                f"using legacy config: {legacy_config}")
+            camera_config_file = legacy_config
+        else:
+            launch.logging.get_logger().error(
+                f"Camera configuration file not found: {camera_config_file}")
+            return []
+
 
     # Pre-launch camera reset for hardware mode
     if not sim_mode:
@@ -133,6 +160,9 @@ def launch_setup(context, *args, **kwargs):
             launch.logging.get_logger().info(
                 f"Camera GUID: {camera_params['guid']}")
 
+            # Get binning factor (default to 1 if not specified)
+            binning_factor = camera_params.get("binning_factor", 1)
+
             launch_actions.append(Node(
                 name=driver_node_name,
                 namespace='promoc',
@@ -158,8 +188,10 @@ def launch_setup(context, *args, **kwargs):
                     },
                     "ImageFormatControl": {
                         "PixelFormat": [camera_params["pixel_format"]],
-                        "Width": 2048,
-                        "Height": 1536,
+                        "Width": camera_config["camera_info"]["image_width"],
+                        "Height": camera_config["camera_info"]["image_height"],
+                        "BinningHorizontal": binning_factor,
+                        "BinningVertical": binning_factor,
                     },
                 }]
             ))

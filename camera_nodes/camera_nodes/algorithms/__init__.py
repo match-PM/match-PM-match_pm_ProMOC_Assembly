@@ -14,6 +14,7 @@ from .autofocus import (
     GoldenSectionAutofocus,
     AdaptiveHillClimbingAutofocus,
     HillClimbingAutofocus,
+    ThreeStageAutofocus,
     ExhaustiveAutofocus,
     FibonacciAutofocus,
     BruteForceAutofocus,
@@ -40,6 +41,7 @@ AUTOFOCUS_ALGORITHMS = [
     (2, 'parabolic', IterativeParabolicAutofocus),
     (3, 'fibonacci', FibonacciAutofocus),
     (4, 'exhaustive', ExhaustiveAutofocus),  # Reference algorithm
+    (5, 'threestage', ThreeStageAutofocus),
 ]
 
 
@@ -51,6 +53,7 @@ __all__ = [
     'GoldenSectionAutofocus',
     'AdaptiveHillClimbingAutofocus',
     'HillClimbingAutofocus',
+    'ThreeStageAutofocus',
     'ExhaustiveAutofocus',
     'FibonacciAutofocus',
     'BruteForceAutofocus',

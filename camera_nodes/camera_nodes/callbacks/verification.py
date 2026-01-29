@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 import csv
 import numpy as np
+import cv2
 
 from promoc_assembly_interfaces.srv import (
     MoveAbsolute,
@@ -22,6 +23,7 @@ from ..algorithms import (
 )
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector
+from ..plotting import VerificationPlotter
 from promoc_core.error_handling import handle_service_errors
 
 
@@ -84,6 +86,9 @@ class VerificationCallbacks(CallbackBase):
         metadata['start_position_mm'] = request.start_position
         metadata['end_position_mm'] = request.end_position
         metadata['repetitions'] = repetitions
+
+        output_dir = self._get_output_dir('verification')
+        timestamp = self._get_timestamp()
         
         # Results storage
         results = []
@@ -111,7 +116,9 @@ class VerificationCallbacks(CallbackBase):
                 algo_start = time.time()
                 
                 # Run autofocus loop
-                best_pos, best_score, measurements = self._run_autofocus_loop(af, clients)
+                best_pos, best_score, measurements, best_image = self._run_autofocus_loop(
+                    af, clients, return_best_image=True
+                )
                 
                 duration = time.time() - algo_start
                 
@@ -124,31 +131,42 @@ class VerificationCallbacks(CallbackBase):
                 if reference_position is not None and best_pos is not None:
                     deviation = best_pos - reference_position
                 
+                pos_str = f'{best_pos:.4f}' if best_pos is not None else 'N/A'
+                score_str = f'{best_score:.0f}' if best_score is not None else 'N/A'
+
                 results.append({
                     'timestamp': datetime.now().isoformat(),
                     'algorithm': name,
-                    'focus_position_mm': f'{best_pos:.4f}' if best_pos else 'N/A',
-                    'focus_score': f'{best_score:.0f}',
+                    'focus_position_mm': pos_str,
+                    'focus_score': score_str,
                     'duration_s': f'{duration:.2f}',
                     'measurements': measurements,
                     'deviation_from_ref_mm': f'{deviation:.4f}',
                     'repetition': rep + 1,
                 })
+
+                if best_image is not None:
+                    img_path = output_dir / f'autofocus_best_{name}_rep{rep + 1}_{timestamp}.jpg'
+                    cv2.imwrite(str(img_path), best_image)
+                    self._node.get_logger().info(f'Saved best image: {img_path}')
                 
                 self._node.get_logger().info(
-                    f'{name}: pos={best_pos:.3f}mm, score={best_score:.0f}, '
+                    f'{name}: pos={pos_str}mm, score={score_str}, '
                     f'time={duration:.1f}s, dev={deviation:.4f}mm'
                 )
         
         # Write CSV
-        output_dir = self._get_output_dir('verification')
-        timestamp = self._get_timestamp()
         csv_path = output_dir / f'autofocus_verification_{timestamp}.csv'
         
         fieldnames = ['timestamp', 'algorithm', 'focus_position_mm', 'focus_score',
                         'duration_s', 'measurements', 'deviation_from_ref_mm', 'repetition']
         
         self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
+
+        plotter = VerificationPlotter(self._node.get_logger())
+        plot_path = output_dir / f'autofocus_verification_{timestamp}.png'
+        if plotter.plot_autofocus_verification(results, str(plot_path)):
+            self._node.get_logger().info(f'Autofocus plot saved: {plot_path}')
         
         # Calculate summary statistics
         max_deviation = 0.0
@@ -204,9 +222,15 @@ class VerificationCallbacks(CallbackBase):
         mtf20_values = []
         mtf10_values = []
         edges_failed = 0
+        mtf_curves = []
         
-        # Detect targets
-        _, bars, squares = RoiDetector.detect_targets(cv_image)
+        # Detect targets + save debug images
+        vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
+
+        output_dir = self._get_output_dir('verification')
+        timestamp = self._get_timestamp()
+
+        edges_tile_path = None
         
         if not squares and not bars:
             raise ImageProcessingError('No MTF targets detected')
@@ -223,17 +247,109 @@ class VerificationCallbacks(CallbackBase):
                 ('bottom_left', margin, h - margin),
                 ('bottom_right', w - margin, h - margin),
             ])
+
+        # Annotate measurement positions on debug image
+        for pos_name, target_x, target_y in positions:
+            cv2.circle(vis_img, (int(target_x), int(target_y)), 8, (0, 255, 255), 2)
+            cv2.putText(
+                vis_img,
+                pos_name,
+                (int(target_x) + 10, int(target_y) - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2,
+            )
+
+        targets_path = output_dir / f'mtf_targets_{timestamp}.jpg'
+        cv2.imwrite(str(targets_path), vis_img)
         
         # For each position, find nearest target and measure
         for pos_name, target_x, target_y in positions:
             self._node.get_logger().info(f'Measuring at {pos_name} ({target_x}, {target_y})')
+
+            # Find nearest square for this position
+            chosen_square = None
+            if squares:
+                closest_dist = None
+                for rect in squares:
+                    (cx, cy), _, _ = rect
+                    dist = ((cx - target_x) ** 2 + (cy - target_y) ** 2) ** 0.5
+                    if closest_dist is None or dist < closest_dist:
+                        closest_dist = dist
+                        chosen_square = rect
+
+                # Skip if square is too far from requested position
+                max_dist = min(w, h) * 0.35
+                if closest_dist is None or closest_dist > max_dist:
+                    self._node.get_logger().warn(
+                        f'No nearby target for {pos_name} (dist={closest_dist})'
+                    )
+                    cv2.putText(
+                        vis_img,
+                        f'no_target:{pos_name}',
+                        (int(target_x) + 10, int(target_y) + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 0, 255),
+                        1,
+                    )
+                    results.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'config': request.config_name or 'default',
+                        'position': pos_name,
+                        'edge': 'n/a',
+                        'roi_x': target_x,
+                        'roi_y': target_y,
+                        'mtf50_lpmm': '0',
+                        'mtf20_lpmm': '0',
+                        'mtf10_lpmm': '0',
+                        'edge_angle_deg': '0',
+                        'contrast': '0',
+                        'nyquist_lpmm': '0',
+                        'valid': 'false',
+                        'error': 'no_nearby_target',
+                    })
+                    edges_failed += 4
+                    continue
             
             # Find squares or use detected ROIs
-            if squares:
-                # Use largest square
-                largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-                edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
+            if chosen_square is not None:
+                # Draw chosen square and edge boxes on debug image
+                (roi_cx, roi_cy), _, _ = chosen_square
+                box = np.int32(cv2.boxPoints(chosen_square))
+                cv2.drawContours(vis_img, [box], 0, (0, 128, 255), 2)
+                cv2.putText(
+                    vis_img,
+                    f'roi:{pos_name}',
+                    (int(roi_cx) + 10, int(roi_cy) + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 128, 255),
+                    1,
+                )
+
+                edges_with_boxes = RoiDetector.split_square_into_edges_with_boxes(cv_image, chosen_square)
+                edges = [roi for roi, _, _ in edges_with_boxes]
                 edge_names = ['top', 'right', 'bottom', 'left']
+
+                # Save tiled edge visualization for first position only
+                if edges_tile_path is None and edges:
+                    vis_edges, _ = RoiDetector.create_debug_visualization(edges)
+                    edges_tile_path = output_dir / f'mtf_edges_{timestamp}.jpg'
+                    cv2.imwrite(str(edges_tile_path), vis_edges)
+
+                for roi, (x, y, w_box, h_box), name in edges_with_boxes:
+                    cv2.rectangle(vis_img, (x, y), (x + w_box, y + h_box), (0, 0, 255), 2)
+                    cv2.putText(
+                        vis_img,
+                        f'edge:{name}',
+                        (x, max(0, y - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 0, 255),
+                        1,
+                    )
                 
                 for i, edge_img in enumerate(edges):
                     edge_name = edge_names[i] if i < 4 else f'edge_{i}'
@@ -242,13 +358,20 @@ class VerificationCallbacks(CallbackBase):
                     result = analyzer.compute_mtf(edge_img)
                     
                     if result.valid:
+                        if result.frequencies.size and result.mtf_values.size and len(mtf_curves) < 6:
+                            mtf_curves.append({
+                                'label': f'{pos_name}-{edge_name}',
+                                'frequencies': result.frequencies,
+                                'mtf_values': result.mtf_values,
+                                'nyquist_lpmm': result.nyquist_frequency,
+                            })
                         results.append({
                             'timestamp': datetime.now().isoformat(),
                             'config': request.config_name or 'default',
                             'position': pos_name,
                             'edge': edge_name,
-                            'roi_x': target_x,
-                            'roi_y': target_y,
+                            'roi_x': int(roi_cx),
+                            'roi_y': int(roi_cy),
                             'mtf50_lpmm': f'{result.mtf50:.2f}',
                             'mtf20_lpmm': f'{result.mtf20:.2f}',
                             'mtf10_lpmm': f'{result.mtf10:.2f}',
@@ -267,8 +390,8 @@ class VerificationCallbacks(CallbackBase):
                             'config': request.config_name or 'default',
                             'position': pos_name,
                             'edge': edge_name,
-                            'roi_x': target_x,
-                            'roi_y': target_y,
+                            'roi_x': int(roi_cx),
+                            'roi_y': int(roi_cy),
                             'mtf50_lpmm': '0',
                             'mtf20_lpmm': '0',
                             'mtf10_lpmm': '0',
@@ -284,15 +407,18 @@ class VerificationCallbacks(CallbackBase):
                     break
         
         # Write CSV
-        output_dir = self._get_output_dir('verification')
-        timestamp = self._get_timestamp()
         csv_path = output_dir / f'mtf_verification_{timestamp}.csv'
         
         fieldnames = ['timestamp', 'config', 'position', 'edge', 'roi_x', 'roi_y',
-                        'mtf50_lpmm', 'mtf20_lpmm', 'mtf10_lpmm', 'edge_angle_deg',
-                        'contrast', 'nyquist_lpmm', 'valid']
+                'mtf50_lpmm', 'mtf20_lpmm', 'mtf10_lpmm', 'edge_angle_deg',
+                'contrast', 'nyquist_lpmm', 'valid', 'error']
         
         self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
+
+        plotter = VerificationPlotter(self._node.get_logger())
+        plot_path = output_dir / f'mtf_results_{timestamp}.png'
+        if plotter.plot_mtf_verification(results, str(plot_path), curves=mtf_curves):
+            self._node.get_logger().info(f'MTF plot saved: {plot_path}')
         
         # Calculate statistics
         mtf50_mean = float(np.mean(mtf50_values)) if mtf50_values else 0.0

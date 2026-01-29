@@ -456,7 +456,7 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
                 execution_time = time.time() - start_time
 
                 if current_logger:
-                    current_logger.error(f"Service error: {e}", exc_info=True)
+                    current_logger.error(f"Service error: {e}")
 
                 # Attempt recovery if a manager is available
                 if recovery_manager:
@@ -489,8 +489,7 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
 
                 if current_logger:
                     current_logger.error(
-                        f"Unexpected error in service: {type(e).__name__}: {e}",
-                        exc_info=True
+                        f"Unexpected error in service: {type(e).__name__}: {e}"
                     )
 
                 response = ServiceResponse.error_response(e, execution_time)
