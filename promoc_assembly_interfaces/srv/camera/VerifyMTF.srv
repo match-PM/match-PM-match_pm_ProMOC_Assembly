@@ -9,6 +9,9 @@ string config_name      # Configuration name (e.g. "baseline", "with_filter")
 string operator_name    # Name of operator performing test
 string notes            # Additional notes about optical setup
 
+# Repeatability testing
+int32 repetitions 1     # Number of times to repeat each measurement (default: 1)
+
 ---
 # Response: MTF verification results
 

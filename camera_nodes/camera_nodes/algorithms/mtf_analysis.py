@@ -97,6 +97,9 @@ class MTFResult:
         valid: True if measurement is valid
         error_msg: Error message if not valid
         roi_bounds: ROI bounds as (x1, y1, x2, y2)
+        edge_name: Name of measured edge ('top', 'right', 'bottom', 'left')
+        edge_direction: Direction of edge ('vertical' or 'horizontal')
+        contrast: Michelson contrast of the ROI
     """
     mtf50: float = 0.0
     mtf20: float = 0.0
@@ -109,6 +112,9 @@ class MTFResult:
     valid: bool = False
     error_msg: str = ""
     roi_bounds: Optional[Tuple[int, int, int, int]] = None
+    edge_name: str = ""
+    edge_direction: str = ""
+    contrast: float = 0.0
 
     def to_dict(self) -> dict:
         """Convert result to dictionary (for serialization)."""
@@ -119,8 +125,25 @@ class MTFResult:
             'edge_angle': self.edge_angle,
             'valid': self.valid,
             'error_msg': self.error_msg,
-            'nyquist_frequency': self.nyquist_frequency
+            'nyquist_frequency': self.nyquist_frequency,
+            'edge_name': self.edge_name,
+            'edge_direction': self.edge_direction,
+            'contrast': self.contrast,
+            'roi_bounds': self.roi_bounds,
         }
+    
+    def format_edge_info(self) -> str:
+        """Format edge information for display."""
+        if not self.edge_name:
+            return ""
+        
+        edge_str = f"{self.edge_name.capitalize()} Edge"
+        
+        if self.roi_bounds:
+            x, y, w, h = self.roi_bounds
+            edge_str += f" @ x={x},y={y} {w}x{h}px"
+        
+        return edge_str
 
     @property
     def nyquist_frequency(self) -> float:

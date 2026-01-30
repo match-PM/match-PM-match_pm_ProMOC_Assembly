@@ -15,7 +15,7 @@ from promoc_core.promoc_exceptions import (
 )
 from .base import CallbackBase
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
-from ..algorithms.roi_detection import RoiDetector
+from ..algorithms.roi_detection import RoiDetector, EdgeROI
 from promoc_core.error_handling import handle_service_errors
 
 
@@ -235,86 +235,117 @@ class MTFCallbacks(CallbackBase):
                 response.status_message += " [WARNING: Low Res Measurement]"
 
             # Auto ROI Detection
-            roi_list = []
+            edge_rois = []  # List of EdgeROI objects
+            roi_list = []   # Legacy list for manual mode
+            
             if getattr(request, 'auto_roi', False):
                 self._node.get_logger().info('Auto-ROI enabled: Detecting targets...')
                 _, bars, squares = RoiDetector.detect_targets(cv_image)
                 
-                # Priority 1: Squares (split into 4 edges)
+                # Priority 1: Squares (use new EdgeROI-based extraction)
                 if squares:
                     # Take largest square
                     largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-                    edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
                     
-                    # Try all 4 edges (Top, Right, Bottom, Left)
-                    edge_names = ['Top', 'Right', 'Bottom', 'Left']
-                    for i, edge_img in enumerate(edges):
-                        roi_list.append({'image': edge_img, 'name': f'Square {edge_names[i]} Edge'})
+                    # Use improved edge extraction with coordinate tracking
+                    edge_rois = RoiDetector.create_edge_rois_from_rect(
+                        cv_image, largest_square, roi_width=60
+                    )
+                    
+                    # Filter by contrast
+                    valid_edges = [e for e in edge_rois if e.is_valid]
+                    if valid_edges:
+                        edge_rois = valid_edges
+                        self._node.get_logger().info(
+                            f"Found {len(edge_rois)} valid edges from square "
+                            f"(center: {edge_rois[0].parent_center})"
+                        )
+                    else:
+                        self._node.get_logger().warn(
+                            f"All {len(edge_rois)} edges have low contrast, trying anyway..."
+                        )
                     
                 # Priority 2: Bars
                 elif bars:
                     # Take largest bar
                     largest_bar = max(bars, key=lambda r: r[1][0] * r[1][1])
-                    # Simple fallback: Use the bounding box of the rotated rect.
-                    box = cv2.boxPoints(largest_bar)
-                    x, y, w, h = cv2.boundingRect(box)
-                    # Clamp to image bounds
-                    h_img, w_img = cv_image.shape[:2]
-                    x = max(0, x); y = max(0, y)
-                    w = min(w, w_img - x); h = min(h, h_img - y)
                     
-                    roi_list.append({'roi': (x, y, w, h), 'name': 'Slanted Bar'})
+                    # Use new EdgeROI extraction for bars too
+                    edge_rois = RoiDetector.create_edge_rois_from_rect(
+                        cv_image, largest_bar, roi_width=60
+                    )
+                    
+                    if edge_rois:
+                        self._node.get_logger().info(
+                            f"Found {len(edge_rois)} edges from bar target"
+                        )
     
-                if not roi_list:
+                if not edge_rois:
                     raise ImageProcessingError('Auto-ROI: No targets detected')
             
             else:
                 # Manual mode: Interactive selection
-                # Note: This requires a GUI environment on the host
                 roi, roi_img = self._select_roi_interactive(cv_image)
                 if roi is None:
                     raise ImageProcessingError("ROI selection cancelled")
-                roi_list = [{'image': roi_img, 'name': 'Manual ROI'}]
+                x, y, w, h = roi
+                # Create manual EdgeROI for consistency
+                contrast = RoiDetector.calculate_michelson_contrast(roi_img)
+                edge_rois = [EdgeROI(
+                    image=roi_img,
+                    bbox=(x, y, w, h),
+                    edge_direction='unknown',
+                    edge_name='manual',
+                    contrast=contrast,
+                    parent_center=(x + w//2, y + h//2)
+                )]
     
             # Filter by requested edge (if specified)
             if hasattr(request, 'target_edge') and request.target_edge:
                 requested = request.target_edge.lower().strip()
                 if requested == "select" or requested == "interactive":
-                        # Interactive Candidate Selection
-                        selected = self._select_candidate_interactive(roi_list)
-                        if selected:
-                            roi_list = [selected]
-                            self._node.get_logger().info(f"User selected target: {selected['name']}")
-                        else:
-                            raise ImageProcessingError("Interactive selection cancelled")
-                elif requested not in ["", "any"]:
-                    filtered = [t for t in roi_list if requested in t['name'].lower()]
-                    if filtered:
-                        roi_list = filtered
-                        self._node.get_logger().info(f"Filtered targets by edge '{requested}': {len(roi_list)} candidates")
+                    # Interactive Candidate Selection - convert EdgeROIs to legacy format
+                    roi_list = [{'image': e.image, 'name': f'{e.edge_name.capitalize()} Edge', 'edge_roi': e} 
+                                for e in edge_rois]
+                    selected = self._select_candidate_interactive(roi_list)
+                    if selected and 'edge_roi' in selected:
+                        edge_rois = [selected['edge_roi']]
+                        self._node.get_logger().info(f"User selected: {selected['name']}")
                     else:
-                        raise ImageProcessingError(f"Requested edge '{requested}' not found in detected targets")
+                        raise ImageProcessingError("Interactive selection cancelled")
+                elif requested not in ["", "any"]:
+                    filtered = [e for e in edge_rois if requested in e.edge_name.lower()]
+                    if filtered:
+                        edge_rois = filtered
+                        self._node.get_logger().info(
+                            f"Filtered to '{requested}' edges: {len(edge_rois)} candidates"
+                        )
+                    else:
+                        raise ImageProcessingError(
+                            f"Requested edge '{requested}' not found in detected targets"
+                        )
     
-            # Perform Measurement (Try all candidates)
+            # Perform Measurement (Try all edge candidates)
             last_error = "Unknown error"
             
-            for target in roi_list:
-                # Check contrast if image available
-                contrast = 0.0
-                if 'image' in target:
-                    contrast = RoiDetector.calculate_michelson_contrast(target['image'])
-                    if contrast < 0.2:
-                        self._node.get_logger().warn(f"Low contrast ({contrast:.2f}) for {target['name']}")
+            for edge_roi in edge_rois:
+                if edge_roi.contrast < 0.2:
+                    self._node.get_logger().warn(
+                        f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
+                    )
                 
                 config = MTFConfig(pixel_size_um=pixel_size_um)
                 analyzer = MTFAnalyzer(config)
                 
-                if 'image' in target:
-                    result = analyzer.compute_mtf(target['image'])
-                else:
-                    result = analyzer.compute_mtf(cv_image, roi=target['roi'])
+                result = analyzer.compute_mtf(edge_roi.image)
     
                 if result.valid:
+                    # Attach edge metadata to result
+                    result.edge_name = edge_roi.edge_name
+                    result.edge_direction = edge_roi.edge_direction
+                    result.contrast = edge_roi.contrast
+                    result.roi_bounds = edge_roi.bbox
+                    
                     # Success! Return this result
                     response.success = True
                     response.mtf50 = float(result.mtf50)
@@ -322,8 +353,16 @@ class MTFCallbacks(CallbackBase):
                     response.mtf10 = float(result.mtf10)
                     response.edge_angle = float(result.edge_angle)
                     response.nyquist_frequency = float(result.nyquist_frequency)
+                    
+                    # Format detailed status message with edge coordinates
+                    edge_info = result.format_edge_info()
                     response.status_message = (
-                        f"MTF50={response.mtf50:.2f} lp/mm ({target['name']}, {result.edge_angle:.1f}°, C:{contrast:.2f})"
+                        f"MTF50={response.mtf50:.2f} lp/mm "
+                        f"({edge_info}, {result.edge_angle:.1f}°, C:{edge_roi.contrast:.2f})"
+                    )
+                    
+                    self._node.get_logger().info(
+                        f"MTF measurement successful: {response.status_message}"
                     )
                     return response
                 

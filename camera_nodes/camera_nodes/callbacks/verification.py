@@ -197,8 +197,11 @@ class VerificationCallbacks(CallbackBase):
         """Verification service: MTF field test with comprehensive output."""
         start_time = time.time()
         
+        repetitions = max(1, request.repetitions) if hasattr(request, 'repetitions') and request.repetitions > 0 else 1
+        
         self._node.get_logger().info(
-            f'MTF Verification: field_test={request.field_test}, config={request.config_name}'
+            f'MTF Verification: field_test={request.field_test}, config={request.config_name}, '
+            f'repetitions={repetitions}'
         )
 
         cv_image = self._get_latest_cv_image()
@@ -212,15 +215,16 @@ class VerificationCallbacks(CallbackBase):
         metadata['notes'] = request.notes or metadata.get('notes', '')
         metadata['measurement_type'] = 'mtf_verification'
         metadata['field_test'] = request.field_test
+        metadata['repetitions'] = repetitions
         
         pixel_size_um = self._node.get_parameter('pixel_size_um').value or 2.40  # IDS U3-3800CP
         config = MTFConfig(pixel_size_um=pixel_size_um)
         analyzer = MTFAnalyzer(config)
         
         results = []
-        mtf50_values = []
-        mtf20_values = []
-        mtf10_values = []
+        # Track per-edge measurements for statistics
+        from collections import defaultdict
+        edge_measurements = defaultdict(lambda: {'mtf50': [], 'mtf20': [], 'mtf10': [], 'contrast': []})
         edges_failed = 0
         mtf_curves = []
         
@@ -264,54 +268,60 @@ class VerificationCallbacks(CallbackBase):
         targets_path = output_dir / f'mtf_targets_{timestamp}.jpg'
         cv2.imwrite(str(targets_path), vis_img)
         
-        # For each position, find nearest target and measure
-        for pos_name, target_x, target_y in positions:
-            self._node.get_logger().info(f'Measuring at {pos_name} ({target_x}, {target_y})')
+        # REPEATABILITY LOOP: Measure multiple times if requested
+        for rep in range(repetitions):
+            if repetitions > 1:
+                self._node.get_logger().info(f'--- Repetition {rep + 1}/{repetitions} ---')
+        
+            # For each position, find nearest target and measure
+            for pos_name, target_x, target_y in positions:
+                self._node.get_logger().info(f'Measuring at {pos_name} ({target_x}, {target_y})')
 
-            # Find nearest square for this position
-            chosen_square = None
-            if squares:
-                closest_dist = None
-                for rect in squares:
-                    (cx, cy), _, _ = rect
-                    dist = ((cx - target_x) ** 2 + (cy - target_y) ** 2) ** 0.5
-                    if closest_dist is None or dist < closest_dist:
-                        closest_dist = dist
-                        chosen_square = rect
+                # Find nearest square for this position
+                chosen_square = None
+                if squares:
+                    closest_dist = None
+                    for rect in squares:
+                        (cx, cy), _, _ = rect
+                        dist = ((cx - target_x) ** 2 + (cy - target_y) ** 2) ** 0.5
+                        if closest_dist is None or dist < closest_dist:
+                            closest_dist = dist
+                            chosen_square = rect
 
-                # Skip if square is too far from requested position
-                max_dist = min(w, h) * 0.35
-                if closest_dist is None or closest_dist > max_dist:
-                    self._node.get_logger().warn(
-                        f'No nearby target for {pos_name} (dist={closest_dist})'
-                    )
-                    cv2.putText(
-                        vis_img,
-                        f'no_target:{pos_name}',
-                        (int(target_x) + 10, int(target_y) + 15),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 0, 255),
-                        1,
-                    )
-                    results.append({
-                        'timestamp': datetime.now().isoformat(),
-                        'config': request.config_name or 'default',
-                        'position': pos_name,
-                        'edge': 'n/a',
-                        'roi_x': target_x,
-                        'roi_y': target_y,
-                        'mtf50_lpmm': '0',
-                        'mtf20_lpmm': '0',
-                        'mtf10_lpmm': '0',
-                        'edge_angle_deg': '0',
-                        'contrast': '0',
-                        'nyquist_lpmm': '0',
-                        'valid': 'false',
-                        'error': 'no_nearby_target',
-                    })
-                    edges_failed += 4
-                    continue
+                    # Skip if square is too far from requested position
+                    max_dist = min(w, h) * 0.35
+                    if closest_dist is None or closest_dist > max_dist:
+                        self._node.get_logger().warn(
+                            f'No nearby target for {pos_name} (dist={closest_dist})'
+                        )
+                        cv2.putText(
+                            vis_img,
+                            f'no_target:{pos_name}',
+                            (int(target_x) + 10, int(target_y) + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (0, 0, 255),
+                            1,
+                        )
+                        results.append({
+                            'timestamp': datetime.now().isoformat(),
+                            'config': request.config_name or 'default',
+                            'repetition': rep + 1,
+                            'position': pos_name,
+                            'edge': 'n/a',
+                            'roi_x': target_x,
+                            'roi_y': target_y,
+                            'mtf50_lpmm': '0',
+                            'mtf20_lpmm': '0',
+                            'mtf10_lpmm': '0',
+                            'edge_angle_deg': '0',
+                            'contrast': '0',
+                            'nyquist_lpmm': '0',
+                            'valid': 'false',
+                            'error': 'no_nearby_target',
+                        })
+                        edges_failed += 4
+                        continue
             
             # Find squares or use detected ROIs
             if chosen_square is not None:

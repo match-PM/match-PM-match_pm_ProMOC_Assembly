@@ -5,6 +5,8 @@ Image processing algorithms for camera_nodes:
 - autofocus: Simple autofocus with multi-level refinement
 - focus_metrics: Sharpness/focus quality metrics (tenengrad, laplacian, etc.)
 - mtf_analysis: MTF computation using slanted edge method (ISO 12233)
+- statistics: Statistical analysis utilities for verification
+- field_curvature: Field curvature analysis for MTF across FOV
 """
 
 from .autofocus import (
@@ -30,6 +32,22 @@ from .focus_metrics import (
     sml
 )
 from .mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig
+from .statistics import (
+    calculate_statistics,
+    detect_outliers,
+    perform_t_test,
+    calculate_rms_error,
+    calculate_repeatability,
+    StatisticsResult,
+    TTestResult
+)
+from .field_curvature import (
+    analyze_field_curvature,
+    analyze_field_curvature_detailed,
+    detect_field_rois,
+    calculate_field_metrics,
+    FIELD_POSITIONS
+)
 
 
 # Centralized algorithm definitions for autofocus
@@ -71,4 +89,21 @@ __all__ = [
     'MTFAnalyzer',
     'MTFResult',
     'MTFConfig',
+    
+    # Statistics
+    'calculate_statistics',
+    'detect_outliers',
+    'perform_t_test',
+    'calculate_rms_error',
+    'calculate_repeatability',
+    'StatisticsResult',
+    'TTestResult',
+    
+    # Field curvature
+    'analyze_field_curvature',
+    'analyze_field_curvature_detailed',
+    'detect_field_rois',
+    'calculate_field_metrics',
+    'FIELD_POSITIONS',
 ]
+

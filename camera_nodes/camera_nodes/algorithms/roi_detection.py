@@ -36,6 +36,38 @@ class DetectedTarget:
         return self.contrast >= MIN_CONTRAST_THRESHOLD
 
 
+@dataclass
+class EdgeROI:
+    """
+    Detailed info about an extracted edge ROI for MTF measurement.
+    
+    This dataclass provides full traceability of which edge was used
+    and its exact position in the image.
+    """
+    image: np.ndarray                     # The extracted ROI image
+    bbox: Tuple[int, int, int, int]       # (x, y, width, height) in original image
+    edge_direction: str                    # 'vertical' or 'horizontal'
+    edge_name: str                         # 'top', 'right', 'bottom', 'left'
+    contrast: float = 0.0                  # Michelson contrast
+    parent_center: Tuple[int, int] = (0, 0)  # Center of parent rectangle
+    
+    @property
+    def is_valid(self) -> bool:
+        """Check if edge has sufficient contrast for MTF."""
+        return self.contrast >= MIN_CONTRAST_THRESHOLD and self.image.size > 0
+    
+    @property
+    def center(self) -> Tuple[int, int]:
+        """Center point of this ROI."""
+        x, y, w, h = self.bbox
+        return (x + w // 2, y + h // 2)
+    
+    def format_coords(self) -> str:
+        """Format coordinates as string for display."""
+        x, y, w, h = self.bbox
+        return f"x={x},y={y} {w}x{h}px"
+
+
 class RoiDetector:
     """Detector for MTF targets (slanted edges and squares).
     
@@ -390,6 +422,123 @@ class RoiDetector:
                 results.append((roi, (ix, iy, crop_size, crop_size), name))
 
         return results
+
+    @staticmethod
+    def create_edge_rois_from_rect(image: np.ndarray,
+                                    rect: tuple,
+                                    roi_width: int = 60) -> List['EdgeROI']:
+        """
+        Create EdgeROI objects at all 4 edges of a detected rectangle.
+        
+        ROIs are positioned PERPENDICULAR to each edge, spanning across the edge
+        boundary (50% inside, 50% outside) for optimal edge detection.
+        
+        This is the improved version that provides:
+        - Explicit edge direction (vertical/horizontal) for correct ESF extraction
+        - Full coordinate tracking for output display
+        - Contrast pre-calculation for filtering
+        
+        Args:
+            image: Input image (grayscale or color)
+            rect: minAreaRect tuple ((cx, cy), (w, h), angle)
+            roi_width: Width of ROI perpendicular to edge (default: 60px)
+            
+        Returns:
+            List of EdgeROI objects for each valid edge
+        """
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+            
+        img_h, img_w = gray.shape[:2]
+        (center_x, center_y), (w, h), angle = rect
+        
+        # Get box points
+        box = cv2.boxPoints(rect)
+        box = np.int32(box)
+        
+        # Sort corners: Top-Left, Top-Right, Bottom-Right, Bottom-Left
+        cnt_pts = sorted(box, key=lambda p: p[1])  # Sort by Y
+        top_pts = sorted(cnt_pts[:2], key=lambda p: p[0])  # Top by X
+        bot_pts = sorted(cnt_pts[2:], key=lambda p: p[0])  # Bottom by X
+        
+        tl, tr = top_pts
+        bl, br = bot_pts
+        
+        # Edge definitions: (point1, point2, edge_name, edge_direction)
+        # vertical edges -> measure horizontal MTF
+        # horizontal edges -> measure vertical MTF
+        edges = [
+            (tl, tr, 'top', 'horizontal'),      # Top edge runs horizontally
+            (tr, br, 'right', 'vertical'),      # Right edge runs vertically
+            (br, bl, 'bottom', 'horizontal'),   # Bottom edge runs horizontally
+            (bl, tl, 'left', 'vertical'),       # Left edge runs vertically
+        ]
+        
+        # ROI length along the edge (40% of edge length to avoid corners)
+        edge_len = min(w, h)
+        roi_len = int(edge_len * 0.4)
+        roi_len = max(20, roi_len)  # Minimum 20px
+        
+        half_width = roi_width // 2
+        half_len = roi_len // 2
+        
+        edge_rois = []
+        
+        for p1, p2, edge_name, edge_direction in edges:
+            # Edge midpoint
+            mx = (p1[0] + p2[0]) / 2
+            my = (p1[1] + p2[1]) / 2
+            
+            # Calculate ROI bounds based on edge direction
+            if edge_direction == 'horizontal':
+                # Edge runs horizontally -> ROI is wider in X, perpendicular in Y
+                x1 = int(mx - half_len)
+                x2 = int(mx + half_len)
+                y1 = int(my - half_width)
+                y2 = int(my + half_width)
+            else:  # vertical
+                # Edge runs vertically -> ROI is perpendicular in X, longer in Y
+                x1 = int(mx - half_width)
+                x2 = int(mx + half_width)
+                y1 = int(my - half_len)
+                y2 = int(my + half_len)
+            
+            # Clamp to image bounds
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(img_w, x2)
+            y2 = min(img_h, y2)
+            
+            # Validate ROI size
+            roi_w = x2 - x1
+            roi_h = y2 - y1
+            
+            if roi_w < 10 or roi_h < 10:
+                continue  # Skip too small ROIs
+                
+            # Extract ROI
+            roi_img = gray[y1:y2, x1:x2]
+            
+            if roi_img.size == 0:
+                continue
+                
+            # Calculate contrast
+            contrast = RoiDetector.calculate_michelson_contrast(roi_img)
+            
+            edge_roi = EdgeROI(
+                image=roi_img,
+                bbox=(x1, y1, roi_w, roi_h),
+                edge_direction=edge_direction,
+                edge_name=edge_name,
+                contrast=contrast,
+                parent_center=(int(center_x), int(center_y))
+            )
+            
+            edge_rois.append(edge_roi)
+        
+        return edge_rois
 
     @staticmethod
     def calculate_michelson_contrast(roi: np.ndarray) -> float:
