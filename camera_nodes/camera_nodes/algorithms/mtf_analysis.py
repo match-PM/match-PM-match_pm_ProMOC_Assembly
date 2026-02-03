@@ -37,6 +37,8 @@ except ImportError:
     cv2 = None
 
 
+from .roi_detection import RoiDetector
+
 @dataclass
 class MTFConfig:
     """
@@ -196,6 +198,58 @@ class MTFAnalyzer:
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
 
+    def check_image_quality(self, roi: np.ndarray) -> dict:
+        """
+        Check image suitability for MTF analysis.
+        
+        Checks:
+        1. Saturation/Clipping (Critical for slanted edge)
+        2. Contrast (Michelson)
+        3. Dynamic Range
+        """
+        res = {'valid': True, 'reason': '', 'contrast': 0.0}
+        
+        if roi.size == 0:
+            return {'valid': False, 'reason': 'Empty ROI'}
+            
+        # 1. Contrast Check (Reuse existing algorithim)
+        michelson = RoiDetector.calculate_michelson_contrast(roi)
+        res['contrast'] = michelson
+            
+        if michelson < 0.1: # < 10% contrast is very poor
+             res['valid'] = False
+             res['reason'] = f"Low Contrast ({michelson:.2f})"
+             return res
+             
+        # 2. Saturation/Clipping Check
+        # Saturated pixels on the edge destroy the LSF calculation.
+        # We allow SOME saturation in the ROI (e.g. background), but not "too much".
+        # Strict check: > 1% pixels saturated high (255 for 8-bit)
+        
+        # Assuming 8-bit image for now, or check range
+        is_8bit = roi.dtype == np.uint8
+        sat_high = 255 if is_8bit else 65535 
+        sat_low = 0
+        
+        n_high = np.sum(roi >= (sat_high - 1)) # count 254/255
+        
+        total_pixels = roi.size
+        sat_percent = (n_high / total_pixels) * 100.0
+        
+        if sat_percent > 2.0: # Tolerance 2%
+             res['valid'] = False
+             res['reason'] = f"Overexposure/Clipping ({sat_percent:.1f}% pixels saturated)"
+             return res
+        
+        # 3. Brightness check
+        mx = np.max(roi)
+        if mx < 50 and is_8bit: 
+             res['valid'] = False
+             res['reason'] = f"Underexposed (Max value {mx} too low)"
+             return res
+
+        return res
+
     def compute_mtf(self, image: np.ndarray,
                     roi: Optional[Tuple[int, int, int, int]] = None) -> MTFResult:
         """
@@ -223,6 +277,16 @@ class MTFAnalyzer:
         roi_img, roi_bounds = self._extract_roi(gray, roi)
         if roi_img is None:
             return MTFResult(valid=False, error_msg="Failed to extract ROI")
+
+        # --- Image Quality Checks ---
+        quality_res = self.check_image_quality(roi_img)
+        if not quality_res['valid']:
+            return MTFResult(
+                valid=False,
+                error_msg=f"Image Quality Low: {quality_res['reason']}",
+                roi_bounds=roi_bounds,
+                contrast=quality_res.get('contrast', 0.0)
+            )
 
         # Detect edge angle
         edge_angle = self._detect_edge_angle(roi_img)
