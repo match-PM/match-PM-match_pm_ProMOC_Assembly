@@ -65,7 +65,10 @@ class MTFConfig:
     oversample_factor: int = 4
     canny_low: int = 50
     canny_high: int = 150
+    canny_high: int = 150
     hough_threshold: int = 50
+    f_number: float = 2.8 # Lens aperture (default assumption)
+    wavelength_um: float = 0.555 # Green light default
 
     def validate(self) -> None:
         """Validate configuration parameters."""
@@ -108,6 +111,7 @@ class MTFResult:
     mtf10: float = 0.0
     frequencies: np.ndarray = field(default_factory=lambda: np.array([]))
     mtf_values: np.ndarray = field(default_factory=lambda: np.array([]))
+    mtf_ideal: np.ndarray = field(default_factory=lambda: np.array([])) # Diffraction limit
     esf: np.ndarray = field(default_factory=lambda: np.array([]))
     lsf: np.ndarray = field(default_factory=lambda: np.array([]))
     edge_angle: float = 0.0
@@ -116,40 +120,13 @@ class MTFResult:
     roi_bounds: Optional[Tuple[int, int, int, int]] = None
     edge_name: str = ""
     edge_direction: str = ""
-    contrast: float = 0.0
-
-    def to_dict(self) -> dict:
-        """Convert result to dictionary (for serialization)."""
-        return {
-            'mtf50': self.mtf50,
-            'mtf20': self.mtf20,
-            'mtf10': self.mtf10,
-            'edge_angle': self.edge_angle,
-            'valid': self.valid,
-            'error_msg': self.error_msg,
-            'nyquist_frequency': self.nyquist_frequency,
-            'edge_name': self.edge_name,
-            'edge_direction': self.edge_direction,
-            'contrast': self.contrast,
-            'roi_bounds': self.roi_bounds,
-        }
+    sensor_nyquist: float = 0.0
     
-    def format_edge_info(self) -> str:
-        """Format edge information for display."""
-        if not self.edge_name:
-            return ""
-        
-        edge_str = f"{self.edge_name.capitalize()} Edge"
-        
-        if self.roi_bounds:
-            x, y, w, h = self.roi_bounds
-            edge_str += f" @ x={x},y={y} {w}x{h}px"
-        
-        return edge_str
-
     @property
     def nyquist_frequency(self) -> float:
-        """Nyquist frequency in lp/mm."""
+        """Nyquist frequency in lp/mm (Sensor Limit)."""
+        if self.sensor_nyquist > 0:
+            return self.sensor_nyquist
         if len(self.frequencies) > 0:
             return float(np.max(self.frequencies))
         return 0.0
@@ -288,43 +265,93 @@ class MTFAnalyzer:
                 contrast=quality_res.get('contrast', 0.0)
             )
 
-        # Detect edge angle
-        edge_angle = self._detect_edge_angle(roi_img)
+        # Detect Gradient Normal Angle (Perpendicular to edge)
+        normal_angle = self._detect_gradient_normal_angle(roi_img)
 
-        if edge_angle is None:
+        if normal_angle is None:
             return MTFResult(
                 valid=False,
                 error_msg="No edge detected",
                 roi_bounds=roi_bounds
             )
-
+            
+        # Determine Orientation and Rotate if needed
+        # We need the edge to be roughly VERTICAL for the ESF projection algorithm.
+        # Vertical Edge -> Normal is Horizontal (~0 or ~180 deg) -> Good.
+        # Horizontal Edge -> Normal is Vertical (~90 or ~-90 deg) -> Needs Rotation.
+        
+        # Normalize to [-90, 90] range relative to X-axis
+        # If angle is 175, it's -5 deg from X-axis.
+        norm_angle_deg = normal_angle
+        is_rotated = False
+        
+        # Check if Horizontal-ish (Deviation from Vertical axis > 45)
+        # We look at deviation from X-axis (0).
+        # if angle is near 90/-90 -> Horizontal Edge.
+        
+        # Map to [0, 180] for check
+        angle_mod = norm_angle_deg % 180
+        
+        if 45 <= angle_mod <= 135:
+            # Horizontal Edge case
+            # Rotate image 90 degrees CW to make it Vertical
+            roi_to_process = cv2.rotate(roi_img, cv2.ROTATE_90_CLOCKWISE)
+            is_rotated = True
+            edge_direction = "horizontal"
+            
+            # Adjust angle: The new normal will be (angle - 90)
+            # e.g. 85 deg (Horizontal-ish) -> -5 deg (Vertical-ish)
+            # e.g. 95 deg -> 5 deg
+            measure_angle = norm_angle_deg - 90
+        else:
+            # Vertical Edge case
+            roi_to_process = roi_img
+            is_rotated = False
+            edge_direction = "vertical"
+            measure_angle = norm_angle_deg
+            
+        # Normalize effective angle to [-45, 45] for ESF calculation
+        # This represents the "deviation from perfect vertical"
+        measure_angle = ((measure_angle + 180) % 360) - 180 # to [-180, 180]
+        if measure_angle > 90: measure_angle -= 180
+        if measure_angle < -90: measure_angle += 180
+        
+        # Now measure_angle should be small (e.g. 5 deg) for a valid slanted edge
+        
         # Validate edge angle
-        if abs(edge_angle) < self.config.min_edge_angle:
+        if abs(measure_angle) < self.config.min_edge_angle:
             return MTFResult(
-                edge_angle=edge_angle,
+                edge_angle=measure_angle,
                 valid=False,
-                error_msg=f"Edge angle too small: {edge_angle:.1f}° (min: {self.config.min_edge_angle}°)",
-                roi_bounds=roi_bounds
+                error_msg=f"Edge angle too small: {measure_angle:.1f}° (min: {self.config.min_edge_angle}°)",
+                roi_bounds=roi_bounds,
+                edge_direction=edge_direction
             )
 
-        if abs(edge_angle) > self.config.max_edge_angle:
+        if abs(measure_angle) > self.config.max_edge_angle:
             return MTFResult(
-                edge_angle=edge_angle,
+                edge_angle=measure_angle,
                 valid=False,
-                error_msg=f"Edge angle too large: {edge_angle:.1f}° (max: {self.config.max_edge_angle}°)",
-                roi_bounds=roi_bounds
+                error_msg=f"Edge angle too large: {measure_angle:.1f}° (max: {self.config.max_edge_angle}°)",
+                roi_bounds=roi_bounds,
+                edge_direction=edge_direction
             )
 
         # Compute ESF
-        esf = self._compute_esf(roi_img.astype(np.float64), edge_angle)
+        # Note: The gradient normal angle has opposite sign to the line slope.
+        # Normal (nx, ny) -> Line slope is -nx/ny (if verticalish).
+        # If Normal is +5 deg, Line slants -5 deg.
+        # We pass -measure_angle to align the projection.
+        esf = self._compute_esf(roi_to_process.astype(np.float64), -measure_angle)
 
         if len(esf) < 10:
             return MTFResult(
                 esf=esf,
-                edge_angle=edge_angle,
+                edge_angle=measure_angle,
                 valid=False,
                 error_msg="ESF too short for analysis",
-                roi_bounds=roi_bounds
+                roi_bounds=roi_bounds,
+                edge_direction=edge_direction
             )
 
         # Compute LSF = derivative of ESF
@@ -343,10 +370,11 @@ class MTFAnalyzer:
             return MTFResult(
                 esf=esf,
                 lsf=lsf,
-                edge_angle=edge_angle,
+                edge_angle=measure_angle,
                 valid=False,
-                error_msg="MTF(0) = 0, invalid measurement",
-                roi_bounds=roi_bounds
+                error_msg="Zero mean component in MTF",
+                roi_bounds=roi_bounds,
+                edge_direction=edge_direction
             )
 
         mtf = mtf / mtf[0]
@@ -357,11 +385,18 @@ class MTFAnalyzer:
         sample_spacing = effective_pixel_size / 1000.0  # mm
         frequencies = np.fft.fftfreq(
             len(lsf_windowed), d=sample_spacing)[:len(mtf)]
-
+            
         # Extract MTF50, MTF20, MTF10
         mtf50 = self._find_mtf_frequency(frequencies, mtf, 0.5)
         mtf20 = self._find_mtf_frequency(frequencies, mtf, 0.2)
         mtf10 = self._find_mtf_frequency(frequencies, mtf, 0.1)
+
+        # Calculate Sensor Nyquist (Physical Limit)
+        # Nyquist = 1 / (2 * pixel_pitch_mm)
+        sensor_nyquist = 1000.0 / (2.0 * self.config.pixel_size_um)
+        
+        # Calculate Diffraction Limited MTF (Theoretical Max)
+        mtf_ideal = self._calculate_diffraction_mtf(frequencies)
 
         return MTFResult(
             mtf50=mtf50,
@@ -369,12 +404,40 @@ class MTFAnalyzer:
             mtf10=mtf10,
             frequencies=frequencies,
             mtf_values=mtf,
+            mtf_ideal=mtf_ideal,
             esf=esf,
             lsf=lsf,
-            edge_angle=edge_angle,
+            edge_angle=measure_angle,
             valid=True,
-            roi_bounds=roi_bounds
+            roi_bounds=roi_bounds,
+            edge_direction=edge_direction,
+            sensor_nyquist=sensor_nyquist
         )
+
+    def _calculate_diffraction_mtf(self, frequencies: np.ndarray) -> np.ndarray:
+        """
+        Calculates the theoretical diffraction-limited MTF for the given frequencies.
+        Based on: MTF(f) = (2/pi) * (acos(f/fc) - (f/fc) * sqrt(1 - (f/fc)^2))
+        where fc = 1 / (lambda * F#)
+        """
+        if self.config.f_number <= 0:
+            return np.ones_like(frequencies)
+            
+        # Cutoff frequency in lp/mm
+        # wavelength in mm = wavelength_um / 1000
+        cutoff_freq = 1000.0 / (self.config.wavelength_um * self.config.f_number)
+        
+        # Normalized frequency
+        v = np.abs(frequencies) / cutoff_freq
+        v = np.clip(v, 0, 1) # Clip to valid range [0, 1]
+        
+        # Diffraction formula
+        mtf_diff = (2.0 / np.pi) * (np.arccos(v) - v * np.sqrt(1 - v**2))
+        
+        # If frequency > cutoff, MTF is 0
+        mtf_diff[frequencies > cutoff_freq] = 0.0
+        
+        return mtf_diff
 
     def _extract_roi(self, image: np.ndarray,
                      roi: Optional[Tuple[int, int, int, int]] = None
@@ -402,23 +465,18 @@ class MTFAnalyzer:
 
         return image[y1:y2, x1:x2], (x1, y1, x2, y2)
 
-    def _detect_edge_angle(self, roi: np.ndarray) -> Optional[float]:
+    def _detect_gradient_normal_angle(self, roi: np.ndarray) -> Optional[float]:
         """
-        Detect edge angle using PCA (Structure Tensor) for sub-pixel accuracy.
+        Detect the angle of the gradient normal vector (perpendicular to edge).
+        Returns angle in degrees [-180, 180].
         
-        Method:
-        1. Compute gradients (Scharr/Sobel)
-        2. Threshold to find edge pixels
-        3. Compute Structure Tensor (Covariance of gradients)
-        4. PCA to find dominant gradient direction
-        
-        This offers significantly higher accuracy (approx +/- 0.03 deg) compared 
-        to Hough Transform (+/- 0.06 deg).
+        0 deg = Gradient in +X direction (Vertical Edge, Dark->Light)
+        90 deg = Gradient in +Y direction (Horizontal Edge, Dark->Light)
         """
         # Convert to float for gradient computation
         img_f = roi.astype(np.float64)
         
-        # 1. Compute Gradients (Scharr is more rotationally symmetric than Sobel)
+        # 1. Compute Gradients
         gx = cv2.Scharr(img_f, cv2.CV_64F, 1, 0)
         gy = cv2.Scharr(img_f, cv2.CV_64F, 0, 1)
         
@@ -427,72 +485,39 @@ class MTFAnalyzer:
         if np.max(mag) <= 1e-6:
             return None
             
-        # Adaptive threshold: Top 5% of gradients
         thresh = np.percentile(mag, 95)
-        # Use simple weighting or strict mask
         mask = mag > thresh
         
         if np.sum(mask) < 10:
-            return None # Not enough edge pixels
+            return None 
             
-        # 3. PCA on Gradient Vectors (Structure Tensor approach)
-        # Construct data matrix of gradients [Gx, Gy] from edge pixels
-        # We want the direction perpendicular to the edge (Gradient direction)
-        gradients = np.column_stack((gx[mask], gy[mask]))
+        # 3. Structure Tensor (Covariance of gradients without mean subtraction)
+        # We want the dominant direction of the gradients themselves, not their spread.
+        gx_masked = gx[mask]
+        gy_masked = gy[mask]
         
-        # PCA via Covariance
-        # mean_vec = np.mean(gradients, axis=0) # Should be non-zero for one-sided edge
-        # We can use PCA directly on the scatter matrix of gradients
-        # The eigenvector with LARGEST eigenvalue is the Gradient Direction (Normal to edge)
-        # The eigenvector with SMALLEST eigenvalue is the Edge Direction
+        # Construct the Structure Tensor matrix Elements
+        Sxx = np.sum(gx_masked**2)
+        Syy = np.sum(gy_masked**2)
+        Sxy = np.sum(gx_masked * gy_masked)
         
-        # cv2.PCACompute is robust
-        mean, eigenvectors, eigenvalues = cv2.PCACompute2(gradients, mean=None)
+        # Eigen decomposition of [[Sxx, Sxy], [Sxy, Syy]]
+        # This is a symmetric matrix, can use np.linalg.eigh or svd
+        eigenvals, eigenvecs = np.linalg.eigh([[Sxx, Sxy], [Sxy, Syy]])
         
-        # Eigenvectors[0] corresponds to largest eigenvalue -> Gradient Direction/Normal
-        normal = eigenvectors[0] # [ny, nx] convention in OpenCV? No, [x, y] usually.
-        # Check: PCACompute returns eigenvectors in rows.
-        # normal = [nx, ny]
+        # np.linalg.eigh returns eigenvalues in ASCENDING order
+        # So the largest eigenvalue is at index 1 (last)
+        normal = eigenvecs[:, 1]
         nx, ny = normal[0], normal[1]
         
         # Angle of Normal vector
         angle_normal_rad = np.arctan2(ny, nx)
-        
-        # Edge is perpendicular to Normal
-        angle_edge_rad = angle_normal_rad + (np.pi / 2.0)
-        
-        # Convert to degrees
-        angle_deg = np.degrees(angle_edge_rad)
-        
-        # Normalize to [-90, 90] relative to vertical
-        # Our reference is vertical edge (0 deg). 
-        # So a horizontal line is 90.
-        # Standard notation: 0 deg = Vertical.
-        
-        # Let's normalize carefully
-        # First put in range [-180, 180]
-        angle_deg = ((angle_deg + 180) % 360) - 180
-        
-        # 4. Refine with Hough (Sanity Check) - Optional
-        # If PCA is wildly wrong (e.g. noise), Hough might be coarser but safer.
-        # But PCA on thresholded gradients is extremely standard for ISO 12233.
-        
-        # Map to "deviation from vertical" (0 is vertical)
-        # If angle is 85 (near horizontal), we effectively want 85.
-        # If angle is 5 (near vertical), we want 5.
-        # If angle is 175 (near vertical), we want -5.
-        
-        # Fold: If > 90, subtract 180. If < -90, add 180.
-        if angle_deg > 90:
-            angle_deg -= 180
-        elif angle_deg < -90:
-            angle_deg += 180
-            
-        # Final result is angle from Vertical axis
-        # Note: If edge is Horizontal (90), this returns 90 or -90.
-        # If edge is Vertical (0), returns 0.
+        angle_deg = np.degrees(angle_normal_rad)
         
         return float(angle_deg)
+        
+    # Legacy alias for compatibility, wraps new method
+    _detect_edge_angle = _detect_gradient_normal_angle
 
     def _compute_esf(self, roi: np.ndarray, edge_angle: float) -> np.ndarray:
         """

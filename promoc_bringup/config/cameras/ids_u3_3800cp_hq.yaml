@@ -80,7 +80,7 @@ camera_params:
   # Default binning factor (1 = full res, 2 = 2x2 binning)
   # 2x2 Binning reduces resolution by 4 (20MP -> 5MP) but increases sensitivity
   # and frame rate processing speed. Ideally used for standard operations.
-  binning_factor: 2
+  binning_factor: 1
 
   # -------------------------------------------------------------------------
   # ROS Topics
@@ -128,11 +128,11 @@ frame_rate:
 # Current values are from existing calibration - UPDATE if you recalibrate!
 camera_info:
   # Image dimensions used during calibration
-  # Note: Defaulting to 2x2 Binning resolution (5.1 MP) for standard operation
+  # Note: 1x1 Binning resolution (20 MP)
   # Full Sensor: 5536 x 3692
   # 2x2 Binning: 2768 x 1846
-  image_width: 2768
-  image_height: 1846
+  image_width: 5536
+  image_height: 3692
   
   camera_name: assembly_camera_stream0
   
@@ -227,6 +227,18 @@ dynamic_parameters:
     Description: Vertical binning factor.
 
   
+  - FeatureName: Width
+    Type: integer
+    Min: 256
+    Max: 5536
+    Description: Width of the image in pixels.
+
+  - FeatureName: Height
+    Type: integer
+    Min: 256
+    Max: 3692
+    Description: Height of the image in pixels.
+
   # Additional available features on IDS U3-3800CP:
   # - Auto exposure, Auto gain, Auto white balance
   # - Gamma, LUT (Look-Up Table)

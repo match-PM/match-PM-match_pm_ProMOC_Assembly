@@ -23,7 +23,7 @@ from .algorithms import (
     MTFAnalyzer,
     MTFConfig
 )
-from .algorithms.roi_detection import RoiDetector
+from camera_nodes.algorithms.roi_detection import RoiDetector
 from .algorithms.statistics import calculate_uncertainty_budget
 from ament_index_python.packages import get_package_share_directory
 import yaml
@@ -216,44 +216,6 @@ class VerificationLogic:
         
         reference_pos = None
 
-        # 1. Establish Ground Truth (Exhaustive Search)
-        # We run this once (or per repetition?) - Usually once per "Scene" is enough if scene doesn't change.
-        # But we do R repetitions of the comparison.
-        self.log.info("--- Establishing Ground Truth (Exhaustive Search) ---")
-        ex_config = AutofocusConfig(start_mm=start_pos, end_mm=end_pos, step_mm=0.1) # Finer step for GT?
-        # Note: ExhaustiveAutofocus needs to be imported/available
-        # It's in AUTOFOCUS_ALGORITHMS list as (4, 'exhaustive', ExhaustiveAutofocus)
-        
-        # Find exhaustive class
-        ex_algo_cls = next((cls for _, name, cls in algorithms if name == 'exhaustive'), None)
-        
-        if ex_algo_cls:
-            af = ex_algo_cls(ex_config)
-            start_t = time.time()
-            best_pos, best_score, count = self._run_autofocus_loop(af)
-            duration = time.time() - start_t
-            
-            if best_pos is not None:
-                reference_pos = best_pos
-                self.log.info(f"Ground Truth established at {reference_pos}mm (Score: {best_score})")
-                
-                # Add to results
-                results.append({
-                    'algorithm': 'exhaustive (GT)',
-                    'repetition': 0,
-                    'focus_position_mm': best_pos,
-                    'focus_score': best_score,
-                    'duration_s': duration,
-                    'measurements': count,
-                    'deviation_from_ref_mm': 0.0,
-                    'success': True
-                })
-            else:
-                 self.log.error("Exhaustive search failed to find focus!")
-                 
-        else:
-            self.log.warn("Exhaustive algorithm not found in configuration!")
-
         # 2. Test Candidates
         candidates = [a for a in algorithms if a[1] != 'exhaustive']
         
@@ -264,25 +226,10 @@ class VerificationLogic:
         range_span = end_pos - start_pos
         mid_point = start_pos + range_span / 2.0
         
-        start_strategies = []
-        if reference_pos:
-            start_strategies = [
-                ('optimum', reference_pos),
-                ('offset_neg', max(start_pos, reference_pos - 1.0)),
-                ('offset_pos', min(end_pos, reference_pos + 1.0))
-            ]
-        else:
-             # Fallback if no ref: Start, Middle, End
-            start_strategies = [
-                ('start', start_pos),
-                ('middle', mid_point),
-                ('end', end_pos)
-            ]
-        
         for rep in range(repetitions):
-            # Periodic Exhaustive (every 10 reps) to track drift
-            if (rep > 0 and rep % 10 == 0) and ex_algo_cls:
-                self.log.info(f"--- Periodic Reference Update (Exhaustive) at Rep {rep+1} ---")
+            # Periodic Exhaustive (rep 1, 10, 20, 30, ...) to track drift
+            if ex_algo_cls and (rep == 0 or (rep + 1) % 10 == 0):
+                self.log.info(f"--- Reference Update (Exhaustive) at Rep {rep+1} ---")
                 ex_config = AutofocusConfig(start_mm=start_pos, end_mm=end_pos, step_mm=0.1)
                 af = ex_algo_cls(ex_config)
                 start_t = time.time()
@@ -297,7 +244,7 @@ class VerificationLogic:
                     
                     # Log this measurement
                     results.append({
-                        'algorithm': 'exhaustive (periodic)',
+                        'algorithm': 'exhaustive (reference)',
                         'repetition': rep+1,
                         'focus_position_mm': best_pos,
                         'focus_score': best_score,
@@ -308,13 +255,23 @@ class VerificationLogic:
                         'start_strategy': 'reference_update',
                         'start_pos_mm': start_pos
                     })
-                    
-                    # Update strategies with new reference
-                    start_strategies = [
-                        ('optimum', reference_pos),
-                        ('offset_neg', max(start_pos, reference_pos - 1.0)),
-                        ('offset_pos', min(end_pos, reference_pos + 1.0))
-                    ]
+                else:
+                    self.log.error("Exhaustive search failed to find focus!")
+
+            start_strategies = []
+            if reference_pos:
+                start_strategies = [
+                    ('optimum', reference_pos),
+                    ('offset_neg', max(start_pos, reference_pos - 1.0)),
+                    ('offset_pos', min(end_pos, reference_pos + 1.0))
+                ]
+            else:
+                # Fallback if no ref: Start, Middle, End
+                start_strategies = [
+                    ('start', start_pos),
+                    ('middle', mid_point),
+                    ('end', end_pos)
+                ]
             
             for strat_name, strat_pos in start_strategies:
                 self.log.info(f"--- AF Verification Rep {rep+1} (Start: {strat_name}) ---")

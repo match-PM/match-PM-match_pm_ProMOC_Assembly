@@ -10,18 +10,17 @@ Image processing algorithms for camera_nodes:
 """
 
 from camera_nodes.algorithms.autofocus import (
-    Autofocus, 
+    MSPRAutofocus,
     ParabolicAutofocus,
     IterativeParabolicAutofocus,
     GoldenSectionAutofocus,
-    AdaptiveHillClimbingAutofocus,
     HillClimbingAutofocus,
+    FourStepAutofocus,
     ExhaustiveAutofocus,
     FibonacciAutofocus,
-    BruteForceAutofocus,
-    AutofocusConfig, 
-    AutofocusResult, 
-    Phase, 
+    AutofocusConfig,
+    AutofocusResult,
+    Phase,
     tenengrad
 )
 from camera_nodes.algorithms.focus_metrics import (
@@ -54,24 +53,25 @@ from camera_nodes.algorithms.field_curvature import (
 # Used by autofocus callbacks and verification services
 AUTOFOCUS_ALGORITHMS = [
     (0, 'goldensection', GoldenSectionAutofocus),
-    (1, 'hillclimbing', AdaptiveHillClimbingAutofocus),
+    (1, 'hillclimbing', HillClimbingAutofocus),
     (2, 'parabolic', IterativeParabolicAutofocus),
     (3, 'fibonacci', FibonacciAutofocus),
     (4, 'exhaustive', ExhaustiveAutofocus),  # Reference algorithm
+    (5, 'fourstep', FourStepAutofocus),
+    (6, 'mspr_autofocus', MSPRAutofocus),
 ]
 
 
 __all__ = [
     # Autofocus algorithms
-    'Autofocus',
+    'MSPRAutofocus',
     'ParabolicAutofocus',
     'IterativeParabolicAutofocus',
     'GoldenSectionAutofocus',
-    'AdaptiveHillClimbingAutofocus',
     'HillClimbingAutofocus',
+    'FourStepAutofocus',
     'ExhaustiveAutofocus',
     'FibonacciAutofocus',
-    'BruteForceAutofocus',
     'AutofocusConfig',
     'AutofocusResult',
     'Phase',

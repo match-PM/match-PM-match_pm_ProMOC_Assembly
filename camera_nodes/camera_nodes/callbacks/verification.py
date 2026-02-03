@@ -1,6 +1,8 @@
 """Verification callbacks for scientific validation of autofocus and MTF measurements."""
 
 from datetime import datetime
+from collections import defaultdict
+import json
 from pathlib import Path
 import time
 import csv
@@ -34,8 +36,8 @@ class VerificationCallbacks(CallbackBase):
         """Collects all measurement metadata from node parameters."""
         return {
             'timestamp': datetime.now().isoformat(),
-            'camera_model': 'IDS UI-3590CP-M-GL Rev.2.2',  # TODO: Get from driver
-            'camera_serial': self._node.get_parameter('measurement.username').value or 'unknown',
+            'camera_model': 'U3_3800CP-HQ Rev2.2',
+            'camera_serial': '4104401781',
             'objective': self._node.get_parameter('measurement_conditions.camera_objective').value,
             'pixel_size_um': self._node.get_parameter('pixel_size_um').value,
             'coaxial_light_voltage': self._node.get_parameter('measurement_conditions.coaxial_light_voltage').value,
@@ -65,7 +67,7 @@ class VerificationCallbacks(CallbackBase):
         
         self._node.get_logger().info(
             f'Autofocus Verification: range {request.start_position}-{request.end_position}mm, '
-            f'repetitions={request.repetitions}, include_exhaustive={request.include_exhaustive}'
+            f'repetitions={request.repetitions}'
         )
 
         # Validate input
@@ -73,7 +75,6 @@ class VerificationCallbacks(CallbackBase):
             raise ConfigurationError('start_position must be < end_position')
         
         repetitions = max(1, request.repetitions) if request.repetitions > 0 else 1
-        include_exhaustive = request.include_exhaustive
         
         # Get axis clients
         clients = self._get_all_axis_clients()
@@ -87,23 +88,35 @@ class VerificationCallbacks(CallbackBase):
         metadata['end_position_mm'] = request.end_position
         metadata['repetitions'] = repetitions
 
-        output_dir = self._get_output_dir('verification')
+        output_dir = self._get_output_dir('verification/autofocus_verification', operator_name=request.operator_name)
         timestamp = self._get_timestamp()
+        run_dir = output_dir / timestamp
+        run_dir.mkdir(parents=True, exist_ok=True)
         
         # Results storage
         results = []
         reference_position = None
+        measurement_points = []
+        curves_by_rep = defaultdict(list)
         
         # Select algorithms to test
         algorithms_to_test = AUTOFOCUS_ALGORITHMS.copy()
-        if not include_exhaustive:
-            algorithms_to_test = [a for a in algorithms_to_test if a[1] != 'exhaustive']
         
         # Run each algorithm
         for rep in range(repetitions):
             self._node.get_logger().info(f'--- Repetition {rep + 1}/{repetitions} ---')
-            
-            for mode, name, algo_class in algorithms_to_test:
+
+            run_exhaustive = (rep == 0 or (rep + 1) % 10 == 0)
+            algorithms_for_rep = algorithms_to_test
+            if not run_exhaustive:
+                algorithms_for_rep = [a for a in algorithms_to_test if a[1] != 'exhaustive']
+            else:
+                # Ensure exhaustive runs first as reference
+                exhaustive = [a for a in algorithms_for_rep if a[1] == 'exhaustive']
+                non_exhaustive = [a for a in algorithms_for_rep if a[1] != 'exhaustive']
+                algorithms_for_rep = exhaustive + non_exhaustive
+
+            for mode, name, algo_class in algorithms_for_rep:
                 self._node.get_logger().info(f'Running {name.upper()}...')
                 
                 config = AutofocusConfig(
@@ -122,8 +135,8 @@ class VerificationCallbacks(CallbackBase):
                 
                 duration = time.time() - algo_start
                 
-                # Store reference position from exhaustive
-                if name == 'exhaustive' and rep == 0 and best_pos is not None:
+                # Store/update reference position from exhaustive
+                if name == 'exhaustive' and best_pos is not None:
                     reference_position = best_pos
                 
                 # Calculate deviation from reference
@@ -145,8 +158,32 @@ class VerificationCallbacks(CallbackBase):
                     'repetition': rep + 1,
                 })
 
+                # Store per-measurement data for curve plotting/export
+                series = []
+                for m in getattr(af, '_measurements', []) or []:
+                    try:
+                        series.append({'position_mm': float(m.position_mm), 'score': float(m.score)})
+                    except Exception:
+                        continue
+
+                for idx, m in enumerate(series):
+                    measurement_points.append({
+                        'repetition': rep + 1,
+                        'algorithm': name,
+                        'index': idx,
+                        'position_mm': m['position_mm'],
+                        'score': m['score'],
+                    })
+
+                if series:
+                    curves_by_rep[rep + 1].append({
+                        'label': name,
+                        'positions': [m['position_mm'] for m in series],
+                        'scores': [m['score'] for m in series],
+                    })
+
                 if best_image is not None:
-                    img_path = output_dir / f'autofocus_best_{name}_rep{rep + 1}_{timestamp}.jpg'
+                    img_path = run_dir / f'autofocus_best_{name}_rep{rep + 1}_{timestamp}.jpg'
                     cv2.imwrite(str(img_path), best_image)
                     self._node.get_logger().info(f'Saved best image: {img_path}')
                 
@@ -156,17 +193,32 @@ class VerificationCallbacks(CallbackBase):
                 )
         
         # Write CSV
-        csv_path = output_dir / f'autofocus_verification_{timestamp}.csv'
+        csv_path = run_dir / f'autofocus_verification_{timestamp}.csv'
         
         fieldnames = ['timestamp', 'algorithm', 'focus_position_mm', 'focus_score',
                         'duration_s', 'measurements', 'deviation_from_ref_mm', 'repetition']
         
         self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
 
+        # Write per-measurement data (all points)
+        if measurement_points:
+            measurements_path = run_dir / f'autofocus_measurements_{timestamp}.json'
+            with open(measurements_path, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'metadata': metadata,
+                    'measurements': measurement_points,
+                }, f, indent=2)
+
         plotter = VerificationPlotter(self._node.get_logger())
-        plot_path = output_dir / f'autofocus_verification_{timestamp}.png'
+        plot_path = run_dir / f'autofocus_verification_{timestamp}.png'
         if plotter.plot_autofocus_verification(results, str(plot_path)):
             self._node.get_logger().info(f'Autofocus plot saved: {plot_path}')
+
+        # Plot per-repetition autofocus curves (bell curves)
+        for rep_idx, curves in curves_by_rep.items():
+            curve_path = run_dir / f'autofocus_curves_rep{rep_idx}_{timestamp}.png'
+            if plotter.plot_autofocus_curves(curves, str(curve_path)):
+                self._node.get_logger().info(f'Autofocus curves saved: {curve_path}')
         
         # Calculate summary statistics
         max_deviation = 0.0
@@ -207,6 +259,10 @@ class VerificationCallbacks(CallbackBase):
         cv_image = self._get_latest_cv_image()
         if cv_image is None:
             raise ImageProcessingError('No image available')
+        if cv_image.shape[1] < 3000:
+             self._node.get_logger().warn(
+                f'MTF verification running on low res (width {cv_image.shape[1]}). Results may be inaccurate!'
+            )
         
         # Collect metadata
         metadata = self._get_measurement_metadata()
@@ -218,7 +274,18 @@ class VerificationCallbacks(CallbackBase):
         metadata['repetitions'] = repetitions
         
         pixel_size_um = self._node.get_parameter('pixel_size_um').value or 2.40  # IDS U3-3800CP
-        config = MTFConfig(pixel_size_um=pixel_size_um)
+        min_edge_angle = 2.0
+        max_edge_angle = 10.0
+        if self._node.has_parameter('mtf_min_edge_angle'):
+            min_edge_angle = float(self._node.get_parameter('mtf_min_edge_angle').value or min_edge_angle)
+        if self._node.has_parameter('mtf_max_edge_angle'):
+            max_edge_angle = float(self._node.get_parameter('mtf_max_edge_angle').value or max_edge_angle)
+
+        config = MTFConfig(
+            pixel_size_um=pixel_size_um,
+            min_edge_angle=min_edge_angle,
+            max_edge_angle=max_edge_angle,
+        )
         analyzer = MTFAnalyzer(config)
         
         results = []
@@ -227,12 +294,17 @@ class VerificationCallbacks(CallbackBase):
         edge_measurements = defaultdict(lambda: {'mtf50': [], 'mtf20': [], 'mtf10': [], 'contrast': []})
         edges_failed = 0
         mtf_curves = []
+        mtf50_values = []
+        mtf20_values = []
+        mtf10_values = []
         
         # Detect targets + save debug images
         vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
 
-        output_dir = self._get_output_dir('verification')
+        output_dir = self._get_output_dir('verification/mtf_verification', operator_name=request.operator_name)
         timestamp = self._get_timestamp()
+        run_dir = output_dir / timestamp
+        run_dir.mkdir(parents=True, exist_ok=True)
 
         edges_tile_path = None
         
@@ -265,7 +337,7 @@ class VerificationCallbacks(CallbackBase):
                 2,
             )
 
-        targets_path = output_dir / f'mtf_targets_{timestamp}.jpg'
+        targets_path = run_dir / f'mtf_targets_{timestamp}.jpg'
         cv2.imwrite(str(targets_path), vis_img)
         
         # REPEATABILITY LOOP: Measure multiple times if requested
@@ -339,40 +411,68 @@ class VerificationCallbacks(CallbackBase):
                     1,
                 )
 
-                edges_with_boxes = RoiDetector.split_square_into_edges_with_boxes(cv_image, chosen_square)
+                # Use fixed ROI size as requested (300px long, 50px wide)
+                # Long dimension is along the edge, Short is perpendicular.
+                fixed_roi_dims = (300, 50)
+                edges_with_boxes = RoiDetector.split_square_into_edges_with_boxes(
+                    cv_image, chosen_square, fixed_size=fixed_roi_dims
+                )
                 edges = [roi for roi, _, _ in edges_with_boxes]
                 edge_names = ['top', 'right', 'bottom', 'left']
 
-                # Save tiled edge visualization for first position only
+                # Save tiled edge visualization (legacy overview)
                 if edges_tile_path is None and edges:
                     vis_edges, _ = RoiDetector.create_debug_visualization(edges)
-                    edges_tile_path = output_dir / f'mtf_edges_{timestamp}.jpg'
+                    edges_tile_path = run_dir / f'mtf_edges_overview_{timestamp}.jpg'
                     cv2.imwrite(str(edges_tile_path), vis_edges)
 
+                # Process each edge
                 for roi, (x, y, w_box, h_box), name in edges_with_boxes:
+                    # 1. Draw tight ROI on main debug image
                     cv2.rectangle(vis_img, (x, y), (x + w_box, y + h_box), (0, 0, 255), 2)
-                    cv2.putText(
-                        vis_img,
-                        f'edge:{name}',
-                        (x, max(0, y - 8)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 0, 255),
-                        1,
-                    )
-                
-                for i, edge_img in enumerate(edges):
-                    edge_name = edge_names[i] if i < 4 else f'edge_{i}'
+                    cv2.putText(vis_img, f'{name}', (x, max(0, y - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
+                    # 2. Save individual "Zoomed Out" Context Image
+                    # Crop a larger area (e.g. +50px padding)
+                    pad = 50
+                    cx, cy = x + w_box // 2, y + h_box // 2
+                    # Context size
+                    ctx_w, ctx_h = w_box + 2*pad, h_box + 2*pad
+                    ctx_x = max(0, cx - ctx_w // 2)
+                    ctx_y = max(0, cy - ctx_h // 2)
+                    ctx_w = min(ctx_w, w - ctx_x)
+                    ctx_h = min(ctx_h, h - ctx_y)
                     
-                    contrast = RoiDetector.calculate_michelson_contrast(edge_img)
-                    result = analyzer.compute_mtf(edge_img)
+                    if ctx_w > 0 and ctx_h > 0:
+                        context_img = cv_image[ctx_y:ctx_y+ctx_h, ctx_x:ctx_x+ctx_w].copy()
+                        if len(context_img.shape) == 2:
+                            context_img = cv2.cvtColor(context_img, cv2.COLOR_GRAY2BGR)
+                            
+                        # Draw the ROI box inside this context image
+                        # Box coords relative to context crop
+                        rel_x = x - ctx_x
+                        rel_y = y - ctx_y
+                        cv2.rectangle(context_img, (rel_x, rel_y), 
+                                      (rel_x + w_box, rel_y + h_box), (0, 255, 0), 1)
+                        
+                        roi_path = run_dir / f'roi_{pos_name}_{name}_{timestamp}.jpg'
+                        cv2.imwrite(str(roi_path), context_img)
+                
+                for i, (roi_img, (box_x, box_y, box_w, box_h), name) in enumerate(edges_with_boxes):
+                    edge_name = name
+                    
+                    contrast = RoiDetector.calculate_michelson_contrast(roi_img)
+                    result = analyzer.compute_mtf(roi_img)
                     
                     if result.valid:
                         if result.frequencies.size and result.mtf_values.size and len(mtf_curves) < 6:
                             mtf_curves.append({
                                 'label': f'{pos_name}-{edge_name}',
                                 'frequencies': result.frequencies,
+                                'frequencies': result.frequencies,
                                 'mtf_values': result.mtf_values,
+                                'mtf_ideal': result.mtf_ideal,
                                 'nyquist_lpmm': result.nyquist_frequency,
                             })
                         results.append({
@@ -380,8 +480,12 @@ class VerificationCallbacks(CallbackBase):
                             'config': request.config_name or 'default',
                             'position': pos_name,
                             'edge': edge_name,
-                            'roi_x': int(roi_cx),
-                            'roi_y': int(roi_cy),
+                            'roi_x': int(box_x), # Exact Top-Left of the Edge ROI
+                            'roi_y': int(box_y),
+                            'roi_w': int(box_w),
+                            'roi_h': int(box_h),
+                            'square_cx': int(roi_cx), # Keep context
+                            'square_cy': int(roi_cy),
                             'mtf50_lpmm': f'{result.mtf50:.2f}',
                             'mtf20_lpmm': f'{result.mtf20:.2f}',
                             'mtf10_lpmm': f'{result.mtf10:.2f}',
@@ -400,8 +504,12 @@ class VerificationCallbacks(CallbackBase):
                             'config': request.config_name or 'default',
                             'position': pos_name,
                             'edge': edge_name,
-                            'roi_x': int(roi_cx),
-                            'roi_y': int(roi_cy),
+                            'roi_x': int(box_x),
+                            'roi_y': int(box_y),
+                            'roi_w': int(box_w),
+                            'roi_h': int(box_h),
+                            'square_cx': int(roi_cx),
+                            'square_cy': int(roi_cy),
                             'mtf50_lpmm': '0',
                             'mtf20_lpmm': '0',
                             'mtf10_lpmm': '0',
@@ -412,21 +520,111 @@ class VerificationCallbacks(CallbackBase):
                             'error': result.error_msg,
                         })
                 
-                # Only measure center for now (field test would need multiple targets)
-                if not request.field_test:
-                    break
+                # Only measure center for now (implicit via positions list)
+                pass
         
-        # Write CSV
-        csv_path = output_dir / f'mtf_verification_{timestamp}.csv'
-        
-        fieldnames = ['timestamp', 'config', 'position', 'edge', 'roi_x', 'roi_y',
-                'mtf50_lpmm', 'mtf20_lpmm', 'mtf10_lpmm', 'edge_angle_deg',
-                'contrast', 'nyquist_lpmm', 'valid', 'error']
-        
+        # Write Main Summary CSV (Raw Data)
+        csv_path = run_dir / f'mtf_verification_{timestamp}.csv'
+        fieldnames = ['timestamp', 'config', 'position', 'edge', 
+                      'roi_x', 'roi_y', 'roi_w', 'roi_h', 'square_cx', 'square_cy',
+                      'mtf50_lpmm', 'mtf20_lpmm', 'mtf10_lpmm', 'edge_angle_deg',
+                      'contrast', 'nyquist_lpmm', 'valid', 'error']
         self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
 
+        # Calculate Statistics (Mean & Std Dev)
+        stats_results = []
+        # Group by (position, edge)
+        grouped_data = defaultdict(lambda: {
+            'mtf50': [], 'mtf20': [], 'mtf10': [], 'angle': [], 'contrast': []
+        })
+        
+        for r in results:
+            if r.get('valid') == 'true':
+                key = (r['position'], r['edge'])
+                grouped_data[key]['mtf50'].append(float(r['mtf50_lpmm']))
+                grouped_data[key]['mtf20'].append(float(r['mtf20_lpmm']))
+                grouped_data[key]['mtf10'].append(float(r['mtf10_lpmm']))
+                grouped_data[key]['angle'].append(float(r['edge_angle_deg']))
+                grouped_data[key]['contrast'].append(float(r['contrast']))
+
+        for (pos, edge), data in grouped_data.items():
+            count = len(data['mtf50'])
+            if count > 0:
+                stats_results.append({
+                    'position': pos,
+                    'edge': edge,
+                    'count': count,
+                    'mtf50_mean': f"{np.mean(data['mtf50']):.2f}",
+                    'mtf50_std': f"{np.std(data['mtf50']):.2f}",
+                    'mtf20_mean': f"{np.mean(data['mtf20']):.2f}",
+                    'mtf20_std': f"{np.std(data['mtf20']):.2f}",
+                    'mtf10_mean': f"{np.mean(data['mtf10']):.2f}",
+                    'mtf10_std': f"{np.std(data['mtf10']):.2f}",
+                    'angle_mean': f"{np.mean(data['angle']):.2f}",
+                    'contrast_mean': f"{np.mean(data['contrast']):.3f}",
+                })
+
+        # Write Statistics CSV
+        if stats_results:
+            summary_csv_path = run_dir / f'mtf_verification_summary_{timestamp}.csv'
+            summary_fields = ['position', 'edge', 'count', 
+                              'mtf50_mean', 'mtf50_std', 
+                              'mtf20_mean', 'mtf20_std', 
+                              'mtf10_mean', 'mtf10_std', 
+                              'angle_mean', 'contrast_mean']
+            
+            with open(summary_csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=summary_fields)
+                writer.writeheader()
+                writer.writerows(stats_results)
+            
+            response.status_message += f', Summary CSV: {summary_csv_path}'
+
+
+        # Write Comprehensive Curve Data CSV
+        curve_data_rows = []
+        for curve in mtf_curves:
+            label = curve['label'] # e.g. center-top
+            freqs = curve['frequencies']
+            vals = curve['mtf_values']
+            ideals = curve.get('mtf_ideal', [])
+            nyq = curve['nyquist_lpmm']
+            
+            # Unpack label
+            parts = label.split('-')
+            pos = parts[0]
+            edge = parts[1] if len(parts) > 1 else 'unknown'
+            
+            # If ideals is not present or partial, pad it
+            if len(ideals) != len(freqs):
+                ideals = [0.0] * len(freqs)
+
+            for f, v, ideal in zip(freqs, vals, ideals):
+                # Filter out negative frequencies or irrelevant range if needed
+                if f >= 0 and f <= (nyq * 1.5):
+                    curve_data_rows.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'position': pos,
+                        'edge': edge,
+                        'frequency_lpmm': f'{f:.4f}',
+                        'mtf_value': f'{v:.6f}',
+                        'mtf_ideal_value': f'{ideal:.6f}',
+                        'nyquist_limit': f'{nyq:.2f}'
+                    })
+                    
+        if curve_data_rows:
+            full_csv_path = run_dir / f'mtf_full_curves_{timestamp}.csv'
+            curve_fieldnames = ['timestamp', 'position', 'edge', 'frequency_lpmm', 
+                                'mtf_value', 'mtf_ideal_value', 'nyquist_limit']
+            with open(full_csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=curve_fieldnames)
+                writer.writeheader()
+                writer.writerows(curve_data_rows)
+            # Add to response message
+            response.status_message += f', Curves CSV: {full_csv_path}'
+
         plotter = VerificationPlotter(self._node.get_logger())
-        plot_path = output_dir / f'mtf_results_{timestamp}.png'
+        plot_path = run_dir / f'mtf_results_{timestamp}.png'
         if plotter.plot_mtf_verification(results, str(plot_path), curves=mtf_curves):
             self._node.get_logger().info(f'MTF plot saved: {plot_path}')
         

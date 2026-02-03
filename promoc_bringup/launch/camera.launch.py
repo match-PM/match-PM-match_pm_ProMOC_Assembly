@@ -31,9 +31,16 @@ def generate_launch_description():
         description='Camera configuration to use (filename in config/cameras/ without .yaml extension). Default: ids_u3_3800cp_hq'
     )
 
+    binning_factor_arg = DeclareLaunchArgument(
+        'binning_factor',
+        default_value='',
+        description='Override binning factor (e.g., 1 or 2). Empty = use config file.'
+    )
+
     return LaunchDescription([
         sim_mode_arg,
         camera_type_arg,
+        binning_factor_arg,
         OpaqueFunction(function=launch_setup)
     ])
 
@@ -42,6 +49,7 @@ def launch_setup(context, *args, **kwargs):
     sim_mode = LaunchConfiguration(
         'sim_mode').perform(context).lower() == 'true'
     camera_type = LaunchConfiguration('camera_type').perform(context)
+    binning_override = LaunchConfiguration('binning_factor').perform(context).strip()
     
     launch_actions = []
 
@@ -162,6 +170,13 @@ def launch_setup(context, *args, **kwargs):
 
             # Get binning factor (default to 1 if not specified)
             binning_factor = camera_params.get("binning_factor", 1)
+            if binning_override:
+                try:
+                    binning_factor = int(binning_override)
+                except ValueError:
+                    launch.logging.get_logger().warn(
+                        f"Invalid binning_factor override '{binning_override}', using config value"
+                    )
 
             launch_actions.append(Node(
                 name=driver_node_name,
@@ -176,7 +191,7 @@ def launch_setup(context, *args, **kwargs):
                     "frame_id": camera_params["cameraname"],
                     "stream_names": ["stream0"],
                     "camera_info_urls": [f"file://{camera_info_yaml}"],
-                    "dynamic_parameters_yaml_url": dynamic_parameters_yaml,
+                    "dynamic_parameters_yaml_url": f"file://{dynamic_parameters_yaml}",
                     "DeviceControl": {
                         "DeviceLinkThroughputLimit": 125000000,
                     },

@@ -15,7 +15,7 @@ Algorithm:
    - Stop when step size reaches minimum threshold
 
 Usage:
-    from camera_nodes.autofocus import Autofocus, AutofocusConfig
+    from camera_nodes.autofocus import MSPRAutofocus, AutofocusConfig
     
     config = AutofocusConfig(
         start_mm=0.0,
@@ -25,7 +25,7 @@ Usage:
         min_step_mm=0.01
     )
     
-    af = Autofocus(config)
+    af = MSPRAutofocus(config)
     position = af.start()  # Returns initial position
     
     while True:
@@ -845,8 +845,8 @@ class HillClimbingAutofocus(MSPRAutofocus):
         self.min_step = config.min_step_mm
 
         # Drop detection settings
-        self.drop_threshold = 0.85
-        self.refine_drop_threshold = 0.95
+        self.drop_threshold = 0.80
+        self.refine_drop_threshold = 0.80
         self.drop_steps = 0
         self._refine_start_pos = 0.0
 
@@ -855,7 +855,9 @@ class HillClimbingAutofocus(MSPRAutofocus):
         self.blind_zone_end = config.start_mm + (total_range * 0.3)
         
         # State
-        self.phase_state = "SCANNING" # SCANNING, REVERSING, REFINING, FINISHED
+        self.phase_state = "SCANNING" # SCANNING, REFINING, FINAL_SCAN, FINISHED
+        self.final_scan_points: list[float] = []
+        self.final_scan_index: int = 0
 
     def start(self) -> float:
         self._phase = Phase.COARSE_SCAN # Reuse enum for compatibility
@@ -888,7 +890,11 @@ class HillClimbingAutofocus(MSPRAutofocus):
         elif self.phase_state == "REFINING":
             if self._best_measurement is not None and score < (self._best_measurement.score * self.refine_drop_threshold):
                 if self.step <= self.min_step:
-                    finished = True
+                    if self._setup_final_scan():
+                        self.phase_state = "FINAL_SCAN"
+                        next_pos = self.final_scan_points[0]
+                    else:
+                        finished = True
                 else:
                     self.step = max(self.step * 0.5, self.min_step)
                     next_pos = self._best_measurement.position_mm - (self.step * 3)
@@ -899,15 +905,30 @@ class HillClimbingAutofocus(MSPRAutofocus):
                     dist = abs(next_pos - self._best_measurement.position_mm)
                     if dist > (self.step * 10):
                         if self.step <= self.min_step:
-                            finished = True
+                            if self._setup_final_scan():
+                                self.phase_state = "FINAL_SCAN"
+                                next_pos = self.final_scan_points[0]
+                            else:
+                                finished = True
                         else:
                             self._start_refinement_cycle()
                             next_pos = self._calculate_refine_start()
 
+        elif self.phase_state == "FINAL_SCAN":
+            self.final_scan_index += 1
+            if self.final_scan_index < len(self.final_scan_points):
+                next_pos = self.final_scan_points[self.final_scan_index]
+            else:
+                finished = True
+
         # Boundary Checks
         if next_pos > self.config.end_mm or next_pos < self.config.start_mm:
             if self.step <= self.min_step:
-                finished = True
+                if self._setup_final_scan():
+                    self.phase_state = "FINAL_SCAN"
+                    next_pos = self.final_scan_points[0]
+                else:
+                    finished = True
             else:
                 self._start_refinement_cycle()
                 next_pos = self._calculate_refine_start()
@@ -925,7 +946,7 @@ class HillClimbingAutofocus(MSPRAutofocus):
     def _start_refinement_cycle(self) -> None:
         """Prepares the next finer pass."""
         self.phase_state = "REFINING"
-        self.step = max(self.step * 0.4, self.min_step)
+        self.step = max(self.step * 0.6, self.min_step)
         self.bad_steps = 0
         self.drop_steps = 0
 
@@ -936,15 +957,34 @@ class HillClimbingAutofocus(MSPRAutofocus):
         self._refine_start_pos = self._best_measurement.position_mm - (self.step * 4.0)
         return self._refine_start_pos
 
+    def _setup_final_scan(self) -> bool:
+        """Prepare a final fine scan around the best position."""
+        if self._best_measurement is None:
+            return False
 
-class ThreeStageAutofocus(MSPRAutofocus):
+        window = max(self.min_step * 20.0, 0.1)
+        start = self._best_measurement.position_mm - (window / 2.0)
+        end = self._best_measurement.position_mm + (window / 2.0)
+
+        start = max(self.config.start_mm, start)
+        end = min(self.config.end_mm, end)
+
+        self.final_scan_points = list(np.arange(start, end + (self.min_step / 2.0), self.min_step))
+        self.final_scan_points = self._clamp_positions(self.final_scan_points)
+        self.final_scan_index = 0
+        return bool(self.final_scan_points)
+
+
+
+class FourStepAutofocus(MSPRAutofocus):
     """
-    3-Stage Autofocus for 10µm Precision without Backlash.
+    4-Step Autofocus for 10µm Precision without Backlash.
 
     Progression:
     1. Coarse (0.4 mm) -> Scans full range. Finds the "Hill".
     2. Fine   (0.1 mm) -> Scans +/- 0.6 mm. Finds the "Peak".
     3. Ultra  (0.01 mm)-> Scans +/- 0.15 mm. Finds the "Summit".
+    4. Parabolic refinement on the final samples.
 
     Feature: Unidirectional Scan
     Before each stage, the axis moves back to a start position and then
@@ -1023,12 +1063,14 @@ class ThreeStageAutofocus(MSPRAutofocus):
 
         elif self.stage == "ULTRA":
             if self.drop_counter >= 5:
+                self._apply_parabolic_refinement()
                 finished = True
             else:
                 self.scan_index += 1
                 if self.scan_index < len(self.scan_points):
                     next_pos = self.scan_points[self.scan_index]
                 else:
+                    self._apply_parabolic_refinement()
                     finished = True
 
         return AutofocusResult(
@@ -1067,6 +1109,28 @@ class ThreeStageAutofocus(MSPRAutofocus):
         if self.stage == "ULTRA":
             return 0.9
         return 1.0
+
+    def _apply_parabolic_refinement(self) -> None:
+        """Parabolic peak refinement using final stage measurements."""
+        if not self.scan_points or not self._measurements:
+            return
+
+        final_coords = [
+            (m.position_mm, m.score)
+            for m in self._measurements
+            if any(abs(m.position_mm - p) < 1e-6 for p in self.scan_points)
+        ]
+
+        if len(final_coords) < 3:
+            return
+
+        final_coords.sort(key=lambda x: x[0])
+        x_vals = [c[0] for c in final_coords]
+        scores = [c[1] for c in final_coords]
+        subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
+
+        if self._best_measurement and abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
+            self._best_measurement.position_mm = subpixel_pos
 
 
 class ExhaustiveAutofocus(MSPRAutofocus):
@@ -1365,7 +1429,4 @@ class FibonacciAutofocus(MSPRAutofocus):
         )
 
 
-# Aliases for convenience
-Autofocus = MSPRAutofocus
-AdaptiveHillClimbingAutofocus = HillClimbingAutofocus
-BruteForceAutofocus = ExhaustiveAutofocus  # Alternative name
+# Aliases removed for clarity

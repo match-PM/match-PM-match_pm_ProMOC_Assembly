@@ -42,5 +42,5 @@ user:
 measurement_conditions:
   coaxial_light_voltage: 18.15    # Coaxial light voltage in Volts
   coaxial_light_current: 0.18     # Coaxial light current in Amperes
-  camera_objective: '4x'          # Used objective lens (e.g., '4x', '10x', '20x')
+  camera_objective: '3x'          # Used objective lens (e.g., '4x', '10x', '20x')
   notes: ''                        # Additional notes (e.g., 'new lens', 'calibration run')

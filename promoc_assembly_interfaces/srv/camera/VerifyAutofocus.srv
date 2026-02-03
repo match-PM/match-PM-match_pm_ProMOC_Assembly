@@ -7,7 +7,6 @@ float64 end_position    # End position in mm
 
 # Test configuration
 int32 repetitions       # Repetitions per algorithm (default: 1)
-bool include_exhaustive # Include exhaustive as reference (default: true, slow!)
 
 # Operator and metadata
 string operator_name    # Name of operator performing test

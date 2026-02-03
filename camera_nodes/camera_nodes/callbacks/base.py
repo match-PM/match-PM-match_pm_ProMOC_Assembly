@@ -101,10 +101,13 @@ class CallbackBase:
     # CSV EXPORT
     # ==========================================================================
 
-    def _get_output_dir(self, subdirectory: str = '') -> Path:
+    def _get_output_dir(self, subdirectory: str = '', operator_name: str | None = None) -> Path:
         """Creates and returns the output directory."""
         username = ''
-        if self._node.has_parameter('measurement.username'):
+        operator_clean = (operator_name or '').strip()
+        if operator_clean:
+            username = operator_clean
+        elif self._node.has_parameter('measurement.username'):
             username = self._node.get_parameter(
                 'measurement.username').get_parameter_value().string_value.strip()
 

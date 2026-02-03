@@ -6,7 +6,7 @@ import time
 import cv2
 import numpy as np
 
-from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.srv import GetParameters, SetParameters
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 
 from promoc_core.promoc_exceptions import (
@@ -100,10 +100,10 @@ class MTFCallbacks(CallbackBase):
     def _set_camera_binning(self, factor: int):
         """Switches camera binning factor and resolution via parameter service."""
         try:
-            client = self._node.create_client(SetParameters, '/promoc/assembly_camera/set_parameters')
-            if not client.wait_for_service(timeout_sec=2.0):
-                self._node.get_logger().warn('Parameter service not ready, cannot switch binning')
-                return
+            service_candidates = [
+                '/promoc/assembly_camera/set_parameters',
+                '/promoc/assembly_camera_controller/set_parameters',
+            ]
 
             req = SetParameters.Request()
             val_bin = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=factor)
@@ -143,44 +143,92 @@ class MTFCallbacks(CallbackBase):
             # If we set Binning=2 while Width=5536, it might error "Value out of range".
             # So for 1->2, we MUST set Width -> 2768 FIRST.
             
-            params = []
-            
-            if factor == 2: # Going to low res
-                params.append(Parameter(name='Width', value=val_w))
-                params.append(Parameter(name='Height', value=val_h))
-                params.append(Parameter(name='BinningHorizontal', value=val_bin))
-                params.append(Parameter(name='BinningVertical', value=val_bin))
-            else: # Going to high res (1)
-                params.append(Parameter(name='BinningHorizontal', value=val_bin))
-                params.append(Parameter(name='BinningVertical', value=val_bin))
-                params.append(Parameter(name='Width', value=val_w))
-                params.append(Parameter(name='Height', value=val_h))
+            name_variants = [
+                {
+                    'width': 'Width',
+                    'height': 'Height',
+                    'bin_h': 'BinningHorizontal',
+                    'bin_v': 'BinningVertical',
+                },
+                {
+                    'width': 'ImageFormatControl.Width',
+                    'height': 'ImageFormatControl.Height',
+                    'bin_h': 'ImageFormatControl.BinningHorizontal',
+                    'bin_v': 'ImageFormatControl.BinningVertical',
+                },
+            ]
 
-            req.parameters = params
-            
             self._node.get_logger().info(f'Switching Binning to {factor}x{factor} ({w}x{h})...')
-            
-            # Call synchronously-ish (wait for future)
-            future = client.call_async(req)
-            
-            # Wait for result loop (non-blocking spin not possible here)
-            start_wait = time.time()
-            while not future.done() and time.time() - start_wait < 3.0:
-                time.sleep(0.05)
-                
-            if future.done():
-                res = future.result()
-                # Check for per-parameter errors?
-                successful = True
-                for r in res.results:
-                    if not r.successful:
-                        successful = False
-                        self._node.get_logger().error(f"Param Set Failed: {r.reason}")
-                
-                if successful:
-                    self._node.get_logger().info("Camera parameters updated successfully.")
-            else:
-                self._node.get_logger().warn("Parameter update timed out!")
+
+            for service_name in service_candidates:
+                client = self._node.create_client(SetParameters, service_name)
+                if not client.wait_for_service(timeout_sec=2.0):
+                    continue
+
+                get_client = self._node.create_client(
+                    GetParameters, service_name.replace('set_parameters', 'get_parameters')
+                )
+                if not get_client.wait_for_service(timeout_sec=2.0):
+                    continue
+
+                for names in name_variants:
+                    get_req = GetParameters.Request()
+                    get_req.names = [
+                        names['width'],
+                        names['height'],
+                        names['bin_h'],
+                        names['bin_v'],
+                    ]
+                    get_future = get_client.call_async(get_req)
+                    start_wait = time.time()
+                    while not get_future.done() and time.time() - start_wait < 2.0:
+                        time.sleep(0.05)
+
+                    if not get_future.done():
+                        continue
+
+                    get_res = get_future.result()
+                    if not get_res or not get_res.values or all(v.type == 0 for v in get_res.values):
+                        continue
+
+                    params = []
+                    if factor == 2:  # Going to low res
+                        params.append(Parameter(name=names['width'], value=val_w))
+                        params.append(Parameter(name=names['height'], value=val_h))
+                        params.append(Parameter(name=names['bin_h'], value=val_bin))
+                        params.append(Parameter(name=names['bin_v'], value=val_bin))
+                    else:  # Going to high res (1)
+                        params.append(Parameter(name=names['bin_h'], value=val_bin))
+                        params.append(Parameter(name=names['bin_v'], value=val_bin))
+                        params.append(Parameter(name=names['width'], value=val_w))
+                        params.append(Parameter(name=names['height'], value=val_h))
+
+                    req.parameters = params
+
+                    future = client.call_async(req)
+                    start_wait = time.time()
+                    while not future.done() and time.time() - start_wait < 3.0:
+                        time.sleep(0.05)
+
+                    if not future.done():
+                        self._node.get_logger().warn("Parameter update timed out!")
+                        continue
+
+                    res = future.result()
+                    successful = True
+                    for r in res.results:
+                        if not r.successful:
+                            successful = False
+                            self._node.get_logger().error(f"Param Set Failed: {r.reason}")
+
+                    if successful:
+                        self._node.get_logger().info(
+                            f"Camera parameters updated successfully via {service_name} ({names['bin_h']})."
+                        )
+                        return
+
+            self._node.get_logger().warn('Parameter service not ready or parameters not declared, cannot switch binning')
+            return
 
         except Exception as e:
             self._node.get_logger().error(f'Failed to set binning: {e}')
@@ -190,36 +238,9 @@ class MTFCallbacks(CallbackBase):
         """MTF measurement from current camera image."""
         self._node.get_logger().info('MTF measurement service called.')
 
-        original_binning = 2 # Assume we came from 2x2
-        switched_resolution = False
-
         try:
-            # 1. Switch to High Resolution (1x1 Binning)
-            self._set_camera_binning(1)
-            
-            # 2. Wait for High-Res Image (Sensor Width > 5000)
-            self._node.get_logger().info('Waiting for high-resolution image...')
-            start_time = time.time()
-            cv_image = None
-            
-            while time.time() - start_time < 10.0: # 10 seconds timeout
-                img = self._get_latest_cv_image()
-                if img is not None:
-                     if img.shape[1] > 5000:
-                        cv_image = img
-                        switched_resolution = True
-                        self._node.get_logger().info(f'High-res image acquired: {img.shape}')
-                        break
-                     else:
-                        # Debug: Log what we are getting
-                        self._node.get_logger().debug(f'Still waiting... current res: {img.shape}')
-                
-                time.sleep(0.2)
-            
-            if cv_image is None:
-                # If we didn't get high-res, try with whatever we have (maybe switch failed)
-                self._node.get_logger().warn('Timeout waiting for high-res image! Using latest avail.')
-                cv_image = self._get_latest_cv_image()
+            # 1. Get latest image directly (assume correct config)
+            cv_image = self._get_latest_cv_image()
             
             if cv_image is None:
                 raise ImageProcessingError('No image available')
@@ -228,11 +249,14 @@ class MTFCallbacks(CallbackBase):
             if not pixel_size_um or pixel_size_um <= 0:
                 pixel_size_um = 2.40  # IDS U3-3800CP (Sony IMX183)
 
-            # Important: If we are in 2x2 binning (switch failed), effective pixel size is 2x
-            if cv_image.shape[1] < 3000:
-                self._node.get_logger().warn('Measuring with low resolution (Binning active)!')
-                pixel_size_um *= 2.0
-                response.status_message += " [WARNING: Low Res Measurement]"
+            min_edge_angle = 2.0
+            max_edge_angle = 10.0
+            if self._node.has_parameter('mtf_min_edge_angle'):
+                min_edge_angle = float(self._node.get_parameter('mtf_min_edge_angle').value or min_edge_angle)
+            if self._node.has_parameter('mtf_max_edge_angle'):
+                max_edge_angle = float(self._node.get_parameter('mtf_max_edge_angle').value or max_edge_angle)
+
+            # Pass edge angle limits into analyzer (applied per ROI below)
 
             # Auto ROI Detection
             edge_rois = []  # List of EdgeROI objects
@@ -334,7 +358,11 @@ class MTFCallbacks(CallbackBase):
                         f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
                     )
                 
-                config = MTFConfig(pixel_size_um=pixel_size_um)
+                config = MTFConfig(
+                    pixel_size_um=pixel_size_um,
+                    min_edge_angle=min_edge_angle,
+                    max_edge_angle=max_edge_angle,
+                )
                 
                 # Get calibration from valid CameraInfo if available
                 camera_matrix = None
@@ -386,10 +414,7 @@ class MTFCallbacks(CallbackBase):
             raise ImageProcessingError(f"MTF failed on all candidates. Last error: {last_error}")
         
         finally:
-            # Restore original binning (2x2)
-            if switched_resolution:
-                self._node.get_logger().info('Restoring Binning 2x2...')
-                self._set_camera_binning(original_binning)
+            pass 
 
         return response
 

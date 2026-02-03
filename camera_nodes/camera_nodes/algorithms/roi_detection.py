@@ -361,10 +361,17 @@ class RoiDetector:
 
     @staticmethod
     def split_square_into_edges_with_boxes(image: np.ndarray,
-                                           square_rect: tuple
+                                           square_rect: tuple,
+                                           fixed_size: Optional[Tuple[int, int]] = None
                                            ) -> List[Tuple[np.ndarray, Tuple[int, int, int, int], str]]:
         """
         Splits square into edges and returns ROIs with crop boxes.
+        
+        Args:
+            image: Input image
+            square_rect: Square rotated rect
+            fixed_size: Optional (long_dim, short_dim) to enforce fixed ROI size.
+                        If None, uses 40% of side length (square).
 
         Returns:
             List of (roi_image, (x, y, w, h), edge_name)
@@ -386,40 +393,61 @@ class RoiDetector:
         tl, tr = top_pts
         bl, br = bot_pts
 
-        side_len = min(w, h)
-        crop_size = int(side_len * 0.4)
-        crop_size = max(16, crop_size)
-        half_crop = crop_size // 2
-
         edge_pairs = [(tl, tr), (tr, br), (br, bl), (bl, tl)]
         edge_names = ['top', 'right', 'bottom', 'left']
+        # Orientation of the edge itself:
+        # Top: Horizontal, Right: Vertical, Bottom: Horizontal, Left: Vertical
+        edge_orientations = ['horizontal', 'vertical', 'horizontal', 'vertical']
 
         img_h, img_w = gray.shape[:2]
         results = []
 
+        # Default dynamic size
+        side_len = min(w, h)
+        default_crop = int(side_len * 0.4)
+        default_crop = max(16, default_crop)
+
         for idx, (p1, p2) in enumerate(edge_pairs):
+            orientation = edge_orientations[idx]
+            
+            if fixed_size:
+                long_dim_req, short_dim_req = fixed_size
+                
+                # Safety: Ensure we don't exceed the square's actual physical size
+                # We enable getting close to corners but leave 10% safety margin on each side
+                max_len = int(side_len * 0.8) 
+                
+                # We can keep the requested width (50px is small), but must limit length
+                actual_long = min(long_dim_req, max_len)
+                actual_short = short_dim_req # Usually 50px, fits easily
+                
+                if orientation == 'horizontal':
+                    crop_w, crop_h = actual_long, actual_short
+                else:
+                    crop_w, crop_h = actual_short, actual_long
+            else:
+                crop_w, crop_h = default_crop, default_crop
+
             cx = (p1[0] + p2[0]) / 2
             cy = (p1[1] + p2[1]) / 2
 
-            ix = int(cx - half_crop)
-            iy = int(cy - half_crop)
+            ix = int(cx - crop_w // 2)
+            iy = int(cy - crop_h // 2)
 
-            if ix < 0:
-                ix = 0
-            if iy < 0:
-                iy = 0
-            if ix + crop_size > img_w:
-                ix = img_w - crop_size
-            if iy + crop_size > img_h:
-                iy = img_h - crop_size
-
-            if ix < 0 or iy < 0 or crop_size <= 0:
+            # Clamp and Validate
+            if ix < 0: ix = 0
+            if iy < 0: iy = 0
+            # Ensure we don't go out of bounds (width/height might be reduced)
+            final_w = min(crop_w, img_w - ix)
+            final_h = min(crop_h, img_h - iy)
+            
+            if final_w < 4 or final_h < 4: 
                 continue
 
-            roi = gray[iy:iy+crop_size, ix:ix+crop_size]
+            roi = gray[iy:iy+final_h, ix:ix+final_w]
             if roi.size > 0:
                 name = edge_names[idx] if idx < len(edge_names) else f'edge_{idx}'
-                results.append((roi, (ix, iy, crop_size, crop_size), name))
+                results.append((roi, (ix, iy, final_w, final_h), name))
 
         return results
 
