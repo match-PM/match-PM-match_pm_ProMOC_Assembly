@@ -300,3 +300,145 @@ def calculate_repeatability(values: List[float]) -> dict:
         'repeatability_limit': r_limit,
         'relative_repeatability': stats.cv_percent
     }
+
+
+def check_normality(data: List[float], alpha: float = 0.05) -> dict:
+    """
+    Test for normal distribution using Shapiro-Wilk test.
+    Requires at least 3 data points.
+    
+    Args:
+        data: List of measurements
+        alpha: Significance level (default 0.05)
+        
+    Returns:
+        Dict with test results and recommendation
+    """
+    if len(data) < 3:
+        return {
+            'is_normal': None,
+            'statistic': None,
+            'p_value': None,
+            'recommendation': 'Sample size too small (N<3) for normality test'
+        }
+
+    if HAS_SCIPY:
+        statistic, p_value = scipy_stats.shapiro(data)
+        is_normal = p_value > alpha
+        
+        if is_normal:
+            recommendation = 'Data consistent with normal distribution. Parametric tests OK.'
+        else:
+            recommendation = (f'Data NOT normally distributed (p={p_value:.4f}). '
+                              'Consider non-parametric test (Mann-Whitney U).')
+    else:
+        # Fallback if scipy not present (always assume normal or warn)
+        statistic, p_value = 0.0, 1.0
+        is_normal = True
+        recommendation = 'Scipy not available - assuming normality (unverified).'
+
+    return {
+        'is_normal': is_normal,
+        'statistic': statistic,
+        'p_value': p_value,
+        'recommendation': recommendation
+    }
+
+
+def independent_t_test_robust(group1: List[float], group2: List[float], alpha: float = 0.05) -> dict:
+    """
+    Robust comparison of two independent groups.
+    Checks normality first and switches to Mann-Whitney U if needed.
+    """
+    # 1. Check Normality
+    norm1 = check_normality(group1, alpha)
+    norm2 = check_normality(group2, alpha)
+    
+    use_parametric = True
+    if norm1['is_normal'] is False or norm2['is_normal'] is False:
+        use_parametric = False
+        
+    # 2. Select Test
+    if use_parametric or not HAS_SCIPY:
+        # Use Welch's t-test
+        t_res = perform_t_test(group1, group2, alpha=alpha, paired=False)
+        return {
+            'test_type': "Welch's t-test (parametric)",
+            'statistic': t_res.t_statistic,
+            'p_value': t_res.p_value,
+            'significant': t_res.significant,
+            'normality_group1': norm1,
+            'normality_group2': norm2,
+            'mean_diff': t_res.mean_diff
+        }
+    else:
+        # Use Mann-Whitney U
+        stat, p_val = scipy_stats.mannwhitneyu(group1, group2, alternative='two-sided')
+        return {
+            'test_type': 'Mann-Whitney U (non-parametric)',
+            'statistic': float(stat),
+            'p_value': float(p_val),
+            'significant': p_val < alpha,
+            'normality_group1': norm1,
+            'normality_group2': norm2,
+            'mean_diff': np.mean(group1) - np.mean(group2)
+        }
+
+
+def calculate_uncertainty_budget(
+    mtf_value: float,
+    pixel_size_um: float = 2.4,
+    pixel_size_uncertainty_um: float = 0.05,
+    distortion_correction_applied: bool = False,
+    distortion_max_percent: float = 5.0,  # e.g. from k1
+    axis_repeatability_mm: float = 0.002,
+    algorithm_uncertainty_percent: float = 1.5,
+    statistical_uncertainty: float = 0.0  # std dev
+) -> dict:
+    """
+    Calculate Measurement Uncertainty Budget according to ISO GUM.
+    
+    Combines systematic and random errors:
+    u_combined = sqrt(u_pixel^2 + u_dist^2 + u_algo^2 + u_stats^2)
+    """
+    # 1. Pixel Size Uncertainty (Systematic)
+    # relative_u_pixel = u_pixel / pixel_size
+    u_pixel = (pixel_size_uncertainty_um / pixel_size_um) * mtf_value
+    
+    # 2. Distortion Uncertainty (Systematic)
+    if not distortion_correction_applied:
+        # If not corrected, full distortion is an uncertainty/error
+        u_distortion = (distortion_max_percent / 100.0) * mtf_value
+    else:
+        # If corrected, assume 20% residual error of the original distortion
+        u_distortion = (distortion_max_percent / 100.0) * 0.2 * mtf_value
+
+    # 3. Axis Uncertainty (Systematic/Random mixed)
+    # For MTF, axis position matters less than focus, but affects field position accuracy
+    # We treat it as minor contributor to MTF
+    u_axis = 0.0 # Placeholder, hard to map directly to MTF without sensitivity coefficient
+    
+    # 4. Algorithm Uncertainty (Systematic)
+    u_algorithm = (algorithm_uncertainty_percent / 100.0) * mtf_value
+    
+    # 5. Statistical Uncertainty (Random)
+    u_statistical = statistical_uncertainty
+    
+    # Combined Standard Uncertainty
+    u_combined = np.sqrt(u_pixel**2 + u_distortion**2 + u_algorithm**2 + u_statistical**2)
+    
+    # Expanded Uncertainty (k=2, 95%)
+    U95 = 2 * u_combined
+    
+    return {
+        'value': mtf_value,
+        'u_pixel': u_pixel,
+        'u_distortion': u_distortion,
+        'u_algorithm': u_algorithm,
+        'u_statistical': u_statistical,
+        'u_combined': u_combined,
+        'U95': U95,
+        'k': 2,
+        'relative_uncertainty_percent': (u_combined / mtf_value * 100) if mtf_value > 0 else 0.0
+    }
+

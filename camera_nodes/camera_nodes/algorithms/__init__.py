@@ -31,6 +31,13 @@ from .focus_metrics import (
     sml
 )
 from .mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig
+from .field_curvature import (
+    analyze_field_curvature,
+    analyze_field_curvature_detailed,
+    detect_field_rois,
+    calculate_field_metrics,
+    FIELD_POSITIONS
+)
 
 
 # Centralized algorithm definitions for autofocus
@@ -74,4 +81,12 @@ __all__ = [
     'MTFAnalyzer',
     'MTFResult',
     'MTFConfig',
+    
+    # Field Curvature
+    'analyze_field_curvature',
+    'analyze_field_curvature_detailed',
+    'detect_field_rois',
+    'calculate_field_metrics',
+    'FIELD_POSITIONS',
 ]
+

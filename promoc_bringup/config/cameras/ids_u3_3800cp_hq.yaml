@@ -32,6 +32,10 @@ camera_params:
   # Physical pixel size on sensor (in micrometers)
   # Source: IDS datasheet - Pixelgröße: 2.4 µm
   pixelsize: 2.4  # µm
+  # Uncertainty of Pixel Pitch (Lithography tolerances)
+  #realistic: < 0.01 µm. 
+  #for error propagation: negligible compared to Magnification Error.
+  pixel_size_uncertainty_um: 0.01
   
   # Optical sensor dimensions
   # Source: IDS datasheet - Optische Fläche: 13.286 mm x 8.861 mm

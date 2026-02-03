@@ -9,7 +9,7 @@ Image processing algorithms for camera_nodes:
 - field_curvature: Field curvature analysis for MTF across FOV
 """
 
-from .autofocus import (
+from camera_nodes.algorithms.autofocus import (
     Autofocus, 
     ParabolicAutofocus,
     IterativeParabolicAutofocus,
@@ -24,14 +24,14 @@ from .autofocus import (
     Phase, 
     tenengrad
 )
-from .focus_metrics import (
+from camera_nodes.algorithms.focus_metrics import (
     laplacian_variance,
     tenengrad as tenengrad_metric,
     brenner_gradient,
     normalized_variance,
     sml
 )
-from .mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig
+from camera_nodes.algorithms.mtf_analysis import MTFAnalyzer, MTFResult, MTFConfig
 from .statistics import (
     calculate_statistics,
     detect_outliers,
@@ -41,7 +41,7 @@ from .statistics import (
     StatisticsResult,
     TTestResult
 )
-from .field_curvature import (
+from camera_nodes.algorithms.field_curvature import (
     analyze_field_curvature,
     analyze_field_curvature_detailed,
     detect_field_rois,

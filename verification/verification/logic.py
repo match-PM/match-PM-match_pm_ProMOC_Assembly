@@ -9,7 +9,7 @@ from promoc_assembly_interfaces.srv import (
     MoveAbsolute,
     GetPosition,
     GetOperationStatus,
-    MeasureMTF, # Still might use this for fallback or if convenient, or use local analyzer
+    # MeasureMTF, # Not used directly
     SetVelocityParameters,
     GetVelocityParameters,
     JogAxis,
@@ -24,12 +24,24 @@ from .algorithms import (
     MTFConfig
 )
 from .algorithms.roi_detection import RoiDetector
+from .algorithms.statistics import calculate_uncertainty_budget
+from ament_index_python.packages import get_package_share_directory
+import yaml
+import os
 
 class VerificationLogic:
-    def __init__(self, node, clients):
+    """
+    Business logic for the Verification Pipeline.
+    
+    Handles control flow between hardware (axes, camera) and algorithms 
+    (autofocus, MTF analysis).
+    """
+    def __init__(self, node, clients, system_config=None):
         self.node = node
         self.clients = clients
         self.log = node.get_logger()
+        self.system_config = system_config or {}
+        self.camera_calibration = self._load_calibration_data()
 
     def _get_timestamp(self):
         return datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -37,7 +49,6 @@ class VerificationLogic:
     def _check_services(self):
         """Checks if all critical services are available."""
         timeout_sec = 2.0
-        # self.clients is passed from orchestrator
         for name, client in self.clients.items():
             if not client.wait_for_service(timeout_sec=timeout_sec):
                 self.log.error(f"Service {name} unavailable after {timeout_sec}s")
@@ -60,10 +71,7 @@ class VerificationLogic:
         raise RuntimeError("Timeout waiting for axis idle")
 
     def _get_latest_image(self):
-        # Access the node's latest image (assuming orchestrator has a subscriber)
-        # We need to add a subscriber to Orchestrator or pass it here
-        # The Orchestrator doesn't have one yet! We need to add it.
-        # Check if node has 'latest_image_msg'
+        """Retrieves and converts the latest image from the orchestrator node."""
         if hasattr(self.node, 'latest_image_msg') and self.node.latest_image_msg:
              from cv_bridge import CvBridge
              bridge = CvBridge()
@@ -74,6 +82,80 @@ class VerificationLogic:
                  img = bridge.imgmsg_to_cv2(self.node.latest_image_msg, desired_encoding='bgr8')
                  return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         return None
+
+    def _load_calibration_data(self):
+        """Load camera calibration data if configured."""
+        try:
+            cam_config = self.system_config.get('camera', {})
+            calib_file = cam_config.get('calibration_file')
+            
+            if not calib_file:
+                return None
+                
+            # Resolve package:// URI
+            if calib_file.startswith('package://'):
+                parts = calib_file.replace('package://', '').split('/', 1)
+                pkg_name = parts[0]
+                rel_path = parts[1]
+                try:
+                    pkg_path = get_package_share_directory(pkg_name)
+                    full_path = Path(pkg_path) / rel_path
+                    
+                    # --- Dev Environment Fallback ---
+                    # If package is not installed (source build), try to infer path from current file loc
+                    if not full_path.exists():
+                        # Assumption: we are in <workspace>/src/.../verification/verification/logic.py
+                        # We want to find <workspace>/<pkg_name>/<rel_path>
+                        # Go up 4 levels: logic.py -> verification -> verification -> src -> workspace? 
+                        # This is fragile but helpful for local dev without install.
+                        repo_root = Path(__file__).parent.parent.parent.parent
+                        potential_path = repo_root / pkg_name / rel_path
+                        if potential_path.exists():
+                             full_path = potential_path
+                             self.log.info(f"Found config in source tree: {full_path}")
+                except Exception:
+                     # Fallback to absolute check if it looks like one
+                     full_path = Path(calib_file)
+            else:
+                full_path = Path(calib_file)
+                
+            if not full_path.exists():
+                self.log.warn(f"Calibration file not found: {full_path}")
+                return None
+
+                
+            self.log.info(f"Loading calibration from: {full_path}")
+            with open(full_path, 'r') as f:
+                calib_data = yaml.safe_load(f)
+            
+            # Smart parsing: Handle both standard ROS calibration file (camera_matrix at root)
+            # and nested config file (camera_info key)
+            if 'camera_info' in calib_data:
+                # Nested structure
+                matrix_data = calib_data['camera_info']['camera_matrix']['data']
+                dist_data = calib_data['camera_info']['distortion_coefficients']['data']
+            else:
+                # Flat structure (standard from camera_calibration_parsers?)
+                # Or standard YAML output which usually has camera_matrix at top
+                if 'camera_matrix' in calib_data:
+                     matrix_data = calib_data['camera_matrix']['data']
+                     dist_data = calib_data['distortion_coefficients']['data']
+                else:
+                    self.log.warn("Invalid calibration file format: missing camera_matrix")
+                    return None
+
+            # Parse OpenCV matrices
+            camera_matrix = np.array(matrix_data).reshape(3, 3)
+            dist_coeffs = np.array(dist_data)
+            
+            return {
+                'camera_matrix': camera_matrix,
+                'dist_coeffs': dist_coeffs
+            }
+            
+        except Exception as e:
+            self.log.error(f"Failed to load calibration data: {e}")
+            return None
 
     def _run_autofocus_loop(self, af):
         """Runs the autofocus state machine locally."""
@@ -292,9 +374,16 @@ class VerificationLogic:
                 self.log.error(f"No image for MTF measurement {i+1}")
                 continue
                 
-            pixel_size = 2.40 # Parameterize?
+            # Prepare Analyzer with calibration if available
+            pixel_size = self.system_config.get('camera', {}).get('pixel_size_um', 2.40)
+            
+            calib_args = {}
+            if self.camera_calibration:
+                calib_args['camera_matrix'] = self.camera_calibration['camera_matrix']
+                calib_args['dist_coeffs'] = self.camera_calibration['dist_coeffs']
+            
             config = MTFConfig(pixel_size_um=pixel_size)
-            analyzer = MTFAnalyzer(config)
+            analyzer = MTFAnalyzer(config, **calib_args)
             
             # ROI: Center for now
             h, w = img.shape[:2]
@@ -305,9 +394,12 @@ class VerificationLogic:
             # Let's crop center 50% to avoid noise from edges
             cy, cx = h // 2, w // 2
             crop_h, crop_w = h // 2, w // 2
-            crop = img[cy-crop_h//2:cy+crop_h//2, cx-crop_w//2:cx+crop_w//2]
             
-            res = analyzer.compute_mtf(crop)
+            # Pass full image with ROI to analyzer
+            # analyzer.compute_mtf will undistort full image if calibration is present, then extract ROI
+            roi_rect = (cx-crop_w//2, cy-crop_h//2, cx+crop_w//2, cy+crop_h//2)
+            
+            res = analyzer.compute_mtf(img, roi=roi_rect)
             
             if res.valid:
                 mtf_results.append({
@@ -326,14 +418,40 @@ class VerificationLogic:
             return {'valid': False, 'error': 'All measurements failed'}
             
         mtf50_vals = [r['mtf50'] for r in mtf_results]
+        mtf50_mean = float(np.mean(mtf50_vals))
+        mtf50_std = float(np.std(mtf50_vals))
         
         stats = {
             'valid': True,
-            'mtf50_mean': float(np.mean(mtf50_vals)),
-            'mtf50_std': float(np.std(mtf50_vals)),
+            'mtf50_mean': mtf50_mean,
+            'mtf50_std': mtf50_std,
             'n_samples': len(mtf_results),
             'raw_data': mtf_results
         }
+        
+        # Calculate Uncertainty Budget
+        try:
+            sys_conf = self.system_config
+            cam_conf = sys_conf.get('camera', {})
+            axis_conf = sys_conf.get('axis', {})
+            defaults = sys_conf.get('defaults', {})
+            
+            ub = calculate_uncertainty_budget(
+                mtf_value=mtf50_mean,
+                pixel_size_um=cam_conf.get('pixel_size_um', 2.4),
+                pixel_size_uncertainty_um=cam_conf.get('pixel_size_uncertainty_um', 0.05),
+                distortion_correction_applied=bool(self.camera_calibration),
+                distortion_max_percent=5.0, # Could also come from config
+                axis_repeatability_mm=axis_conf.get('repeatability_mm', 0.002),
+                algorithm_uncertainty_percent=defaults.get('mtf_algorithm_uncertainty_percent', 1.5),
+                statistical_uncertainty=mtf50_std
+            )
+            stats['uncertainty_budget'] = ub
+            self.log.info(f"Uncertainty: {ub['U95']:.3f} lp/mm (k=2, {ub['relative_uncertainty_percent']:.1f}%)")
+            
+        except Exception as e:
+            self.log.error(f"Error calculating uncertainty budget: {e}")
+            stats['uncertainty_error'] = str(e)
         
         self.log.info(f"MTF Stats: Mean={stats['mtf50_mean']:.3f} +/- {stats['mtf50_std']:.3f} lp/mm")
         return stats

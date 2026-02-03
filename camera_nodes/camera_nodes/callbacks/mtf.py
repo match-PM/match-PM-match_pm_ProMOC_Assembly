@@ -335,7 +335,21 @@ class MTFCallbacks(CallbackBase):
                     )
                 
                 config = MTFConfig(pixel_size_um=pixel_size_um)
-                analyzer = MTFAnalyzer(config)
+                
+                # Get calibration from valid CameraInfo if available
+                camera_matrix = None
+                dist_coeffs = None
+                
+                if self._node.latest_camera_info is not None:
+                    try:
+                        ci = self._node.latest_camera_info
+                        camera_matrix = np.array(ci.k).reshape(3, 3)
+                        dist_coeffs = np.array(ci.d)
+                        # self._node.get_logger().debug("Using calibration for MTF analysis")
+                    except Exception as e:
+                        self._node.get_logger().warn(f"Failed to process camera info: {e}")
+
+                analyzer = MTFAnalyzer(config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
                 
                 result = analyzer.compute_mtf(edge_roi.image)
     

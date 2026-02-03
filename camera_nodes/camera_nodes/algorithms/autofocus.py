@@ -163,9 +163,9 @@ class _Measurement:
     score: float
 
 
-class Autofocus:
+class MSPRAutofocus:
     """
-    Simple autofocus with multi-level refinement.
+    Multi-Stage Parabolic Refinement (MSPR) Autofocus.
     
     Algorithm:
     1. Coarse Scan: Linear scan from start to end with step_mm
@@ -175,6 +175,7 @@ class Autofocus:
        - Sample ~refinement_samples points in new range
        - Find new maximum
        - Repeat until step size < min_step_mm
+    4. Subpixel Interpolation: Calculate quadratic peak around final best point
     """
     
     def __init__(self, config: AutofocusConfig):
@@ -304,6 +305,54 @@ class Autofocus:
     # HELPER METHODS
     # =========================================================================
     
+    def _calculate_subpixel_peak(self, x_vals: list[float], scores: list[float]) -> float:
+        """
+        Perform quadratic interpolation around the best measured point.
+        
+        Args:
+            x_vals: List of positions
+            scores: List of corresponding focus scores
+            
+        Returns:
+            Interpolated subpixel peak position
+        """
+        if len(scores) < 3:
+            return x_vals[np.argmax(scores)] if x_vals else 0.0
+            
+        # 1. Find index of maximum
+        best_idx = int(np.argmax(scores))
+        
+        # Check boundary conditions (peak must not be at start or end)
+        if best_idx == 0 or best_idx == len(scores) - 1:
+            return x_vals[best_idx] # Fallback to discrete value
+
+        # 2. Extract the 3 points
+        x1, y1 = x_vals[best_idx - 1], scores[best_idx - 1]
+        x2, y2 = x_vals[best_idx],     scores[best_idx]
+        x3, y3 = x_vals[best_idx + 1], scores[best_idx + 1]
+
+        # 3. Parabel-Fit (Inverse Parabolic Interpolation)
+        # Using the vertex formula for a parabola passing through 3 points
+        denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+        if abs(denom) < 1e-12:
+            return x2
+
+        a = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom
+        b = (x3**2 * (y1 - y2) + x2**2 * (y3 - y1) + x1**2 * (y2 - y3)) / denom
+        
+        # If a >= 0, it's not a downward opening parabola (maximum)
+        if a >= 0 or abs(a) < 1e-9:
+            return x2
+
+        # Vertex (maximum) at x = -b / (2 * a)
+        exact_peak_x = -b / (2 * a)
+
+        # Plausibility check: The calculated peak must be within the interval of neighbors
+        if not (min(x1, x3) <= exact_peak_x <= max(x1, x3)):
+            return x2
+
+        return float(exact_peak_x)
+
     def _make_result(self, 
                      finished: bool = False,
                      next_position: float | None = None,
@@ -463,6 +512,24 @@ class Autofocus:
         
         # Current level complete → check if we need another level
         if self._current_step_mm <= self.config.min_step_mm:
+            # --- MSPR ENHANCEMENT: Quadratic Interpolation ---
+            # Use the measurements from the final refinement level for subpixel accuracy
+            final_coords = [(m.position_mm, m.score) for m in self._measurements 
+                           if any(abs(m.position_mm - p) < 1e-6 for p in self._refinement_positions)]
+            
+            # Sort by position
+            final_coords.sort(key=lambda x: x[0])
+            if len(final_coords) >= 3:
+                x_vals = [c[0] for c in final_coords]
+                scores = [c[1] for c in final_coords]
+                subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
+                
+                if abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
+                    # Update best measurement with interpolated position
+                    # We keep the discrete best score as the "true" measured peak score
+                    # but move the position to the interpolated maximum.
+                    self._best_measurement.position_mm = subpixel_pos
+            
             self._phase = Phase.FINISHED
             return self._make_result(finished=True, phase=Phase.FINISHED, progress=1.0)
         
@@ -549,7 +616,7 @@ class Autofocus:
         self._refinement_level += 1
 
 
-class ParabolicAutofocus(Autofocus):
+class ParabolicAutofocus(MSPRAutofocus):
     """
     Optimized autofocus with local parabolic interpolation around peak.
     Base class providing local fit logic.
@@ -657,7 +724,7 @@ class ParabolicAutofocus(Autofocus):
         return result
 
 
-class GoldenSectionAutofocus(Autofocus):
+class GoldenSectionAutofocus(MSPRAutofocus):
     """
     Robust autofocus using Golden Section Search for refinement.
     Reduces the search interval by factor 0.618 in each step.
@@ -760,7 +827,7 @@ class IterativeParabolicAutofocus(ParabolicAutofocus):
         )
 
 
-class HillClimbingAutofocus(Autofocus):
+class HillClimbingAutofocus(MSPRAutofocus):
     """
         Advanced Hill Climbing.
         1. Fast Search: Large steps until significant drop detected.
@@ -870,7 +937,7 @@ class HillClimbingAutofocus(Autofocus):
         return self._refine_start_pos
 
 
-class ThreeStageAutofocus(Autofocus):
+class ThreeStageAutofocus(MSPRAutofocus):
     """
     3-Stage Autofocus for 10µm Precision without Backlash.
 
@@ -1002,7 +1069,7 @@ class ThreeStageAutofocus(Autofocus):
         return 1.0
 
 
-class ExhaustiveAutofocus(Autofocus):
+class ExhaustiveAutofocus(MSPRAutofocus):
     """
     Exhaustive (Brute-Force) Autofocus - Maximum Precision Reference.
     
@@ -1103,7 +1170,7 @@ class ExhaustiveAutofocus(Autofocus):
         )
 
 
-class FibonacciAutofocus(Autofocus):
+class FibonacciAutofocus(MSPRAutofocus):
     """
     Fibonacci Search Autofocus.
     
@@ -1299,5 +1366,6 @@ class FibonacciAutofocus(Autofocus):
 
 
 # Aliases for convenience
+Autofocus = MSPRAutofocus
 AdaptiveHillClimbingAutofocus = HillClimbingAutofocus
 BruteForceAutofocus = ExhaustiveAutofocus  # Alternative name

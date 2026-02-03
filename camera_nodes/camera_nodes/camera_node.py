@@ -77,7 +77,7 @@ import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 
@@ -205,6 +205,7 @@ class CameraNode(Node):
             self, self.camera_driver)
 
         self.latest_image_msg = None
+        self.latest_camera_info = None
         self.current_axis_position = -1.0
 
 
@@ -218,6 +219,13 @@ class CameraNode(Node):
             Float64,
             f'/{axis_name}/position',
             self.axis_position_callback,
+            10
+        )
+
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/promoc/assembly_camera/stream0/camera_info',
+            self.camera_info_callback,
             10
         )
 
@@ -363,6 +371,10 @@ class CameraNode(Node):
     def axis_position_callback(self, msg: Float64):
         """Receive and cache axis position."""
         self.current_axis_position = msg.data
+
+    def camera_info_callback(self, msg: CameraInfo):
+        """Receive and cache camera calibration info."""
+        self.latest_camera_info = msg
 
 
 def main(args=None):

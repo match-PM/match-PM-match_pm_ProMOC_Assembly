@@ -5,13 +5,25 @@ class ReportGenerator:
     def __init__(self, directory):
         self.directory = Path(directory)
         
-    def generate(self, results):
+    def generate(self, results, config=None):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = self.directory / f"verification_report_{timestamp}.md"
+        config = config or {}
         
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write(f"# Verification Report\n")
-            f.write(f"**Date:** {datetime.now()}\n\n")
+            f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # 0. Environmental Conditions
+            env_start = config.get('environment_start')
+            env_end = config.get('environment_end')
+            
+            if env_start and env_start.get('valid'):
+                f.write("## Environmental Conditions\n")
+                f.write("| Condition | Start | End |\n")
+                f.write("|-----------|-------|-----|\n")
+                f.write(f"| Temperature | {env_start.get('temperature_c', 0):.1f}°C | {env_end.get('temperature_c', 0) if env_end else 'N/A'}°C |\n")
+                f.write(f"| Humidity | {env_start.get('humidity_percent', 0):.1f}% | {env_end.get('humidity_percent', 0) if env_end else 'N/A'}% |\n\n")
             
             # 1. Autofocus Section
             if 'af_verification_raw' in results:
@@ -42,18 +54,34 @@ class ReportGenerator:
                 f.write("\n")
 
             # 2. MTF Section
-            if 'baseline_mtf' in results and 'st_verification' in results:
-                f.write("## 2. Optical Verification (Strahlteiler)\n")
+            if 'baseline_mtf' in results:
+                f.write("## 2. Optical Verification (MTF)\n")
                 
                 bl = results['baseline_mtf']
-                st = results['st_verification']
+                st = results.get('st_verification', {})
                 
+                f.write("### MTF Results\n")
                 f.write(f"- **Baseline MTF50:** {bl.get('mtf50_mean', 0):.2f} +/- {bl.get('mtf50_std', 0):.2f} lp/mm\n")
-                f.write(f"- **Strahlteiler MTF50:** {st.get('mtf50_mean', 0):.2f} +/- {st.get('mtf50_std', 0):.2f} lp/mm\n")
-                f.write(f"- **Degradation:** {st.get('degradation_percent', 0):.2f}%\n")
+                if st:
+                    f.write(f"- **Strahlteiler MTF50:** {st.get('mtf50_mean', 0):.2f} +/- {st.get('mtf50_std', 0):.2f} lp/mm\n")
+                    f.write(f"- **Degradation:** {st.get('degradation_percent', 0):.2f}%\n")
+                    sig = st.get('significant_degradation', False)
+                    f.write(f"- **Significant:** {'YES ⚠️' if sig else 'NO ✅'}\n")
                 
-                sig = st.get('significant_degradation', False)
-                f.write(f"- **Significant:** {'YES ⚠️' if sig else 'NO ✅'}\n")
+                # Uncertainty Budget
+                if 'uncertainty_budget' in bl:
+                    ub = bl['uncertainty_budget']
+                    f.write("\n### Measurement Uncertainty Budget (ISO GUM)\n")
+                    f.write(f"**Expanded Uncertainty (k={ub.get('k')}):** ±{ub.get('U95', 0):.3f} lp/mm ({ub.get('relative_uncertainty_percent', 0):.1f}%)\n\n")
+                    
+                    f.write("| Uncertainty Component | Standard Uncertainty (lp/mm) | Source |\n")
+                    f.write("|-----------------------|------------------------------|--------|\n")
+                    f.write(f"| Pixel Size | {ub.get('u_pixel', 0):.4f} | Systematic |\n")
+                    f.write(f"| Distortion | {ub.get('u_distortion', 0):.4f} | Systematic/Corrected |\n")
+                    f.write(f"| Algorithm | {ub.get('u_algorithm', 0):.4f} | Method |\n")
+                    f.write(f"| Repeatability | {ub.get('u_statistical', 0):.4f} | Random (N={bl.get('n_samples')}) |\n")
+                    f.write(f"| **Combined (u_c)** | **{ub.get('u_combined', 0):.4f}** | RSS Sum |\n\n")
+
                 
             f.write("\n_Generated automatically by VerificationOrchestrator_")
             
