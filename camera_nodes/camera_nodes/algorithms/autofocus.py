@@ -840,6 +840,7 @@ class HillClimbingAutofocus(MSPRAutofocus):
         # Override start parameters
         self.current_pos = config.start_mm
         self.step = config.step_mm * 2.0 # Start fast!
+        self._initial_step = self.step
         self.direction = 1 # 1 = forward, -1 = backward
         self.bad_steps = 0
         self.min_step = config.min_step_mm
@@ -850,6 +851,11 @@ class HillClimbingAutofocus(MSPRAutofocus):
         self.drop_steps = 0
         self._refine_start_pos = 0.0
 
+        # Early stop when no improvement at min step
+        self._no_improve_count = 0
+        self._max_no_improve = 8
+        self._max_measurements = 45
+
         # Blind zone: force forward motion to avoid early aborts
         total_range = config.end_mm - config.start_mm
         self.blind_zone_end = config.start_mm + (total_range * 0.3)
@@ -858,6 +864,14 @@ class HillClimbingAutofocus(MSPRAutofocus):
         self.phase_state = "SCANNING" # SCANNING, REFINING, FINAL_SCAN, FINISHED
         self.final_scan_points: list[float] = []
         self.final_scan_index: int = 0
+
+    def _dynamic_threshold(self, base: float) -> float:
+        """Increase threshold as step size gets finer to stop earlier."""
+        if self._initial_step <= 0:
+            return base
+        ratio = 1.0 - min(1.0, max(0.0, self.step / self._initial_step))
+        # Increase up to +0.15 as we get finer
+        return min(0.98, base + (0.15 * ratio))
 
     def start(self) -> float:
         self._phase = Phase.COARSE_SCAN # Reuse enum for compatibility
@@ -868,19 +882,35 @@ class HillClimbingAutofocus(MSPRAutofocus):
         if score <= 0 and self._measurements:
             score = self._measurements[-1].score
         self._measurements.append(_Measurement(position_mm, score))
-        
-        if self._best_measurement is None or score > self._best_measurement.score:
+
+        if len(self._measurements) >= self._max_measurements:
+            return AutofocusResult(
+                finished=True,
+                next_position_mm=position_mm,
+                best_position_mm=self._best_measurement.position_mm if self._best_measurement else 0.0,
+                best_score=self._best_measurement.score if self._best_measurement else 0.0,
+                phase=Phase.FINISHED,
+                progress=1.0,
+                current_score=score
+            )
+
+        improved = self._best_measurement is None or score > self._best_measurement.score
+        if improved:
             self._best_measurement = _Measurement(position_mm, score)
+            self._no_improve_count = 0
+        else:
+            self._no_improve_count += 1
 
         # --- Logic ---
         next_pos = position_mm
         finished = False
 
         if self.phase_state == "SCANNING":
+            dyn_drop = self._dynamic_threshold(self.drop_threshold)
             if position_mm < self.blind_zone_end:
                 next_pos = position_mm + (self.step * self.direction)
             else:
-                if self._best_measurement is not None and score < (self._best_measurement.score * self.drop_threshold):
+                if self._best_measurement is not None and score < (self._best_measurement.score * dyn_drop):
                     self._start_refinement_cycle()
                     next_pos = self._calculate_refine_start()
                 else:
@@ -888,7 +918,19 @@ class HillClimbingAutofocus(MSPRAutofocus):
                     next_pos = position_mm + (self.step * self.direction)
         
         elif self.phase_state == "REFINING":
-            if self._best_measurement is not None and score < (self._best_measurement.score * self.refine_drop_threshold):
+            dyn_refine_drop = self._dynamic_threshold(self.refine_drop_threshold)
+            if self.step <= self.min_step and self._no_improve_count >= self._max_no_improve:
+                finished = True
+                return AutofocusResult(
+                    finished=True,
+                    next_position_mm=position_mm,
+                    best_position_mm=self._best_measurement.position_mm if self._best_measurement else 0.0,
+                    best_score=self._best_measurement.score if self._best_measurement else 0.0,
+                    phase=Phase.FINISHED,
+                    progress=1.0,
+                    current_score=score
+                )
+            if self._best_measurement is not None and score < (self._best_measurement.score * dyn_refine_drop):
                 if self.step <= self.min_step:
                     if self._setup_final_scan():
                         self.phase_state = "FINAL_SCAN"
@@ -915,11 +957,14 @@ class HillClimbingAutofocus(MSPRAutofocus):
                             next_pos = self._calculate_refine_start()
 
         elif self.phase_state == "FINAL_SCAN":
-            self.final_scan_index += 1
-            if self.final_scan_index < len(self.final_scan_points):
-                next_pos = self.final_scan_points[self.final_scan_index]
-            else:
+            if self._no_improve_count >= self._max_no_improve:
                 finished = True
+            else:
+                self.final_scan_index += 1
+                if self.final_scan_index < len(self.final_scan_points):
+                    next_pos = self.final_scan_points[self.final_scan_index]
+                else:
+                    finished = True
 
         # Boundary Checks
         if next_pos > self.config.end_mm or next_pos < self.config.start_mm:
@@ -962,7 +1007,7 @@ class HillClimbingAutofocus(MSPRAutofocus):
         if self._best_measurement is None:
             return False
 
-        window = max(self.min_step * 20.0, 0.1)
+        window = max(self.min_step * 10.0, 0.05)
         start = self._best_measurement.position_mm - (window / 2.0)
         end = self._best_measurement.position_mm + (window / 2.0)
 
@@ -1005,18 +1050,26 @@ class FourStepAutofocus(MSPRAutofocus):
         self.scan_index = 0
         self.stage = "COARSE"
         self.drop_counter = 0
+        self.parabolic_peak_mm: float | None = None
+        self.parabolic_fit_points: list[tuple[float, float]] = []
+        self.current_stage_best_score: float | None = None
+        self.ultra_start_index: int | None = None
 
     def start(self) -> float:
         self._phase = Phase.COARSE_SCAN
 
-        self.scan_points = list(np.arange(
+        total_range = self.config.end_mm - self.config.start_mm
+        n_steps = max(1, int(round(total_range / self.step_coarse)) + 1)
+        self.scan_points = list(np.linspace(
             self.config.start_mm,
-            self.config.end_mm + 0.001,
-            self.step_coarse
+            self.config.end_mm,
+            n_steps
         ))
         self.scan_points = self._clamp_positions(self.scan_points)
         self.scan_index = 0
         self.stage = "COARSE"
+        self.current_stage_best_score = None
+        self.ultra_start_index = None
 
         return self.scan_points[0] if self.scan_points else float(self.config.start_mm)
 
@@ -1028,9 +1081,12 @@ class FourStepAutofocus(MSPRAutofocus):
 
         if self._best_measurement is None or score > self._best_measurement.score:
             self._best_measurement = _Measurement(position_mm, score)
-            self.drop_counter = 0
-        else:
-            if self.stage == "ULTRA":
+
+        if self.stage == "ULTRA":
+            if self.current_stage_best_score is None or score > self.current_stage_best_score:
+                self.current_stage_best_score = score
+                self.drop_counter = 0
+            else:
                 self.drop_counter += 1
 
         next_pos = position_mm
@@ -1044,6 +1100,7 @@ class FourStepAutofocus(MSPRAutofocus):
                 self.stage = "FINE"
                 self._phase = Phase.REFINEMENT
                 self._setup_next_scan(self.step_fine, self.range_fine)
+                self.current_stage_best_score = None
                 if self.scan_points:
                     next_pos = self.scan_points[0]
                 else:
@@ -1056,6 +1113,8 @@ class FourStepAutofocus(MSPRAutofocus):
             else:
                 self.stage = "ULTRA"
                 self._setup_next_scan(self.step_ultra, self.range_ultra)
+                self.current_stage_best_score = None
+                self.ultra_start_index = len(self._measurements)
                 if self.scan_points:
                     next_pos = self.scan_points[0]
                 else:
@@ -1096,7 +1155,9 @@ class FourStepAutofocus(MSPRAutofocus):
         start = max(self.config.start_mm, start)
         end = min(self.config.end_mm, end)
 
-        self.scan_points = list(np.arange(start, end + 0.00001, step_size))
+        total_range = end - start
+        n_steps = max(1, int(round(total_range / step_size)) + 1)
+        self.scan_points = list(np.linspace(start, end, n_steps))
         self.scan_points = self._clamp_positions(self.scan_points)
         self.scan_index = 0
         self.drop_counter = 0
@@ -1115,19 +1176,28 @@ class FourStepAutofocus(MSPRAutofocus):
         if not self.scan_points or not self._measurements:
             return
 
+        start_idx = self.ultra_start_index or 0
         final_coords = [
             (m.position_mm, m.score)
-            for m in self._measurements
-            if any(abs(m.position_mm - p) < 1e-6 for p in self.scan_points)
+            for m in self._measurements[start_idx:]
         ]
 
         if len(final_coords) < 3:
             return
 
+        # Use local 3-point neighborhood around the best position
         final_coords.sort(key=lambda x: x[0])
-        x_vals = [c[0] for c in final_coords]
-        scores = [c[1] for c in final_coords]
+        self.parabolic_fit_points = final_coords
+
+        best_idx = int(np.argmax([c[1] for c in final_coords]))
+        if best_idx == 0 or best_idx == len(final_coords) - 1:
+            return
+
+        local_coords = final_coords[best_idx - 1:best_idx + 2]
+        x_vals = [c[0] for c in local_coords]
+        scores = [c[1] for c in local_coords]
         subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
+        self.parabolic_peak_mm = subpixel_pos
 
         if self._best_measurement and abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
             self._best_measurement.position_mm = subpixel_pos
