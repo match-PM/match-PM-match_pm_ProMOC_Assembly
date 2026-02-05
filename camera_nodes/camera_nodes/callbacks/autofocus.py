@@ -92,22 +92,29 @@ class AutofocusCallbacks(CallbackBase):
         clients = self._get_all_axis_clients()
         
         # ══════════════════════════════════════════════════════════════
-        # PHASE 1: Fly-Over Detection
+        # PHASE 1: Fly-Over Detection (or skip if requested)
         # ══════════════════════════════════════════════════════════════
-        self._node.get_logger().info('Phase 1: Fly-Over Detection...')
+        skip_flyover = getattr(request, 'skip_flyover', False)
         
-        peak_start, peak_end, max_stddev = self._fly_over_detection(
-            request.start_position, 
-            request.end_position,
-            clients
-        )
-        
-        if peak_start is None or peak_end is None:
-            raise ImageProcessingError('No target detected during fly-over')
-        
-        self._node.get_logger().info(
-            f'Peak detected: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
-        )
+        if skip_flyover:
+            self._node.get_logger().info('Skipping fly-over, using full range.')
+            peak_start = float(request.start_position)
+            peak_end = float(request.end_position)
+        else:
+            self._node.get_logger().info('Phase 1: Fly-Over Detection...')
+            
+            peak_start, peak_end, max_stddev = self._fly_over_detection(
+                request.start_position, 
+                request.end_position,
+                clients
+            )
+            
+            if peak_start is None or peak_end is None:
+                raise ImageProcessingError('No target detected during fly-over')
+            
+            self._node.get_logger().info(
+                f'Peak detected: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})'
+            )
         
         # ══════════════════════════════════════════════════════════════
         # PHASE 2-4: Refinement nach Modus
@@ -354,12 +361,67 @@ class AutofocusCallbacks(CallbackBase):
         af = algo_class(config)
         
         # Run autofocus algorithm
-        best_position, best_score, measurements = self._run_autofocus_loop(af, clients)
+        save_best_image = bool(getattr(request, 'save_best_image', False))
+        if save_best_image:
+            best_position, best_score, measurements, best_image = self._run_autofocus_loop(
+                af, clients, return_best_image=True
+            )
+        else:
+            best_position, best_score, measurements = self._run_autofocus_loop(af, clients)
+            best_image = None
+
+        if mode_name == 'fourstep' and hasattr(af, 'parabolic_peak_mm'):
+            peak_mm = getattr(af, 'parabolic_peak_mm', None)
+            fit_points = getattr(af, 'parabolic_fit_points', [])
+            if peak_mm is not None:
+                self._node.get_logger().info(
+                    f'FOURSTEP Parabolic Peak: {peak_mm:.6f}mm (fit_points={len(fit_points)}) '
+                    f'final_best={best_position:.6f}mm'
+                )
         
-        # Move to best position
+        # Move to best position (FourStep: approach from below to reduce backlash)
         if best_position is not None:
-            clients['move'].call(MoveAbsolute.Request(axis_position=float(best_position)))
+            target_pos = float(best_position)
+            if mode_name == 'fourstep':
+                offset = 0.5
+                pre_pos = float(best_position) - offset
+                # Clamp to requested range
+                pre_pos = max(float(request.start_position), min(float(request.end_position), pre_pos))
+                target_pos = max(float(request.start_position), min(float(request.end_position), target_pos))
+                clients['move'].call(MoveAbsolute.Request(axis_position=pre_pos))
+                self._wait_for_axis_idle(clients)
+            clients['move'].call(MoveAbsolute.Request(axis_position=target_pos))
             self._wait_for_axis_idle(clients)
+
+            # FourStep: measure once at the parabolic peak position
+            if mode_name == 'fourstep':
+                time.sleep(0.3)
+                cv_image = self._get_latest_cv_image()
+                if cv_image is not None:
+                    try:
+                        prior_best_score = best_score
+                        final_score = float(af._calculate_score(cv_image))
+                        if final_score >= prior_best_score:
+                            best_score = final_score
+                            if save_best_image:
+                                best_image = cv_image
+                        else:
+                            # Keep previous best and re-approach target position
+                            if mode_name == 'fourstep':
+                                offset = 0.5
+                                pre_pos = float(best_position) - offset
+                                pre_pos = max(float(request.start_position), min(float(request.end_position), pre_pos))
+                                clients['move'].call(MoveAbsolute.Request(axis_position=pre_pos))
+                                self._wait_for_axis_idle(clients)
+                            clients['move'].call(MoveAbsolute.Request(axis_position=target_pos))
+                            self._wait_for_axis_idle(clients)
+
+                        self._node.get_logger().info(
+                            f'FOURSTEP peak measurement: pos={target_pos:.3f}mm score={final_score:.0f} '
+                            f'(kept_best={best_score:.0f})'
+                        )
+                    except Exception:
+                        pass
         
         duration = time.time() - start_time
         response.success = best_position is not None
@@ -368,6 +430,32 @@ class AutofocusCallbacks(CallbackBase):
         response.best_focus_value = float(best_score)
         response.total_measurements_taken = measurements
         response.duration_seconds = duration
+        response.best_image_path = ''
+        response.measurement_positions = []
+        response.measurement_scores = []
+
+        if save_best_image and best_image is not None:
+            out_dir = str(getattr(request, 'output_dir', '') or '').strip()
+            out_prefix = str(getattr(request, 'output_prefix', '') or '').strip()
+            if not out_prefix:
+                out_prefix = f'autofocus_best_{mode_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+            if not out_dir:
+                out_dir = str(Path.home() / 'autofocus_results')
+            out_path = Path(out_dir)
+            out_path.mkdir(parents=True, exist_ok=True)
+            img_path = out_path / f'{out_prefix}.jpg'
+            cv2.imwrite(str(img_path), best_image)
+            response.best_image_path = str(img_path)
+            self._node.get_logger().info(f'Saved best image: {img_path}')
+
+        # Export measurement series for verification
+        try:
+            measurements = getattr(af, '_measurements', []) or []
+            response.measurement_positions = [float(m.position_mm) for m in measurements]
+            response.measurement_scores = [float(m.score) for m in measurements]
+        except Exception:
+            response.measurement_positions = []
+            response.measurement_scores = []
         
         return response
 

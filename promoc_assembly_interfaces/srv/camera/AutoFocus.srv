@@ -24,6 +24,17 @@ float64 estimated_peak_millions
 # --- OPTIONAL: Use SIFT weighting in fine search ---
 bool use_sift_weighting
 
+# --- OPTIONAL: Skip fly-over detection (use full range) ---
+# If true, skips fly-over and uses start_position to end_position directly
+# Used by verification to test all algorithms on same range
+bool skip_flyover
+
+# --- OPTIONAL: Save best image ---
+# If true, saves best image to output_dir with output_prefix
+bool save_best_image
+string output_dir
+string output_prefix
+
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
 # If empty/zero, node parameters are used
 float64 coaxial_light_voltage
@@ -41,3 +52,6 @@ float64 best_focus_position
 float64 best_focus_value
 int32 total_measurements_taken
 float64 duration_seconds
+string best_image_path
+float64[] measurement_positions
+float64[] measurement_scores

@@ -216,48 +216,17 @@ class VerificationLogic:
         
         reference_pos = None
 
-        # 2. Test Candidates
-        candidates = [a for a in algorithms if a[1] != 'exhaustive']
-        
-        # Find exhaustive for periodic reference
-        ex_algo_cls = next((cls for _, name, cls in algorithms if name == 'exhaustive'), None)
+        # 2. Test Candidates (include exhaustive again)
+        candidates = algorithms
         
         # Define start point strategies
         range_span = end_pos - start_pos
         mid_point = start_pos + range_span / 2.0
         
-        for rep in range(repetitions):
-            # Periodic Exhaustive (rep 1, 10, 20, 30, ...) to track drift
-            if ex_algo_cls and (rep == 0 or (rep + 1) % 10 == 0):
-                self.log.info(f"--- Reference Update (Exhaustive) at Rep {rep+1} ---")
-                ex_config = AutofocusConfig(start_mm=start_pos, end_mm=end_pos, step_mm=0.1)
-                af = ex_algo_cls(ex_config)
-                start_t = time.time()
-                best_pos, best_score, count = self._run_autofocus_loop(af)
-                duration = time.time() - start_t
-                
-                if best_pos is not None:
-                    old_ref = reference_pos
-                    reference_pos = best_pos
-                    drift = reference_pos - old_ref if old_ref else 0.0
-                    self.log.info(f"Reference updated: {reference_pos}mm (Drift: {drift:+.4f}mm)")
-                    
-                    # Log this measurement
-                    results.append({
-                        'algorithm': 'exhaustive (reference)',
-                        'repetition': rep+1,
-                        'focus_position_mm': best_pos,
-                        'focus_score': best_score,
-                        'duration_s': duration,
-                        'measurements': count,
-                        'deviation_from_ref_mm': drift,
-                        'success': True,
-                        'start_strategy': 'reference_update',
-                        'start_pos_mm': start_pos
-                    })
-                else:
-                    self.log.error("Exhaustive search failed to find focus!")
+        exhaustive_runs = {0, max(0, repetitions // 2), max(0, repetitions - 1)}
 
+        for rep in range(repetitions):
+            rep_idx = rep + 1
             start_strategies = []
             if reference_pos:
                 start_strategies = [
@@ -274,13 +243,20 @@ class VerificationLogic:
                 ]
             
             for strat_name, strat_pos in start_strategies:
-                self.log.info(f"--- AF Verification Rep {rep+1} (Start: {strat_name}) ---")
+                self.log.info(f"--- AF Verification Rep {rep_idx} (Start: {strat_name}) ---")
                 
                 # Move to start position first
                 self.clients['move'].call(MoveAbsolute.Request(axis_position=strat_pos))
                 self._wait_for_axis_idle()
                 
-                for _, name, algo_cls in candidates:
+                if rep in exhaustive_runs:
+                    exhaustive_first = [a for a in candidates if a[1] == 'exhaustive']
+                    other_algos = [a for a in candidates if a[1] != 'exhaustive']
+                    run_list = exhaustive_first + other_algos
+                else:
+                    run_list = [a for a in candidates if a[1] != 'exhaustive']
+
+                for _, name, algo_cls in run_list:
                     algo_config = AutofocusConfig(start_mm=start_pos, end_mm=end_pos, step_mm=step_size)
                     af = algo_cls(algo_config)
                     
@@ -299,7 +275,7 @@ class VerificationLogic:
                     
                     res = {
                         'algorithm': name,
-                        'repetition': rep+1,
+                        'repetition': rep_idx,
                         'start_strategy': strat_name,
                         'start_pos_mm': strat_pos,
                         'focus_position_mm': best_pos,

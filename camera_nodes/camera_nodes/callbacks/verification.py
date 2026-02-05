@@ -1,7 +1,6 @@
 """Verification callbacks for scientific validation of autofocus and MTF measurements."""
 
 from datetime import datetime
-from collections import defaultdict
 import json
 from pathlib import Path
 import time
@@ -9,10 +8,6 @@ import csv
 import numpy as np
 import cv2
 
-from promoc_assembly_interfaces.srv import (
-    MoveAbsolute,
-    GetOperationStatus,
-)
 from promoc_core.promoc_exceptions import (
     ConfigurationError,
     ImageProcessingError,
@@ -20,7 +15,6 @@ from promoc_core.promoc_exceptions import (
 )
 from .base import CallbackBase
 from ..algorithms import (
-    AutofocusConfig,
     AUTOFOCUS_ALGORITHMS,  # Use centralized definition
 )
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
@@ -76,8 +70,11 @@ class VerificationCallbacks(CallbackBase):
         
         repetitions = max(1, request.repetitions) if request.repetitions > 0 else 1
         
-        # Get axis clients
-        clients = self._get_all_axis_clients()
+        # Create autofocus service client
+        from promoc_assembly_interfaces.srv import AutoFocus
+        af_client = self._node.create_client(AutoFocus, '~/autofocus')
+        if not af_client.wait_for_service(timeout_sec=2.0):
+            raise ServiceCallFailedError('Autofocus service not available')
         
         # Collect metadata
         metadata = self._get_measurement_metadata()
@@ -97,49 +94,64 @@ class VerificationCallbacks(CallbackBase):
         results = []
         reference_position = None
         measurement_points = []
-        curves_by_rep = defaultdict(list)
         
-        # Select algorithms to test
-        algorithms_to_test = AUTOFOCUS_ALGORITHMS.copy()
+        # Select algorithms to test (include exhaustive)
+        algorithms_to_test = list(AUTOFOCUS_ALGORITHMS)
+        exhaustive_runs = {0, max(0, repetitions // 2), max(0, repetitions - 1)}
         
         # Run each algorithm
         for rep in range(repetitions):
             self._node.get_logger().info(f'--- Repetition {rep + 1}/{repetitions} ---')
 
-            run_exhaustive = (rep == 0 or (rep + 1) % 10 == 0)
-            algorithms_for_rep = algorithms_to_test
-            if not run_exhaustive:
-                algorithms_for_rep = [a for a in algorithms_to_test if a[1] != 'exhaustive']
+            if rep in exhaustive_runs:
+                exhaustive_first = [a for a in algorithms_to_test if a[1] == 'exhaustive']
+                other_algos = [a for a in algorithms_to_test if a[1] != 'exhaustive']
+                run_list = exhaustive_first + other_algos
             else:
-                # Ensure exhaustive runs first as reference
-                exhaustive = [a for a in algorithms_for_rep if a[1] == 'exhaustive']
-                non_exhaustive = [a for a in algorithms_for_rep if a[1] != 'exhaustive']
-                algorithms_for_rep = exhaustive + non_exhaustive
+                run_list = [a for a in algorithms_to_test if a[1] != 'exhaustive']
 
-            for mode, name, algo_class in algorithms_for_rep:
+            for mode, name, _ in run_list:
                 self._node.get_logger().info(f'Running {name.upper()}...')
                 
-                config = AutofocusConfig(
-                    start_mm=float(request.start_position),
-                    end_mm=float(request.end_position),
-                    step_mm=0.5,  # Coarse step
-                )
-                
-                af = algo_class(config)
                 algo_start = time.time()
                 
-                # Run autofocus loop
-                best_pos, best_score, measurements, best_image = self._run_autofocus_loop(
-                    af, clients, return_best_image=True
-                )
+                # Call autofocus service with skip_flyover=true
+                af_req = AutoFocus.Request()
+                af_req.start_position = float(request.start_position)
+                af_req.end_position = float(request.end_position)
+                af_req.refinement_mode = int(mode)
+                af_req.skip_flyover = True
+                af_req.use_sift_weighting = False
+                af_req.save_best_image = True
+                af_req.output_dir = str(run_dir)
+                af_req.output_prefix = f'autofocus_best_{name}_rep{rep + 1}_{timestamp}'
+                
+                af_resp = af_client.call(af_req)
                 
                 duration = time.time() - algo_start
                 
-                # Store/update reference position from exhaustive
-                if name == 'exhaustive' and best_pos is not None:
+                if not af_resp.success:
+                    self._node.get_logger().error(f'{name} failed: {af_resp.status_message}')
+                    results.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'algorithm': name,
+                        'focus_position_mm': 'N/A',
+                        'focus_score': 'N/A',
+                        'duration_s': f'{duration:.2f}',
+                        'measurements': 0,
+                        'deviation_from_ref_mm': 'N/A',
+                        'repetition': rep + 1,
+                    })
+                    continue
+                
+                best_pos = af_resp.best_focus_position
+                best_score = af_resp.best_focus_value
+                measurements = af_resp.total_measurements_taken
+                
+                # Calculate deviation from reference (first successful result)
+                if reference_position is None and best_pos > 0:
                     reference_position = best_pos
                 
-                # Calculate deviation from reference
                 deviation = 0.0
                 if reference_position is not None and best_pos is not None:
                     deviation = best_pos - reference_position
@@ -158,39 +170,28 @@ class VerificationCallbacks(CallbackBase):
                     'repetition': rep + 1,
                 })
 
-                # Store per-measurement data for curve plotting/export
-                series = []
-                for m in getattr(af, '_measurements', []) or []:
-                    try:
-                        series.append({'position_mm': float(m.position_mm), 'score': float(m.score)})
-                    except Exception:
-                        continue
-
-                for idx, m in enumerate(series):
-                    measurement_points.append({
-                        'repetition': rep + 1,
-                        'algorithm': name,
-                        'index': idx,
-                        'position_mm': m['position_mm'],
-                        'score': m['score'],
-                    })
-
-                if series:
-                    curves_by_rep[rep + 1].append({
-                        'label': name,
-                        'positions': [m['position_mm'] for m in series],
-                        'scores': [m['score'] for m in series],
-                    })
-
-                if best_image is not None:
-                    img_path = run_dir / f'autofocus_best_{name}_rep{rep + 1}_{timestamp}.jpg'
-                    cv2.imwrite(str(img_path), best_image)
-                    self._node.get_logger().info(f'Saved best image: {img_path}')
+                # Store per-measurement data for export
+                try:
+                    positions = list(getattr(af_resp, 'measurement_positions', []) or [])
+                    scores = list(getattr(af_resp, 'measurement_scores', []) or [])
+                    for idx, (pos, score) in enumerate(zip(positions, scores)):
+                        measurement_points.append({
+                            'repetition': rep + 1,
+                            'algorithm': name,
+                            'index': idx,
+                            'position_mm': float(pos),
+                            'score': float(score),
+                        })
+                except Exception:
+                    pass
                 
                 self._node.get_logger().info(
                     f'{name}: pos={pos_str}mm, score={score_str}, '
                     f'time={duration:.1f}s, dev={deviation:.4f}mm'
                 )
+
+                if getattr(af_resp, 'best_image_path', ''):
+                    self._node.get_logger().info(f'Saved best image: {af_resp.best_image_path}')
         
         # Write CSV
         csv_path = run_dir / f'autofocus_verification_{timestamp}.csv'
@@ -209,16 +210,19 @@ class VerificationCallbacks(CallbackBase):
                     'measurements': measurement_points,
                 }, f, indent=2)
 
+            measurements_csv_path = run_dir / f'autofocus_measurements_{timestamp}.csv'
+            measurement_fields = ['repetition', 'algorithm', 'index', 'position_mm', 'score']
+            self._write_csv_with_metadata(
+                measurements_csv_path,
+                metadata,
+                measurement_fields,
+                measurement_points
+            )
+
         plotter = VerificationPlotter(self._node.get_logger())
         plot_path = run_dir / f'autofocus_verification_{timestamp}.png'
         if plotter.plot_autofocus_verification(results, str(plot_path)):
             self._node.get_logger().info(f'Autofocus plot saved: {plot_path}')
-
-        # Plot per-repetition autofocus curves (bell curves)
-        for rep_idx, curves in curves_by_rep.items():
-            curve_path = run_dir / f'autofocus_curves_rep{rep_idx}_{timestamp}.png'
-            if plotter.plot_autofocus_curves(curves, str(curve_path)):
-                self._node.get_logger().info(f'Autofocus curves saved: {curve_path}')
         
         # Calculate summary statistics
         max_deviation = 0.0
