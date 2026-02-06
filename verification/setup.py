@@ -21,6 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'verification_orchestrator = verification.verification_orchestrator:main',
+            'mtf_verification = verification.mtf_verification_node:main',
+            'scientific_verification = verification.scientific_verification_node:main',
         ],
     },
 )

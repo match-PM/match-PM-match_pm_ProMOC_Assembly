@@ -468,53 +468,57 @@ class MTFAnalyzer:
     def _detect_gradient_normal_angle(self, roi: np.ndarray) -> Optional[float]:
         """
         Detect the angle of the gradient normal vector (perpendicular to edge).
-        Returns angle in degrees [-180, 180].
+        Uses Ghosal & Mehrotra Zernike Moment ($A_{11}$) method for sub-pixel accuracy.
         
-        0 deg = Gradient in +X direction (Vertical Edge, Dark->Light)
-        90 deg = Gradient in +Y direction (Horizontal Edge, Dark->Light)
+        Returns:
+            Angle in degrees [-180, 180]. 
+            0 deg = Normal points +X (Vertical Edge, Dark->Light)
         """
-        # Convert to float for gradient computation
-        img_f = roi.astype(np.float64)
-        
-        # 1. Compute Gradients
-        gx = cv2.Scharr(img_f, cv2.CV_64F, 1, 0)
-        gy = cv2.Scharr(img_f, cv2.CV_64F, 0, 1)
-        
-        # 2. Focus on the edge (Thresholding)
-        mag = np.sqrt(gx**2 + gy**2)
-        if np.max(mag) <= 1e-6:
+        if roi is None or roi.size == 0:
             return None
             
-        thresh = np.percentile(mag, 95)
-        mask = mag > thresh
+        # Convert to float
+        img_f = roi.astype(np.float64)
+        
+        # Zernike moments A11 masks (7x7 approximation)
+        # N=7 masks for Re(A11) ~ Gx and Im(A11) ~ Gy
+        k_re = np.array([
+            [-0.0165, -0.0238, -0.0210, 0.0, 0.0210, 0.0238, 0.0165],
+            [-0.0416, -0.0673, -0.0683, 0.0, 0.0683, 0.0673, 0.0416],
+            [-0.0637, -0.1162, -0.1432, 0.0, 0.1432, 0.1162, 0.0637],
+            [-0.0766, -0.1491, -0.2078, 0.0, 0.2078, 0.1491, 0.0766],
+            [-0.0637, -0.1162, -0.1432, 0.0, 0.1432, 0.1162, 0.0637],
+            [-0.0416, -0.0673, -0.0683, 0.0, 0.0683, 0.0673, 0.0416],
+            [-0.0165, -0.0238, -0.0210, 0.0, 0.0210, 0.0238, 0.0165]
+        ])
+        k_im = k_re.T
+        
+        # Convolve
+        a11_re = cv2.filter2D(img_f, cv2.CV_64F, k_re)
+        a11_im = cv2.filter2D(img_f, cv2.CV_64F, k_im)
+        
+        # Magnitude check
+        magnitude = np.sqrt(a11_re**2 + a11_im**2)
+        if np.max(magnitude) <= 1e-6:
+            return None
+            
+        thresh = np.percentile(magnitude, 90) # Top 10%
+        mask = magnitude > thresh
         
         if np.sum(mask) < 10:
-            return None 
+            return None
             
-        # 3. Structure Tensor (Covariance of gradients without mean subtraction)
-        # We want the dominant direction of the gradients themselves, not their spread.
-        gx_masked = gx[mask]
-        gy_masked = gy[mask]
+        # Calculate angles at strong edge pixels
+        # phi is the angle of the normal vector
+        phis = np.arctan2(a11_im[mask], a11_re[mask])
         
-        # Construct the Structure Tensor matrix Elements
-        Sxx = np.sum(gx_masked**2)
-        Syy = np.sum(gy_masked**2)
-        Sxy = np.sum(gx_masked * gy_masked)
+        # Robust averaging (circular mean)
+        # Avoid issues at -180/180 transition
+        mean_sin = np.mean(np.sin(phis))
+        mean_cos = np.mean(np.cos(phis))
+        mean_phi = np.arctan2(mean_sin, mean_cos)
         
-        # Eigen decomposition of [[Sxx, Sxy], [Sxy, Syy]]
-        # This is a symmetric matrix, can use np.linalg.eigh or svd
-        eigenvals, eigenvecs = np.linalg.eigh([[Sxx, Sxy], [Sxy, Syy]])
-        
-        # np.linalg.eigh returns eigenvalues in ASCENDING order
-        # So the largest eigenvalue is at index 1 (last)
-        normal = eigenvecs[:, 1]
-        nx, ny = normal[0], normal[1]
-        
-        # Angle of Normal vector
-        angle_normal_rad = np.arctan2(ny, nx)
-        angle_deg = np.degrees(angle_normal_rad)
-        
-        return float(angle_deg)
+        return float(np.degrees(mean_phi))
         
     # Legacy alias for compatibility, wraps new method
     _detect_edge_angle = _detect_gradient_normal_angle

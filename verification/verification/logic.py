@@ -23,6 +23,7 @@ from .algorithms import (
     MTFAnalyzer,
     MTFConfig
 )
+from .algorithms.image_metrics import ImageMetrics
 from camera_nodes.algorithms.roi_detection import RoiDetector
 from .algorithms.statistics import calculate_uncertainty_budget
 from ament_index_python.packages import get_package_share_directory
@@ -388,3 +389,120 @@ class VerificationLogic:
         
         self.log.info(f"MTF Stats: Mean={stats['mtf50_mean']:.3f} +/- {stats['mtf50_std']:.3f} lp/mm")
         return stats
+
+    def run_correlation_verification(self, start_pos, end_pos, step_size, settle_time=0.5):
+        """
+        Runs a scan to verify relationship between Autofocus Peak (Tenengrad) and MTF Peak.
+        
+        Args:
+            start_pos: Start Z position (mm)
+            end_pos: End Z position (mm)
+            step_size: Step size (mm)
+            settle_time: Settle time in seconds
+            
+        Returns:
+            dict: {
+                'peak_shift': float,
+                'max_af_pos': float,
+                'max_mtf_pos': float,
+                'data': list of dicts {pos, tenengrad, mtf, angle},
+                'success': bool
+            }
+        """
+        self.log.info(f"Starting Correlation Scan: {start_pos}-{end_pos}mm (step={step_size}mm)")
+        
+        # Move to start
+        self._move_axis(start_pos)
+        self._wait_for_axis_idle()
+        
+        positions = np.arange(start_pos, end_pos + step_size, step_size)
+        results = []
+        
+        bridge = None # Lazy init if needed or just use cv2 directly? 
+        # Orchestrator gives us self.node which has self.latest_image_msg
+        # BUT logic.py doesn't have direct access to self.node.latest_image_msg unless we ask for it or updated node
+        # VerificationOrchestrator passed 'self' as 'node' to VerificationLogic? Yes: VerificationLogic(self, ...)
+        # BUT VerificationOrchestrator has the image subscription.
+        # Let's add a helper to get image from node.
+        
+        from cv_bridge import CvBridge
+        cv_bridge = CvBridge()
+        
+        for pos in positions:
+            self.log.info(f"Scanning Z={pos:.2f}...")
+            self._move_axis(float(pos))
+            self._wait_for_axis_idle()
+            time.sleep(settle_time)
+            
+            # Get Image
+            img_msg = self.node.latest_image_msg
+            if img_msg is None:
+                self.log.warn(f"No image available at {pos}")
+                continue
+                
+            try:
+                cv_img = cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
+            except Exception as e:
+                self.log.error(f"CV conversion failed: {e}")
+                continue
+            
+            # Calculate Metrics
+            tenengrad = ImageMetrics.calculate_tenengrad(cv_img)
+            mtf_score, angle = ImageMetrics.calculate_mtf_proxy(cv_img)
+            
+            results.append({
+                'pos': float(pos),
+                'tenengrad': tenengrad,
+                'mtf': mtf_score,
+                'angle': angle
+            })
+            self.log.info(f"  -> Ten={tenengrad:.1f}, MTF={mtf_score:.2f}")
+
+        if not results:
+            self.log.error("Correlation Scan produced no results.")
+            return {'success': False, 'message': 'No data collected'}
+
+        # Analyze
+        from scipy.signal import find_peaks
+        # Simple max search for robustness if curves are noisy but generally correct
+        # Ideally we might fit a parabola, but let's stick to argmax for now
+        
+        best_af = max(results, key=lambda x: x['tenengrad'])
+        best_mtf = max(results, key=lambda x: x['mtf'])
+        
+        peak_shift = best_af['pos'] - best_mtf['pos']
+        
+        return {
+            'success': True,
+            'peak_shift': peak_shift,
+            'max_af_pos': best_af['pos'],
+            'max_mtf_pos': best_mtf['pos'],
+            'data': results
+        }
+
+    def _move_axis(self, position_mm):
+        req = MoveAbsolute.Request()
+        req.axis_position = float(position_mm)
+        future = self.clients['move'].call_async(req)
+        # We need to spin? logic runs in a thread in orchestrator?
+        # Orchestrator calls logic methods in a separate thread `verification_thread`.
+        # BUT self.clients are created with callback_group=ReentrantCallbackGroup in Orchestrator.
+        # We can block on the future result with a short timeout loop?
+        # Or simpler: The Orchestrator calls this in a dedicated thread. 
+        # rclpy.spin_until_future_complete cannot be called easily if we are not the main thread or executor issues.
+        # But wait, self.clients['move'].call(req) is SYNC call!
+        # The Orchestrator defined clients using .create_client.
+        # Usually .call() is synchronous and blocks.
+        # Let's check how other methods do it.
+        # helper _run_autofocus_loop uses: self.clients['move'].call(MoveAbsolute.Request(...))
+        # So yes, we can use synchronous call.
+        
+        try:
+            res = self.clients['move'].call(req)
+            if not res or not res.success:
+                raise RuntimeError(f"Move to {position_mm} failed")
+        except Exception as e:
+            self.log.error(f"Move service call failed: {e}")
+            raise
+
+

@@ -71,7 +71,6 @@ Example Service Calls:
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.srv import (
     AutoFocus, MeasureMTF, SetExposure, DetectRois,
-    VerifyAutofocus, VerifyMTF
 )
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -281,19 +280,7 @@ class CameraNode(Node):
                 callback_group=self.cb_group,
             )
 
-        # Verification services
-        self.verify_autofocus_service = self.create_service(
-            VerifyAutofocus,
-            '~/verify_autofocus',
-            self.service_callbacks.verify_autofocus_callback,
-            callback_group=self.cb_group,
-        )
-        self.verify_mtf_service = self.create_service(
-            VerifyMTF,
-            '~/verify_mtf',
-            self.service_callbacks.verify_mtf_callback,
-            callback_group=self.cb_group,
-        )
+
 
         self.log.info('Camera Node initialized successfully')
 

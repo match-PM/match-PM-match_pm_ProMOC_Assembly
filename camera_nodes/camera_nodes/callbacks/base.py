@@ -40,15 +40,33 @@ class CallbackBase:
     # ==========================================================================
 
     def _get_latest_cv_image(self):
-        """Retrieves the latest camera image as OpenCV array."""
-        if self._node.latest_image_msg is None:
-            return None
+        """Retrieves the latest camera image as OpenCV array.
+        
+        Returns:
+            tuple: (cv_image, timestamp_ns) or (None, None)
+        """
+        msg = self._node.latest_image_msg
+        if msg is None:
+            return None, None
         try:
-            return self._node.bridge.imgmsg_to_cv2(
-                self._node.latest_image_msg, 'bgr8')
+            cv_img = self._node.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            # msg.header.stamp is a Time object in rclpy, but here it might be a msg object.
+            # In ROS2 python msg, stamp has sec and nanosec.
+            ts = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+            return cv_img, ts
         except Exception as e:
             self.logger.warn(f'Failed to convert image: {e}')
-            return None
+            return None, None
+
+    def _wait_for_new_image(self, last_timestamp: int, timeout: float = 1.0):
+        """Waits for an image with a newer timestamp."""
+        start = time.time()
+        while time.time() - start < timeout:
+             _, ts = self._get_latest_cv_image()
+             if ts is not None and ts > last_timestamp:
+                 return self._get_latest_cv_image()
+             time.sleep(0.01)
+        return None, None
 
     @staticmethod
     def _get_center_roi(image: np.ndarray, size: int) -> np.ndarray:

@@ -130,7 +130,11 @@ class AutofocusCallbacks(CallbackBase):
     # ... (existing client methods skipped) ...
 
     def _get_all_axis_clients(self):
-        """Creates all service clients for the linear axis."""
+        """Creates or returns cached service clients for the linear axis."""
+        # Return cached clients if available
+        if hasattr(self, '_cached_axis_clients') and self._cached_axis_clients:
+            return self._cached_axis_clients
+            
         x_axis_name = self._node.get_parameter('x_axis_node_name').value
         
         clients = {
@@ -147,6 +151,8 @@ class AutofocusCallbacks(CallbackBase):
             if not client.wait_for_service(timeout_sec=2.0):
                 raise ServiceError(f'Linear axis {name} service not available')
         
+        # Cache the clients to prevent resource leaks
+        self._cached_axis_clients = clients
         return clients
 
     def _wait_for_axis_idle(self, clients):
@@ -261,7 +267,7 @@ class AutofocusCallbacks(CallbackBase):
 
                 # 3. Process Image
                 stddev = 0.0
-                cv_image = self._get_latest_cv_image()
+                cv_image, _ = self._get_latest_cv_image()
                 if cv_image is not None:
                     green = cv_image[:, :, 1] if len(cv_image.shape) == 3 else cv_image
                     roi = self._get_center_roi(green, roi_size)
@@ -297,26 +303,33 @@ class AutofocusCallbacks(CallbackBase):
             max_stddev_pos = best_sample[0]
             max_stddev = best_sample[1]
             
-            # ABSOLUTE THRESHOLD logic: Everything > 2.5 is part of the peak area
-            ABS_THRESHOLD = 2.5
-            valid_points = [p for p, s in scan_data if s >= ABS_THRESHOLD]
+            # Dynamic Threshold Calculation (Ratio based)
+            # Use the configured peak_ratio (default 0.5) to set threshold relative to peak
+            dynamic_threshold = max_stddev * peak_ratio
+            effective_threshold = max(dynamic_threshold, 2.5) # Keep noise floor at 2.5
+            
+            valid_points = [p for p, s in scan_data if s >= effective_threshold]
             
             if not valid_points:
-                 self._node.get_logger().warn(f'No point in fly-over exceeded threshold {ABS_THRESHOLD}.')
+                 self._node.get_logger().warn(f'No point in fly-over exceeded threshold {effective_threshold}.')
                  return None, None, max_stddev
             
             peak_window_min = min(valid_points)
             peak_window_max = max(valid_points)
 
+            # Apply margin
+            peak_window_min_m = peak_window_min - margin
+            peak_window_max_m = peak_window_max + margin
+
             self._node.get_logger().info(
                 f'Fly-Over: Peak at {max_stddev_pos:.2f}mm (std={max_stddev:.1f}). '
-                f'Found {len(valid_points)} points >= {ABS_THRESHOLD}. '
-                f'Auto-Window: {peak_window_min:.2f}-{peak_window_max:.2f}mm'
+                f'Found {len(valid_points)} points >= {effective_threshold:.2f} (ratio={peak_ratio}). '
+                f'Auto-Window: {peak_window_min_m:.2f}-{peak_window_max_m:.2f}mm (margin={margin}mm)'
             )
 
-            # Use absolute window without extra margins
-            peak_start = max(start_pos, peak_window_min)
-            peak_end = min(end_pos, peak_window_max)
+            # Clamp scan window to physical limits
+            peak_start = max(start_pos, peak_window_min_m)
+            peak_end = min(end_pos, peak_window_max_m)
 
             return peak_start, peak_end, max_stddev
             
@@ -396,7 +409,7 @@ class AutofocusCallbacks(CallbackBase):
             # FourStep: measure once at the parabolic peak position
             if mode_name == 'fourstep':
                 time.sleep(0.3)
-                cv_image = self._get_latest_cv_image()
+                cv_image, _ = self._get_latest_cv_image()
                 if cv_image is not None:
                     try:
                         prior_best_score = best_score
@@ -485,13 +498,18 @@ class AutofocusCallbacks(CallbackBase):
         except Exception:
             pass
 
+        last_timestamp = 0
+        
         for _ in range(max_steps):
-            cv_image = self._get_latest_cv_image()
+            # Wait ensuring we get a NEW image frame
+            cv_image, ts = self._wait_for_new_image(last_timestamp, timeout=2.0)
+            
             if cv_image is None:
-                time.sleep(0.1)
-                cv_image = self._get_latest_cv_image()
-            if cv_image is None:
-                raise ImageProcessingError('No image available')
+                self._node.get_logger().error("Timeout waiting for new image in AF loop - Stream stalled?")
+                raise ImageProcessingError('Autofocus failed: Camera stream stalled (no new images)')
+            
+            if ts is not None:
+                last_timestamp = ts
             
             result = af.process_image(current_pos, cv_image)
             best_score = result.best_score

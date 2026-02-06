@@ -39,6 +39,7 @@ class VerificationState:
     BASELINE_MTF = "BASELINE_MTF"
     WAITING_FOR_USER = "WAITING_FOR_USER"
     STRAHLTEILER_VERIFICATION = "STRAHLTEILER_VERIFICATION"
+    CORRELATION_VERIFICATION = "CORRELATION_VERIFICATION"
     FINISHED = "FINISHED"
     ERROR = "ERROR"
 
@@ -114,6 +115,7 @@ class VerificationOrchestrator(Node):
         self.current_config = {
             'run_af': request.run_autofocus_verification,
             'run_mtf': request.run_mtf_verification,
+            'run_correlation': getattr(request, 'run_correlation_verification', False),
             'operator': request.operator_name,
             'notes': request.notes,
             'timestamp': datetime.now().isoformat(),
@@ -164,6 +166,10 @@ class VerificationOrchestrator(Node):
             # --- PHASE 1: Autofocus Verification ---
             if self.current_config['run_af']:
                 self._run_af_phase()
+
+            # --- PHASE 1.5: Correlation Verification (AF Peak vs MTF Peak) ---
+            if self.current_config['run_correlation']:
+                self._run_correlation_phase()
             
             # --- PHASE 2 & 3: MTF Baseline & User Interaction ---
             best_pos = None
@@ -210,6 +216,25 @@ class VerificationOrchestrator(Node):
             'best_pos': best_overall
         }
         self.get_logger().info(f"AF Verification Done. Best Pos: {best_overall}")
+
+    def _run_correlation_phase(self):
+        self.state = VerificationState.CORRELATION_VERIFICATION
+        self.get_logger().info("Starting Correlation Verification (AF-Peak vs MTF-Peak)...")
+        
+        start_pos = self.current_config.get('start_pos', 0.0)
+        end_pos = self.current_config.get('end_pos', 10.0)
+        step_size = self.current_config.get('step_size', 0.5)
+        
+        # Use existing logic
+        result = self.logic.run_correlation_verification(start_pos, end_pos, step_size)
+        
+        if result['success']:
+             self.results['correlation_verification'] = result
+             self.get_logger().info(f"Correlation: Shift={result['peak_shift']:.3f}mm "
+                                    f"(AF_Peak={result['max_af_pos']:.3f}, MTF_Peak={result['max_mtf_pos']:.3f})")
+        else:
+             self.get_logger().error(f"Correlation Verification Failed: {result.get('message')}")
+             self.results['correlation_verification'] = {'success': False, 'error': result.get('message')}
 
     def _run_baseline_mtf_phase(self):
         self.state = VerificationState.BASELINE_MTF
@@ -312,6 +337,13 @@ class VerificationOrchestrator(Node):
                 filename=f"mtf_impact_{datetime.now().strftime('%H%M%S')}.png"
             )
             report_paths['mtf_plot'] = str(path)
+
+        if 'correlation_verification' in self.results and self.results['correlation_verification']['success']:
+             path = plotter.plot_correlation_verification(
+                 self.results['correlation_verification'],
+                 filename=f"correlation_{datetime.now().strftime('%H%M%S')}.png"
+             )
+             report_paths['correlation_plot'] = str(path)
 
         self.state = VerificationState.FINISHED
         self.current_config['environment_end'] = {'valid': False, 'temperature_c': 0.0, 'humidity_percent': 0.0}
@@ -457,6 +489,17 @@ class VerificationOrchestrator(Node):
                 writer.writeheader()
                 writer.writerows(mtf_data)
             self.get_logger().info(f"Saved MTF CSV: {csv_path}")
+
+        # 3. Correlation Results CSV
+        if 'correlation_verification' in self.results:
+            corr_res = self.results['correlation_verification']
+            if corr_res.get('success'):
+                csv_path = directory / f"correlation_results_{timestamp}.csv"
+                with open(csv_path, 'w', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=['pos', 'tenengrad', 'mtf', 'angle'])
+                    writer.writeheader()
+                    writer.writerows(corr_res['data'])
+                self.get_logger().info(f"Saved Correlation CSV: {csv_path}")
 
 def main(args=None):
     rclpy.init(args=args)

@@ -233,6 +233,32 @@ class MTFCallbacks(CallbackBase):
         except Exception as e:
             self._node.get_logger().error(f'Failed to set binning: {e}')
 
+    def _wait_for_next_image(self, timeout=1.0):
+        """Waits for a strictly newer image than the current one."""
+        if self._node.latest_image_msg is None:
+            return None
+        
+        start_ts = self._node.latest_image_msg.header.stamp
+        start_ns = start_ts.sec * 1_000_000_000 + start_ts.nanosec
+        
+        deadline = time.time() + timeout
+        
+        while time.time() < deadline:
+            curr_msg = self._node.latest_image_msg
+            if curr_msg:
+                curr_ts = curr_msg.header.stamp
+                curr_ns = curr_ts.sec * 1_000_000_000 + curr_ts.nanosec
+                
+                if curr_ns > start_ns:
+                    try:
+                        return self._node.bridge.imgmsg_to_cv2(curr_msg, 'bgr8')
+                    except Exception:
+                        return None
+            time.sleep(0.01)
+        
+        self._node.get_logger().warn("Timeout waiting for next image in averaging loop")
+        return None
+
     @handle_service_errors()
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
@@ -382,7 +408,31 @@ class MTFCallbacks(CallbackBase):
                 result = analyzer.compute_mtf(edge_roi.image)
     
                 if result.valid:
-                    # Attach edge metadata to result
+                    # --- Averaging Logic ---
+                    num_samples = 10
+                    valid_samples = [result]
+                    
+                    if num_samples > 1:
+                        self._node.get_logger().info(f"Edge valid. Measuring {num_samples-1} more frames for averaging...")
+                        roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
+                        
+                        for i in range(num_samples - 1):
+                            next_img = self._wait_for_next_image(timeout=1.0)
+                            if next_img is not None:
+                                # Ensure ROI is within bounds (in case image size changed?? unlikely but safe)
+                                if roi_y+roi_h <= next_img.shape[0] and roi_x+roi_w <= next_img.shape[1]:
+                                    crop_img = next_img[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
+                                    sample_res = analyzer.compute_mtf(crop_img)
+                                    if sample_res.valid:
+                                        valid_samples.append(sample_res)
+                    
+                    # Compute Averages
+                    avg_mtf50 = float(np.mean([r.mtf50 for r in valid_samples]))
+                    avg_mtf20 = float(np.mean([r.mtf20 for r in valid_samples]))
+                    avg_mtf10 = float(np.mean([r.mtf10 for r in valid_samples]))
+                    avg_angle = float(np.mean([r.edge_angle for r in valid_samples]))
+                    
+                    # Attach edge metadata to result (using first result for metadata)
                     result.edge_name = edge_roi.edge_name
                     result.edge_direction = edge_roi.edge_direction
                     result.contrast = edge_roi.contrast
@@ -390,17 +440,17 @@ class MTFCallbacks(CallbackBase):
                     
                     # Success! Return this result
                     response.success = True
-                    response.mtf50 = float(result.mtf50)
-                    response.mtf20 = float(result.mtf20)
-                    response.mtf10 = float(result.mtf10)
-                    response.edge_angle = float(result.edge_angle)
+                    response.mtf50 = avg_mtf50
+                    response.mtf20 = avg_mtf20
+                    response.mtf10 = avg_mtf10
+                    response.edge_angle = avg_angle
                     response.nyquist_frequency = float(result.nyquist_frequency)
                     
                     # Format detailed status message with edge coordinates
                     edge_info = result.format_edge_info()
                     response.status_message = (
-                        f"MTF50={response.mtf50:.2f} lp/mm "
-                        f"({edge_info}, {result.edge_angle:.1f}°, C:{edge_roi.contrast:.2f})"
+                        f"MTF50={response.mtf50:.2f} lp/mm (Avg {len(valid_samples)}) "
+                        f"({edge_info}, {response.edge_angle:.1f}°, C:{edge_roi.contrast:.2f})"
                     )
                     
                     self._node.get_logger().info(

@@ -547,3 +547,50 @@ class ResultsPlotter:
         plt.close(fig)
         return save_path
 
+    def plot_correlation_verification(self, result_data: Dict, filename: str = 'correlation.png'):
+        """Plots the correlation between Autofocus (Tenengrad) and MTF Proxy curves."""
+        data = result_data.get('data', [])
+        if not data:
+            return None
+            
+        df = pd.DataFrame(data)
+        
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        
+        color1 = 'tab:blue'
+        ax1.set_xlabel('Position (mm)')
+        ax1.set_ylabel('Focus Metric (Tenengrad)', color=color1)
+        l1 = ax1.plot(df['pos'], df['tenengrad'], color=color1, marker='o', label='Tenengrad (Focus)')
+        ax1.tick_params(axis='y', labelcolor=color1)
+        
+        ax2 = ax1.twinx()
+        color2 = 'tab:orange'
+        ax2.set_ylabel('Quality Metric (MTF Proxy)', color=color2)
+        l2 = ax2.plot(df['pos'], df['mtf'], color=color2, marker='x', linestyle='--', label='MTF Proxy 90%')
+        ax2.tick_params(axis='y', labelcolor=color2)
+        
+        # Peaks
+        peak_af = result_data.get('max_af_pos')
+        peak_mtf = result_data.get('max_mtf_pos')
+        shift = result_data.get('peak_shift', 0)
+        
+        if peak_af:
+             l3 = ax1.axvline(peak_af, color=color1, linestyle=':', alpha=0.5, label=f'AF Peak {peak_af:.3f}')
+        if peak_mtf:
+             l4 = ax2.axvline(peak_mtf, color=color2, linestyle=':', alpha=0.5, label=f'MTF Peak {peak_mtf:.3f}')
+             
+        plt.title(f'AF vs MTF Correlation (Shift: {shift:.3f} mm)')
+        
+        # Legend
+        lns = l1 + l2
+        labs = [l.get_label() for l in lns]
+        ax1.legend(lns, labs, loc='upper center', bbox_to_anchor=(0.5, -0.15),
+                 ncol=2)
+                 
+        plt.tight_layout()
+        save_path = self.output_dir / filename
+        plt.savefig(save_path, dpi=150)
+        plt.close(fig)
+        return save_path
+
+

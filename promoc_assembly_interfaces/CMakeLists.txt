@@ -55,6 +55,7 @@ set(INTERFACE_FILES
   "srv/camera/VerifyAutofocus.srv"
   "srv/camera/VerifyMTF.srv"
   "srv/camera/RunVerification.srv"
+  "srv/camera/VerifyCorrelation.srv"
 )
 
 # CRITICAL: Generate the interfaces (this was missing!)

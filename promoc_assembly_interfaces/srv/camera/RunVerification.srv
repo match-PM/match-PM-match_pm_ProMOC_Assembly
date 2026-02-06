@@ -4,6 +4,7 @@
 # Configuration
 bool run_autofocus_verification   # Check which algorithm is best
 bool run_mtf_verification         # Check if system detects strahlteiler
+bool run_correlation_verification # Verify AF Peak vs MTF Peak correlation
 
 # Parameters
 float64 start_position_mm         # Start of AF search range

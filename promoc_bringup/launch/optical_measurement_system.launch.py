@@ -59,7 +59,8 @@ def generate_launch_description():
 
         # Camera processing node (delayed start)
         TimerAction(period=2.0, actions=[
-            _create_camera_node(user_config)
+            _create_camera_node(user_config),
+            _create_verification_node(user_config)
         ]),
     ])
 
@@ -148,5 +149,23 @@ def _create_camera_node(config: dict):
             'measurement_conditions.coaxial_light_current': config['measurement_conditions']['coaxial_light_current'],
             'measurement_conditions.camera_objective': config['measurement_conditions']['camera_objective'],
             'measurement_conditions.notes': config['measurement_conditions']['notes'],
+        }]
+    )
+
+
+def _create_verification_node(config: dict):
+    """Create scientific verification node."""
+    return Node(
+        package='verification',
+        executable='scientific_verification',
+        name='scientific_verification_node',
+        output='screen',
+        emulate_tty=True,
+        parameters=[{
+            'camera_topic': '/promoc/assembly_camera/stream0/image_raw',
+            'autofocus_service': '/camera_node/autofocus',
+            'axis_name': LaunchConfiguration('x_axis_name'),
+            'pixel_size_um': config['camera']['pixel_size_um'],
+            'results_dir': os.path.join(os.path.expanduser('~'), 'Dokumente', 'Messungen')
         }]
     )
