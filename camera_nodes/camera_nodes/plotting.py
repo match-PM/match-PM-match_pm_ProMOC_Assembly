@@ -261,3 +261,67 @@ class VerificationPlotter:
         fig.savefig(filename, dpi=150)
         plt.close(fig)
         return True
+
+    def plot_correlation_verification(self, result_data: dict, filename: str) -> bool:
+        """Plot Tenengrad and MTF50 across position with detected peak markers."""
+        if plt is None:
+            self._warn('matplotlib not available - skipping correlation plot')
+            return False
+
+        rows = list(result_data.get('data', []))
+        if not rows:
+            self._warn('No data for correlation plot')
+            return False
+
+        points: list[tuple[float, float, float]] = []
+        for row in rows:
+            pos = self._safe_float(row.get('position_mm', row.get('pos')))
+            ten = self._safe_float(row.get('tenengrad'))
+            mtf = self._safe_float(row.get('mtf50_lpmm', row.get('mtf')))
+            if pos is None or ten is None or mtf is None:
+                continue
+            points.append((pos, ten, mtf))
+
+        if not points:
+            self._warn('No valid points for correlation plot')
+            return False
+
+        points.sort(key=lambda item: item[0])
+        positions = np.array([p[0] for p in points], dtype=float)
+        ten_values = np.array([p[1] for p in points], dtype=float)
+        mtf_values = np.array([p[2] for p in points], dtype=float)
+
+        fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+        line1 = ax1.plot(positions, ten_values, color='tab:blue', marker='o', label='Tenengrad')
+        ax1.set_xlabel('Position (mm)')
+        ax1.set_ylabel('Tenengrad', color='tab:blue')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+        ax2 = ax1.twinx()
+        line2 = ax2.plot(positions, mtf_values, color='tab:orange', marker='x', linestyle='--', label='MTF50')
+        ax2.set_ylabel('MTF50 (lp/mm)', color='tab:orange')
+        ax2.tick_params(axis='y', labelcolor='tab:orange')
+
+        af_peak = self._safe_float(result_data.get('max_af_pos'))
+        mtf_peak = self._safe_float(result_data.get('max_mtf_pos'))
+        shift = self._safe_float(result_data.get('peak_shift'))
+
+        if af_peak is not None:
+            ax1.axvline(af_peak, color='tab:blue', linestyle=':', alpha=0.5)
+        if mtf_peak is not None:
+            ax2.axvline(mtf_peak, color='tab:orange', linestyle=':', alpha=0.5)
+
+        title = 'AF vs MTF Correlation'
+        if shift is not None:
+            title += f' (Shift: {shift:.4f} mm)'
+        ax1.set_title(title)
+
+        lines = line1 + line2
+        labels = [line.get_label() for line in lines]
+        ax1.legend(lines, labels, loc='upper left')
+        ax1.grid(True, alpha=0.3)
+
+        fig.tight_layout()
+        fig.savefig(filename, dpi=150)
+        plt.close(fig)
+        return True

@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 import time
 import csv
-from collections import defaultdict
 
 import rclpy
 from rclpy.node import Node
@@ -52,6 +51,13 @@ from promoc_core.promoc_exceptions import (
     ServiceCallFailedError,
 )
 from promoc_core.error_handling import handle_service_errors
+from verification.algorithms.mtf_verification_stats import (
+    estimate_peak_position,
+    extract_metric_values,
+    summarize_mtf_by_direction,
+    summarize_mtf_by_group,
+    summarize_numeric_values,
+)
 
 
 class ScientificVerificationNode(Node):
@@ -148,14 +154,46 @@ class ScientificVerificationNode(Node):
     def image_callback(self, msg):
         self.latest_image_msg = msg
 
-    def _get_latest_cv_image(self):
-        if self.latest_image_msg is None:
+    def _stamp_to_tuple(self, msg) -> tuple[int, int] | None:
+        """Extract ROS timestamp tuple (sec, nsec) if available."""
+        if msg is None:
             return None
         try:
-            return self.bridge.imgmsg_to_cv2(self.latest_image_msg, 'bgr8')
+            stamp = msg.header.stamp
+            return int(stamp.sec), int(stamp.nanosec)
+        except Exception:
+            return None
+
+    def _convert_msg_to_cv2(self, msg):
+        if msg is None:
+            return None
+        try:
+            return self.bridge.imgmsg_to_cv2(msg, 'bgr8')
         except Exception as e:
             self.get_logger().warn(f'Image conversion failed: {e}')
             return None
+
+    def _get_latest_cv_image(self):
+        return self._convert_msg_to_cv2(self.latest_image_msg)
+
+    def _wait_for_fresh_cv_image(
+        self,
+        previous_stamp: tuple[int, int] | None = None,
+        timeout_sec: float = 2.0
+    ) -> tuple[np.ndarray | None, tuple[int, int] | None]:
+        """
+        Wait for a fresh image (new header timestamp). Falls back to latest frame.
+        """
+        start = time.time()
+        while time.time() - start < timeout_sec:
+            msg = self.latest_image_msg
+            stamp = self._stamp_to_tuple(msg)
+            if msg is not None and (previous_stamp is None or stamp != previous_stamp):
+                return self._convert_msg_to_cv2(msg), stamp
+            time.sleep(0.01)
+
+        msg = self.latest_image_msg
+        return self._convert_msg_to_cv2(msg), self._stamp_to_tuple(msg)
 
     def _get_output_dir(self, subdirectory: str = '', operator_name: str | None = None) -> Path:
         """Creates and returns the output directory."""
@@ -395,14 +433,9 @@ class ScientificVerificationNode(Node):
     @handle_service_errors()
     def verify_mtf_callback(self, request, response):
         """Verification service: MTF field test with comprehensive output."""
-        start_time = time.time()
         repetitions = max(1, request.repetitions) if hasattr(request, 'repetitions') and request.repetitions > 0 else 1
         
         self.get_logger().info(f'MTF Verification: field_test={request.field_test}, reps={repetitions}')
-
-        cv_image = self._get_latest_cv_image()
-        if cv_image is None:
-            raise ImageProcessingError('No image available')
 
         metadata = self._get_measurement_metadata()
         metadata.update({
@@ -414,36 +447,72 @@ class ScientificVerificationNode(Node):
             'repetitions': repetitions
         })
 
-        output_dir = self._get_output_dir('verification/mtf_Verification', operator_name=request.operator_name)
+        output_dir = self._get_output_dir('verification/mtf_verification', operator_name=request.operator_name)
         timestamp = self._get_timestamp()
         run_dir = output_dir / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = run_dir / f'mtf_verification_{timestamp}.csv'
 
         # Force debug export for this verification run into the run directory
         analyzer = self._create_mtf_analyzer(debug_dir=str(run_dir), force_debug=True)
-        vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
-        
+        first_image, image_stamp = self._wait_for_fresh_cv_image(timeout_sec=2.0)
+        if first_image is None:
+            raise ImageProcessingError('No image available')
+
+        vis_img, bars, squares = RoiDetector.detect_targets(first_image)
         if not squares and not bars:
             raise ImageProcessingError('No MTF targets detected')
 
-        positions = self._define_measurement_positions(cv_image, request.field_test)
+        positions = self._define_measurement_positions(first_image, request.field_test)
         self._annotate_targets(vis_img, positions)
         cv2.imwrite(str(run_dir / f'mtf_targets_{timestamp}.jpg'), vis_img)
 
         results = []
-        mtf_curves = []
+        mtf_curves_plot = []
+        mtf_curves_full = []
         edges_failed = 0
         edges_tile_path = None
 
         try:
+            baseline_squares = squares
+            current_stamp = image_stamp
             for rep in range(repetitions):
-                for pos_name, target_x, target_y in positions:
-                    chosen_square = self._find_nearest_square(squares, target_x, target_y, cv_image.shape)
+                cv_image, current_stamp = self._wait_for_fresh_cv_image(
+                    previous_stamp=current_stamp,
+                    timeout_sec=2.0
+                )
+                if cv_image is None:
+                    self.get_logger().warn(f'No image for repetition {rep + 1}')
+                    continue
+
+                rep_vis, _, rep_squares = RoiDetector.detect_targets(cv_image)
+                if rep_vis is None or rep_vis.size == 0:
+                    if len(cv_image.shape) == 2:
+                        rep_vis = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
+                    else:
+                        rep_vis = cv_image.copy()
+
+                rep_positions = self._define_measurement_positions(cv_image, request.field_test)
+                self._annotate_targets(rep_vis, rep_positions)
+                cv2.imwrite(str(run_dir / f'mtf_targets_rep{rep + 1}_{timestamp}.jpg'), rep_vis)
+
+                active_squares = rep_squares if rep_squares else baseline_squares
+                if not active_squares:
+                    for pos_name, target_x, target_y in rep_positions:
+                        self._record_missing_target(
+                            results, metadata, rep + 1, pos_name, target_x, target_y, error='no_detected_squares'
+                        )
+                    edges_failed += 4 * len(rep_positions)
+                    continue
+
+                for pos_name, target_x, target_y in rep_positions:
+                    chosen_square = self._find_nearest_square(active_squares, target_x, target_y, cv_image.shape)
                     if not chosen_square:
-                        self._record_missing_target(results, metadata, rep+1, pos_name, target_x, target_y)
+                        self._record_missing_target(results, metadata, rep + 1, pos_name, target_x, target_y)
                         edges_failed += 4
                         continue
 
+                    (square_cx, square_cy), _, _ = chosen_square
                     fixed_roi_dims = (300, 50)
                     edges_with_boxes = RoiDetector.split_square_into_edges_with_boxes(
                         cv_image, chosen_square, fixed_size=fixed_roi_dims
@@ -456,21 +525,26 @@ class ScientificVerificationNode(Node):
                                 vis_edges, _ = RoiDetector.create_debug_visualization(edges)
                                 edges_tile_path = run_dir / f'mtf_edges_overview_{timestamp}.jpg'
                                 cv2.imwrite(str(edges_tile_path), vis_edges)
-                            except Exception: pass
+                            except Exception:
+                                pass
 
                     for roi_img, (x, y, w_box, h_box), edge_name in edges_with_boxes:
-                        self._draw_edge_debug(vis_img, run_dir, cv_image, x, y, w_box, h_box, 
-                                            pos_name, edge_name, timestamp)
-                        
+                        self._draw_edge_debug(
+                            rep_vis, run_dir, cv_image, x, y, w_box, h_box, pos_name, edge_name,
+                            f'{timestamp}_rep{rep + 1}'
+                        )
+
                         contrast = RoiDetector.calculate_michelson_contrast(roi_img)
                         debug_label = f"{pos_name}_{edge_name}"
                         mtf_res = analyzer.compute_mtf(roi_img, debug_label=debug_label)
-                        
+
                         row = {
                             'timestamp': datetime.now().isoformat(),
                             'config': request.config_name or 'default',
+                            'repetition': int(rep + 1),
                             'position': pos_name, 'edge': edge_name,
                             'roi_x': int(x), 'roi_y': int(y), 'roi_w': int(w_box), 'roi_h': int(h_box),
+                            'square_cx': int(square_cx), 'square_cy': int(square_cy),
                             'contrast': f'{contrast:.3f}',
                         }
 
@@ -487,14 +561,18 @@ class ScientificVerificationNode(Node):
                                 'nyquist_lpmm': f'{mtf_res.nyquist_frequency:.2f}',
                                 'valid': 'true', 'error': ''
                             })
-                            if mtf_res.frequencies.size > 0 and len(mtf_curves) < 8:
-                                mtf_curves.append({
+                            if mtf_res.frequencies.size > 0:
+                                curve = {
                                     'label': f'{pos_name}-{edge_name}',
+                                    'repetition': int(rep + 1),
                                     'frequencies': mtf_res.frequencies,
                                     'mtf_values': mtf_res.mtf_values,
                                     'mtf_ideal': mtf_res.mtf_ideal,
                                     'nyquist_lpmm': mtf_res.nyquist_frequency,
-                                })
+                                }
+                                mtf_curves_full.append(curve)
+                                if len(mtf_curves_plot) < 8:
+                                    mtf_curves_plot.append(curve)
                         else:
                             edges_failed += 1
                             row.update({
@@ -506,34 +584,40 @@ class ScientificVerificationNode(Node):
         finally:
             if results:
                 self.get_logger().info(f"Saving {len(results)} MTF results (partial or complete)...")
-                csv_path = run_dir / f'mtf_verification_{timestamp}.csv'
-                fieldnames = ['timestamp', 'config', 'position', 'edge', 
+                fieldnames = ['timestamp', 'config', 'repetition', 'position', 'edge',
                             'roi_x', 'roi_y', 'roi_w', 'roi_h', 'square_cx', 'square_cy',
                             'mtf50_lpmm', 'mtf20_lpmm', 'mtf10_lpmm', 'edge_angle_deg',
                             'contrast', 'nyquist_lpmm', 'valid', 'error']
                 self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
 
-        stats_csv_path = self._save_mtf_statistics(run_dir, timestamp, results)
-        dir_stats_path = self._save_mtf_directional_stats(run_dir, timestamp, results)
-        self._save_mtf_curves(run_dir, timestamp, mtf_curves)
+        stats_csv_path = self._save_mtf_statistics(run_dir, timestamp, results, metadata)
+        dir_stats_path = self._save_mtf_directional_stats(run_dir, timestamp, results, metadata)
+        self._save_mtf_curves(run_dir, timestamp, mtf_curves_full)
 
         try:
             plotter = VerificationPlotter(self.get_logger())
             plot_path = run_dir / f'mtf_results_{timestamp}.png'
-            plotter.plot_mtf_verification(results, str(plot_path), curves=mtf_curves)
+            plotter.plot_mtf_verification(results, str(plot_path), curves=mtf_curves_plot)
         except Exception as e:
             self.get_logger().error(f"Plotting failed: {e}")
 
         response.success = True
-        response.status_message = f'MTF Done. CSV: {csv_path.name}'
+        response.status_message = f'MTF done. CSV: {csv_path.name}'
         response.csv_path = str(csv_path)
-        valid_mtf50 = [float(r['mtf50_lpmm']) for r in results if r['valid'] == 'true']
-        response.mtf50_mean = float(np.mean(valid_mtf50)) if valid_mtf50 else 0.0
-        response.mtf50_std = float(np.std(valid_mtf50)) if len(valid_mtf50) > 1 else 0.0
+        valid_mtf50 = extract_metric_values(results, 'mtf50_lpmm')
+        valid_mtf20 = extract_metric_values(results, 'mtf20_lpmm')
+        valid_mtf10 = extract_metric_values(results, 'mtf10_lpmm')
+        mtf50_summary = summarize_numeric_values(valid_mtf50)
+        response.mtf50_mean = mtf50_summary['mean']
+        response.mtf50_std = mtf50_summary['std']
+        response.mtf20_mean = summarize_numeric_values(valid_mtf20)['mean']
+        response.mtf10_mean = summarize_numeric_values(valid_mtf10)['mean']
         response.edges_measured = len(valid_mtf50)
         response.edges_failed = edges_failed
 
         # Log directional stats if available
+        if stats_csv_path:
+            self.get_logger().info(f"MTF group stats saved: {stats_csv_path.name}")
         if dir_stats_path:
             self.get_logger().info(f"Directional MTF stats saved: {dir_stats_path.name}")
 
@@ -546,8 +630,6 @@ class ScientificVerificationNode(Node):
     @handle_service_errors()
     def verify_correlation_callback(self, request, response):
         """Scans a range and returns correlation between AF and MTF peaks."""
-        start_time = time.time()
-        
         if request.start_position >= request.end_position:
             raise ConfigurationError('start_position must be < end_position')
             
@@ -628,21 +710,29 @@ class ScientificVerificationNode(Node):
         
         if not results:
              raise ImageProcessingError("No valid data collected during scan")
-        
-        # Analyze Peaks
-        # Simple argmax for now (could be fitted)
-        best_af = max(results, key=lambda x: x['tenengrad'])
-        best_mtf = max(results, key=lambda x: x['mtf50_lpmm'])
-        
-        peak_shift = best_af['position_mm'] - best_mtf['position_mm']
+
+        valid_mtf_rows = [row for row in results if row.get('valid') and row.get('mtf50_lpmm', 0.0) > 0.0]
+        if not valid_mtf_rows:
+            raise ImageProcessingError("No valid MTF data collected during scan")
+
+        # Analyze Peaks with sub-step interpolation around maxima.
+        af_peak = estimate_peak_position(results, position_key='position_mm', value_key='tenengrad')
+        mtf_peak = estimate_peak_position(valid_mtf_rows, position_key='position_mm', value_key='mtf50_lpmm')
+
+        if af_peak is None:
+            af_peak = max(results, key=lambda x: x['tenengrad'])['position_mm']
+        if mtf_peak is None:
+            mtf_peak = max(valid_mtf_rows, key=lambda x: x['mtf50_lpmm'])['position_mm']
+
+        peak_shift = float(af_peak) - float(mtf_peak)
         
         # Plot
         try:
             plotter = VerificationPlotter(self.get_logger())
             plot_path = run_dir / f'correlation_plot_{timestamp}.png'
-            plotter.plot_correlation_verification({'data': results, 'peak_shift': peak_shift, 
-                                                   'max_af_pos': best_af['position_mm'], 
-                                                   'max_mtf_pos': best_mtf['position_mm']}, 
+            plotter.plot_correlation_verification({'data': results, 'peak_shift': peak_shift,
+                                                   'max_af_pos': float(af_peak),
+                                                   'max_mtf_pos': float(mtf_peak)},
                                                    str(plot_path))
         except Exception:
              pass
@@ -650,8 +740,8 @@ class ScientificVerificationNode(Node):
         response.success = True
         response.status_message = f"Correlation done. Shift: {peak_shift:.4f}mm"
         response.peak_shift = peak_shift
-        response.max_af_pos = best_af['position_mm']
-        response.max_mtf_pos = best_mtf['position_mm']
+        response.max_af_pos = float(af_peak)
+        response.max_mtf_pos = float(mtf_peak)
         
         return response
 
@@ -672,7 +762,7 @@ class ScientificVerificationNode(Node):
              
         # Wait for Idle
         start_idle = time.time()
-        while time.time() - start_idle > 30.0:
+        while time.time() - start_idle < 30.0:
              stat_future = self.status_client.call_async(GetOperationStatus.Request())
              while not stat_future.done():
                  time.sleep(0.01)
@@ -847,13 +937,16 @@ class ScientificVerificationNode(Node):
             return None
         return chosen_square
 
-    def _record_missing_target(self, results, metadata, rep, pos_name, tx, ty):
+    def _record_missing_target(self, results, metadata, rep, pos_name, tx, ty, error: str = 'no_nearby_target'):
         results.append({
             'timestamp': datetime.now().isoformat(),
             'config': metadata.get('config_name', 'default'),
             'repetition': rep, 'position': pos_name,
             'edge': 'n/a', 'roi_x': tx, 'roi_y': ty, 'roi_w': 0, 'roi_h': 0,
-            'mtf50_lpmm': '0', 'valid': 'false', 'error': 'no_nearby_target'
+            'square_cx': 0, 'square_cy': 0,
+            'mtf50_lpmm': '0', 'mtf20_lpmm': '0', 'mtf10_lpmm': '0',
+            'edge_angle_deg': '0', 'contrast': '0', 'nyquist_lpmm': '0',
+            'valid': 'false', 'error': error
         })
 
     def _draw_edge_debug(self, vis_img, run_dir, cv_image, x, y, w, h, pos_name, edge_name, ts):
@@ -876,84 +969,38 @@ class ScientificVerificationNode(Node):
             p = run_dir / f'roi_{pos_name}_{edge_name}_{ts}.jpg'
             cv2.imwrite(str(p), context_img)
 
-    def _save_mtf_statistics(self, run_dir, timestamp, results):
-        grouped = defaultdict(lambda: {'mtf50': [], 'mtf20': [], 'angle': [], 'contrast': []})
-        for r in results:
-            if r.get('valid') == 'true':
-                key = (r['position'], r['edge'])
-                grouped[key]['mtf50'].append(float(r['mtf50_lpmm']))
-                grouped[key]['mtf20'].append(float(r['mtf20_lpmm']))
-                grouped[key]['angle'].append(float(r['edge_angle_deg']))
-                grouped[key]['contrast'].append(float(r['contrast']))
-        stats_rows = []
-        for (pos, edge), data in grouped.items():
-            if data['mtf50']:
-                stats_rows.append({
-                    'position': pos, 'edge': edge, 'count': len(data['mtf50']),
-                    'mtf50_mean': f"{np.mean(data['mtf50']):.2f}",
-                    'mtf50_std': f"{np.std(data['mtf50']):.2f}",
-                    'angle_mean': f"{np.mean(data['angle']):.2f}",
-                    'contrast_mean': f"{np.mean(data['contrast']):.3f}",
-                })
+    def _save_mtf_statistics(self, run_dir, timestamp, results, metadata):
+        stats_rows = summarize_mtf_by_group(results)
         if stats_rows:
             path = run_dir / f'mtf_verification_summary_{timestamp}.csv'
-            fields = ['position', 'edge', 'count', 'mtf50_mean', 'mtf50_std', 'angle_mean', 'contrast_mean']
-            with open(path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fields)
-                writer.writeheader()
-                writer.writerows(stats_rows)
+            fields = [
+                'position', 'edge', 'count',
+                'mtf50_mean', 'mtf50_std', 'mtf50_ci_lower', 'mtf50_ci_upper',
+                'mtf20_mean', 'mtf20_std', 'mtf20_ci_lower', 'mtf20_ci_upper',
+                'mtf10_mean', 'mtf10_std', 'mtf10_ci_lower', 'mtf10_ci_upper',
+                'angle_mean', 'angle_std', 'angle_ci_lower', 'angle_ci_upper',
+                'contrast_mean', 'contrast_std', 'contrast_ci_lower', 'contrast_ci_upper',
+            ]
+            self._write_csv_with_metadata(path, metadata, fields, stats_rows)
             return path
         return None
 
-    def _save_mtf_directional_stats(self, run_dir, timestamp, results):
+    def _save_mtf_directional_stats(self, run_dir, timestamp, results, metadata):
         """
         Save aggregated MTF stats by direction:
         - vertical: top/bottom edges
         - horizontal: left/right edges
         """
-        groups = {
-            'vertical': [],
-            'horizontal': []
-        }
-        for r in results:
-            if r.get('valid') != 'true':
-                continue
-            edge = (r.get('edge') or '').lower()
-            if edge in ('top', 'bottom'):
-                groups['vertical'].append(r)
-            elif edge in ('left', 'right'):
-                groups['horizontal'].append(r)
-
-        rows = []
-        for direction, vals in groups.items():
-            if not vals:
-                continue
-            mtf50_vals = [float(v.get('mtf50_lpmm', 0)) for v in vals]
-            mtf20_vals = [float(v.get('mtf20_lpmm', 0)) for v in vals]
-            mtf10_vals = [float(v.get('mtf10_lpmm', 0)) for v in vals]
-            rows.append({
-                'direction': direction,
-                'count': len(mtf50_vals),
-                'mtf50_mean': f"{np.mean(mtf50_vals):.2f}",
-                'mtf50_std': f"{np.std(mtf50_vals):.2f}",
-                'mtf20_mean': f"{np.mean(mtf20_vals):.2f}",
-                'mtf20_std': f"{np.std(mtf20_vals):.2f}",
-                'mtf10_mean': f"{np.mean(mtf10_vals):.2f}",
-                'mtf10_std': f"{np.std(mtf10_vals):.2f}",
-            })
-
+        rows = summarize_mtf_by_direction(results)
         if rows:
             path = run_dir / f'mtf_verification_directional_{timestamp}.csv'
             fields = [
                 'direction', 'count',
-                'mtf50_mean', 'mtf50_std',
-                'mtf20_mean', 'mtf20_std',
-                'mtf10_mean', 'mtf10_std'
+                'mtf50_mean', 'mtf50_std', 'mtf50_ci_lower', 'mtf50_ci_upper',
+                'mtf20_mean', 'mtf20_std', 'mtf20_ci_lower', 'mtf20_ci_upper',
+                'mtf10_mean', 'mtf10_std', 'mtf10_ci_lower', 'mtf10_ci_upper'
             ]
-            with open(path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fields)
-                writer.writeheader()
-                writer.writerows(rows)
+            self._write_csv_with_metadata(path, metadata, fields, rows)
             return path
         return None
 
@@ -968,13 +1015,14 @@ class ScientificVerificationNode(Node):
                  if 0 <= f <= nyq * 1.5:
                      rows.append({
                          'timestamp': datetime.now().isoformat(),
+                         'repetition': int(curve.get('repetition', 1)),
                          'position': pos, 'edge': edge,
                          'frequency_lpmm': f'{f:.4f}', 'mtf_value': f'{v:.6f}',
                          'mtf_ideal_value': f'{ideal:.6f}', 'nyquist_limit': f'{nyq:.2f}'
                      })
         if rows:
             path = run_dir / f'mtf_full_curves_{timestamp}.csv'
-            fields = ['timestamp', 'position', 'edge', 'frequency_lpmm', 
+            fields = ['timestamp', 'repetition', 'position', 'edge', 'frequency_lpmm',
                       'mtf_value', 'mtf_ideal_value', 'nyquist_limit']
             with open(path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=fields)
