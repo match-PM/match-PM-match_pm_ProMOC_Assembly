@@ -690,116 +690,104 @@ class ScientificVerificationNode(Node):
     def _create_mtf_analyzer(self, debug_dir: str | None = None, force_debug: bool = False) -> MTFAnalyzer:
         pixel_size = self.get_parameter('pixel_size_um').value
         config = MTFConfig(pixel_size_um=pixel_size, min_edge_angle=2.0)
-        # Optional config overrides
+        self._apply_mtf_param_overrides(config, debug_dir=debug_dir, force_debug=force_debug)
+        self._apply_mtf_profile(config)
+        return MTFAnalyzer(config)
+
+    def _apply_mtf_param_overrides(self, config: MTFConfig, debug_dir: str | None, force_debug: bool) -> None:
+        """Apply parameter overrides to an MTFConfig instance."""
+        def _param(name: str):
+            return self.get_parameter(name).value
+
         if debug_dir is None:
-            debug_dir = str(self.get_parameter('mtf.debug_export_dir').value or "")
+            debug_dir = str(_param('mtf.debug_export_dir') or "")
             if debug_dir:
                 config.debug_export_dir = debug_dir
-                config.debug_export_prefix = str(
-                    self.get_parameter('mtf.debug_export_prefix').value or config.debug_export_prefix
-                )
-                config.debug_export_csv = bool(self.get_parameter('mtf.debug_export_csv').value)
-                config.debug_export_png = bool(self.get_parameter('mtf.debug_export_png').value)
+                prefix = _param('mtf.debug_export_prefix')
+                if prefix:
+                    config.debug_export_prefix = str(prefix)
+                config.debug_export_csv = bool(_param('mtf.debug_export_csv'))
+                config.debug_export_png = bool(_param('mtf.debug_export_png'))
         else:
             config.debug_export_dir = str(debug_dir)
-            config.debug_export_prefix = str(
-                self.get_parameter('mtf.debug_export_prefix').value or config.debug_export_prefix
-            )
+            prefix = _param('mtf.debug_export_prefix')
+            if prefix:
+                config.debug_export_prefix = str(prefix)
             if force_debug:
                 config.debug_export_csv = True
                 config.debug_export_png = True
             else:
-                config.debug_export_csv = bool(self.get_parameter('mtf.debug_export_csv').value)
-                config.debug_export_png = bool(self.get_parameter('mtf.debug_export_png').value)
-        config.lsf_window_mode = str(self.get_parameter('mtf.lsf_window_mode').value or config.lsf_window_mode)
+                config.debug_export_csv = bool(_param('mtf.debug_export_csv'))
+                config.debug_export_png = bool(_param('mtf.debug_export_png'))
+
+        config.lsf_window_mode = str(_param('mtf.lsf_window_mode') or config.lsf_window_mode)
         try:
-            config.lsf_peak_window_size = int(self.get_parameter('mtf.lsf_peak_window_size').value or 0)
+            config.lsf_peak_window_size = int(_param('mtf.lsf_peak_window_size') or 0)
         except Exception:
             pass
         try:
-            config.derivative_mode = str(
-                self.get_parameter('mtf.derivative_mode').value or config.derivative_mode
-            )
+            config.derivative_mode = str(_param('mtf.derivative_mode') or config.derivative_mode)
         except Exception:
             pass
         try:
-            config.apply_derivative_correction = bool(
-                self.get_parameter('mtf.apply_derivative_correction').value
-            )
+            config.apply_derivative_correction = bool(_param('mtf.apply_derivative_correction'))
         except Exception:
             pass
         try:
-            config.derivative_correction_max = float(
-                self.get_parameter('mtf.derivative_correction_max').value or 0.0
-            )
+            config.derivative_correction_max = float(_param('mtf.derivative_correction_max') or 0.0)
         except Exception:
             pass
         try:
-            config.apply_angle_correction = bool(
-                self.get_parameter('mtf.apply_angle_correction').value
-            )
+            config.apply_angle_correction = bool(_param('mtf.apply_angle_correction'))
         except Exception:
             pass
         try:
-            config.esf_smooth_mode = str(
-                self.get_parameter('mtf.esf_smooth_mode').value or config.esf_smooth_mode
-            )
+            config.esf_smooth_mode = str(_param('mtf.esf_smooth_mode') or config.esf_smooth_mode)
         except Exception:
             pass
         try:
-            config.esf_sg_window = int(
-                self.get_parameter('mtf.esf_sg_window').value or config.esf_sg_window
-            )
+            config.esf_sg_window = int(_param('mtf.esf_sg_window') or config.esf_sg_window)
         except Exception:
             pass
         try:
-            config.esf_sg_poly = int(
-                self.get_parameter('mtf.esf_sg_poly').value or config.esf_sg_poly
-            )
+            config.esf_sg_poly = int(_param('mtf.esf_sg_poly') or config.esf_sg_poly)
         except Exception:
             pass
         try:
-            config.edge_validation_mode = str(
-                self.get_parameter('mtf.edge_validation_mode').value or config.edge_validation_mode
-            )
+            config.edge_validation_mode = str(_param('mtf.edge_validation_mode') or config.edge_validation_mode)
         except Exception:
             pass
         try:
             config.edge_validation_percentile = float(
-                self.get_parameter('mtf.edge_validation_percentile').value or config.edge_validation_percentile
+                _param('mtf.edge_validation_percentile') or config.edge_validation_percentile
             )
         except Exception:
             pass
         try:
             config.edge_validation_min_points = int(
-                self.get_parameter('mtf.edge_validation_min_points').value or config.edge_validation_min_points
+                _param('mtf.edge_validation_min_points') or config.edge_validation_min_points
             )
         except Exception:
             pass
         try:
-            config.clip_to_nyquist = bool(
-                self.get_parameter('mtf.clip_to_nyquist').value
-            )
+            config.clip_to_nyquist = bool(_param('mtf.clip_to_nyquist'))
         except Exception:
             pass
         try:
-            config.export_dual_curves = bool(
-                self.get_parameter('mtf.export_dual_curves').value
-            )
+            config.export_dual_curves = bool(_param('mtf.export_dual_curves'))
         except Exception:
             pass
         try:
-            config.mtf_clip_max = float(self.get_parameter('mtf.clip_max').value or 0.0)
+            config.mtf_clip_max = float(_param('mtf.clip_max') or 0.0)
         except Exception:
             pass
         try:
-            config.mtf_warn_threshold = float(
-                self.get_parameter('mtf.warn_threshold').value or config.mtf_warn_threshold
-            )
+            config.mtf_warn_threshold = float(_param('mtf.warn_threshold') or config.mtf_warn_threshold)
         except Exception:
             pass
 
-        # Apply profile last (overrides for ease-of-use)
+    def _apply_mtf_profile(self, config: MTFConfig) -> None:
+        """Apply profile presets for ease-of-use."""
         try:
             profile = str(self.get_parameter('mtf.profile').value or "default").strip().lower()
         except Exception:
@@ -822,7 +810,6 @@ class ScientificVerificationNode(Node):
             config.export_dual_curves = True
         if profile not in ("default", "scientific", "debug", ""):
             self.get_logger().warn(f"Unknown mtf.profile='{profile}', using current configuration.")
-        return MTFAnalyzer(config)
 
     def _define_measurement_positions(self, image, field_test: bool):
         h, w = image.shape[:2]

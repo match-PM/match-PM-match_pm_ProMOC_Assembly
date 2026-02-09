@@ -63,6 +63,143 @@ class MTFCallbacks(CallbackBase):
         roi_image = cv_image[y:y+h, x:x+w]
         return roi, roi_image
 
+    def _build_mtf_config(self, pixel_size_um: float, min_edge_angle: float,
+                          max_edge_angle: float, auto_roi: bool) -> MTFConfig:
+        """Build MTFConfig from node parameters and profile overrides."""
+        config = MTFConfig(
+            pixel_size_um=pixel_size_um,
+            min_edge_angle=min_edge_angle,
+            max_edge_angle=max_edge_angle,
+        )
+
+        def _param(name: str):
+            return self._node.get_parameter(name).value if self._node.has_parameter(name) else None
+
+        # Debug export
+        debug_dir = _param('mtf.debug_export_dir')
+        if debug_dir:
+            config.debug_export_dir = str(debug_dir)
+            prefix = _param('mtf.debug_export_prefix')
+            if prefix:
+                config.debug_export_prefix = str(prefix)
+            val = _param('mtf.debug_export_csv')
+            if val is not None:
+                config.debug_export_csv = bool(val)
+            val = _param('mtf.debug_export_png')
+            if val is not None:
+                config.debug_export_png = bool(val)
+
+        # Windowing / derivative / smoothing
+        val = _param('mtf.lsf_window_mode')
+        if val:
+            config.lsf_window_mode = str(val)
+        val = _param('mtf.lsf_peak_window_size')
+        if val is not None:
+            try:
+                config.lsf_peak_window_size = int(val)
+            except Exception:
+                pass
+
+        val = _param('mtf.derivative_mode')
+        if val:
+            config.derivative_mode = str(val)
+        val = _param('mtf.apply_derivative_correction')
+        if val is not None:
+            config.apply_derivative_correction = bool(val)
+        val = _param('mtf.derivative_correction_max')
+        if val is not None:
+            try:
+                config.derivative_correction_max = float(val)
+            except Exception:
+                pass
+        val = _param('mtf.apply_angle_correction')
+        if val is not None:
+            config.apply_angle_correction = bool(val)
+
+        val = _param('mtf.esf_smooth_mode')
+        if val:
+            config.esf_smooth_mode = str(val)
+        val = _param('mtf.esf_sg_window')
+        if val is not None:
+            try:
+                config.esf_sg_window = int(val)
+            except Exception:
+                pass
+        val = _param('mtf.esf_sg_poly')
+        if val is not None:
+            try:
+                config.esf_sg_poly = int(val)
+            except Exception:
+                pass
+
+        # Validation / clipping / dual curves
+        val = _param('mtf.edge_validation_mode')
+        if val:
+            config.edge_validation_mode = str(val)
+        val = _param('mtf.edge_validation_percentile')
+        if val is not None:
+            try:
+                config.edge_validation_percentile = float(val)
+            except Exception:
+                pass
+        val = _param('mtf.edge_validation_min_points')
+        if val is not None:
+            try:
+                config.edge_validation_min_points = int(val)
+            except Exception:
+                pass
+        val = _param('mtf.edge_validation_only_auto')
+        if val:
+            if not auto_roi:
+                config.edge_validation_mode = "off"
+
+        val = _param('mtf.clip_to_nyquist')
+        if val is not None:
+            config.clip_to_nyquist = bool(val)
+        val = _param('mtf.export_dual_curves')
+        if val is not None:
+            config.export_dual_curves = bool(val)
+        val = _param('mtf.clip_max')
+        if val is not None:
+            try:
+                config.mtf_clip_max = float(val)
+            except Exception:
+                pass
+        val = _param('mtf.warn_threshold')
+        if val is not None:
+            try:
+                config.mtf_warn_threshold = float(val)
+            except Exception:
+                pass
+
+        # Apply profile last (overrides for ease-of-use)
+        profile = str(_param('mtf.profile') or "default").strip().lower()
+        if profile in ("scientific", "debug"):
+            config.derivative_mode = "iso"
+            config.apply_derivative_correction = True
+            config.apply_angle_correction = True
+            config.clip_to_nyquist = True
+            config.lsf_window_mode = "peak"
+            config.lsf_peak_window_size = 0
+            config.edge_validation_mode = "warn"
+        if profile == "debug":
+            if not config.debug_export_dir:
+                debug_root = self._get_output_dir('mtf_debug')
+                run_dir = debug_root / self._get_timestamp()
+                run_dir.mkdir(parents=True, exist_ok=True)
+                config.debug_export_dir = str(run_dir)
+            config.debug_export_csv = True
+            config.debug_export_png = True
+            if config.esf_smooth_mode == "none":
+                config.esf_smooth_mode = "sg"
+            config.export_dual_curves = True
+        if profile not in ("default", "scientific", "debug", ""):
+            self._node.get_logger().warn(
+                f"Unknown mtf.profile='{profile}', using current configuration."
+            )
+
+        return config
+
     @handle_service_errors()
     def select_roi_callback(self, request, response):
         """Interactive ROI selection with MTF calculation."""
@@ -384,160 +521,12 @@ class MTFCallbacks(CallbackBase):
                         f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
                     )
                 
-                config = MTFConfig(
+                config = self._build_mtf_config(
                     pixel_size_um=pixel_size_um,
                     min_edge_angle=min_edge_angle,
                     max_edge_angle=max_edge_angle,
+                    auto_roi=getattr(request, 'auto_roi', False)
                 )
-                # Optional debug/export + windowing parameters
-                if self._node.has_parameter('mtf.debug_export_dir'):
-                    debug_dir = str(self._node.get_parameter('mtf.debug_export_dir').value or "")
-                    if debug_dir:
-                        config.debug_export_dir = debug_dir
-                        if self._node.has_parameter('mtf.debug_export_prefix'):
-                            config.debug_export_prefix = str(
-                                self._node.get_parameter('mtf.debug_export_prefix').value or config.debug_export_prefix
-                            )
-                        if self._node.has_parameter('mtf.debug_export_csv'):
-                            config.debug_export_csv = bool(self._node.get_parameter('mtf.debug_export_csv').value)
-                        if self._node.has_parameter('mtf.debug_export_png'):
-                            config.debug_export_png = bool(self._node.get_parameter('mtf.debug_export_png').value)
-
-                if self._node.has_parameter('mtf.lsf_window_mode'):
-                    config.lsf_window_mode = str(
-                        self._node.get_parameter('mtf.lsf_window_mode').value or config.lsf_window_mode
-                    )
-                if self._node.has_parameter('mtf.lsf_peak_window_size'):
-                    try:
-                        config.lsf_peak_window_size = int(
-                            self._node.get_parameter('mtf.lsf_peak_window_size').value or 0
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.clip_max'):
-                    try:
-                        config.mtf_clip_max = float(self._node.get_parameter('mtf.clip_max').value or 0.0)
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.warn_threshold'):
-                    try:
-                        config.mtf_warn_threshold = float(
-                            self._node.get_parameter('mtf.warn_threshold').value or config.mtf_warn_threshold
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.derivative_mode'):
-                    config.derivative_mode = str(
-                        self._node.get_parameter('mtf.derivative_mode').value or config.derivative_mode
-                    )
-                if self._node.has_parameter('mtf.apply_derivative_correction'):
-                    try:
-                        config.apply_derivative_correction = bool(
-                            self._node.get_parameter('mtf.apply_derivative_correction').value
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.derivative_correction_max'):
-                    try:
-                        config.derivative_correction_max = float(
-                            self._node.get_parameter('mtf.derivative_correction_max').value or 0.0
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.apply_angle_correction'):
-                    try:
-                        config.apply_angle_correction = bool(
-                            self._node.get_parameter('mtf.apply_angle_correction').value
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.esf_smooth_mode'):
-                    config.esf_smooth_mode = str(
-                        self._node.get_parameter('mtf.esf_smooth_mode').value or config.esf_smooth_mode
-                    )
-                if self._node.has_parameter('mtf.esf_sg_window'):
-                    try:
-                        config.esf_sg_window = int(
-                            self._node.get_parameter('mtf.esf_sg_window').value or config.esf_sg_window
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.esf_sg_poly'):
-                    try:
-                        config.esf_sg_poly = int(
-                            self._node.get_parameter('mtf.esf_sg_poly').value or config.esf_sg_poly
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.edge_validation_mode'):
-                    config.edge_validation_mode = str(
-                        self._node.get_parameter('mtf.edge_validation_mode').value or config.edge_validation_mode
-                    )
-                if self._node.has_parameter('mtf.edge_validation_percentile'):
-                    try:
-                        config.edge_validation_percentile = float(
-                            self._node.get_parameter('mtf.edge_validation_percentile').value or config.edge_validation_percentile
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.edge_validation_min_points'):
-                    try:
-                        config.edge_validation_min_points = int(
-                            self._node.get_parameter('mtf.edge_validation_min_points').value or config.edge_validation_min_points
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.edge_validation_only_auto'):
-                    try:
-                        only_auto = bool(self._node.get_parameter('mtf.edge_validation_only_auto').value)
-                        if only_auto and not getattr(request, 'auto_roi', False):
-                            config.edge_validation_mode = "off"
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.clip_to_nyquist'):
-                    try:
-                        config.clip_to_nyquist = bool(
-                            self._node.get_parameter('mtf.clip_to_nyquist').value
-                        )
-                    except Exception:
-                        pass
-                if self._node.has_parameter('mtf.export_dual_curves'):
-                    try:
-                        config.export_dual_curves = bool(
-                            self._node.get_parameter('mtf.export_dual_curves').value
-                        )
-                    except Exception:
-                        pass
-
-                # Apply profile last (overrides for ease-of-use)
-                if self._node.has_parameter('mtf.profile'):
-                    try:
-                        profile = str(self._node.get_parameter('mtf.profile').value or "default").strip().lower()
-                    except Exception:
-                        profile = "default"
-                    if profile in ("scientific", "debug"):
-                        config.derivative_mode = "iso"
-                        config.apply_derivative_correction = True
-                        config.apply_angle_correction = True
-                        config.clip_to_nyquist = True
-                        config.lsf_window_mode = "peak"
-                        config.lsf_peak_window_size = 0
-                        config.edge_validation_mode = "warn"
-                    if profile == "debug":
-                        if not config.debug_export_dir:
-                            debug_root = self._get_output_dir('mtf_debug')
-                            run_dir = debug_root / self._get_timestamp()
-                            run_dir.mkdir(parents=True, exist_ok=True)
-                            config.debug_export_dir = str(run_dir)
-                        config.debug_export_csv = True
-                        config.debug_export_png = True
-                        if config.esf_smooth_mode == "none":
-                            config.esf_smooth_mode = "sg"
-                        config.export_dual_curves = True
-                    if profile not in ("default", "scientific", "debug", ""):
-                        self._node.get_logger().warn(
-                            f"Unknown mtf.profile='{profile}', using current configuration."
-                        )
                 
                 # Get calibration from valid CameraInfo if available
                 camera_matrix = None
