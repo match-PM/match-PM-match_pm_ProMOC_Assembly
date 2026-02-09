@@ -67,6 +67,8 @@ class CameraImageProcessing:
         if not result.valid:
             self.logger.error(f'MTF calculation failed: {result.error_msg}')
             return None
+        if getattr(result, 'warning_msg', ''):
+            self.logger.warning(f"MTF warning: {result.warning_msg}")
         
         return {
             'frequency': result.frequencies,

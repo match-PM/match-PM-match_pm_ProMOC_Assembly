@@ -72,6 +72,28 @@ class ScientificVerificationNode(Node):
         
         # Camera Params (mirrored from camera_node for analysis)
         self.declare_parameter('pixel_size_um', 2.40)
+        # MTF debug / tuning parameters
+        self.declare_parameter('mtf.debug_export_dir', '')
+        self.declare_parameter('mtf.debug_export_prefix', 'mtf')
+        self.declare_parameter('mtf.debug_export_csv', True)
+        self.declare_parameter('mtf.debug_export_png', False)
+        self.declare_parameter('mtf.profile', 'default')  # default | scientific | debug
+        self.declare_parameter('mtf.lsf_window_mode', 'full')  # full | peak | none
+        self.declare_parameter('mtf.lsf_peak_window_size', 0)  # samples; 0 = auto
+        self.declare_parameter('mtf.derivative_mode', 'iso')  # diff | iso
+        self.declare_parameter('mtf.apply_derivative_correction', True)
+        self.declare_parameter('mtf.derivative_correction_max', 0.0)  # 0 disables cap
+        self.declare_parameter('mtf.apply_angle_correction', True)
+        self.declare_parameter('mtf.esf_smooth_mode', 'none')  # none | sg
+        self.declare_parameter('mtf.esf_sg_window', 11)
+        self.declare_parameter('mtf.esf_sg_poly', 2)
+        self.declare_parameter('mtf.edge_validation_mode', 'warn')  # off | warn | fail
+        self.declare_parameter('mtf.edge_validation_percentile', 90.0)
+        self.declare_parameter('mtf.edge_validation_min_points', 50)
+        self.declare_parameter('mtf.clip_to_nyquist', True)
+        self.declare_parameter('mtf.export_dual_curves', False)
+        self.declare_parameter('mtf.clip_max', 0.0)  # 0 disables clipping
+        self.declare_parameter('mtf.warn_threshold', 1.05)
         
         # Verification Services (Server)
         self.verify_af_srv = self.create_service(
@@ -392,12 +414,13 @@ class ScientificVerificationNode(Node):
             'repetitions': repetitions
         })
 
-        output_dir = self._get_output_dir('verification/mtf_verification', operator_name=request.operator_name)
+        output_dir = self._get_output_dir('verification/mtf_Verification', operator_name=request.operator_name)
         timestamp = self._get_timestamp()
         run_dir = output_dir / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        analyzer = self._create_mtf_analyzer()
+        # Force debug export for this verification run into the run directory
+        analyzer = self._create_mtf_analyzer(debug_dir=str(run_dir), force_debug=True)
         vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
         
         if not squares and not bars:
@@ -440,7 +463,8 @@ class ScientificVerificationNode(Node):
                                             pos_name, edge_name, timestamp)
                         
                         contrast = RoiDetector.calculate_michelson_contrast(roi_img)
-                        mtf_res = analyzer.compute_mtf(roi_img)
+                        debug_label = f"{pos_name}_{edge_name}"
+                        mtf_res = analyzer.compute_mtf(roi_img, debug_label=debug_label)
                         
                         row = {
                             'timestamp': datetime.now().isoformat(),
@@ -451,6 +475,10 @@ class ScientificVerificationNode(Node):
                         }
 
                         if mtf_res.valid:
+                            if mtf_res.warning_msg:
+                                self.get_logger().warn(
+                                    f"MTF warning ({pos_name}/{edge_name}): {mtf_res.warning_msg}"
+                                )
                             row.update({
                                 'mtf50_lpmm': f'{mtf_res.mtf50:.2f}',
                                 'mtf20_lpmm': f'{mtf_res.mtf20:.2f}',
@@ -486,6 +514,7 @@ class ScientificVerificationNode(Node):
                 self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
 
         stats_csv_path = self._save_mtf_statistics(run_dir, timestamp, results)
+        dir_stats_path = self._save_mtf_directional_stats(run_dir, timestamp, results)
         self._save_mtf_curves(run_dir, timestamp, mtf_curves)
 
         try:
@@ -503,6 +532,10 @@ class ScientificVerificationNode(Node):
         response.mtf50_std = float(np.std(valid_mtf50)) if len(valid_mtf50) > 1 else 0.0
         response.edges_measured = len(valid_mtf50)
         response.edges_failed = edges_failed
+
+        # Log directional stats if available
+        if dir_stats_path:
+            self.get_logger().info(f"Directional MTF stats saved: {dir_stats_path.name}")
 
         return response
 
@@ -569,9 +602,11 @@ class ScientificVerificationNode(Node):
                 cw, ch = 300, 300 # Fixed window around center
                 roi_rect = (max(0, cx-cw//2), max(0, cy-ch//2), min(w, cx+cw//2), min(h, cy+ch//2))
                 
-                mtf_res = analyzer.compute_mtf(cv_image, roi=roi_rect)
+                mtf_res = analyzer.compute_mtf(cv_image, roi=roi_rect, debug_label="correlation_center")
                 
                 mtf_val = mtf_res.mtf50 if mtf_res.valid else 0.0
+                if mtf_res.valid and mtf_res.warning_msg:
+                    self.get_logger().warn(f"MTF warning (correlation): {mtf_res.warning_msg}")
                 
                 self.get_logger().info(f"Z={pos:.2f}: Ten={tenengrad:.1f}, MTF50={mtf_val:.3f}")
                 
@@ -652,9 +687,141 @@ class ScientificVerificationNode(Node):
     # MTF HELPERS
     # -------------------------------------------------------------------------
 
-    def _create_mtf_analyzer(self) -> MTFAnalyzer:
+    def _create_mtf_analyzer(self, debug_dir: str | None = None, force_debug: bool = False) -> MTFAnalyzer:
         pixel_size = self.get_parameter('pixel_size_um').value
         config = MTFConfig(pixel_size_um=pixel_size, min_edge_angle=2.0)
+        # Optional config overrides
+        if debug_dir is None:
+            debug_dir = str(self.get_parameter('mtf.debug_export_dir').value or "")
+            if debug_dir:
+                config.debug_export_dir = debug_dir
+                config.debug_export_prefix = str(
+                    self.get_parameter('mtf.debug_export_prefix').value or config.debug_export_prefix
+                )
+                config.debug_export_csv = bool(self.get_parameter('mtf.debug_export_csv').value)
+                config.debug_export_png = bool(self.get_parameter('mtf.debug_export_png').value)
+        else:
+            config.debug_export_dir = str(debug_dir)
+            config.debug_export_prefix = str(
+                self.get_parameter('mtf.debug_export_prefix').value or config.debug_export_prefix
+            )
+            if force_debug:
+                config.debug_export_csv = True
+                config.debug_export_png = True
+            else:
+                config.debug_export_csv = bool(self.get_parameter('mtf.debug_export_csv').value)
+                config.debug_export_png = bool(self.get_parameter('mtf.debug_export_png').value)
+        config.lsf_window_mode = str(self.get_parameter('mtf.lsf_window_mode').value or config.lsf_window_mode)
+        try:
+            config.lsf_peak_window_size = int(self.get_parameter('mtf.lsf_peak_window_size').value or 0)
+        except Exception:
+            pass
+        try:
+            config.derivative_mode = str(
+                self.get_parameter('mtf.derivative_mode').value or config.derivative_mode
+            )
+        except Exception:
+            pass
+        try:
+            config.apply_derivative_correction = bool(
+                self.get_parameter('mtf.apply_derivative_correction').value
+            )
+        except Exception:
+            pass
+        try:
+            config.derivative_correction_max = float(
+                self.get_parameter('mtf.derivative_correction_max').value or 0.0
+            )
+        except Exception:
+            pass
+        try:
+            config.apply_angle_correction = bool(
+                self.get_parameter('mtf.apply_angle_correction').value
+            )
+        except Exception:
+            pass
+        try:
+            config.esf_smooth_mode = str(
+                self.get_parameter('mtf.esf_smooth_mode').value or config.esf_smooth_mode
+            )
+        except Exception:
+            pass
+        try:
+            config.esf_sg_window = int(
+                self.get_parameter('mtf.esf_sg_window').value or config.esf_sg_window
+            )
+        except Exception:
+            pass
+        try:
+            config.esf_sg_poly = int(
+                self.get_parameter('mtf.esf_sg_poly').value or config.esf_sg_poly
+            )
+        except Exception:
+            pass
+        try:
+            config.edge_validation_mode = str(
+                self.get_parameter('mtf.edge_validation_mode').value or config.edge_validation_mode
+            )
+        except Exception:
+            pass
+        try:
+            config.edge_validation_percentile = float(
+                self.get_parameter('mtf.edge_validation_percentile').value or config.edge_validation_percentile
+            )
+        except Exception:
+            pass
+        try:
+            config.edge_validation_min_points = int(
+                self.get_parameter('mtf.edge_validation_min_points').value or config.edge_validation_min_points
+            )
+        except Exception:
+            pass
+        try:
+            config.clip_to_nyquist = bool(
+                self.get_parameter('mtf.clip_to_nyquist').value
+            )
+        except Exception:
+            pass
+        try:
+            config.export_dual_curves = bool(
+                self.get_parameter('mtf.export_dual_curves').value
+            )
+        except Exception:
+            pass
+        try:
+            config.mtf_clip_max = float(self.get_parameter('mtf.clip_max').value or 0.0)
+        except Exception:
+            pass
+        try:
+            config.mtf_warn_threshold = float(
+                self.get_parameter('mtf.warn_threshold').value or config.mtf_warn_threshold
+            )
+        except Exception:
+            pass
+
+        # Apply profile last (overrides for ease-of-use)
+        try:
+            profile = str(self.get_parameter('mtf.profile').value or "default").strip().lower()
+        except Exception:
+            profile = "default"
+        if profile in ("scientific", "debug"):
+            config.derivative_mode = "iso"
+            config.apply_derivative_correction = True
+            config.apply_angle_correction = True
+            config.clip_to_nyquist = True
+            config.lsf_window_mode = "peak"
+            config.lsf_peak_window_size = 0
+            config.edge_validation_mode = "warn"
+        if profile == "debug":
+            if not config.debug_export_dir:
+                config.debug_export_dir = str(Path(self.get_parameter('results_dir').value) / "mtf_debug")
+            config.debug_export_csv = True
+            config.debug_export_png = True
+            if config.esf_smooth_mode == "none":
+                config.esf_smooth_mode = "sg"
+            config.export_dual_curves = True
+        if profile not in ("default", "scientific", "debug", ""):
+            self.get_logger().warn(f"Unknown mtf.profile='{profile}', using current configuration.")
         return MTFAnalyzer(config)
 
     def _define_measurement_positions(self, image, field_test: bool):
@@ -748,6 +915,58 @@ class ScientificVerificationNode(Node):
                 writer = csv.DictWriter(f, fieldnames=fields)
                 writer.writeheader()
                 writer.writerows(stats_rows)
+            return path
+        return None
+
+    def _save_mtf_directional_stats(self, run_dir, timestamp, results):
+        """
+        Save aggregated MTF stats by direction:
+        - vertical: top/bottom edges
+        - horizontal: left/right edges
+        """
+        groups = {
+            'vertical': [],
+            'horizontal': []
+        }
+        for r in results:
+            if r.get('valid') != 'true':
+                continue
+            edge = (r.get('edge') or '').lower()
+            if edge in ('top', 'bottom'):
+                groups['vertical'].append(r)
+            elif edge in ('left', 'right'):
+                groups['horizontal'].append(r)
+
+        rows = []
+        for direction, vals in groups.items():
+            if not vals:
+                continue
+            mtf50_vals = [float(v.get('mtf50_lpmm', 0)) for v in vals]
+            mtf20_vals = [float(v.get('mtf20_lpmm', 0)) for v in vals]
+            mtf10_vals = [float(v.get('mtf10_lpmm', 0)) for v in vals]
+            rows.append({
+                'direction': direction,
+                'count': len(mtf50_vals),
+                'mtf50_mean': f"{np.mean(mtf50_vals):.2f}",
+                'mtf50_std': f"{np.std(mtf50_vals):.2f}",
+                'mtf20_mean': f"{np.mean(mtf20_vals):.2f}",
+                'mtf20_std': f"{np.std(mtf20_vals):.2f}",
+                'mtf10_mean': f"{np.mean(mtf10_vals):.2f}",
+                'mtf10_std': f"{np.std(mtf10_vals):.2f}",
+            })
+
+        if rows:
+            path = run_dir / f'mtf_verification_directional_{timestamp}.csv'
+            fields = [
+                'direction', 'count',
+                'mtf50_mean', 'mtf50_std',
+                'mtf20_mean', 'mtf20_std',
+                'mtf10_mean', 'mtf10_std'
+            ]
+            with open(path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(rows)
             return path
         return None
 

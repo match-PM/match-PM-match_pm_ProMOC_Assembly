@@ -434,20 +434,22 @@ class RoiDetector:
             ix = int(cx - crop_w // 2)
             iy = int(cy - crop_h // 2)
 
-            # Clamp and Validate
-            if ix < 0: ix = 0
-            if iy < 0: iy = 0
-            # Ensure we don't go out of bounds (width/height might be reduced)
-            final_w = min(crop_w, img_w - ix)
-            final_h = min(crop_h, img_h - iy)
-            
-            if final_w < 4 or final_h < 4: 
+            # Clamp to image bounds explicitly (avoid negative/overflow slicing)
+            x1 = max(0, ix)
+            y1 = max(0, iy)
+            x2 = min(img_w, ix + crop_w)
+            y2 = min(img_h, iy + crop_h)
+
+            final_w = x2 - x1
+            final_h = y2 - y1
+
+            if final_w < 4 or final_h < 4:
                 continue
 
-            roi = gray[iy:iy+final_h, ix:ix+final_w]
+            roi = gray[y1:y2, x1:x2]
             if roi.size > 0:
                 name = edge_names[idx] if idx < len(edge_names) else f'edge_{idx}'
-                results.append((roi, (ix, iy, final_w, final_h), name))
+                results.append((roi, (x1, y1, final_w, final_h), name))
 
         return results
 

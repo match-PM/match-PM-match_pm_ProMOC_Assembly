@@ -144,7 +144,10 @@ def load_user_config(bringup_share_dir: str) -> dict:
     user_config_path = get_config_path(bringup_share_dir, 'user_config.yaml')
 
     defaults = {
-        'user': {'name': 'default_user'},
+        'user': {
+            'name': 'default_user',
+            'measurement_base_path': os.path.join(os.path.expanduser('~'), 'Dokumente', 'Messungen'),
+        },
         'autofocus': {
             'refinement_samples': 51,
             'min_step_mm': 0.010,
@@ -157,6 +160,10 @@ def load_user_config(bringup_share_dir: str) -> dict:
         'camera': {
             'pixel_size_um': 2.40,
             'mtf_csv_path': '/tmp/mtf_results.csv',
+        },
+        'mtf': {
+            'profile': 'default',
+            'debug_export_dir': '',
         },
         'measurement_conditions': {
             'coaxial_light_voltage': 0.0,

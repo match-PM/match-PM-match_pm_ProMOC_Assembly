@@ -37,6 +37,11 @@ user:
 #   pixel_size_um: 3.45               # Sensor pixel size in micrometers
 #   exposure_time_us: 5000            # Default exposure time
 
+# MTF settings (optional overrides)
+# mtf:
+#   profile: 'default'                # default | scientific | debug
+#   debug_export_dir: ''              # optional fixed debug dir
+
 # Measurement conditions for scientific documentation
 # These values will be written to CSV headers for reproducibility
 measurement_conditions:

@@ -129,7 +129,17 @@ class CallbackBase:
             username = self._node.get_parameter(
                 'measurement.username').get_parameter_value().string_value.strip()
 
-        base_dir = Path.home() / 'Dokumente' / 'Messungen'
+        base_dir = None
+        if self._node.has_parameter('measurement.base_path'):
+            try:
+                base_param = self._node.get_parameter(
+                    'measurement.base_path').get_parameter_value().string_value.strip()
+                if base_param:
+                    base_dir = Path(base_param).expanduser()
+            except Exception:
+                base_dir = None
+        if base_dir is None:
+            base_dir = Path.home() / 'Dokumente' / 'Messungen'
         if username:
             output_dir = base_dir / username / subdirectory
         else:

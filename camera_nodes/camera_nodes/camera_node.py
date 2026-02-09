@@ -141,6 +141,7 @@ class CameraNode(Node):
         
         # Measurement parameters
         self.declare_parameter('measurement.username', '')
+        self.declare_parameter('measurement.base_path', '')
         
         # Debug overlay parameter
         self.declare_parameter('enable_debug_overlay', False)
@@ -180,6 +181,30 @@ class CameraNode(Node):
         self.declare_parameter('measurement_conditions.coaxial_light_current', 0.0)
         self.declare_parameter('measurement_conditions.camera_objective', 'unknown')
         self.declare_parameter('measurement_conditions.notes', '')
+
+        # MTF debug / tuning parameters
+        self.declare_parameter('mtf.debug_export_dir', '')
+        self.declare_parameter('mtf.debug_export_prefix', 'mtf')
+        self.declare_parameter('mtf.debug_export_csv', True)
+        self.declare_parameter('mtf.debug_export_png', False)
+        self.declare_parameter('mtf.profile', 'default')  # default | scientific | debug
+        self.declare_parameter('mtf.lsf_window_mode', 'full')  # full | peak | none
+        self.declare_parameter('mtf.lsf_peak_window_size', 0)  # samples; 0 = auto
+        self.declare_parameter('mtf.derivative_mode', 'iso')  # diff | iso
+        self.declare_parameter('mtf.apply_derivative_correction', True)
+        self.declare_parameter('mtf.derivative_correction_max', 0.0)  # 0 disables cap
+        self.declare_parameter('mtf.apply_angle_correction', True)
+        self.declare_parameter('mtf.esf_smooth_mode', 'none')  # none | sg
+        self.declare_parameter('mtf.esf_sg_window', 11)
+        self.declare_parameter('mtf.esf_sg_poly', 2)
+        self.declare_parameter('mtf.edge_validation_mode', 'warn')  # off | warn | fail
+        self.declare_parameter('mtf.edge_validation_percentile', 90.0)
+        self.declare_parameter('mtf.edge_validation_min_points', 50)
+        self.declare_parameter('mtf.edge_validation_only_auto', False)
+        self.declare_parameter('mtf.clip_to_nyquist', True)
+        self.declare_parameter('mtf.export_dual_curves', False)
+        self.declare_parameter('mtf.clip_max', 0.0)  # 0 disables clipping
+        self.declare_parameter('mtf.warn_threshold', 1.05)
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value

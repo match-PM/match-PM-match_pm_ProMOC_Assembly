@@ -124,6 +124,14 @@ def _create_x_axis_node(axis_config: dict):
 
 def _create_camera_node(config: dict):
     """Create camera processing node with all parameters."""
+    base_dir = config.get('user', {}).get('measurement_base_path') or os.path.join(
+        os.path.expanduser('~'), 'Dokumente', 'Messungen'
+    )
+    base_dir = os.path.expanduser(str(base_dir))
+    user_name = config.get('user', {}).get('name', '').strip()
+    mtf_config = config.get('mtf', {})
+    mtf_profile = str(mtf_config.get('profile', 'default'))
+    mtf_debug_dir = str(mtf_config.get('debug_export_dir', '') or '')
     return Node(
         package='camera_nodes',
         executable='camera_node',
@@ -132,10 +140,13 @@ def _create_camera_node(config: dict):
         emulate_tty=True,
         parameters=[{
             'measurement.username': config['user']['name'],
+            'measurement.base_path': base_dir,
             'use_simulator': LaunchConfiguration('use_simulator'),
             'x_axis_node_name': LaunchConfiguration('x_axis_name'),
             'pixel_size_um': config['camera']['pixel_size_um'],
             'mtf_csv_path': '',
+            'mtf.profile': mtf_profile,
+            'mtf.debug_export_dir': mtf_debug_dir,
             # Debug overlay for alignment
             'enable_debug_overlay': False,
             # Autofocus parameters
@@ -155,6 +166,13 @@ def _create_camera_node(config: dict):
 
 def _create_verification_node(config: dict):
     """Create scientific verification node."""
+    base_dir = config.get('user', {}).get('measurement_base_path') or os.path.join(
+        os.path.expanduser('~'), 'Dokumente', 'Messungen'
+    )
+    base_dir = os.path.expanduser(str(base_dir))
+    mtf_config = config.get('mtf', {})
+    mtf_profile = str(mtf_config.get('profile', 'default'))
+    mtf_debug_dir = str(mtf_config.get('debug_export_dir', '') or '')
     return Node(
         package='verification',
         executable='scientific_verification',
@@ -166,6 +184,8 @@ def _create_verification_node(config: dict):
             'autofocus_service': '/camera_node/autofocus',
             'axis_name': LaunchConfiguration('x_axis_name'),
             'pixel_size_um': config['camera']['pixel_size_um'],
-            'results_dir': os.path.join(os.path.expanduser('~'), 'Dokumente', 'Messungen')
+            'results_dir': base_dir,
+            'mtf.profile': mtf_profile,
+            'mtf.debug_export_dir': mtf_debug_dir,
         }]
     )

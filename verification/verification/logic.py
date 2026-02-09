@@ -333,9 +333,11 @@ class VerificationLogic:
             # analyzer.compute_mtf will undistort full image if calibration is present, then extract ROI
             roi_rect = (cx-crop_w//2, cy-crop_h//2, cx+crop_w//2, cy+crop_h//2)
             
-            res = analyzer.compute_mtf(img, roi=roi_rect)
+            res = analyzer.compute_mtf(img, roi=roi_rect, debug_label="verification_center")
             
             if res.valid:
+                if res.warning_msg:
+                    self.log.warn(f"MTF warning: {res.warning_msg}")
                 mtf_results.append({
                     'mtf50': res.mtf50,
                     'mtf20': res.mtf20,
@@ -504,5 +506,4 @@ class VerificationLogic:
         except Exception as e:
             self.log.error(f"Move service call failed: {e}")
             raise
-
 
