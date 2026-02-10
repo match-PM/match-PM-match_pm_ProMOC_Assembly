@@ -1,19 +1,15 @@
 """MTF callbacks for Modulation Transfer Function measurements."""
 
-from datetime import datetime
-from pathlib import Path
 import time
 import cv2
 import numpy as np
-
-from rcl_interfaces.srv import GetParameters, SetParameters
-from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 
 from promoc_core.promoc_exceptions import (
     ConfigurationError,
     ImageProcessingError,
 )
 from .base import CallbackBase
+from .camera_format_controller import CameraFormatController
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
 from promoc_core.error_handling import handle_service_errors
@@ -21,6 +17,11 @@ from promoc_core.error_handling import handle_service_errors
 
 class MTFCallbacks(CallbackBase):
     """Callbacks for MTF measurements and ROI selection."""
+
+    def __init__(self, node, camera_driver):
+        """Initialize MTF callbacks and shared camera format controller."""
+        super().__init__(node, camera_driver)
+        self._camera_format_controller = CameraFormatController(node)
 
     def _select_roi_interactive(self, cv_image):
         """Opens window for ROI selection."""
@@ -149,9 +150,8 @@ class MTFCallbacks(CallbackBase):
             except Exception:
                 pass
         val = _param('mtf.edge_validation_only_auto')
-        if val:
-            if not auto_roi:
-                config.edge_validation_mode = "off"
+        if bool(val) and not auto_roi:
+            config.edge_validation_mode = "off"
 
         val = _param('mtf.clip_to_nyquist')
         if val is not None:
@@ -234,142 +234,6 @@ class MTFCallbacks(CallbackBase):
 
         return response
 
-    def _set_camera_binning(self, factor: int):
-        """Switches camera binning factor and resolution via parameter service."""
-        try:
-            service_candidates = [
-                '/promoc/assembly_camera/set_parameters',
-                '/promoc/assembly_camera_controller/set_parameters',
-            ]
-
-            req = SetParameters.Request()
-            val_bin = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=factor)
-            
-            # Determine target resolution based on binning
-            # Full Sensor: 5536 x 3690 (approx, depending on camera exact model)
-            # Using precise values from config/datasheet
-            if factor == 1:
-                w, h = 5536, 3692
-            else:
-                w, h = 2768, 1846
-            
-            val_w = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=w)
-            val_h = ParameterValue(type=ParameterType.PARAMETER_INTEGER, integer_value=h)
-
-            # We must set Binning first, or Width/Height first?
-            # GenICam is tricky. Usually setting Width too high for current Binning fails.
-            # So: If going 2->1 (Getting bigger): Set Binning=1 FIRST, then Width=Big.
-            # If going 1->2 (Getting smaller): Set Width=Small FIRST, then Binning=2.
-            
-            # Strategy: Send two requests to be safe, or one order-independent?
-            # ROS parameters are set in list order potentially? Or batch?
-            # Let's try sending Width/Height and Binning together. 
-            # If that fails, we might need logic.
-            # Most safe: Set Binning, then Set Size.
-            
-            # Actually, standard GenICam standard says Width is constrained by Binning.
-            # So if we change Binning to 1 (pixels get smaller, sensor "virtual" size gets bigger), 
-            # max Width increases. So we can update Width.
-            
-            # Force order by separate calls if needed. Let's try single batch first, but with thought.
-            # If we switch to 1x1, MaxWidth becomes 5536. Current Width is 2768. 2768 is valid in 1x1.
-            # So switching Binning to 1 is safe. Then we assume Width stays 2768 (Crop).
-            # Then we set Width to 5536.
-            
-            # If we switch to 2x2, MaxWidth becomes 2768. Current Width is 5536. 
-            # If we set Binning=2 while Width=5536, it might error "Value out of range".
-            # So for 1->2, we MUST set Width -> 2768 FIRST.
-            
-            name_variants = [
-                {
-                    'width': 'Width',
-                    'height': 'Height',
-                    'bin_h': 'BinningHorizontal',
-                    'bin_v': 'BinningVertical',
-                },
-                {
-                    'width': 'ImageFormatControl.Width',
-                    'height': 'ImageFormatControl.Height',
-                    'bin_h': 'ImageFormatControl.BinningHorizontal',
-                    'bin_v': 'ImageFormatControl.BinningVertical',
-                },
-            ]
-
-            self._node.get_logger().info(f'Switching Binning to {factor}x{factor} ({w}x{h})...')
-
-            for service_name in service_candidates:
-                client = self._node.create_client(SetParameters, service_name)
-                if not client.wait_for_service(timeout_sec=2.0):
-                    continue
-
-                get_client = self._node.create_client(
-                    GetParameters, service_name.replace('set_parameters', 'get_parameters')
-                )
-                if not get_client.wait_for_service(timeout_sec=2.0):
-                    continue
-
-                for names in name_variants:
-                    get_req = GetParameters.Request()
-                    get_req.names = [
-                        names['width'],
-                        names['height'],
-                        names['bin_h'],
-                        names['bin_v'],
-                    ]
-                    get_future = get_client.call_async(get_req)
-                    start_wait = time.time()
-                    while not get_future.done() and time.time() - start_wait < 2.0:
-                        time.sleep(0.05)
-
-                    if not get_future.done():
-                        continue
-
-                    get_res = get_future.result()
-                    if not get_res or not get_res.values or all(v.type == 0 for v in get_res.values):
-                        continue
-
-                    params = []
-                    if factor == 2:  # Going to low res
-                        params.append(Parameter(name=names['width'], value=val_w))
-                        params.append(Parameter(name=names['height'], value=val_h))
-                        params.append(Parameter(name=names['bin_h'], value=val_bin))
-                        params.append(Parameter(name=names['bin_v'], value=val_bin))
-                    else:  # Going to high res (1)
-                        params.append(Parameter(name=names['bin_h'], value=val_bin))
-                        params.append(Parameter(name=names['bin_v'], value=val_bin))
-                        params.append(Parameter(name=names['width'], value=val_w))
-                        params.append(Parameter(name=names['height'], value=val_h))
-
-                    req.parameters = params
-
-                    future = client.call_async(req)
-                    start_wait = time.time()
-                    while not future.done() and time.time() - start_wait < 3.0:
-                        time.sleep(0.05)
-
-                    if not future.done():
-                        self._node.get_logger().warn("Parameter update timed out!")
-                        continue
-
-                    res = future.result()
-                    successful = True
-                    for r in res.results:
-                        if not r.successful:
-                            successful = False
-                            self._node.get_logger().error(f"Param Set Failed: {r.reason}")
-
-                    if successful:
-                        self._node.get_logger().info(
-                            f"Camera parameters updated successfully via {service_name} ({names['bin_h']})."
-                        )
-                        return
-
-            self._node.get_logger().warn('Parameter service not ready or parameters not declared, cannot switch binning')
-            return
-
-        except Exception as e:
-            self._node.get_logger().error(f'Failed to set binning: {e}')
-
     def _wait_for_next_image(self, timeout=1.0):
         """Waits for a strictly newer image than the current one."""
         if self._node.latest_image_msg is None:
@@ -400,13 +264,21 @@ class MTFCallbacks(CallbackBase):
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
         self._node.get_logger().info('MTF measurement service called.')
+        restore_state = None
 
         try:
-            # 1. Get latest image directly (assume correct config)
-            cv_image = self._get_latest_cv_image()
-            
+            # 1. Get latest image and optionally switch camera to full frame for MTF
+            cv_image, image_ts_ns = self._get_latest_cv_image()
             if cv_image is None:
                 raise ImageProcessingError('No image available')
+
+            restore_state, switched_image = self._camera_format_controller.switch_to_full_frame_for_mtf(
+                image_ts_ns if image_ts_ns is not None else 0,
+                get_latest_image_fn=self._get_latest_cv_image,
+                wait_for_new_image_fn=self._wait_for_new_image,
+            )
+            if switched_image is not None:
+                cv_image = switched_image
 
             pixel_size_um = self._node.get_parameter('pixel_size_um').value
             if not pixel_size_um or pixel_size_um <= 0:
@@ -607,7 +479,7 @@ class MTFCallbacks(CallbackBase):
             raise ImageProcessingError(f"MTF failed on all candidates. Last error: {last_error}")
         
         finally:
-            pass 
+            self._camera_format_controller.restore_after_mtf(restore_state)
 
         return response
 
@@ -666,7 +538,7 @@ class MTFCallbacks(CallbackBase):
         """Debug callback to visualize detected ROIs."""
         self._node.get_logger().info('Debugging ROI detection...')
         
-        cv_image = self._get_latest_cv_image()
+        cv_image, _ = self._get_latest_cv_image()
         if cv_image is None:
             raise ImageProcessingError('No image available')
             

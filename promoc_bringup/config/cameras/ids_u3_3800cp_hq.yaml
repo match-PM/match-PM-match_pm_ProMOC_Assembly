@@ -215,26 +215,26 @@ dynamic_parameters:
     Description: Analog gain applied to the sensor signal.
 
   - FeatureName: BinningHorizontal
-    Type: integer
+    Type: int
     Min: 1
     Max: 2
     Description: Horizontal binning factor.
 
   - FeatureName: BinningVertical
-    Type: integer
+    Type: int
     Min: 1
     Max: 2
     Description: Vertical binning factor.
 
   
   - FeatureName: Width
-    Type: integer
+    Type: int
     Min: 256
     Max: 5536
     Description: Width of the image in pixels.
 
   - FeatureName: Height
-    Type: integer
+    Type: int
     Min: 256
     Max: 3692
     Description: Height of the image in pixels.

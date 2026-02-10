@@ -191,7 +191,7 @@ def launch_setup(context, *args, **kwargs):
                     "frame_id": camera_params["cameraname"],
                     "stream_names": ["stream0"],
                     "camera_info_urls": [f"file://{camera_info_yaml}"],
-                    "dynamic_parameters_yaml_url": f"file://{dynamic_parameters_yaml}",
+                    "dynamic_parameters_yaml_url": dynamic_parameters_yaml,
                     "DeviceControl": {
                         "DeviceLinkThroughputLimit": 125000000,
                     },
@@ -233,7 +233,19 @@ def launch_setup(context, *args, **kwargs):
                 arguments=['--ros-args', '--log-level', 'INFO'],
                 parameters=[{
                     'use_simulator': False,
-                        'mtf_csv_path': ''
+                    'mtf_csv_path': '',
+                    'mtf.use_full_frame': True,
+                    'mtf.full_frame_width': camera_params.get(
+                        'sensor_resolution_h',
+                        camera_config["camera_info"]["image_width"],
+                    ),
+                    'mtf.full_frame_height': camera_params.get(
+                        'sensor_resolution_v',
+                        camera_config["camera_info"]["image_height"],
+                    ),
+                    'mtf.full_frame_offset_x': 0,
+                    'mtf.full_frame_offset_y': 0,
+                    'mtf.full_frame_binning': 1,
                 }],
             ))
 

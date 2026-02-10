@@ -9,6 +9,8 @@ camera_params:
   cameraname: 'assembly_camera'
   pixelsize: 2.2 # in um
   magnification: 1 
+  sensor_resolution_h: 5536
+  sensor_resolution_v: 3692
   camera_axis_1: 'x'
   camera_axis_2: 'y'
   camera_axis_1_angle: 0                # Starting from normal 'x' in math. positive direction
@@ -60,3 +62,23 @@ dynamic_parameters:
   - FeatureName: ExposureTime
     Type: float
     Description: Exposure time in milliseconds.
+  - FeatureName: BinningHorizontal
+    Type: int
+    Min: 1
+    Max: 2
+    Description: Horizontal binning factor.
+  - FeatureName: BinningVertical
+    Type: int
+    Min: 1
+    Max: 2
+    Description: Vertical binning factor.
+  - FeatureName: Width
+    Type: int
+    Min: 256
+    Max: 5536
+    Description: Width of the image in pixels.
+  - FeatureName: Height
+    Type: int
+    Min: 256
+    Max: 3692
+    Description: Height of the image in pixels.

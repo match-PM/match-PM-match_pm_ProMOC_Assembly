@@ -205,6 +205,19 @@ class CameraNode(Node):
         self.declare_parameter('mtf.export_dual_curves', False)
         self.declare_parameter('mtf.clip_max', 0.0)  # 0 disables clipping
         self.declare_parameter('mtf.warn_threshold', 1.05)
+        # Runtime camera format switch for MTF:
+        # Start cropped for autofocus, temporarily switch to full frame for MTF.
+        self.declare_parameter('mtf.use_full_frame', True)
+        self.declare_parameter('mtf.full_frame_width', 5536)
+        self.declare_parameter('mtf.full_frame_height', 3692)
+        self.declare_parameter('mtf.full_frame_offset_x', 0)
+        self.declare_parameter('mtf.full_frame_offset_y', 0)
+        self.declare_parameter('mtf.full_frame_binning', 1)
+        self.declare_parameter('mtf.full_frame_settle_s', 0.25)
+        self.declare_parameter('mtf.full_frame_image_timeout_s', 2.0)
+        self.declare_parameter('mtf.restore_after_measurement', True)
+        self.declare_parameter('mtf.restore_settle_s', 0.15)
+        self.declare_parameter('mtf.log_format_switch', True)
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value

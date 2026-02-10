@@ -21,7 +21,7 @@ from ..algorithms import tenengrad
 
 
 class CallbackBase:
-    """Gemeinsame Funktionalität für alle Camera Service Callbacks.
+    """Common functionality for all camera service callbacks.
     
     Attributes:
         _node: Parent ROS2 node

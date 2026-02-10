@@ -4,7 +4,6 @@ Modules:
     - autofocus: Autofocus with 5 algorithms (GoldenSection, HillClimbing, Parabolic, Fibonacci, Exhaustive)
     - mtf: MTF measurements and ROI selection
     - exposure: Exposure control
-    - exposure: Exposure control
 """
 
 from .autofocus import AutofocusCallbacks
@@ -32,11 +31,8 @@ class CameraServiceCallbacks(AutofocusCallbacks, MTFCallbacks, ExposureCallbacks
             node: Parent ROS2 node
             camera_driver: Camera driver instance
         """
-        # CallbackBase.__init__ wird durch MRO aufgerufen
+        # CallbackBase.__init__ is invoked via MRO.
         super().__init__(node, camera_driver)
-        
-        # MTF analyzer lazy init
-        self._mtf_analyzer = None
 
 
 __all__ = [

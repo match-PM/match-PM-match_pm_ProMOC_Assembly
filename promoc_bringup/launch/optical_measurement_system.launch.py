@@ -59,7 +59,7 @@ def generate_launch_description():
 
         # Camera processing node (delayed start)
         TimerAction(period=2.0, actions=[
-            _create_camera_node(user_config),
+            _create_camera_node(user_config, camera_config),
             _create_verification_node(user_config)
         ]),
     ])
@@ -122,7 +122,7 @@ def _create_x_axis_node(axis_config: dict):
     )
 
 
-def _create_camera_node(config: dict):
+def _create_camera_node(config: dict, camera_config: dict):
     """Create camera processing node with all parameters."""
     base_dir = config.get('user', {}).get('measurement_base_path') or os.path.join(
         os.path.expanduser('~'), 'Dokumente', 'Messungen'
@@ -145,6 +145,12 @@ def _create_camera_node(config: dict):
             'x_axis_node_name': LaunchConfiguration('x_axis_name'),
             'pixel_size_um': config['camera']['pixel_size_um'],
             'mtf_csv_path': '',
+            'mtf.use_full_frame': True,
+            'mtf.full_frame_width': camera_config.get('sensor_resolution_h', 5536),
+            'mtf.full_frame_height': camera_config.get('sensor_resolution_v', 3692),
+            'mtf.full_frame_offset_x': 0,
+            'mtf.full_frame_offset_y': 0,
+            'mtf.full_frame_binning': 1,
             'mtf.profile': mtf_profile,
             'mtf.debug_export_dir': mtf_debug_dir,
             # Debug overlay for alignment
