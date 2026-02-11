@@ -5,7 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
+import numpy as np
 
+from promoc_assembly_interfaces.srv import GetPosition
 from promoc_core.error_handling import handle_service_errors
 from promoc_core.promoc_exceptions import ImageProcessingError
 from verification.algorithms.mtf_verification_stats import (
@@ -37,9 +39,35 @@ class MTFVerificationCallbacks:
             if hasattr(request, "repetitions") and request.repetitions > 0
             else 1
         )
+        requested_fpm = (
+            int(request.frames_per_measurement)
+            if hasattr(request, "frames_per_measurement")
+            else 0
+        )
+        if requested_fpm > 0:
+            frames_per_measurement = requested_fpm
+            fpm_source = "request"
+        else:
+            frames_per_measurement = max(
+                1,
+                int(self.get_parameter("verify_mtf.frames_per_measurement").value or 1),
+            )
+            fpm_source = "parameter"
+        frames_per_measurement = max(
+            1, int(frames_per_measurement)
+        )
+        frame_timeout_s = float(
+            self.get_parameter("verify_mtf.frame_timeout_s").value or 2.0
+        )
+        log_progress = bool(
+            self.get_parameter("verify_mtf.log_progress").value
+            if self.has_parameter("verify_mtf.log_progress")
+            else True
+        )
 
         self.get_logger().info(
-            f"MTF Verification: field_test={request.field_test}, reps={repetitions}"
+            f"MTF Verification: field_test={request.field_test}, reps={repetitions}, "
+            f"frames_per_measurement={frames_per_measurement} ({fpm_source})"
         )
 
         metadata = self._get_measurement_metadata()
@@ -51,6 +79,10 @@ class MTFVerificationCallbacks:
                 "measurement_type": "mtf_verification",
                 "field_test": request.field_test,
                 "repetitions": repetitions,
+                "frames_per_measurement": frames_per_measurement,
+                "frames_per_measurement_source": fpm_source,
+                "frame_timeout_s": frame_timeout_s,
+                "log_progress": log_progress,
             }
         )
 
@@ -61,14 +93,31 @@ class MTFVerificationCallbacks:
         run_dir = output_dir / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
         csv_path = run_dir / f"mtf_verification_{timestamp}.csv"
+        restore_state = None
 
         analyzer = self._create_mtf_analyzer(debug_dir=str(run_dir), force_debug=True)
-        first_image, image_stamp = self._wait_for_fresh_cv_image(timeout_sec=2.0)
+        first_image, image_stamp = self._wait_for_fresh_cv_image(timeout_sec=frame_timeout_s)
         if first_image is None:
             raise ImageProcessingError("No image available")
 
+        controller = getattr(self, "_camera_format_controller", None)
+        if controller is not None:
+            last_ts_ns = self._stamp_tuple_to_ns(image_stamp)
+            restore_state, switched_image = controller.switch_to_full_frame_for_mtf(
+                last_ts_ns if last_ts_ns is not None else 0,
+                get_latest_image_fn=self._get_latest_cv_image_and_ts_ns,
+                wait_for_new_image_fn=self._wait_for_new_image_ns,
+            )
+            if switched_image is not None:
+                first_image = switched_image
+                latest_stamp = self._stamp_to_tuple(getattr(self, "latest_image_msg", None))
+                if latest_stamp is not None:
+                    image_stamp = latest_stamp
+
         vis_img, bars, squares = RoiDetector.detect_targets(first_image)
         if not squares and not bars:
+            if controller is not None:
+                controller.restore_after_mtf(restore_state)
             raise ImageProcessingError("No MTF targets detected")
 
         positions = self._define_measurement_positions(first_image, request.field_test)
@@ -85,12 +134,25 @@ class MTFVerificationCallbacks:
             baseline_squares = squares
             current_stamp = image_stamp
             for rep in range(repetitions):
+                axis_position_mm = self._read_axis_position_mm()
+                if rep == 0 and axis_position_mm is not None:
+                    metadata["axis_position_start_mm"] = axis_position_mm
+                if log_progress:
+                    axis_txt = f"{axis_position_mm:.4f}mm" if axis_position_mm is not None else "n/a"
+                    self.get_logger().info(
+                        f"MTF Rep {rep + 1}/{repetitions}: start (axis={axis_txt})"
+                    )
+
                 cv_image, current_stamp = self._wait_for_fresh_cv_image(
-                    previous_stamp=current_stamp, timeout_sec=2.0
+                    previous_stamp=current_stamp, timeout_sec=frame_timeout_s
                 )
                 if cv_image is None:
                     self.get_logger().warn(f"No image for repetition {rep + 1}")
                     continue
+
+                rep_valid_edges = 0
+                rep_total_edges = 0
+                rep_mtf50_values = []
 
                 rep_vis, _, rep_squares = RoiDetector.detect_targets(cv_image)
                 if rep_vis is None or rep_vis.size == 0:
@@ -117,6 +179,7 @@ class MTFVerificationCallbacks:
                             pos_name,
                             target_x,
                             target_y,
+                            axis_position_mm=axis_position_mm,
                             error="no_detected_squares",
                         )
                     edges_failed += 4 * len(rep_positions)
@@ -128,7 +191,13 @@ class MTFVerificationCallbacks:
                     )
                     if not chosen_square:
                         self._record_missing_target(
-                            results, metadata, rep + 1, pos_name, target_x, target_y
+                            results,
+                            metadata,
+                            rep + 1,
+                            pos_name,
+                            target_x,
+                            target_y,
+                            axis_position_mm=axis_position_mm,
                         )
                         edges_failed += 4
                         continue
@@ -149,7 +218,20 @@ class MTFVerificationCallbacks:
                             except Exception:
                                 pass
 
+                    frame_batch, current_stamp = self._collect_frame_batch(
+                        first_frame=cv_image,
+                        first_stamp=current_stamp,
+                        frames_per_measurement=frames_per_measurement,
+                        timeout_sec=frame_timeout_s,
+                    )
+                    if len(frame_batch) < frames_per_measurement:
+                        self.get_logger().warn(
+                            f"Rep {rep + 1}: only {len(frame_batch)}/{frames_per_measurement} "
+                            f"frames collected for averaging."
+                        )
+
                     for roi_img, (x, y, w_box, h_box), edge_name in edges_with_boxes:
+                        rep_total_edges += 1
                         self._draw_edge_debug(
                             rep_vis,
                             run_dir,
@@ -163,14 +245,32 @@ class MTFVerificationCallbacks:
                             f"{timestamp}_rep{rep + 1}",
                         )
 
-                        contrast = RoiDetector.calculate_michelson_contrast(roi_img)
-                        debug_label = f"{pos_name}_{edge_name}"
-                        mtf_res = analyzer.compute_mtf(roi_img, debug_label=debug_label)
+                        (
+                            edge_valid,
+                            edge_metrics,
+                            edge_curve_result,
+                            edge_warning_msgs,
+                            frames_used,
+                            frames_requested,
+                            avg_contrast,
+                            edge_error,
+                        ) = self._compute_edge_mtf_average(
+                            analyzer=analyzer,
+                            frame_batch=frame_batch,
+                            bbox=(x, y, w_box, h_box),
+                            pos_name=pos_name,
+                            edge_name=edge_name,
+                        )
 
                         row = {
                             "timestamp": datetime.now().isoformat(),
                             "config": request.config_name or "default",
                             "repetition": int(rep + 1),
+                            "axis_position_mm": (
+                                float(axis_position_mm)
+                                if axis_position_mm is not None
+                                else ""
+                            ),
                             "position": pos_name,
                             "edge": edge_name,
                             "roi_x": int(x),
@@ -179,33 +279,43 @@ class MTFVerificationCallbacks:
                             "roi_h": int(h_box),
                             "square_cx": int(square_cx),
                             "square_cy": int(square_cy),
-                            "contrast": f"{contrast:.3f}",
+                            "contrast": f"{avg_contrast:.3f}",
+                            "frames_requested": int(frames_requested),
+                            "frames_used": int(frames_used),
                         }
 
-                        if mtf_res.valid:
-                            if mtf_res.warning_msg:
+                        if edge_valid:
+                            rep_valid_edges += 1
+                            rep_mtf50_values.append(float(edge_metrics["mtf50"]))
+                            if edge_warning_msgs:
                                 self.get_logger().warn(
-                                    f"MTF warning ({pos_name}/{edge_name}): {mtf_res.warning_msg}"
+                                    f"MTF warning ({pos_name}/{edge_name}): "
+                                    f"{'; '.join(edge_warning_msgs[:2])}"
                                 )
                             row.update(
                                 {
-                                    "mtf50_lpmm": f"{mtf_res.mtf50:.2f}",
-                                    "mtf20_lpmm": f"{mtf_res.mtf20:.2f}",
-                                    "mtf10_lpmm": f"{mtf_res.mtf10:.2f}",
-                                    "edge_angle_deg": f"{mtf_res.edge_angle:.2f}",
-                                    "nyquist_lpmm": f"{mtf_res.nyquist_frequency:.2f}",
+                                    "mtf50_lpmm": f"{edge_metrics['mtf50']:.2f}",
+                                    "mtf20_lpmm": f"{edge_metrics['mtf20']:.2f}",
+                                    "mtf10_lpmm": f"{edge_metrics['mtf10']:.2f}",
+                                    "edge_angle_deg": f"{edge_metrics['edge_angle']:.2f}",
+                                    "nyquist_lpmm": f"{edge_metrics['nyquist']:.2f}",
                                     "valid": "true",
                                     "error": "",
                                 }
                             )
-                            if mtf_res.frequencies.size > 0:
+                            if edge_curve_result is not None:
                                 curve = {
                                     "label": f"{pos_name}-{edge_name}",
                                     "repetition": int(rep + 1),
-                                    "frequencies": mtf_res.frequencies,
-                                    "mtf_values": mtf_res.mtf_values,
-                                    "mtf_ideal": mtf_res.mtf_ideal,
-                                    "nyquist_lpmm": mtf_res.nyquist_frequency,
+                                    "axis_position_mm": (
+                                        float(axis_position_mm)
+                                        if axis_position_mm is not None
+                                        else ""
+                                    ),
+                                    "frequencies": edge_curve_result.frequencies,
+                                    "mtf_values": edge_curve_result.mtf_values,
+                                    "mtf_ideal": edge_curve_result.mtf_ideal,
+                                    "nyquist_lpmm": edge_curve_result.nyquist_frequency,
                                 }
                                 mtf_curves_full.append(curve)
                                 if len(mtf_curves_plot) < 8:
@@ -220,10 +330,22 @@ class MTFVerificationCallbacks:
                                     "edge_angle_deg": "0",
                                     "nyquist_lpmm": "0",
                                     "valid": "false",
-                                    "error": mtf_res.error_msg,
+                                    "error": edge_error or "no_valid_mtf_sample",
                                 }
                             )
                         results.append(row)
+
+                if log_progress:
+                    mtf50_mean_txt = (
+                        f"{float(np.mean(rep_mtf50_values)):.2f}"
+                        if rep_mtf50_values
+                        else "n/a"
+                    )
+                    self.get_logger().info(
+                        f"MTF Rep {rep + 1}/{repetitions}: done "
+                        f"(valid_edges={rep_valid_edges}/{rep_total_edges}, "
+                        f"mtf50_mean={mtf50_mean_txt})"
+                    )
         finally:
             if results:
                 self.get_logger().info(
@@ -233,6 +355,7 @@ class MTFVerificationCallbacks:
                     "timestamp",
                     "config",
                     "repetition",
+                    "axis_position_mm",
                     "position",
                     "edge",
                     "roi_x",
@@ -247,10 +370,14 @@ class MTFVerificationCallbacks:
                     "edge_angle_deg",
                     "contrast",
                     "nyquist_lpmm",
+                    "frames_requested",
+                    "frames_used",
                     "valid",
                     "error",
                 ]
                 self._write_csv_with_metadata(csv_path, metadata, fieldnames, results)
+            if controller is not None:
+                controller.restore_after_mtf(restore_state)
 
         stats_csv_path = self._save_mtf_statistics(run_dir, timestamp, results, metadata)
         dir_stats_path = self._save_mtf_directional_stats(
@@ -266,7 +393,10 @@ class MTFVerificationCallbacks:
             self.get_logger().error(f"Plotting failed: {e}")
 
         response.success = True
-        response.status_message = f"MTF done. CSV: {csv_path.name}"
+        response.status_message = (
+            f"MTF done. CSV: {csv_path.name} "
+            f"(frames_per_measurement={frames_per_measurement})"
+        )
         response.csv_path = str(csv_path)
         valid_mtf50 = extract_metric_values(results, "mtf50_lpmm")
         valid_mtf20 = extract_metric_values(results, "mtf20_lpmm")
@@ -285,6 +415,131 @@ class MTFVerificationCallbacks:
             self.get_logger().info(f"Directional MTF stats saved: {dir_stats_path.name}")
 
         return response
+    
+    @staticmethod
+    def _stamp_tuple_to_ns(stamp_tuple):
+        if stamp_tuple is None:
+            return None
+        try:
+            sec, nsec = int(stamp_tuple[0]), int(stamp_tuple[1])
+            return sec * 1_000_000_000 + nsec
+        except Exception:
+            return None
+
+    def _get_latest_cv_image_and_ts_ns(self):
+        msg = getattr(self, "latest_image_msg", None)
+        img = self._convert_msg_to_cv2(msg)
+        stamp_tuple = self._stamp_to_tuple(msg)
+        return img, self._stamp_tuple_to_ns(stamp_tuple)
+
+    def _wait_for_new_image_ns(self, last_ts_ns: int, timeout: float = 2.0):
+        if last_ts_ns is None or last_ts_ns < 0:
+            prev_stamp = None
+        else:
+            prev_stamp = (int(last_ts_ns // 1_000_000_000), int(last_ts_ns % 1_000_000_000))
+        img, stamp_tuple = self._wait_for_fresh_cv_image(
+            previous_stamp=prev_stamp, timeout_sec=float(timeout)
+        )
+        return img, self._stamp_tuple_to_ns(stamp_tuple)
+
+    def _collect_frame_batch(
+        self,
+        first_frame,
+        first_stamp,
+        frames_per_measurement: int,
+        timeout_sec: float,
+    ):
+        """Collect a time series of fresh frames for temporal averaging."""
+        frames = [first_frame]
+        stamp = first_stamp
+        for _ in range(max(0, int(frames_per_measurement) - 1)):
+            next_frame, stamp = self._wait_for_fresh_cv_image(
+                previous_stamp=stamp, timeout_sec=timeout_sec
+            )
+            if next_frame is None:
+                break
+            frames.append(next_frame)
+        return frames, stamp
+
+    def _compute_edge_mtf_average(self, analyzer, frame_batch, bbox, pos_name, edge_name):
+        """Compute averaged edge MTF metrics over a frame batch."""
+        x, y, w_box, h_box = [int(v) for v in bbox]
+        contrasts = []
+        valid_results = []
+        warning_msgs = []
+        edge_curve_result = None
+        last_error = ""
+
+        for idx, frame in enumerate(frame_batch, start=1):
+            if frame is None:
+                continue
+
+            h_img, w_img = frame.shape[:2]
+            if x < 0 or y < 0 or x + w_box > w_img or y + h_box > h_img:
+                last_error = "roi_out_of_bounds"
+                continue
+
+            roi_img = frame[y : y + h_box, x : x + w_box]
+            if roi_img.size == 0:
+                last_error = "empty_roi"
+                continue
+
+            contrast = float(RoiDetector.calculate_michelson_contrast(roi_img))
+            contrasts.append(contrast)
+
+            debug_label = f"{pos_name}_{edge_name}_s{idx}"
+            mtf_res = analyzer.compute_mtf(roi_img, debug_label=debug_label)
+            if mtf_res.warning_msg:
+                warning_msgs.append(str(mtf_res.warning_msg))
+
+            if mtf_res.valid:
+                valid_results.append(mtf_res)
+                if edge_curve_result is None and mtf_res.frequencies.size > 0:
+                    edge_curve_result = mtf_res
+            else:
+                last_error = str(mtf_res.error_msg or "invalid_mtf")
+
+        unique_warnings = list(dict.fromkeys(warning_msgs))
+        frames_requested = len(frame_batch)
+        frames_used = len(valid_results)
+        avg_contrast = float(np.mean(contrasts)) if contrasts else 0.0
+
+        if not valid_results:
+            return (
+                False,
+                {},
+                None,
+                unique_warnings,
+                frames_used,
+                frames_requested,
+                avg_contrast,
+                last_error or "no_valid_mtf_sample",
+            )
+
+        mtf50_values = [float(r.mtf50) for r in valid_results]
+        mtf20_values = [float(r.mtf20) for r in valid_results]
+        mtf10_values = [float(r.mtf10) for r in valid_results]
+        angle_values = [float(r.edge_angle) for r in valid_results]
+        nyquist_values = [float(r.nyquist_frequency) for r in valid_results]
+
+        edge_metrics = {
+            "mtf50": float(np.mean(mtf50_values)),
+            "mtf20": float(np.mean(mtf20_values)),
+            "mtf10": float(np.mean(mtf10_values)),
+            "edge_angle": float(np.mean(angle_values)),
+            "nyquist": float(np.mean(nyquist_values)),
+        }
+
+        return (
+            True,
+            edge_metrics,
+            edge_curve_result,
+            unique_warnings,
+            frames_used,
+            frames_requested,
+            avg_contrast,
+            "",
+        )
 
     def _create_mtf_analyzer(
         self, debug_dir: str | None = None, force_debug: bool = False
@@ -476,13 +731,24 @@ class MTFVerificationCallbacks:
         return chosen_square
 
     def _record_missing_target(
-        self, results, metadata, rep, pos_name, tx, ty, error: str = "no_nearby_target"
+        self,
+        results,
+        metadata,
+        rep,
+        pos_name,
+        tx,
+        ty,
+        axis_position_mm=None,
+        error: str = "no_nearby_target",
     ):
         results.append(
             {
                 "timestamp": datetime.now().isoformat(),
                 "config": metadata.get("config_name", "default"),
                 "repetition": rep,
+                "axis_position_mm": (
+                    float(axis_position_mm) if axis_position_mm is not None else ""
+                ),
                 "position": pos_name,
                 "edge": "n/a",
                 "roi_x": tx,
@@ -497,10 +763,27 @@ class MTFVerificationCallbacks:
                 "edge_angle_deg": "0",
                 "contrast": "0",
                 "nyquist_lpmm": "0",
+                "frames_requested": 0,
+                "frames_used": 0,
                 "valid": "false",
                 "error": error,
             }
         )
+
+    def _read_axis_position_mm(self):
+        """Read current X-axis position in mm if position service is available."""
+        client = getattr(self, "position_client", None)
+        if client is None:
+            return None
+        try:
+            if not client.wait_for_service(timeout_sec=0.05):
+                return None
+            response = client.call(GetPosition.Request())
+            if response and getattr(response, "success", False):
+                return float(response.axis_position)
+        except Exception:
+            return None
+        return None
 
     def _draw_edge_debug(
         self, vis_img, run_dir, cv_image, x, y, w, h, pos_name, edge_name, ts
@@ -559,6 +842,10 @@ class MTFVerificationCallbacks:
                 "contrast_std",
                 "contrast_ci_lower",
                 "contrast_ci_upper",
+                "axis_position_mean",
+                "axis_position_std",
+                "axis_position_ci_lower",
+                "axis_position_ci_upper",
             ]
             self._write_csv_with_metadata(path, metadata, fields, stats_rows)
             return path
@@ -584,6 +871,10 @@ class MTFVerificationCallbacks:
                 "mtf10_std",
                 "mtf10_ci_lower",
                 "mtf10_ci_upper",
+                "axis_position_mean",
+                "axis_position_std",
+                "axis_position_ci_lower",
+                "axis_position_ci_upper",
             ]
             self._write_csv_with_metadata(path, metadata, fields, rows)
             return path
@@ -602,6 +893,11 @@ class MTFVerificationCallbacks:
                         {
                             "timestamp": datetime.now().isoformat(),
                             "repetition": int(curve.get("repetition", 1)),
+                            "axis_position_mm": (
+                                float(curve.get("axis_position_mm"))
+                                if str(curve.get("axis_position_mm", "")).strip() != ""
+                                else ""
+                            ),
                             "position": pos,
                             "edge": edge,
                             "frequency_lpmm": f"{f:.4f}",
@@ -615,6 +911,7 @@ class MTFVerificationCallbacks:
             fields = [
                 "timestamp",
                 "repetition",
+                "axis_position_mm",
                 "position",
                 "edge",
                 "frequency_lpmm",

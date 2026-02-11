@@ -27,6 +27,33 @@ user:
 #   min_step_mm: 0.010                # Minimum step size (10µm, LTS300 limit: 4µm)
 #   refinement_shrink_factor: 0.25    # Range reduction per level (smaller = faster)
 
+# Optional profile table for autofocus request fields:
+# - objective_magnification_x (e.g. 1.0, 3.0, 6.0)
+# - use_beamsplitter (true/false)
+# Lookup order: default -> "<mag>x" -> "bs0|bs1" -> "<mag>x_bs0|bs1"
+# autofocus_profiles:
+#   default:
+#     axis_speed_scale: 1.0
+#     scan_speed_mm_s: 5.0
+#     max_sample_step_mm: 0.10
+#     coarse_step_mm: 0.2
+#     min_step_mm: 0.01
+#     settle_s: 0.10
+#   profiles:
+#     "1x":
+#       scan_speed_mm_s: 8.0
+#       coarse_step_mm: 0.5
+#     "6x":
+#       scan_speed_mm_s: 1.5
+#       max_sample_step_mm: 0.05
+#       coarse_step_mm: 0.08
+#       min_step_mm: 0.005
+#       settle_s: 0.25
+#     "6x_bs1":
+#       scan_speed_mm_s: 1.0
+#       max_sample_step_mm: 0.03
+#       settle_s: 0.30
+
 # Fly-over autofocus selection (optional overrides)
 # fly_over:
 #   refinement_mode: 0                # 0=use refinement_strategy, 1=standard, 2=fast, 3=parabolic

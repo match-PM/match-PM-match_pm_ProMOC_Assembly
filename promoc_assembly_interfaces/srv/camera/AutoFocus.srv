@@ -6,23 +6,13 @@ float64 start_position
 # End position for the scan (in mm)
 float64 end_position
 
-# Step size for each move (in mm)
-
 # --- ALGORITHM SELECTION ---
 # 0 = Standard (Golden Section search, robust default)
 # 1 = HillClimbing (fast, adaptive step size with early termination)
 # 2 = Parabolic (iterative parabolic interpolation for sub-sample precision)
 # 3 = Fibonacci (efficient Fibonacci sequence based search)
 # 4 = Exhaustive (brute-force with minimum step, maximum precision reference)
-int32 refinement_mode
-
-# --- OPTIONAL: Expected Peak Value ---
-# Used by HillClimbing to determine early termination
-# If 0, default threshold is used
-float64 estimated_peak_millions
-
-# --- OPTIONAL: Use SIFT weighting in fine search ---
-bool use_sift_weighting
+int32 focus_mode
 
 # --- OPTIONAL: Skip fly-over detection (use full range) ---
 # If true, skips fly-over and uses start_position to end_position directly
@@ -30,16 +20,13 @@ bool use_sift_weighting
 bool skip_flyover
 
 # --- OPTIONAL: Save best image ---
-# If true, saves best image to output_dir with output_prefix
+# If true, saves best image to default autofocus result directory
 bool save_best_image
-string output_dir
-string output_prefix
 
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
-# If empty/zero, node parameters are used
-float64 coaxial_light_voltage
-float64 coaxial_light_current
-string camera_objective
+# If objective_magnification_x is 0, objective is inferred from node parameter
+float64 objective_magnification_x  # e.g. 1.0, 3.0, 6.0 (0 = auto/fallback)
+bool use_beamsplitter              # True if beam splitter is in optical path
 string notes
 
 ---

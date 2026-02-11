@@ -101,6 +101,7 @@ def summarize_mtf_by_group(
         ("mtf10", "mtf10_lpmm"),
         ("angle", "edge_angle_deg"),
         ("contrast", "contrast"),
+        ("axis_position", "axis_position_mm"),
     )
 
     stats_rows: list[dict] = []
@@ -141,6 +142,7 @@ def summarize_mtf_by_direction(rows: Iterable[dict]) -> list[dict]:
         mtf50_summary = summarize_numeric_values(extract_metric_values(items, "mtf50_lpmm", valid_only=False))
         mtf20_summary = summarize_numeric_values(extract_metric_values(items, "mtf20_lpmm", valid_only=False))
         mtf10_summary = summarize_numeric_values(extract_metric_values(items, "mtf10_lpmm", valid_only=False))
+        axis_summary = summarize_numeric_values(extract_metric_values(items, "axis_position_mm", valid_only=False))
         results.append({
             "direction": direction,
             "count": len(items),
@@ -156,6 +158,10 @@ def summarize_mtf_by_direction(rows: Iterable[dict]) -> list[dict]:
             "mtf10_std": mtf10_summary["std"],
             "mtf10_ci_lower": mtf10_summary["ci_lower"],
             "mtf10_ci_upper": mtf10_summary["ci_upper"],
+            "axis_position_mean": axis_summary["mean"],
+            "axis_position_std": axis_summary["std"],
+            "axis_position_ci_lower": axis_summary["ci_lower"],
+            "axis_position_ci_upper": axis_summary["ci_upper"],
         })
 
     return results

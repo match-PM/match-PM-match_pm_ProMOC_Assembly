@@ -1,8 +1,11 @@
 """Base class with common helper methods for camera callbacks."""
 
+import asyncio
 import csv
 from datetime import datetime
+import inspect
 from pathlib import Path
+import threading
 import time
 
 import cv2
@@ -67,6 +70,69 @@ class CallbackBase:
                  return self._get_latest_cv_image()
              time.sleep(0.01)
         return None, None
+
+    def _wait_for_new_frames(self, frame_count: int, timeout_per_frame: float = 1.0):
+        """Wait for `frame_count` strictly newer frames and return the latest."""
+        frame_count = max(0, int(frame_count))
+        last_img, last_ts = self._get_latest_cv_image()
+        if frame_count == 0:
+            return last_img, last_ts
+
+        if last_ts is None:
+            # Try to obtain a first valid frame/timestamp.
+            last_img, last_ts = self._wait_for_new_image(0, timeout=timeout_per_frame)
+            if last_img is None or last_ts is None:
+                return None, None
+
+        for _ in range(frame_count):
+            next_img, next_ts = self._wait_for_new_image(last_ts, timeout=timeout_per_frame)
+            if next_img is None or next_ts is None:
+                return None, None
+            last_img, last_ts = next_img, next_ts
+
+        return last_img, last_ts
+
+    @staticmethod
+    def _run_awaitable_blocking(awaitable_obj):
+        """Run an awaitable from sync code and return its result."""
+        try:
+            loop = asyncio.get_running_loop()
+            loop_running = loop.is_running()
+        except RuntimeError:
+            loop_running = False
+
+        if not loop_running:
+            return asyncio.run(awaitable_obj)
+
+        result_box = {}
+        error_box = {}
+
+        def _runner():
+            try:
+                result_box['value'] = asyncio.run(awaitable_obj)
+            except Exception as exc:  # pragma: no cover - best effort fallback
+                error_box['error'] = exc
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+
+        if 'error' in error_box:
+            raise error_box['error']
+        return result_box.get('value')
+
+    def _set_exposure_us(self, exposure_time_us: float) -> bool:
+        """Set exposure robustly from sync callback code."""
+        result = self._driver.set_exposure(float(exposure_time_us))
+        if inspect.isawaitable(result):
+            result = self._run_awaitable_blocking(result)
+        success = bool(True if result is None else result)
+        if not success:
+            raise HardwareError(
+                message='Failed to set exposure',
+                details={'exposure_time_us': float(exposure_time_us)}
+            )
+        return True
 
     @staticmethod
     def _get_center_roi(image: np.ndarray, size: int) -> np.ndarray:

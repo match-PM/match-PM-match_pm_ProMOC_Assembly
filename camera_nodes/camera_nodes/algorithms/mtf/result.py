@@ -20,6 +20,7 @@ class MTFResult:
     valid: bool = False
     error_msg: str = ""
     roi_bounds: Optional[Tuple[int, int, int, int]] = None
+    contrast: float = 0.0
     edge_name: str = ""
     edge_direction: str = ""
     sensor_nyquist: float = 0.0

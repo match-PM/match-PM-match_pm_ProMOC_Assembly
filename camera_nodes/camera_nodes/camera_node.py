@@ -63,7 +63,7 @@ Example Service Calls:
 ======================
     # Perform autofocus:
     ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \
-        "{start_position: 0.0, end_position: 30.0, refinement_mode: 0}"
+        "{start_position: 0.0, end_position: 30.0, focus_mode: 0}"
 
     # Measure MTF:
     ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
@@ -150,6 +150,7 @@ class CameraNode(Node):
         self.declare_parameter('autofocus.refinement_samples', 51)
         self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
         self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
+        self.declare_parameter('autofocus.profile_table_json', '')
         # Autofocus mode selection: 0=standard, 1=fast (hillclimb), 2=parabolic
         self.declare_parameter('autofocus.refinement_mode', 0)
 
@@ -168,9 +169,24 @@ class CameraNode(Node):
         self.declare_parameter('autofocus.fly_over.settle_fine_s', 0.3)
         self.declare_parameter('autofocus.fly_over.use_sift_weighting', False)
         self.declare_parameter('autofocus.fly_over.detection_poll_s', 0.05)
+        self.declare_parameter('autofocus.fly_over.max_sample_step_mm', 0.10)
+        self.declare_parameter('autofocus.fly_over.axis_speed_scale_default', 1.0)
+        self.declare_parameter('autofocus.fly_over.smooth_window_samples', 5)
+        self.declare_parameter('autofocus.fly_over.baseline_percentile', 20.0)
+        self.declare_parameter('autofocus.fly_over.snr_threshold', 3.0)
         self.declare_parameter('autofocus.fly_over.full_scan_for_peak', True)
         self.declare_parameter('autofocus.fly_over.peak_window_ratio', 0.9)
         self.declare_parameter('autofocus.fly_over.peak_window_margin_mm', 1.0)
+        # Objective-aware tuning for high magnification
+        self.declare_parameter('autofocus.fly_over.high_mag_threshold_x', 4.0)
+        self.declare_parameter('autofocus.fly_over.very_high_mag_threshold_x', 6.0)
+        self.declare_parameter('autofocus.fly_over.scan_speed_high_mag', 2.0)
+        self.declare_parameter('autofocus.fly_over.scan_speed_very_high_mag', 1.0)
+        self.declare_parameter('autofocus.fly_over.coarse_step_high_mag_mm', 0.10)
+        self.declare_parameter('autofocus.fly_over.coarse_step_very_high_mag_mm', 0.05)
+        self.declare_parameter('autofocus.fly_over.min_step_high_mag_mm', 0.005)
+        self.declare_parameter('autofocus.fly_over.settle_high_mag_s', 0.20)
+        self.declare_parameter('autofocus.fly_over.settle_very_high_mag_s', 0.25)
         # Refinement strategy: 'linear' (default, fine scan), 'standard' (Autofocus), 'fast' (HillClimbing), 'parabolic'
         self.declare_parameter('autofocus.fly_over.refinement_strategy', 'linear')
         # Numeric refinement mode: 1=standard, 2=fast, 3=parabolic (overrides refinement_strategy when set)
@@ -218,6 +234,9 @@ class CameraNode(Node):
         self.declare_parameter('mtf.restore_after_measurement', True)
         self.declare_parameter('mtf.restore_settle_s', 0.15)
         self.declare_parameter('mtf.log_format_switch', True)
+        # Generic exposure/frame settling
+        self.declare_parameter('exposure.settle_frames_after_set', 2)
+        self.declare_parameter('exposure.frame_timeout_s', 1.0)
 
         self.use_simulator = self.get_parameter(
             'use_simulator').get_parameter_value().bool_value

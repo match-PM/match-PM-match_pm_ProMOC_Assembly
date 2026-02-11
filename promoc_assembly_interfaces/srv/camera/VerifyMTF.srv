@@ -11,6 +11,7 @@ string notes            # Additional notes about optical setup
 
 # Repeatability testing
 int32 repetitions 1     # Number of times to repeat each measurement (default: 1)
+int32 frames_per_measurement 0  # Frames averaged per measurement (0 = use node parameter)
 
 ---
 # Response: MTF verification results

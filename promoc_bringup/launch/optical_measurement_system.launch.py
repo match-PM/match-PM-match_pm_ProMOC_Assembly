@@ -13,6 +13,7 @@ Usage:
 """
 
 import os
+import json
 from ament_index_python import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, TimerAction
@@ -132,6 +133,7 @@ def _create_camera_node(config: dict, camera_config: dict):
     mtf_config = config.get('mtf', {})
     mtf_profile = str(mtf_config.get('profile', 'default'))
     mtf_debug_dir = str(mtf_config.get('debug_export_dir', '') or '')
+    af_profile_json = json.dumps(config.get('autofocus_profiles', {}))
     return Node(
         package='camera_nodes',
         executable='camera_node',
@@ -159,6 +161,7 @@ def _create_camera_node(config: dict, camera_config: dict):
             'autofocus.refinement_samples': config['autofocus']['refinement_samples'],
             'autofocus.min_step_mm': config['autofocus']['min_step_mm'],
             'autofocus.refinement_shrink_factor': config['autofocus']['refinement_shrink_factor'],
+            'autofocus.profile_table_json': af_profile_json,
             'autofocus.fly_over.refinement_mode': config['fly_over']['refinement_mode'],
             'autofocus.fly_over.refinement_strategy': config['fly_over']['refinement_strategy'],
             # Measurement conditions

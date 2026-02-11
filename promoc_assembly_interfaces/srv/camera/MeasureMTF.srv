@@ -11,6 +11,8 @@ bool auto_roi
 float64 coaxial_light_voltage
 float64 coaxial_light_current
 string camera_objective
+float64 objective_magnification_x  # e.g. 1.0, 3.0, 6.0 (0 = auto/fallback)
+bool use_beamsplitter              # True if beam splitter is in optical path
 string notes
 
 # Target Edge Selection (for squares)

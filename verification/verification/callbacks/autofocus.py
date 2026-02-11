@@ -173,12 +173,9 @@ class AutofocusVerificationCallbacks:
         af_req = AutoFocus.Request()
         af_req.start_position = float(request.start_position)
         af_req.end_position = float(request.end_position)
-        af_req.refinement_mode = int(mode)
+        af_req.focus_mode = int(mode)
         af_req.skip_flyover = True
-        af_req.use_sift_weighting = False
         af_req.save_best_image = True
-        af_req.output_dir = str(run_dir)
-        af_req.output_prefix = f"autofocus_best_{name}_rep{rep_num}_{timestamp}"
 
         af_resp = client.call(af_req)
         duration = time.time() - algo_start

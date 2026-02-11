@@ -43,30 +43,31 @@ def test_summarize_mtf_by_group():
     rows = [
         {"valid": "true", "position": "center", "edge": "left",
          "mtf50_lpmm": "40", "mtf20_lpmm": "60", "mtf10_lpmm": "70",
-         "edge_angle_deg": "5", "contrast": "0.45"},
+         "edge_angle_deg": "5", "contrast": "0.45", "axis_position_mm": "277.90"},
         {"valid": "true", "position": "center", "edge": "left",
          "mtf50_lpmm": "44", "mtf20_lpmm": "62", "mtf10_lpmm": "72",
-         "edge_angle_deg": "6", "contrast": "0.50"},
+         "edge_angle_deg": "6", "contrast": "0.50", "axis_position_mm": "277.95"},
         {"valid": "false", "position": "center", "edge": "left",
          "mtf50_lpmm": "100", "mtf20_lpmm": "100", "mtf10_lpmm": "100",
-         "edge_angle_deg": "0", "contrast": "0.1"},
+         "edge_angle_deg": "0", "contrast": "0.1", "axis_position_mm": "278.50"},
         {"valid": "true", "position": "top_left", "edge": "top",
          "mtf50_lpmm": "30", "mtf20_lpmm": "50", "mtf10_lpmm": "65",
-         "edge_angle_deg": "4", "contrast": "0.40"},
+         "edge_angle_deg": "4", "contrast": "0.40", "axis_position_mm": "278.10"},
     ]
     summary_rows = summarize_mtf_by_group(rows)
     assert len(summary_rows) == 2
     center_left = next(r for r in summary_rows if r["position"] == "center" and r["edge"] == "left")
     assert center_left["count"] == 2
     assert center_left["mtf50_mean"] == pytest.approx(42.0)
+    assert center_left["axis_position_mean"] == pytest.approx(277.925)
 
 
 def test_summarize_mtf_by_direction():
     rows = [
-        {"valid": "true", "edge": "top", "mtf50_lpmm": "30", "mtf20_lpmm": "45", "mtf10_lpmm": "55"},
-        {"valid": "true", "edge": "bottom", "mtf50_lpmm": "32", "mtf20_lpmm": "47", "mtf10_lpmm": "57"},
-        {"valid": "true", "edge": "left", "mtf50_lpmm": "40", "mtf20_lpmm": "55", "mtf10_lpmm": "65"},
-        {"valid": "false", "edge": "right", "mtf50_lpmm": "100", "mtf20_lpmm": "100", "mtf10_lpmm": "100"},
+        {"valid": "true", "edge": "top", "mtf50_lpmm": "30", "mtf20_lpmm": "45", "mtf10_lpmm": "55", "axis_position_mm": "278.00"},
+        {"valid": "true", "edge": "bottom", "mtf50_lpmm": "32", "mtf20_lpmm": "47", "mtf10_lpmm": "57", "axis_position_mm": "278.02"},
+        {"valid": "true", "edge": "left", "mtf50_lpmm": "40", "mtf20_lpmm": "55", "mtf10_lpmm": "65", "axis_position_mm": "277.95"},
+        {"valid": "false", "edge": "right", "mtf50_lpmm": "100", "mtf20_lpmm": "100", "mtf10_lpmm": "100", "axis_position_mm": "279.00"},
     ]
     direction_rows = summarize_mtf_by_direction(rows)
     assert len(direction_rows) == 2
@@ -74,6 +75,7 @@ def test_summarize_mtf_by_direction():
     horizontal = next(r for r in direction_rows if r["direction"] == "horizontal")
     assert vertical["count"] == 2
     assert vertical["mtf50_mean"] == pytest.approx(31.0)
+    assert vertical["axis_position_mean"] == pytest.approx(278.01)
     assert horizontal["count"] == 1
     assert horizontal["mtf50_mean"] == pytest.approx(40.0)
 

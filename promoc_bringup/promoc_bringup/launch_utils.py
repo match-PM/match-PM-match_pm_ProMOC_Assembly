@@ -153,6 +153,10 @@ def load_user_config(bringup_share_dir: str) -> dict:
             'min_step_mm': 0.010,
             'refinement_shrink_factor': 0.25,
         },
+        'autofocus_profiles': {
+            'default': {},
+            'profiles': {},
+        },
         'fly_over': {
             'refinement_mode': 0,
             'refinement_strategy': 'linear',

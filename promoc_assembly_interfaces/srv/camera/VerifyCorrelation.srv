@@ -6,6 +6,8 @@ float64 end_position      # End position in mm
 float64 step_size         # Step size for scan (default: 1.0)
 
 float64 settle_time       # Wait time before image capture (default: 0.5)
+int32 frames_per_measurement 0  # Frames averaged per measurement point (0 = use node parameter)
+string operator_name      # Operator/user name for output directory prefix (optional)
 
 ---
 bool success

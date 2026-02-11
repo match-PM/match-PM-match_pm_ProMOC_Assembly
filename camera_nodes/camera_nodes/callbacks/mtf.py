@@ -268,6 +268,8 @@ class MTFCallbacks(CallbackBase):
 
         try:
             # 1. Get latest image and optionally switch camera to full frame for MTF
+            cv_image = None
+            image_ts_ns = None
             cv_image, image_ts_ns = self._get_latest_cv_image()
             if cv_image is None:
                 raise ImageProcessingError('No image available')
