@@ -7,6 +7,31 @@ import math
 # Global logger instance
 logger = None
 
+LINEAR_MIN_TRAVEL_TIME_S = 0.2
+SIX_D_TRAVEL_TIME_S = 1.5
+ARC_TRAVEL_FACTOR = 1.5
+ARC_MIN_TRAVEL_TIME_S = 0.5
+ARC_FALLBACK_TRAVEL_TIME_S = 2.0
+ROTARY_MIN_TRAVEL_TIME_S = 0.3
+ROTARY_FALLBACK_TRAVEL_TIME_S = 0.8
+STOP_DELAY_S = 0.2
+
+
+def _schedule_motion_completion(xbot, travel_time_s, updates, completion_message=None):
+    """Finalize simulated motion asynchronously after `travel_time_s`."""
+
+    def complete_motion():
+        time.sleep(travel_time_s)
+        for attr_name, attr_value in updates.items():
+            setattr(xbot, attr_name, attr_value)
+        xbot.is_moving = False
+        xbot.xbot_state = XbotState.XBOT_IDLE
+        if completion_message:
+            log_msg(completion_message)
+
+    threading.Thread(target=complete_motion, daemon=True).start()
+
+
 def set_logger(log_instance):
     """Set the logger to use for output instead of print."""
     global logger
@@ -246,18 +271,14 @@ class xbot_commands:
         current_x = xbot.x_pos
         current_y = xbot.y_pos
         distance = math.sqrt((x_pos - current_x)**2 + (y_pos - current_y)**2)
-        travel_time = max(distance / xy_max_speed, 0.2)  # Minimum 200ms
+        travel_time = max(distance / xy_max_speed, LINEAR_MIN_TRAVEL_TIME_S)  # Minimum 200ms
         
-        # Simulate motion completion after delay
-        def complete_motion():
-            time.sleep(travel_time)
-            xbot.x_pos = x_pos
-            xbot.y_pos = y_pos
-            xbot.is_moving = False
-            xbot.xbot_state = XbotState.XBOT_IDLE
-            log_msg(f"Mock: Linear motion completed for XBot {xbot_id}")
-        
-        threading.Thread(target=complete_motion, daemon=True).start()
+        _schedule_motion_completion(
+            xbot=xbot,
+            travel_time_s=travel_time,
+            updates={"x_pos": x_pos, "y_pos": y_pos},
+            completion_message=f"Mock: Linear motion completed for XBot {xbot_id}",
+        )
         return travel_time
 
     @staticmethod
@@ -269,19 +290,19 @@ class xbot_commands:
         xbot.is_moving = True
         xbot.xbot_state = XbotState.XBOT_MOTION
         
-        def complete_motion():
-            time.sleep(1.5)  # Simulate motion time
-            xbot.x_pos = x_pos
-            xbot.y_pos = y_pos
-            xbot.z_pos = z_pos
-            xbot.rx_pos = rx_pos
-            xbot.ry_pos = ry_pos
-            xbot.rz_pos = rz_pos
-            xbot.is_moving = False
-            xbot.xbot_state = XbotState.XBOT_IDLE
-        
-        threading.Thread(target=complete_motion, daemon=True).start()
-        return 1.5  # Return estimated travel time
+        _schedule_motion_completion(
+            xbot=xbot,
+            travel_time_s=SIX_D_TRAVEL_TIME_S,
+            updates={
+                "x_pos": x_pos,
+                "y_pos": y_pos,
+                "z_pos": z_pos,
+                "rx_pos": rx_pos,
+                "ry_pos": ry_pos,
+                "rz_pos": rz_pos,
+            },
+        )
+        return SIX_D_TRAVEL_TIME_S  # Return estimated travel time
 
     @staticmethod
     def arc_motion_target_radius(xbot_id, x_pos, y_pos, arc_type, postion_mode, arc_dir,
@@ -296,18 +317,17 @@ class xbot_commands:
         current_x = xbot.x_pos
         current_y = xbot.y_pos
         distance = math.sqrt((x_pos - current_x)**2 + (y_pos - current_y)**2)
-        arc_factor = 1.5  # Arc motion takes longer than linear
-        travel_time = max((distance * arc_factor) / xy_max_speed, 0.5) if xy_max_speed > 0 else 2.0
+        travel_time = (
+            max((distance * ARC_TRAVEL_FACTOR) / xy_max_speed, ARC_MIN_TRAVEL_TIME_S)
+            if xy_max_speed > 0 else ARC_FALLBACK_TRAVEL_TIME_S
+        )
         
-        def complete_motion():
-            time.sleep(travel_time)
-            xbot.x_pos = x_pos
-            xbot.y_pos = y_pos
-            xbot.is_moving = False
-            xbot.xbot_state = XbotState.XBOT_IDLE
-            log_msg(f"Mock: Arc motion completed for XBot {xbot_id}")
-        
-        threading.Thread(target=complete_motion, daemon=True).start()
+        _schedule_motion_completion(
+            xbot=xbot,
+            travel_time_s=travel_time,
+            updates={"x_pos": x_pos, "y_pos": y_pos},
+            completion_message=f"Mock: Arc motion completed for XBot {xbot_id}",
+        )
         return travel_time
 
     @staticmethod
@@ -321,16 +341,17 @@ class xbot_commands:
         # Calculate realistic travel time based on rotation angle and speed
         current_rz = xbot.rz_pos
         rotation_angle = abs(target_rz - current_rz)
-        travel_time = max(rotation_angle / max_speed, 0.3) if max_speed > 0 else 0.8
+        travel_time = (
+            max(rotation_angle / max_speed, ROTARY_MIN_TRAVEL_TIME_S)
+            if max_speed > 0 else ROTARY_FALLBACK_TRAVEL_TIME_S
+        )
         
-        def complete_motion():
-            time.sleep(travel_time)
-            xbot.rz_pos = target_rz
-            xbot.is_moving = False
-            xbot.xbot_state = XbotState.XBOT_IDLE
-            log_msg(f"Mock: Rotary motion completed for XBot {xbot_id}")
-        
-        threading.Thread(target=complete_motion, daemon=True).start()
+        _schedule_motion_completion(
+            xbot=xbot,
+            travel_time_s=travel_time,
+            updates={"rz_pos": target_rz},
+            completion_message=f"Mock: Rotary motion completed for XBot {xbot_id}",
+        )
         return travel_time
 
     @staticmethod
@@ -344,7 +365,7 @@ class xbot_commands:
                 xbot.xbot_state = XbotState.XBOT_STOPPING
             
             def complete_stop():
-                time.sleep(0.2)  # Realistic stop delay
+                time.sleep(STOP_DELAY_S)  # Realistic stop delay
                 for xbot in simulated_xbots.values():
                     xbot.xbot_state = XbotState.XBOT_IDLE
                 log_msg(f"Mock: All XBots stopped and are now IDLE")
@@ -356,7 +377,7 @@ class xbot_commands:
             xbot.xbot_state = XbotState.XBOT_STOPPING
             
             def complete_stop():
-                time.sleep(0.2)  # Realistic stop delay
+                time.sleep(STOP_DELAY_S)  # Realistic stop delay
                 xbot.xbot_state = XbotState.XBOT_IDLE
                 log_msg(f"Mock: XBot {xbot_id} stopped and is now IDLE")
             

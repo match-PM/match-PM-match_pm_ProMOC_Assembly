@@ -34,6 +34,10 @@ warnings.filterwarnings("ignore", message="can't recognize the stage name*")
 warnings.filterwarnings("ignore", message="can't recognize motor model*")
 
 ABSOLUTE_MAX_POSITION = 300.0
+LOCK_TIMEOUT_FAST_S = 0.05
+LOCK_TIMEOUT_SHORT_S = 0.1
+LOCK_TIMEOUT_NORMAL_S = 0.3
+LOCK_TIMEOUT_PATIENT_S = 0.5
 
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
@@ -156,7 +160,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                     time.sleep(self._poll_interval_s)
                     continue
 
-                acquired = self._comm_lock.acquire(timeout=0.05)
+                acquired = self._comm_lock.acquire(timeout=LOCK_TIMEOUT_FAST_S)
                 if acquired:
                     try:
                         position = self.device.get_position() / self.device_units_per_mm
@@ -295,12 +299,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Args:
             timeout (float): Homing timeout in seconds (default: 180s)
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         self.logger.info(f'Homing device with {timeout}s timeout...')
 
@@ -356,12 +355,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
 
     def get_position(self) -> float:
         """Get current position in millimeters with caching."""
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         # Use cached position during operations to reduce hardware communication
         import time
@@ -392,7 +386,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 return self._last_position_cache
 
             # No recent cache, wait briefly for lock
-            if self._comm_lock.acquire(timeout=0.5):
+            if self._comm_lock.acquire(timeout=LOCK_TIMEOUT_PATIENT_S):
                 try:
                     position = self.device.get_position() / self.device_units_per_mm
                     self._last_position_cache = position
@@ -413,7 +407,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
             return False
 
         # Use timeout to avoid blocking indefinitely
-        if self._comm_lock.acquire(timeout=0.3):
+        if self._comm_lock.acquire(timeout=LOCK_TIMEOUT_NORMAL_S):
             try:
                 moving_status = self.device.is_moving()
                 return moving_status
@@ -454,12 +448,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Returns:
             Tuple of (min_velocity, acceleration, max_velocity) in mm/s and mm/s^2
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         try:
             # Get velocity parameters from device (returns in device units)
@@ -496,12 +485,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Returns:
             Tuple of actual set parameters in mm/s and mm/s^2
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         try:
             # Get current parameters if some are not specified
@@ -548,16 +532,11 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Immediately stop any ongoing movement.
         This is an emergency stop function that halts all motion.
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         # For emergency stop, try to acquire lock with timeout
         # If we can't get it quickly, force the stop anyway
-        if self._comm_lock.acquire(timeout=0.1):
+        if self._comm_lock.acquire(timeout=LOCK_TIMEOUT_SHORT_S):
             try:
                 self.logger.warn(
                     'Emergency stop requested - stopping all movement immediately')
@@ -590,12 +569,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Args:
             step_size (float): Distance to jog in mm (default: 1.0mm)
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         try:
             self.logger.debug(f'Jogging positive by {step_size} mm')
@@ -634,12 +608,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         Args:
             step_size (float): Distance to jog in mm (default: 1.0mm)
         """
-        if not self.connected or not self.device:
-            raise CommunicationError(
-                "Device not connected",
-                details={'connected': self.connected,
-                         'device_initialized': self.device is not None}
-            )
+        self._ensure_connected()
 
         try:
             self.logger.debug(f'Jogging negative by {step_size} mm')

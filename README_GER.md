@@ -36,6 +36,9 @@ Umfassende Dokumentation für jedes Package:
 - **[Setup & Installation](setup/README.md)** – Vollständige Setup-Anweisungen mit Hardware-Integration
 - **[Planar Motor Nodes](planar_motor_nodes/README.md)** – XBot-Steuerung und PMCLib-Integration
 - **[Linear Axis Nodes](linear_axis_nodes/README.md)** – Thorlabs LTS300-Steuerung mit Kollisionserkennung
+- **[Camera Nodes](camera_nodes/README.md)** - Kamera-Setup und Betriebsanleitung
+- **[Kamera Callback Guide (DE)](camera_nodes/docs/callbacks_user_guide_de.md)** - Schritt-fuer-Schritt Services ohne Codewissen
+- **[Camera Callback Guide (EN)](camera_nodes/docs/callbacks_user_guide_en.md)** - Plain-language service guide
 - **[Core Library](promoc_core/README.md)** – Gemeinsame Bibliotheken und Fehlerbehandlung
 - **[Interface Definitionen](promoc_assembly_interfaces/README.md)** – ROS2 Messages und Services
 - **[Launch & Konfiguration](promoc_bringup/README.md)** – System-Start und Parameter-Management
@@ -170,11 +173,6 @@ Sollten Probleme bei der Installation oder Ausführung auftreten, lies bitte uns
 - **Permission denied für /dev/ttyUSB***: Überprüfe die Nutzerrechte (`dialout` Gruppe).
 - **PMCLib import error**: Stelle sicher, dass die Bibliothek korrekt in `local_libraries/` liegt.
 - **Hardware nicht erkannt**: Überprüfe USB-Verbindungen und führe `lsusb | grep Thorlabs` aus.
-
-## 📞 Support
-
-- **Fehler melden**: Bitte erstelle ein neues Issue auf GitHub.
-- **Fragen & Diskussionen**: Nutze die GitHub Discussions.
 
 
 

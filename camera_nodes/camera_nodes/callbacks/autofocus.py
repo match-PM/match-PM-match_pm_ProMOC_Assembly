@@ -17,12 +17,9 @@ Separate Service:
 
 import csv
 from datetime import datetime
-import json
-import re
 import time
 
 import cv2
-import numpy as np
 
 from promoc_assembly_interfaces.srv import (
     GetOperationStatus,
@@ -44,6 +41,9 @@ from ..algorithms import (
     AUTOFOCUS_ALGORITHMS,
 )
 from .base import CallbackBase
+from .focus_profile import FocusProfileBuilder
+from .fly_over import FlyOverDetector
+from promoc_core.error_handling import handle_service_errors
 
 # Build algorithm lookup from centralized list
 _ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
@@ -51,258 +51,18 @@ _ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
 
 # Constants
 COARSE_STEP_MM = 0.5  # Fixed coarse step size
-PEAK_WINDOW_RATIO = 0.85  # 85% of max stddev as threshold for peak window
-FLY_OVER_SPEED = 10.0  # mm/s for fast fly-over scan
-from promoc_core.error_handling import handle_service_errors
+FOURSTEP_APPROACH_OFFSET_MM = 0.5
+FOURSTEP_SETTLE_S = 0.3
+AUTOFOCUS_MAX_STEPS_DEFAULT = 500
+AUTOFOCUS_NEW_IMAGE_TIMEOUT_S = 2.0
 
 
 class AutofocusCallbacks(CallbackBase):
     """Callbacks for autofocus with fly-over detection."""
 
-    @staticmethod
-    def _parse_objective_magnification_x(objective: str) -> float | None:
-        """Extract numeric magnification from objective string (e.g. '6x', '4.5 X')."""
-        text = str(objective or '').strip().lower()
-        if not text:
-            return None
-        match = re.search(r'(\d+(?:[.,]\d+)?)\s*x', text)
-        if not match:
-            match = re.search(r'(\d+(?:[.,]\d+)?)', text)
-        if not match:
-            return None
-        try:
-            return float(match.group(1).replace(',', '.'))
-        except ValueError:
-            return None
-
-    @staticmethod
-    def _normalize_profile_values(values: dict) -> dict:
-        """Keep only numeric autofocus profile keys."""
-        if not isinstance(values, dict):
-            return {}
-        out = {}
-        for key in (
-            'scan_speed_mm_s',
-            'coarse_step_mm',
-            'min_step_mm',
-            'settle_s',
-            'max_sample_step_mm',
-            'axis_speed_scale',
-        ):
-            if key not in values:
-                continue
-            try:
-                out[key] = float(values[key])
-            except (TypeError, ValueError):
-                continue
-        return out
-
-    @staticmethod
-    def _magnification_tokens(mag_x: float | None) -> list[str]:
-        """Generate possible magnification keys for profile lookup."""
-        if mag_x is None or mag_x <= 0:
-            return []
-        tokens = []
-        rounded = int(round(mag_x))
-        if abs(mag_x - rounded) < 1e-3:
-            tokens.append(f'{rounded}x')
-        text = f'{mag_x:g}x'
-        if text not in tokens:
-            tokens.append(text)
-        return tokens
-
-    def _get_profile_overrides(self, mag_x: float | None, beamsplitter: bool) -> tuple[dict, str]:
-        """Load optional autofocus profile overrides from JSON parameter."""
-        raw = str(self._node.get_parameter('autofocus.profile_table_json').value or '').strip()
-        if not raw:
-            return {}, 'heuristic'
-        try:
-            table = json.loads(raw)
-        except Exception as exc:
-            self._node.get_logger().warn(f'Invalid autofocus.profile_table_json: {exc}')
-            return {}, 'heuristic'
-        if not isinstance(table, dict):
-            return {}, 'heuristic'
-
-        profiles = table.get('profiles', table)
-        if not isinstance(profiles, dict):
-            return {}, 'heuristic'
-
-        merged = self._normalize_profile_values(table.get('default', {}))
-        source = 'default'
-        bs_key = 'bs1' if beamsplitter else 'bs0'
-
-        mag_keys = self._magnification_tokens(mag_x)
-        for key in mag_keys:
-            if key in profiles:
-                merged.update(self._normalize_profile_values(profiles[key]))
-                source = key
-
-        if bs_key in profiles:
-            merged.update(self._normalize_profile_values(profiles[bs_key]))
-            source = bs_key
-
-        for key in mag_keys:
-            combo = f'{key}_{bs_key}'
-            if combo in profiles:
-                merged.update(self._normalize_profile_values(profiles[combo]))
-                source = combo
-
-        return merged, source
-
     def _build_focus_profile(self, request) -> dict:
         """Build objective-aware autofocus profile for fly-over and refinement."""
-        objective = str(self._node.get_parameter('measurement_conditions.camera_objective').value or '').strip()
-
-        req_mag = float(getattr(request, 'objective_magnification_x', 0.0) or 0.0)
-        beamsplitter = bool(getattr(request, 'use_beamsplitter', False))
-        mag_x = req_mag if req_mag > 0 else self._parse_objective_magnification_x(objective)
-
-        base_scan_speed = float(self._node.get_parameter('autofocus.fly_over.scan_speed_fast').value or FLY_OVER_SPEED)
-        base_coarse_step = float(self._node.get_parameter('autofocus.fly_over.step_size_coarse').value or COARSE_STEP_MM)
-        base_min_step = float(self._node.get_parameter('autofocus.min_step_mm').value or 0.01)
-        base_settle_s = float(self._node.get_parameter('autofocus.fly_over.settle_fine_s').value or 0.1)
-        base_max_sample_step = float(self._node.get_parameter('autofocus.fly_over.max_sample_step_mm').value or 0.1)
-        base_axis_speed_scale = float(
-            self._node.get_parameter('autofocus.fly_over.axis_speed_scale_default').value or 1.0
-        )
-
-        high_mag_threshold = float(self._node.get_parameter('autofocus.fly_over.high_mag_threshold_x').value or 4.0)
-        very_high_mag_threshold = float(
-            self._node.get_parameter('autofocus.fly_over.very_high_mag_threshold_x').value or 6.0
-        )
-        high_mag_scan_speed = float(self._node.get_parameter('autofocus.fly_over.scan_speed_high_mag').value or 2.0)
-        very_high_mag_scan_speed = float(
-            self._node.get_parameter('autofocus.fly_over.scan_speed_very_high_mag').value or 1.0
-        )
-        high_mag_coarse_step = float(self._node.get_parameter('autofocus.fly_over.coarse_step_high_mag_mm').value or 0.1)
-        very_high_mag_coarse_step = float(
-            self._node.get_parameter('autofocus.fly_over.coarse_step_very_high_mag_mm').value or 0.05
-        )
-        high_mag_min_step = float(self._node.get_parameter('autofocus.fly_over.min_step_high_mag_mm').value or 0.005)
-        high_mag_settle_s = float(self._node.get_parameter('autofocus.fly_over.settle_high_mag_s').value or 0.2)
-        very_high_mag_settle_s = float(self._node.get_parameter('autofocus.fly_over.settle_very_high_mag_s').value or 0.25)
-
-        scan_speed = base_scan_speed
-        coarse_step = base_coarse_step
-        min_step = base_min_step
-        settle_s = base_settle_s
-        max_sample_step_mm = base_max_sample_step
-        axis_speed_scale = max(1e-3, base_axis_speed_scale)
-
-        if mag_x is not None:
-            if mag_x >= very_high_mag_threshold:
-                scan_speed = min(scan_speed, very_high_mag_scan_speed)
-                coarse_step = min(coarse_step, very_high_mag_coarse_step)
-                min_step = min(min_step, high_mag_min_step)
-                settle_s = max(settle_s, very_high_mag_settle_s)
-            elif mag_x >= high_mag_threshold:
-                scan_speed = min(scan_speed, high_mag_scan_speed)
-                coarse_step = min(coarse_step, high_mag_coarse_step)
-                min_step = min(min_step, high_mag_min_step)
-                settle_s = max(settle_s, high_mag_settle_s)
-
-        profile_overrides, profile_source = self._get_profile_overrides(mag_x, beamsplitter)
-        if 'scan_speed_mm_s' in profile_overrides and profile_overrides['scan_speed_mm_s'] > 0:
-            scan_speed = profile_overrides['scan_speed_mm_s']
-        if 'coarse_step_mm' in profile_overrides and profile_overrides['coarse_step_mm'] > 0:
-            coarse_step = profile_overrides['coarse_step_mm']
-        if 'min_step_mm' in profile_overrides and profile_overrides['min_step_mm'] > 0:
-            min_step = profile_overrides['min_step_mm']
-        if 'settle_s' in profile_overrides and profile_overrides['settle_s'] >= 0:
-            settle_s = profile_overrides['settle_s']
-        if 'max_sample_step_mm' in profile_overrides and profile_overrides['max_sample_step_mm'] > 0:
-            max_sample_step_mm = profile_overrides['max_sample_step_mm']
-        if 'axis_speed_scale' in profile_overrides and profile_overrides['axis_speed_scale'] > 0:
-            axis_speed_scale = profile_overrides['axis_speed_scale']
-
-        return {
-            'objective': objective or 'unknown',
-            'magnification_x': mag_x,
-            'beamsplitter': beamsplitter,
-            'profile_source': profile_source,
-            'scan_speed_mm_s': max(0.01, float(scan_speed)),
-            'coarse_step_mm': max(0.001, float(coarse_step)),
-            'min_step_mm': max(0.001, float(min_step)),
-            'settle_s': max(0.0, float(settle_s)),
-            'max_sample_step_mm': max(0.005, float(max_sample_step_mm)),
-            'axis_speed_scale': max(1e-3, float(axis_speed_scale)),
-        }
-
-    def _estimate_frame_period_s(self, timeout_s: float = 0.8) -> float | None:
-        """Estimate camera frame period from image timestamps."""
-        start = time.time()
-        first_ts = None
-        while time.time() - start < timeout_s:
-            _, ts = self._get_latest_cv_image()
-            if ts is None:
-                time.sleep(0.01)
-                continue
-            if first_ts is None:
-                first_ts = ts
-            elif ts > first_ts:
-                return max(1e-4, float(ts - first_ts) / 1_000_000_000.0)
-            time.sleep(0.01)
-        return None
-
-    @staticmethod
-    def _robust_mad_sigma(values: np.ndarray) -> float:
-        """Estimate noise sigma via MAD (robust against peaks/outliers)."""
-        if values.size == 0:
-            return 0.0
-        median = float(np.median(values))
-        mad = float(np.median(np.abs(values - median)))
-        sigma = 1.4826 * mad
-        if sigma <= 0:
-            sigma = float(np.std(values))
-        return max(1e-9, sigma)
-
-    @staticmethod
-    def _median_smooth_1d(values: np.ndarray, window: int) -> np.ndarray:
-        """Apply 1D median smoothing without scipy dependency."""
-        if values.size < 3:
-            return values.copy()
-        win = int(max(1, window))
-        if win % 2 == 0:
-            win += 1
-        if win <= 1:
-            return values.copy()
-        win = min(win, values.size if values.size % 2 == 1 else values.size - 1)
-        if win <= 1:
-            return values.copy()
-
-        half = win // 2
-        padded = np.pad(values, (half, half), mode='edge')
-        smoothed = np.empty_like(values, dtype=np.float64)
-        for i in range(values.size):
-            smoothed[i] = float(np.median(padded[i:i + win]))
-        return smoothed
-
-    @staticmethod
-    def _select_component_bounds(mask: np.ndarray, center_index: int) -> tuple[int, int] | None:
-        """Select connected True segment nearest to center_index."""
-        indices = np.flatnonzero(mask)
-        if indices.size == 0:
-            return None
-
-        splits = np.where(np.diff(indices) > 1)[0]
-        starts = np.r_[indices[0], indices[splits + 1]]
-        ends = np.r_[indices[splits], indices[-1]]
-
-        for start, end in zip(starts, ends):
-            if start <= center_index <= end:
-                return int(start), int(end)
-
-        def _distance_to_segment(start: int, end: int) -> int:
-            if center_index < start:
-                return int(start - center_index)
-            return int(center_index - end)
-
-        best = min(
-            zip(starts, ends),
-            key=lambda seg: _distance_to_segment(int(seg[0]), int(seg[1]))
-        )
-        return int(best[0]), int(best[1])
+        return FocusProfileBuilder(self._node).build(request).as_dict()
 
     @handle_service_errors()
     def autofocus_callback(self, request, response):
@@ -396,7 +156,7 @@ class AutofocusCallbacks(CallbackBase):
         if hasattr(self, '_cached_axis_clients') and self._cached_axis_clients:
             return self._cached_axis_clients
             
-        x_axis_name = self._node.get_parameter('x_axis_node_name').value
+        x_axis_name = self._param_str('x_axis_node_name', 'lts300_x_axis')
         
         clients = {
             'move': self._node.create_client(MoveAbsolute, f'/{x_axis_name}/move_absolute'),
@@ -443,256 +203,21 @@ class AutofocusCallbacks(CallbackBase):
     # ==========================================================================
 
     def _fly_over_detection(self, start_pos: float, end_pos: float, clients, focus_profile: dict | None = None) -> tuple:
-        """Fast fly-over scan for target detection.
-        
-        Returns:
-            (peak_start, peak_end, max_stddev) or (None, None, 0) if no target
-        """
-        # Parameters
-        roi_size = int(self._node.get_parameter('autofocus.fly_over.roi_size').value or 512)
-        base_poll_s = float(self._node.get_parameter('autofocus.fly_over.detection_poll_s').value or 0.05)
-        max_sample_step_mm = float(
-            (focus_profile or {}).get(
-                'max_sample_step_mm',
-                self._node.get_parameter('autofocus.fly_over.max_sample_step_mm').value or 0.1
-            )
+        """Fast fly-over scan for target detection."""
+        detector = FlyOverDetector(
+            node=self._node,
+            get_latest_cv_image=self._get_latest_cv_image,
+            get_center_roi=self._get_center_roi,
+            wait_for_axis_idle=self._wait_for_axis_idle,
+            get_position=self._get_position,
         )
-        # Robust defaults: 50% threshold, generous margin
-        peak_ratio = float(self._node.get_parameter('autofocus.fly_over.peak_window_ratio').value or 0.5)
-        if peak_ratio <= 0.0:
-            peak_ratio = 0.5
-        peak_ratio = min(0.95, max(0.05, peak_ratio))
-
-        margin = float(self._node.get_parameter('autofocus.fly_over.peak_window_margin_mm').value or 8.0)
-        backtrack = float(self._node.get_parameter('autofocus.fly_over.backtrack_mm').value or 8.0)
-        full_scan = bool(self._node.get_parameter('autofocus.fly_over.full_scan_for_peak').value)
-        threshold = float(self._node.get_parameter('autofocus.fly_over.detection_stddev_threshold').value or 0.0)
-        
-        # Backup velocity
-        vel_backup = clients['get_vel'].call(GetVelocityParameters.Request())
-        if not vel_backup or not vel_backup.success:
-            raise ServiceError('Failed to read velocity parameters')
-        
-        try:
-            # Set target real scan velocity (objective/profile aware)
-            target_scan_speed = float(
-                (focus_profile or {}).get(
-                    'scan_speed_mm_s',
-                    self._node.get_parameter('autofocus.fly_over.scan_speed_fast').value or 5.0
-                )
-            )
-            axis_speed_scale = float((focus_profile or {}).get('axis_speed_scale', 1.0))
-            if axis_speed_scale <= 0:
-                axis_speed_scale = 1.0
-            cmd_scan_speed = max(0.01, target_scan_speed / axis_speed_scale)
-            if vel_backup.max_velocity > 0 and cmd_scan_speed > vel_backup.max_velocity:
-                cmd_scan_speed = float(vel_backup.max_velocity)
-            effective_real_speed = max(0.01, cmd_scan_speed * axis_speed_scale)
-
-            # Move to start
-            clients['move'].call(MoveAbsolute.Request(axis_position=float(start_pos)))
-            self._wait_for_axis_idle(clients)
-
-            frame_period_s = self._estimate_frame_period_s(timeout_s=0.8)
-            if frame_period_s is not None and max_sample_step_mm > 0:
-                speed_cap = max_sample_step_mm / frame_period_s
-                if speed_cap > 0 and effective_real_speed > speed_cap:
-                    self._node.get_logger().warn(
-                        f'Fly-Over speed capped by frame rate: {effective_real_speed:.2f} -> {speed_cap:.2f} mm/s '
-                        f'(frame_period={frame_period_s:.3f}s, max_step={max_sample_step_mm:.3f}mm)'
-                    )
-                    effective_real_speed = speed_cap
-                    cmd_scan_speed = max(0.01, effective_real_speed / axis_speed_scale)
-                    if vel_backup.max_velocity > 0 and cmd_scan_speed > vel_backup.max_velocity:
-                        cmd_scan_speed = float(vel_backup.max_velocity)
-                        effective_real_speed = max(0.01, cmd_scan_speed * axis_speed_scale)
-
-            poll_s = min(base_poll_s, max(0.005, max_sample_step_mm / max(effective_real_speed, 1e-6)))
-            self._node.get_logger().info(
-                f'Fly-Over Params: ratio={peak_ratio:.2f}, margin={margin:.2f}mm, backtrack={backtrack:.2f}mm, '
-                f'target_speed={target_scan_speed:.2f}mm/s cmd_speed={cmd_scan_speed:.2f}mm/s '
-                f'est_real_speed={effective_real_speed:.2f}mm/s axis_scale={axis_speed_scale:.3f} poll={poll_s:.3f}s'
-            )
-
-            vel_req = SetVelocityParameters.Request()
-            vel_req.min_velocity = vel_backup.min_velocity
-            vel_req.acceleration = vel_backup.acceleration
-            vel_req.max_velocity = float(cmd_scan_speed)
-            clients['set_vel'].call(vel_req)
-            
-            # Start fly-over scan
-            clients['move'].call(MoveAbsolute.Request(axis_position=float(end_pos)))
-            
-            # State tracking
-            scan_data = []  # List of (pos, stddev)
-            scan_start_time = time.time()
-            scan_start_pos = float(start_pos)
-            end_tolerance = 0.1
-            last_pos = None
-            last_pos_time = time.time()
-            last_log_time = time.time()
-            last_image_ts = None
-            
-            while True:
-                # 1. Get Status (Sync) - Needed for loop termination
-                status = clients['status'].call(GetOperationStatus.Request())
-                if status and status.operation_status in ['error', 'emergency_stop']:
-                    raise ServiceError('Axis error during fly-over')
-
-                # 2. Get Position (Hybrid: Topic -> Service -> Estimate)
-                current_pos = self._get_position(clients)
-                
-                # Update estimation reference
-                if current_pos >= 0:
-                    if last_pos is None or abs(current_pos - last_pos) > 1e-4:
-                        last_pos = current_pos
-                        last_pos_time = time.time()
-                
-                # Fallback to estimation if position stale or missing
-                use_estimate = False
-                if current_pos < 0 or (time.time() - last_pos_time > 1.0):
-                    use_estimate = True
-                    elapsed = time.time() - scan_start_time
-                    current_pos = max(start_pos, min(end_pos, scan_start_pos + (effective_real_speed * elapsed)))
-
-                # 3. Process Image
-                stddev = 0.0
-                cv_image, image_ts = self._get_latest_cv_image()
-                if cv_image is not None and image_ts is not None and image_ts != last_image_ts:
-                    last_image_ts = image_ts
-                    green = cv_image[:, :, 1] if len(cv_image.shape) == 3 else cv_image
-                    roi = self._get_center_roi(green, roi_size)
-                    stddev = float(np.std(roi)) if roi.size > 0 else 0.0
-                    
-                    # Store data
-                    scan_data.append((current_pos, stddev))
-                    
-                    # Log every 0.1s (10Hz)
-                    if time.time() - last_log_time >= 0.1:
-                        action_tag = "EST" if use_estimate else "REAL"
-                        self._node.get_logger().info(f'Fly-Over [{action_tag}]: x={current_pos:.2f}mm std={stddev:.2f}')
-                        last_log_time = time.time()
-                
-                # 4. Termination Check
-                if status and status.operation_status == 'idle':
-                    final_pos = self._get_position(clients)
-                    if final_pos >= 0 and abs(final_pos - end_pos) <= end_tolerance:
-                        break # Reached end
-                    if full_scan: 
-                        break
-                    break
-                
-                time.sleep(poll_s)
-            
-            # Result Processing (Post-Scan)
-            if not scan_data:
-                 self._node.get_logger().warn('Fly-Over finished with no data.')
-                 return None, None, 0.0
-            
-            # Sort by position for robust window extraction.
-            scan_data.sort(key=lambda x: x[0])
-            positions = np.array([p for p, _ in scan_data], dtype=np.float64)
-            std_values_raw = np.array([s for _, s in scan_data], dtype=np.float64)
-
-            smooth_window = int(
-                self._node.get_parameter('autofocus.fly_over.smooth_window_samples').value or 5
-            )
-            baseline_percentile = float(
-                self._node.get_parameter('autofocus.fly_over.baseline_percentile').value or 20.0
-            )
-            baseline_percentile = min(50.0, max(0.0, baseline_percentile))
-            snr_threshold = float(
-                self._node.get_parameter('autofocus.fly_over.snr_threshold').value or 3.0
-            )
-            snr_threshold = max(0.5, snr_threshold)
-
-            std_values_smooth = self._median_smooth_1d(std_values_raw, smooth_window)
-            # Envelope preserves narrow true peaks that can be attenuated by median smoothing.
-            std_values_eval = np.maximum(std_values_smooth, std_values_raw)
-
-            smooth_peak_index = int(np.argmax(std_values_smooth))
-            raw_peak_index = int(np.argmax(std_values_raw))
-            smooth_peak_value = float(std_values_smooth[smooth_peak_index])
-            raw_peak_value = float(std_values_raw[raw_peak_index])
-
-            if raw_peak_value >= smooth_peak_value:
-                peak_index = raw_peak_index
-                peak_source = 'raw'
-            else:
-                peak_index = smooth_peak_index
-                peak_source = 'smooth'
-
-            max_stddev_pos = float(positions[peak_index])
-            max_stddev = float(std_values_eval[peak_index])
-
-            # Adaptive ratio threshold on evaluation curve.
-            baseline_stddev = float(np.percentile(std_values_eval, baseline_percentile))
-            dynamic_threshold = baseline_stddev + (max_stddev - baseline_stddev) * peak_ratio
-            dynamic_threshold = min(max_stddev, max(0.0, dynamic_threshold))
-
-            # Robust noise estimate from residuals (raw - smooth).
-            noise_sigma = self._robust_mad_sigma(std_values_raw - std_values_smooth)
-            signal = np.maximum(0.0, std_values_eval - baseline_stddev)
-            snr_mask = signal >= (snr_threshold * noise_sigma)
-            ratio_mask = std_values_eval >= dynamic_threshold
-            valid_mask = np.logical_and(snr_mask, ratio_mask)
-
-            if threshold > 0:
-                if max_stddev >= threshold:
-                    valid_mask = np.logical_and(valid_mask, std_values_eval >= threshold)
-                else:
-                    self._node.get_logger().warn(
-                        f'Ignoring absolute stddev threshold={threshold:.2f} '
-                        f'because peak is only {max_stddev:.2f}.'
-                    )
-
-            if not np.any(valid_mask):
-                valid_mask = ratio_mask
-            if not np.any(valid_mask):
-                valid_mask = snr_mask
-            if not np.any(valid_mask):
-                self._node.get_logger().warn(
-                    f'No point in fly-over exceeded robust criteria '
-                    f'(ratio={dynamic_threshold:.2f}, snr={snr_threshold:.2f}).'
-                )
-                return None, None, max_stddev
-
-            segment_bounds = self._select_component_bounds(valid_mask, peak_index)
-            if segment_bounds is None:
-                self._node.get_logger().warn('No connected valid segment around fly-over peak.')
-                return None, None, max_stddev
-
-            seg_start, seg_end = segment_bounds
-            peak_window_min = float(positions[seg_start])
-            peak_window_max = float(positions[seg_end])
-
-            # Apply margin (extra start-side backtrack for safe approach)
-            peak_window_min_m = peak_window_min - max(margin, backtrack)
-            peak_window_max_m = peak_window_max + margin
-
-            self._node.get_logger().info(
-                f'Fly-Over: Peak at {max_stddev_pos:.2f}mm (std={max_stddev:.2f}, source={peak_source}, '
-                f'raw_max={raw_peak_value:.2f}@{positions[raw_peak_index]:.2f}mm, '
-                f'smooth_max={smooth_peak_value:.2f}@{positions[smooth_peak_index]:.2f}mm). '
-                f'Window points={int(np.count_nonzero(valid_mask))} '
-                f'(ratio_thr={dynamic_threshold:.2f}, baseline={baseline_stddev:.2f}, '
-                f'noise_sigma={noise_sigma:.3f}, snr_thr={snr_threshold:.2f}). '
-                f'Auto-Window: {peak_window_min_m:.2f}-{peak_window_max_m:.2f}mm (margin={margin}mm)'
-            )
-
-            # Clamp scan window to physical limits
-            peak_start = max(start_pos, peak_window_min_m)
-            peak_end = min(end_pos, peak_window_max_m)
-
-            return peak_start, peak_end, max_stddev
-            
-        finally:
-            # Restore velocity
-            restore_req = SetVelocityParameters.Request()
-            restore_req.min_velocity = vel_backup.min_velocity
-            restore_req.acceleration = vel_backup.acceleration
-            restore_req.max_velocity = vel_backup.max_velocity
-            clients['set_vel'].call(restore_req)
+        result = detector.detect(
+            start_pos=float(start_pos),
+            end_pos=float(end_pos),
+            clients=clients,
+            focus_profile=focus_profile,
+        )
+        return result.peak_start, result.peak_end, result.max_stddev
 
     # ==========================================================================
     # REFINEMENT MODES
@@ -718,10 +243,10 @@ class AutofocusCallbacks(CallbackBase):
             range_end = float(peak_end)
 
         # Erstelle Config mit reduzierter Range und fixem Coarse-Step
-        refinement_samples = int(self._node.get_parameter('autofocus.refinement_samples').value or 51)
-        refinement_shrink_factor = float(self._node.get_parameter('autofocus.refinement_shrink_factor').value or 0.35)
+        refinement_samples = self._param_int('autofocus.refinement_samples', 51)
+        refinement_shrink_factor = self._param_float('autofocus.refinement_shrink_factor', 0.35)
         coarse_step = float((focus_profile or {}).get('coarse_step_mm', COARSE_STEP_MM))
-        min_step = float((focus_profile or {}).get('min_step_mm', self._node.get_parameter('autofocus.min_step_mm').value or 0.01))
+        min_step = float((focus_profile or {}).get('min_step_mm', self._param_float('autofocus.min_step_mm', 0.01)))
 
         config = AutofocusConfig(
             start_mm=range_start,
@@ -731,7 +256,7 @@ class AutofocusCallbacks(CallbackBase):
             min_step_mm=min_step,
             shrink_factor=refinement_shrink_factor,
             use_sift_weighting=bool(
-                self._node.get_parameter('autofocus.fly_over.use_sift_weighting').value
+                self._param_bool('autofocus.fly_over.use_sift_weighting', False)
             )
         )
         af = algo_class(config)
@@ -760,8 +285,7 @@ class AutofocusCallbacks(CallbackBase):
         if best_position is not None:
             target_pos = float(best_position)
             if mode_name == 'fourstep':
-                offset = 0.5
-                pre_pos = float(best_position) - offset
+                pre_pos = float(best_position) - FOURSTEP_APPROACH_OFFSET_MM
                 # Clamp to requested range
                 pre_pos = max(float(request.start_position), min(float(request.end_position), pre_pos))
                 target_pos = max(float(request.start_position), min(float(request.end_position), target_pos))
@@ -772,7 +296,7 @@ class AutofocusCallbacks(CallbackBase):
 
             # FourStep: measure once at the parabolic peak position
             if mode_name == 'fourstep':
-                time.sleep(0.3)
+                time.sleep(FOURSTEP_SETTLE_S)
                 cv_image, _ = self._get_latest_cv_image()
                 if cv_image is not None:
                     try:
@@ -785,8 +309,7 @@ class AutofocusCallbacks(CallbackBase):
                         else:
                             # Keep previous best and re-approach target position
                             if mode_name == 'fourstep':
-                                offset = 0.5
-                                pre_pos = float(best_position) - offset
+                                pre_pos = float(best_position) - FOURSTEP_APPROACH_OFFSET_MM
                                 pre_pos = max(float(request.start_position), min(float(request.end_position), pre_pos))
                                 clients['move'].call(MoveAbsolute.Request(axis_position=pre_pos))
                                 self._wait_for_axis_idle(clients)
@@ -849,7 +372,7 @@ class AutofocusCallbacks(CallbackBase):
         best_current_score = -1.0
         measurements = 0
         
-        max_steps = 500
+        max_steps = AUTOFOCUS_MAX_STEPS_DEFAULT
         try:
             step_size = getattr(af, '_scan_step', af.config.step_mm)
             if step_size and af.config.end_mm > af.config.start_mm:
@@ -861,7 +384,7 @@ class AutofocusCallbacks(CallbackBase):
         
         for _ in range(max_steps):
             # Wait ensuring we get a NEW image frame
-            cv_image, ts = self._wait_for_new_image(last_timestamp, timeout=2.0)
+            cv_image, ts = self._wait_for_new_image(last_timestamp, timeout=AUTOFOCUS_NEW_IMAGE_TIMEOUT_S)
             
             if cv_image is None:
                 self._node.get_logger().error("Timeout waiting for new image in AF loop - Stream stalled?")
@@ -920,10 +443,10 @@ class AutofocusCallbacks(CallbackBase):
         
         results = {}
         
-        refinement_samples = int(self._node.get_parameter('autofocus.refinement_samples').value or 51)
-        refinement_shrink_factor = float(self._node.get_parameter('autofocus.refinement_shrink_factor').value or 0.35)
+        refinement_samples = self._param_int('autofocus.refinement_samples', 51)
+        refinement_shrink_factor = self._param_float('autofocus.refinement_shrink_factor', 0.35)
         coarse_step = float((focus_profile or {}).get('coarse_step_mm', COARSE_STEP_MM))
-        min_step = float((focus_profile or {}).get('min_step_mm', self._node.get_parameter('autofocus.min_step_mm').value or 0.01))
+        min_step = float((focus_profile or {}).get('min_step_mm', self._param_float('autofocus.min_step_mm', 0.01)))
         settle_s = float((focus_profile or {}).get('settle_s', 0.1))
 
         # Use centralized algorithm list
@@ -938,7 +461,7 @@ class AutofocusCallbacks(CallbackBase):
                 min_step_mm=min_step,
                 shrink_factor=refinement_shrink_factor,
                 use_sift_weighting=bool(
-                    self._node.get_parameter('autofocus.fly_over.use_sift_weighting').value
+                    self._param_bool('autofocus.fly_over.use_sift_weighting', False)
                 )
             )
             

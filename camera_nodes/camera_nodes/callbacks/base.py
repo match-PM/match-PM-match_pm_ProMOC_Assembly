@@ -39,6 +39,47 @@ class CallbackBase:
         self._sift = None
 
     # ==========================================================================
+    # PARAMETER HELPERS
+    # ==========================================================================
+
+    def _param_raw(self, name: str, default=None):
+        """Read parameter value with fallback if missing/None."""
+        if not self._node.has_parameter(name):
+            return default
+        value = self._node.get_parameter(name).value
+        if value is None:
+            return default
+        return value
+
+    def _param_float(self, name: str, default: float) -> float:
+        value = self._param_raw(name, default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _param_int(self, name: str, default: int) -> int:
+        value = self._param_raw(name, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _param_str(self, name: str, default: str = '') -> str:
+        value = self._param_raw(name, default)
+        try:
+            return str(value)
+        except Exception:
+            return str(default)
+
+    def _param_bool(self, name: str, default: bool = False) -> bool:
+        value = self._param_raw(name, default)
+        try:
+            return bool(value)
+        except Exception:
+            return bool(default)
+
+    # ==========================================================================
     # IMAGE HELPERS
     # ==========================================================================
 
@@ -191,19 +232,16 @@ class CallbackBase:
         operator_clean = (operator_name or '').strip()
         if operator_clean:
             username = operator_clean
-        elif self._node.has_parameter('measurement.username'):
-            username = self._node.get_parameter(
-                'measurement.username').get_parameter_value().string_value.strip()
+        else:
+            username = self._param_str('measurement.username', '').strip()
 
         base_dir = None
-        if self._node.has_parameter('measurement.base_path'):
-            try:
-                base_param = self._node.get_parameter(
-                    'measurement.base_path').get_parameter_value().string_value.strip()
-                if base_param:
-                    base_dir = Path(base_param).expanduser()
-            except Exception:
-                base_dir = None
+        try:
+            base_param = self._param_str('measurement.base_path', '').strip()
+            if base_param:
+                base_dir = Path(base_param).expanduser()
+        except Exception:
+            base_dir = None
         if base_dir is None:
             base_dir = Path.home() / 'Dokumente' / 'Messungen'
         if username:

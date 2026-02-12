@@ -304,7 +304,7 @@ class MoverUtils:
             else:
                 state_map = {v.value: v.name for v in XbotState}
                 return state_map.get(int(xbot_state), "UNKNOWN")
-        except:
+        except Exception:
             return "UNKNOWN"
 
     # ══════════════════════════════════════════════════════════════════════════

@@ -11,6 +11,47 @@ import numpy as np
 class ScientificVerificationBase:
     """Base mixin with image and file I/O helper methods."""
 
+    # ==========================================================================
+    # PARAMETER HELPERS
+    # ==========================================================================
+
+    def _param_raw(self, name: str, default=None):
+        """Read parameter value with fallback if missing/None."""
+        if not self.has_parameter(name):
+            return default
+        value = self.get_parameter(name).value
+        if value is None:
+            return default
+        return value
+
+    def _param_float(self, name: str, default: float) -> float:
+        value = self._param_raw(name, default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _param_int(self, name: str, default: int) -> int:
+        value = self._param_raw(name, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _param_str(self, name: str, default: str = "") -> str:
+        value = self._param_raw(name, default)
+        try:
+            return str(value)
+        except Exception:
+            return str(default)
+
+    def _param_bool(self, name: str, default: bool = False) -> bool:
+        value = self._param_raw(name, default)
+        try:
+            return bool(value)
+        except Exception:
+            return bool(default)
+
     def image_callback(self, msg):
         self.latest_image_msg = msg
 
@@ -58,7 +99,7 @@ class ScientificVerificationBase:
     ) -> Path:
         """Create and return the output directory."""
         username = (operator_name or "").strip()
-        base_dir = Path(self.get_parameter("results_dir").value)
+        base_dir = Path(self._param_str("results_dir", ""))
 
         if username:
             output_dir = base_dir / username / subdirectory
@@ -76,7 +117,7 @@ class ScientificVerificationBase:
         return {
             "timestamp": datetime.now().isoformat(),
             "node": self.get_name(),
-            "pixel_size_um": self.get_parameter("pixel_size_um").value,
+            "pixel_size_um": self._param_raw("pixel_size_um", None),
         }
 
     def _write_csv_with_metadata(

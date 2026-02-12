@@ -76,3 +76,8 @@ ros2 run camera_aravis2 camera_finder
   - Purpose: GenICam camera driver for GigEVision and USB3Vision cameras
 
 This setup keeps external dependencies separate from your project code while providing seamless integration.
+
+## Callback User Guides
+
+- German: [`docs/callbacks_user_guide_de.md`](docs/callbacks_user_guide_de.md)
+- English: [`docs/callbacks_user_guide_en.md`](docs/callbacks_user_guide_en.md)

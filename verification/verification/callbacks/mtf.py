@@ -27,6 +27,25 @@ except ImportError:
     logging.warning("Could not import camera_nodes algorithms directly. Check PYTHONPATH.")
     raise
 
+_VERIFY_MTF_PARAM_MAP = (
+    ("mtf.lsf_window_mode", "lsf_window_mode", str, True),
+    ("mtf.lsf_peak_window_size", "lsf_peak_window_size", int, False),
+    ("mtf.derivative_mode", "derivative_mode", str, True),
+    ("mtf.apply_derivative_correction", "apply_derivative_correction", bool, False),
+    ("mtf.derivative_correction_max", "derivative_correction_max", float, False),
+    ("mtf.apply_angle_correction", "apply_angle_correction", bool, False),
+    ("mtf.esf_smooth_mode", "esf_smooth_mode", str, True),
+    ("mtf.esf_sg_window", "esf_sg_window", int, False),
+    ("mtf.esf_sg_poly", "esf_sg_poly", int, False),
+    ("mtf.edge_validation_mode", "edge_validation_mode", str, True),
+    ("mtf.edge_validation_percentile", "edge_validation_percentile", float, False),
+    ("mtf.edge_validation_min_points", "edge_validation_min_points", int, False),
+    ("mtf.clip_to_nyquist", "clip_to_nyquist", bool, False),
+    ("mtf.export_dual_curves", "export_dual_curves", bool, False),
+    ("mtf.clip_max", "mtf_clip_max", float, False),
+    ("mtf.warn_threshold", "mtf_warn_threshold", float, False),
+)
+
 
 class MTFVerificationCallbacks:
     """Callbacks and helper methods for MTF verification."""
@@ -48,22 +67,11 @@ class MTFVerificationCallbacks:
             frames_per_measurement = requested_fpm
             fpm_source = "request"
         else:
-            frames_per_measurement = max(
-                1,
-                int(self.get_parameter("verify_mtf.frames_per_measurement").value or 1),
-            )
+            frames_per_measurement = max(1, self._param_int("verify_mtf.frames_per_measurement", 1))
             fpm_source = "parameter"
-        frames_per_measurement = max(
-            1, int(frames_per_measurement)
-        )
-        frame_timeout_s = float(
-            self.get_parameter("verify_mtf.frame_timeout_s").value or 2.0
-        )
-        log_progress = bool(
-            self.get_parameter("verify_mtf.log_progress").value
-            if self.has_parameter("verify_mtf.log_progress")
-            else True
-        )
+        frames_per_measurement = max(1, int(frames_per_measurement))
+        frame_timeout_s = self._param_float("verify_mtf.frame_timeout_s", 2.0)
+        log_progress = self._param_bool("verify_mtf.log_progress", True)
 
         self.get_logger().info(
             f"MTF Verification: field_test={request.field_test}, reps={repetitions}, "
@@ -544,7 +552,7 @@ class MTFVerificationCallbacks:
     def _create_mtf_analyzer(
         self, debug_dir: str | None = None, force_debug: bool = False
     ) -> MTFAnalyzer:
-        pixel_size = self.get_parameter("pixel_size_um").value
+        pixel_size = self._param_float("pixel_size_um", 2.40)
         config = MTFConfig(pixel_size_um=pixel_size, min_edge_angle=2.0)
         self._apply_mtf_param_overrides(
             config, debug_dir=debug_dir, force_debug=force_debug
@@ -556,109 +564,41 @@ class MTFVerificationCallbacks:
         self, config: MTFConfig, debug_dir: str | None, force_debug: bool
     ) -> None:
         """Apply parameter overrides to an MTFConfig instance."""
-
-        def _param(name: str):
-            return self.get_parameter(name).value
-
         if debug_dir is None:
-            debug_dir = str(_param("mtf.debug_export_dir") or "")
+            debug_dir = self._param_str("mtf.debug_export_dir", "").strip()
             if debug_dir:
-                config.debug_export_dir = debug_dir
-                prefix = _param("mtf.debug_export_prefix")
-                if prefix:
-                    config.debug_export_prefix = str(prefix)
-                config.debug_export_csv = bool(_param("mtf.debug_export_csv"))
-                config.debug_export_png = bool(_param("mtf.debug_export_png"))
+                config.debug_export_dir = str(debug_dir)
         else:
             config.debug_export_dir = str(debug_dir)
-            prefix = _param("mtf.debug_export_prefix")
-            if prefix:
-                config.debug_export_prefix = str(prefix)
-            if force_debug:
-                config.debug_export_csv = True
-                config.debug_export_png = True
-            else:
-                config.debug_export_csv = bool(_param("mtf.debug_export_csv"))
-                config.debug_export_png = bool(_param("mtf.debug_export_png"))
 
-        config.lsf_window_mode = str(_param("mtf.lsf_window_mode") or config.lsf_window_mode)
-        try:
-            config.lsf_peak_window_size = int(_param("mtf.lsf_peak_window_size") or 0)
-        except Exception:
-            pass
-        try:
-            config.derivative_mode = str(_param("mtf.derivative_mode") or config.derivative_mode)
-        except Exception:
-            pass
-        try:
-            config.apply_derivative_correction = bool(_param("mtf.apply_derivative_correction"))
-        except Exception:
-            pass
-        try:
-            config.derivative_correction_max = float(
-                _param("mtf.derivative_correction_max") or 0.0
-            )
-        except Exception:
-            pass
-        try:
-            config.apply_angle_correction = bool(_param("mtf.apply_angle_correction"))
-        except Exception:
-            pass
-        try:
-            config.esf_smooth_mode = str(_param("mtf.esf_smooth_mode") or config.esf_smooth_mode)
-        except Exception:
-            pass
-        try:
-            config.esf_sg_window = int(_param("mtf.esf_sg_window") or config.esf_sg_window)
-        except Exception:
-            pass
-        try:
-            config.esf_sg_poly = int(_param("mtf.esf_sg_poly") or config.esf_sg_poly)
-        except Exception:
-            pass
-        try:
-            config.edge_validation_mode = str(
-                _param("mtf.edge_validation_mode") or config.edge_validation_mode
-            )
-        except Exception:
-            pass
-        try:
-            config.edge_validation_percentile = float(
-                _param("mtf.edge_validation_percentile") or config.edge_validation_percentile
-            )
-        except Exception:
-            pass
-        try:
-            config.edge_validation_min_points = int(
-                _param("mtf.edge_validation_min_points") or config.edge_validation_min_points
-            )
-        except Exception:
-            pass
-        try:
-            config.clip_to_nyquist = bool(_param("mtf.clip_to_nyquist"))
-        except Exception:
-            pass
-        try:
-            config.export_dual_curves = bool(_param("mtf.export_dual_curves"))
-        except Exception:
-            pass
-        try:
-            config.mtf_clip_max = float(_param("mtf.clip_max") or 0.0)
-        except Exception:
-            pass
-        try:
-            config.mtf_warn_threshold = float(
-                _param("mtf.warn_threshold") or config.mtf_warn_threshold
-            )
-        except Exception:
-            pass
+        if config.debug_export_dir:
+            prefix = self._param_str("mtf.debug_export_prefix", "").strip()
+            if prefix:
+                config.debug_export_prefix = prefix
+
+        # Parameter overrides
+        for param_name, attr_name, cast, require_truthy in _VERIFY_MTF_PARAM_MAP:
+            raw = self._param_raw(param_name, None)
+            if raw is None:
+                continue
+            if require_truthy and not raw:
+                continue
+            try:
+                setattr(config, attr_name, cast(raw))
+            except Exception:
+                pass
+
+        # Force-debug precedence must be the last override stage.
+        if force_debug:
+            config.debug_export_csv = True
+            config.debug_export_png = True
+        elif config.debug_export_dir:
+            config.debug_export_csv = self._param_bool("mtf.debug_export_csv", config.debug_export_csv)
+            config.debug_export_png = self._param_bool("mtf.debug_export_png", config.debug_export_png)
 
     def _apply_mtf_profile(self, config: MTFConfig) -> None:
         """Apply profile presets for ease-of-use."""
-        try:
-            profile = str(self.get_parameter("mtf.profile").value or "default").strip().lower()
-        except Exception:
-            profile = "default"
+        profile = self._param_str("mtf.profile", "default").strip().lower()
         if profile in ("scientific", "debug"):
             config.derivative_mode = "iso"
             config.apply_derivative_correction = True
@@ -669,9 +609,7 @@ class MTFVerificationCallbacks:
             config.edge_validation_mode = "warn"
         if profile == "debug":
             if not config.debug_export_dir:
-                config.debug_export_dir = str(
-                    Path(self.get_parameter("results_dir").value) / "mtf_debug"
-                )
+                config.debug_export_dir = str(Path(self._param_str("results_dir", "")) / "mtf_debug")
             config.debug_export_csv = True
             config.debug_export_png = True
             if config.esf_smooth_mode == "none":

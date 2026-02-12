@@ -26,14 +26,8 @@ class ExposureCallbacks(CallbackBase):
         self._set_exposure_us(request.exposure_time)
         settle_frames = 2
         timeout_s = 1.0
-        if self._node.has_parameter('exposure.settle_frames_after_set'):
-            settle_frames = int(
-                self._node.get_parameter('exposure.settle_frames_after_set').value or settle_frames
-            )
-        if self._node.has_parameter('exposure.frame_timeout_s'):
-            timeout_s = float(
-                self._node.get_parameter('exposure.frame_timeout_s').value or timeout_s
-            )
+        settle_frames = self._param_int('exposure.settle_frames_after_set', settle_frames)
+        timeout_s = self._param_float('exposure.frame_timeout_s', timeout_s)
         if settle_frames > 0:
             img, _ = self._wait_for_new_frames(settle_frames, timeout_per_frame=timeout_s)
             if img is None:

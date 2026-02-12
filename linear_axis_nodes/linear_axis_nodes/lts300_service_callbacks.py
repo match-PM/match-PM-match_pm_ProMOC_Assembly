@@ -50,6 +50,11 @@ class ServiceCallbacks:
         self.operation_lock = threading.Lock()
         self.last_operation_message = ''
 
+    def _start_async(self, target, *args):
+        """Start a daemon thread for a background operation."""
+        thread = threading.Thread(target=target, args=args, daemon=True)
+        thread.start()
+
     # ══════════════════════════════════════════════════════════════════════════
     # UNIT CONVERSION
     # ══════════════════════════════════════════════════════════════════════════
@@ -197,7 +202,7 @@ class ServiceCallbacks:
                 )
 
             self.logger.debug(
-                f'🎯 Starting {move_type} movement to {position:.2f}mm...'
+                f'Starting {move_type} movement to {position:.2f}mm...'
             )
 
             if move_type == 'absolute':
@@ -251,29 +256,29 @@ class ServiceCallbacks:
                 self.operation_status = OperationStatus.HOMING
                 self.last_operation_message = 'Homing in progress...'
 
-            self.logger.info('🏠 Starting homing operation...')
+            self.logger.info('Starting homing operation...')
 
             # Call the actual homing operation (now with configurable timeout)
             self.driver.home(timeout=self.config['homing_timeout'])
-            self.logger.info('🏠 Hardware homing command completed')
+            self.logger.info('Hardware homing command completed')
 
             # Get final position for confirmation
             try:
                 final_pos = self.driver.get_position()
-                self.logger.info(f'📍 Post-homing position: {final_pos:.2f}mm')
+                self.logger.info(f'Post-homing position: {final_pos:.2f}mm')
             except Exception as pos_e:
                 self.logger.warn(
-                    f'⚠️ Could not read position after homing: {pos_e}'
+                    f'Could not read position after homing: {pos_e}'
                 )
                 final_pos = 'unknown'
 
             with self.operation_lock:
                 self.operation_status = OperationStatus.IDLE
                 self.last_operation_message = (
-                    f'✅ Homing completed successfully (position: {final_pos}mm)'
+                    f'Homing completed successfully (position: {final_pos}mm)'
                 )
 
-            self.logger.info('✅ Homing operation completed successfully')
+            self.logger.info('Homing operation completed successfully')
 
         except Exception as e:
             # Handle specific timeout errors
@@ -281,7 +286,7 @@ class ServiceCallbacks:
                 error_msg = (
                     'Homing timeout - operation may still be in progress on hardware'
                 )
-                self.logger.warn(f'⏰ {error_msg}')
+                self.logger.warn(f'{error_msg}')
                 # Wrap in HomingFailedError for consistent error handling
                 raise HomingFailedError(
                     error_msg,
@@ -296,7 +301,7 @@ class ServiceCallbacks:
                     str(e) if str(e).strip() else 'Unknown error during homing'
                 )
                 self.logger.error(
-                    f'❌ Homing operation failed: {error_msg}'
+                    f'Homing operation failed: {error_msg}'
                 )
                 raise HomingFailedError(
                     error_msg,
@@ -305,10 +310,6 @@ class ServiceCallbacks:
                         'error_type': type(e).__name__
                     }
                 )
-
-            with self.operation_lock:
-                self.operation_status = OperationStatus.ERROR
-                self.last_operation_message = f'❌ Homing failed: {error_msg}'
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
         """
@@ -337,7 +338,7 @@ class ServiceCallbacks:
             if self.operation_status != OperationStatus.IDLE:
                 response.success = False
                 response.status_message = (
-                    f'⚠️ Operation already in progress: {self.operation_status.value}'
+                    f'Operation already in progress: {self.operation_status.value}'
                 )
                 self.logger.warn(response.status_message)
                 return response
@@ -351,16 +352,11 @@ class ServiceCallbacks:
         # Start movement in background thread
         self.logger.debug(
             f'Starting asynchronous absolute movement to: {request.axis_position} mm')
-        move_thread = threading.Thread(
-            target=self._async_move_operation,
-            args=('absolute', request.axis_position),
-            daemon=True,
-        )
-        move_thread.start()
+        self._start_async(self._async_move_operation, 'absolute', request.axis_position)
 
         response.success = True
         response.status_message = (
-            f'🎯 Absolute movement to {request.axis_position:.2f}mm started - '
+            f'Absolute movement to {request.axis_position:.2f}mm started - '
             'check status with get_operation_status'
         )
 
@@ -378,7 +374,7 @@ class ServiceCallbacks:
             if self.operation_status != OperationStatus.IDLE:
                 response.success = False
                 response.status_message = (
-                    f'⚠️ Operation already in progress: {self.operation_status.value}'
+                    f'Operation already in progress: {self.operation_status.value}'
                 )
                 self.logger.warn(response.status_message)
                 return response
@@ -396,16 +392,11 @@ class ServiceCallbacks:
         # Start movement in background thread
         self.logger.debug(
             f'Starting asynchronous relative movement by: {request.axis_position} mm')
-        move_thread = threading.Thread(
-            target=self._async_move_operation,
-            args=('relative', request.axis_position),
-            daemon=True,
-        )
-        move_thread.start()
+        self._start_async(self._async_move_operation, 'relative', request.axis_position)
 
         response.success = True
         response.status_message = (
-            f'🎯 Relative movement by {request.axis_position:.2f}mm started - '
+            f'Relative movement by {request.axis_position:.2f}mm started - '
             'check status with get_operation_status'
         )
 
@@ -427,7 +418,7 @@ class ServiceCallbacks:
             if current_status not in allowed:
                 response.success = False
                 response.status_message = (
-                    f'⚠️ Cannot home during {current_status.value}. Stop operation first.'
+                    f'Cannot home during {current_status.value}. Stop operation first.'
                 )
                 self.logger.warn(response.status_message)
                 return response
@@ -435,25 +426,23 @@ class ServiceCallbacks:
             # If coming from emergency/error state, log the reset
             if current_status in [OperationStatus.EMERGENCY_STOP, OperationStatus.ERROR]:
                 self.logger.info(
-                    f'🔄 Resetting from {current_status.value} state and homing...')
+                    f'Resetting from {current_status.value} state and homing...')
                 response.status_message = (
-                    f'🔄 Resetting from {current_status.value} and homing started - '
+                    f'Resetting from {current_status.value} and homing started - '
                     'check status with get_position service'
                 )
             else:
                 response.status_message = (
-                    '🏠 Homing started - check status with get_position service'
+                    'Homing started - check status with get_position service'
                 )
 
         # Start homing in background thread (this will handle the reset automatically)
         self.logger.info('Starting asynchronous homing operation...')
-        homing_thread = threading.Thread(
-            target=self._async_home_operation, daemon=True)
-        homing_thread.start()
+        self._start_async(self._async_home_operation)
 
         # Return immediately with status
         response.success = True
-        self.logger.info('✅ Homing operation initiated successfully')
+        self.logger.info('Homing operation initiated successfully')
 
         return response
 
@@ -467,10 +456,10 @@ class ServiceCallbacks:
         status, status_msg = self.get_operation_status()
         if status != OperationStatus.IDLE:
             response.status_message = (
-                f'📍 Position: {response.axis_position:.2f}mm | Status: {status_msg}'
+                f'Position: {response.axis_position:.2f}mm | Status: {status_msg}'
             )
         else:
-            response.status_message = '✅ Position retrieved'
+            response.status_message = 'Position retrieved'
 
         return response
 
@@ -496,7 +485,7 @@ class ServiceCallbacks:
             min_vel, accel, max_vel)
 
         response.success = True
-        response.status_message = '✅ Velocity parameters updated'
+        response.status_message = 'Velocity parameters updated'
 
         # Convert back to mm/s for response
         if result:
@@ -521,7 +510,7 @@ class ServiceCallbacks:
         """Handle velocity parameter query requests."""
         params = self.driver.get_velocity_parameters()
         response.success = True
-        response.status_message = '✅ Velocity parameters retrieved'
+        response.status_message = 'Velocity parameters retrieved'
 
         if params is not None:
             # Convert from device units to mm/s
@@ -549,7 +538,7 @@ class ServiceCallbacks:
         self.driver.home()
         self.interface.disconnect()  # Use the interface to manage connection state
         response.success = True
-        response.status_message = '✅ Device homed and disconnected successfully.'
+        response.status_message = 'Device homed and disconnected successfully.'
         return response
 
     @handle_service_errors()
@@ -576,24 +565,24 @@ class ServiceCallbacks:
         # Force stop any hardware movement immediately
         self.driver.stop()
         self.logger.warn(
-            '🛑 EMERGENCY STOP: Hardware movement halted immediately')
+            'EMERGENCY STOP: Hardware movement halted immediately')
 
         # Update operation status to emergency stop
         with self.operation_lock:
             previous_status = self.operation_status
             self.operation_status = OperationStatus.EMERGENCY_STOP
             self.last_operation_message = (
-                f'🛑 Emergency stop triggered (was: {previous_status.value})'
+                f'Emergency stop triggered (was: {previous_status.value})'
             )
 
         response.success = True
         response.was_moving = was_moving
         response.status_message = (
-            f'🛑 Emergency stop executed - movement halted (was_moving: {was_moving})'
+            f'Emergency stop executed - movement halted (was_moving: {was_moving})'
         )
 
         self.logger.warn(
-            f'🛑 Emergency stop completed. Previous state: {previous_status.value}')
+            f'Emergency stop completed. Previous state: {previous_status.value}')
 
         return response
 
@@ -614,7 +603,7 @@ class ServiceCallbacks:
             self.last_operation_message = 'Stopped by request'
 
         response.success = True
-        response.status_message = f'✅ Stop executed (was_moving: {was_moving})'
+        response.status_message = f'Stop executed (was_moving: {was_moving})'
 
         return response
 
@@ -631,7 +620,7 @@ class ServiceCallbacks:
                 response.success = False
                 response.final_position = -1.0
                 response.status_message = (
-                    f'🚫 Jogging not allowed during {self.operation_status.value}'
+                    f'Jogging not allowed during {self.operation_status.value}'
                 )
                 self.logger.warn(response.status_message)
                 return response
@@ -640,7 +629,7 @@ class ServiceCallbacks:
                 response.success = False
                 response.final_position = -1.0
                 response.status_message = (
-                    '⚠️ Cannot jog: operation already in progress: '
+                    'Cannot jog: operation already in progress: '
                     f'{self.operation_status.value}'
                 )
                 return response
@@ -654,7 +643,7 @@ class ServiceCallbacks:
         step_size = request.step_size
         direction_str = 'positive' if step_size >= 0 else 'negative'
         self.logger.debug(
-            f'🕹️ Jog step: {step_size:+.2f}mm ({direction_str} direction)'
+            f'Jog step: {step_size:+.2f}mm ({direction_str} direction)'
         )
 
         # Use the simplified driver method
@@ -669,13 +658,13 @@ class ServiceCallbacks:
         with self.operation_lock:
             self.operation_status = OperationStatus.IDLE
             self.last_operation_message = (
-                f'✅ Jog completed - position: {final_pos:.2f}mm'
+                f'Jog completed - position: {final_pos:.2f}mm'
             )
 
         response.success = True
         response.final_position = final_pos
         response.status_message = (
-            f'✅ Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm'
+            f'Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm'
         )
 
         return response

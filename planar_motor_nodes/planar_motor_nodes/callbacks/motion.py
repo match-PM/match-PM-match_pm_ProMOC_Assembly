@@ -11,6 +11,36 @@ Contains callbacks for all motion-related services:
 from .base import ServiceCallbacksBase, MotionStatus, PositionOutOfBoundsError
 from promoc_core.error_handling import handle_service_errors
 
+LINEAR_TIMEOUT_MULTIPLIER = 1.5
+LINEAR_TIMEOUT_BUFFER_S = 3.0
+LINEAR_TIMEOUT_MIN_S = 5.0
+
+SIX_D_TIMEOUT_MULTIPLIER = 1.5
+SIX_D_TIMEOUT_BUFFER_S = 5.0
+SIX_D_TIMEOUT_MIN_S = 8.0
+SIX_D_TIMEOUT_FALLBACK_S = 10.0
+
+ROTARY_TIMEOUT_MULTIPLIER = 1.5
+ROTARY_TIMEOUT_BUFFER_S = 2.0
+ROTARY_TIMEOUT_MIN_S = 4.0
+
+ARC_TIMEOUT_MULTIPLIER = 1.8
+ARC_TIMEOUT_BUFFER_S = 5.0
+ARC_TIMEOUT_MIN_S = 8.0
+
+
+def _motion_timeout(
+    travel_time: float | None,
+    multiplier: float = 1.5,
+    buffer_s: float = 3.0,
+    min_s: float = 5.0,
+    fallback_s: float | None = None,
+) -> float:
+    """Compute motion timeout with consistent formula and fallback."""
+    if travel_time:
+        return max((travel_time * multiplier) + buffer_s, min_s)
+    return float(min_s if fallback_s is None else fallback_s)
+
 
 class MotionCallbacks(ServiceCallbacksBase):
     """Callbacks for motion-related services."""
@@ -44,7 +74,12 @@ class MotionCallbacks(ServiceCallbacksBase):
         )
 
         # Step 4: Wait for Completion
-        timeout = max((travel_time * 1.5 + 3.0) if travel_time else 5.0, 5.0)
+        timeout = _motion_timeout(
+            travel_time=travel_time,
+            multiplier=LINEAR_TIMEOUT_MULTIPLIER,
+            buffer_s=LINEAR_TIMEOUT_BUFFER_S,
+            min_s=LINEAR_TIMEOUT_MIN_S,
+        )
         motion_result = self.mover_utils.wait_for_motion_completion(
             request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
         )
@@ -82,7 +117,13 @@ class MotionCallbacks(ServiceCallbacksBase):
             speed_params['ry_vel'], speed_params['rz_vel']
         )
 
-        timeout = max(travel_time * 1.5 + 5.0, 8.0) if travel_time else 10.0
+        timeout = _motion_timeout(
+            travel_time=travel_time,
+            multiplier=SIX_D_TIMEOUT_MULTIPLIER,
+            buffer_s=SIX_D_TIMEOUT_BUFFER_S,
+            min_s=SIX_D_TIMEOUT_MIN_S,
+            fallback_s=SIX_D_TIMEOUT_FALLBACK_S,
+        )
         motion_result = self.mover_utils.wait_for_motion_completion(
             request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout
         )
@@ -113,7 +154,12 @@ class MotionCallbacks(ServiceCallbacksBase):
             rot_mode
         )
 
-        timeout = max((travel_time * 1.5 + 2.0) if travel_time else 4.0, 4.0)
+        timeout = _motion_timeout(
+            travel_time=travel_time,
+            multiplier=ROTARY_TIMEOUT_MULTIPLIER,
+            buffer_s=ROTARY_TIMEOUT_BUFFER_S,
+            min_s=ROTARY_TIMEOUT_MIN_S,
+        )
         motion_result = self.mover_utils.wait_for_motion_completion(
             request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout
         )
@@ -152,7 +198,12 @@ class MotionCallbacks(ServiceCallbacksBase):
             final_speed_ms, angle_rad
         )
 
-        timeout = max((travel_time * 1.8 + 5.0) if travel_time else 8.0, 8.0)
+        timeout = _motion_timeout(
+            travel_time=travel_time,
+            multiplier=ARC_TIMEOUT_MULTIPLIER,
+            buffer_s=ARC_TIMEOUT_BUFFER_S,
+            min_s=ARC_TIMEOUT_MIN_S,
+        )
         motion_result = self.mover_utils.wait_for_motion_completion(
             request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
         )

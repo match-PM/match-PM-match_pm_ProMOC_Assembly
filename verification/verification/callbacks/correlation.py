@@ -42,60 +42,19 @@ class CorrelationVerificationCallbacks:
         else:
             frames_per_measurement = max(
                 1,
-                int(
-                    self.get_parameter("verify_correlation.frames_per_measurement").value
-                    or 5
-                ),
+                self._param_int("verify_correlation.frames_per_measurement", 5),
             )
             fpm_source = "parameter"
-        frame_timeout_s = float(
-            self.get_parameter("verify_correlation.frame_timeout_s").value or 2.0
-        )
-        use_autofocus_anchor = bool(
-            self.get_parameter("verify_correlation.use_autofocus_anchor").value
-            if self.has_parameter("verify_correlation.use_autofocus_anchor")
-            else True
-        )
-        scan_half_range_mm = float(
-            self.get_parameter("verify_correlation.scan_half_range_mm").value
-            if self.has_parameter("verify_correlation.scan_half_range_mm")
-            else 1.5
-        )
-        autofocus_mode = int(
-            self.get_parameter("verify_correlation.autofocus_focus_mode").value
-            if self.has_parameter("verify_correlation.autofocus_focus_mode")
-            else 5
-        )
-        autofocus_skip_flyover = bool(
-            self.get_parameter("verify_correlation.autofocus_skip_flyover").value
-            if self.has_parameter("verify_correlation.autofocus_skip_flyover")
-            else True
-        )
-        objective_magnification_x = float(
-            self.get_parameter("verify_correlation.objective_magnification_x").value
-            if self.has_parameter("verify_correlation.objective_magnification_x")
-            else 0.0
-        )
-        use_beamsplitter = bool(
-            self.get_parameter("verify_correlation.use_beamsplitter").value
-            if self.has_parameter("verify_correlation.use_beamsplitter")
-            else False
-        )
-        roi_size_px = int(
-            self.get_parameter("verify_correlation.roi_size_px").value
-            if self.has_parameter("verify_correlation.roi_size_px")
-            else 300
-        )
-        use_detected_square_roi = bool(
-            self.get_parameter("verify_correlation.use_detected_square_roi").value
-            if self.has_parameter("verify_correlation.use_detected_square_roi")
-            else True
-        )
-        log_progress = bool(
-            self.get_parameter("verify_correlation.log_progress").value
-            if self.has_parameter("verify_correlation.log_progress")
-            else True
-        )
+        frame_timeout_s = self._param_float("verify_correlation.frame_timeout_s", 2.0)
+        use_autofocus_anchor = self._param_bool("verify_correlation.use_autofocus_anchor", True)
+        scan_half_range_mm = self._param_float("verify_correlation.scan_half_range_mm", 1.5)
+        autofocus_mode = self._param_int("verify_correlation.autofocus_focus_mode", 5)
+        autofocus_skip_flyover = self._param_bool("verify_correlation.autofocus_skip_flyover", True)
+        objective_magnification_x = self._param_float("verify_correlation.objective_magnification_x", 0.0)
+        use_beamsplitter = self._param_bool("verify_correlation.use_beamsplitter", False)
+        roi_size_px = self._param_int("verify_correlation.roi_size_px", 300)
+        use_detected_square_roi = self._param_bool("verify_correlation.use_detected_square_roi", True)
+        log_progress = self._param_bool("verify_correlation.log_progress", True)
 
         step_size = request.step_size if request.step_size > 0 else 0.5
 

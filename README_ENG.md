@@ -27,6 +27,9 @@ Comprehensive documentation for each package:
 - **[Setup & Installation](setup/README.md)** – Complete setup instructions with hardware integration
 - **[Planar Motor Nodes](planar_motor_nodes/README.md)** – XBot control and PMCLib integration
 - **[Linear Axis Nodes](linear_axis_nodes/README.md)** – Thorlabs LTS300 control with collision detection
+- **[Camera Nodes](camera_nodes/README.md)** - Camera setup and operations
+- **[Camera Callback Guide (DE)](camera_nodes/docs/callbacks_user_guide_de.md)** - Step-by-step service guide
+- **[Camera Callback Guide (EN)](camera_nodes/docs/callbacks_user_guide_en.md)** - Plain-language service guide
 - **[Camera Integration](camera_integration/README.md)** – IDS camera integration using camera_aravis2
 - **[Core Library](promoc_core/README.md)** – Shared logic, error handling, and utilities
 - **[Interface Definitions](promoc_assembly_interfaces/README.md)** – ROS2 messages and services
@@ -179,9 +182,4 @@ Contributions to improve the project are welcome! Please follow our development 
 Coding Standards & Pull Requests: Development Guide
 
 ROS2 API: The available services and topics are documented in the API Reference.
-
-📞 Support
-Report Issues: Please create a new Issue on GitHub.
-
-Questions & Discussions: Use GitHub Discussions.
 

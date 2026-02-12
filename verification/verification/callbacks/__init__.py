@@ -1,24 +1,39 @@
 """Scientific verification callback modules."""
 
-from .autofocus import AutofocusVerificationCallbacks
 from .base import ScientificVerificationBase
-from .correlation import CorrelationVerificationCallbacks
-from .mtf import MTFVerificationCallbacks
 
+AutofocusVerificationCallbacks = None
+MTFVerificationCallbacks = None
+CorrelationVerificationCallbacks = None
 
-class ScientificVerificationCallbacks(
-    AutofocusVerificationCallbacks,
-    MTFVerificationCallbacks,
-    CorrelationVerificationCallbacks,
-    ScientificVerificationBase,
+try:  # pragma: no cover - exercised in ROS runtime
+    from .autofocus import AutofocusVerificationCallbacks
+    from .correlation import CorrelationVerificationCallbacks
+    from .mtf import MTFVerificationCallbacks
+except ImportError:
+    pass
+
+__all__ = ["ScientificVerificationBase"]
+
+if (
+    AutofocusVerificationCallbacks is not None
+    and MTFVerificationCallbacks is not None
+    and CorrelationVerificationCallbacks is not None
 ):
-    """Combined callback class for the scientific verification node."""
 
+    class ScientificVerificationCallbacks(
+        AutofocusVerificationCallbacks,
+        MTFVerificationCallbacks,
+        CorrelationVerificationCallbacks,
+        ScientificVerificationBase,
+    ):
+        """Combined callback class for the scientific verification node."""
 
-__all__ = [
-    "ScientificVerificationCallbacks",
-    "AutofocusVerificationCallbacks",
-    "MTFVerificationCallbacks",
-    "CorrelationVerificationCallbacks",
-    "ScientificVerificationBase",
-]
+    __all__.extend(
+        [
+            "ScientificVerificationCallbacks",
+            "AutofocusVerificationCallbacks",
+            "MTFVerificationCallbacks",
+            "CorrelationVerificationCallbacks",
+        ]
+    )

@@ -1,6 +1,5 @@
 """MTF callbacks for Modulation Transfer Function measurements."""
 
-import time
 import cv2
 import numpy as np
 
@@ -13,6 +12,31 @@ from .camera_format_controller import CameraFormatController
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
 from promoc_core.error_handling import handle_service_errors
+
+MTF_AVG_SAMPLES = 10
+MTF_DEFAULT_PIXEL_SIZE_UM = 2.40
+MTF_AUTO_ROI_EDGE_WIDTH = 60
+MTF_MIN_EDGE_CONTRAST = 0.2
+MTF_SAMPLE_TIMEOUT_S = 1.0
+
+_MTF_PARAM_MAP = (
+    ("mtf.lsf_window_mode", "lsf_window_mode", str, True),
+    ("mtf.lsf_peak_window_size", "lsf_peak_window_size", int, False),
+    ("mtf.derivative_mode", "derivative_mode", str, True),
+    ("mtf.apply_derivative_correction", "apply_derivative_correction", bool, False),
+    ("mtf.derivative_correction_max", "derivative_correction_max", float, False),
+    ("mtf.apply_angle_correction", "apply_angle_correction", bool, False),
+    ("mtf.esf_smooth_mode", "esf_smooth_mode", str, True),
+    ("mtf.esf_sg_window", "esf_sg_window", int, False),
+    ("mtf.esf_sg_poly", "esf_sg_poly", int, False),
+    ("mtf.edge_validation_mode", "edge_validation_mode", str, True),
+    ("mtf.edge_validation_percentile", "edge_validation_percentile", float, False),
+    ("mtf.edge_validation_min_points", "edge_validation_min_points", int, False),
+    ("mtf.clip_to_nyquist", "clip_to_nyquist", bool, False),
+    ("mtf.export_dual_curves", "export_dual_curves", bool, False),
+    ("mtf.clip_max", "mtf_clip_max", float, False),
+    ("mtf.warn_threshold", "mtf_warn_threshold", float, False),
+)
 
 
 class MTFCallbacks(CallbackBase):
@@ -73,107 +97,36 @@ class MTFCallbacks(CallbackBase):
             max_edge_angle=max_edge_angle,
         )
 
-        def _param(name: str):
-            return self._node.get_parameter(name).value if self._node.has_parameter(name) else None
-
         # Debug export
-        debug_dir = _param('mtf.debug_export_dir')
+        debug_dir = self._param_str('mtf.debug_export_dir', '').strip()
         if debug_dir:
-            config.debug_export_dir = str(debug_dir)
-            prefix = _param('mtf.debug_export_prefix')
+            config.debug_export_dir = debug_dir
+            prefix = self._param_str('mtf.debug_export_prefix', '').strip()
             if prefix:
-                config.debug_export_prefix = str(prefix)
-            val = _param('mtf.debug_export_csv')
-            if val is not None:
-                config.debug_export_csv = bool(val)
-            val = _param('mtf.debug_export_png')
-            if val is not None:
-                config.debug_export_png = bool(val)
+                config.debug_export_prefix = prefix
+            if self._param_raw('mtf.debug_export_csv', None) is not None:
+                config.debug_export_csv = self._param_bool('mtf.debug_export_csv', config.debug_export_csv)
+            if self._param_raw('mtf.debug_export_png', None) is not None:
+                config.debug_export_png = self._param_bool('mtf.debug_export_png', config.debug_export_png)
 
-        # Windowing / derivative / smoothing
-        val = _param('mtf.lsf_window_mode')
-        if val:
-            config.lsf_window_mode = str(val)
-        val = _param('mtf.lsf_peak_window_size')
-        if val is not None:
+        # Declarative parameter mapping
+        for param_name, attr_name, cast, require_truthy in _MTF_PARAM_MAP:
+            raw = self._param_raw(param_name, None)
+            if raw is None:
+                continue
+            if require_truthy and not raw:
+                continue
             try:
-                config.lsf_peak_window_size = int(val)
-            except Exception:
-                pass
-
-        val = _param('mtf.derivative_mode')
-        if val:
-            config.derivative_mode = str(val)
-        val = _param('mtf.apply_derivative_correction')
-        if val is not None:
-            config.apply_derivative_correction = bool(val)
-        val = _param('mtf.derivative_correction_max')
-        if val is not None:
-            try:
-                config.derivative_correction_max = float(val)
-            except Exception:
-                pass
-        val = _param('mtf.apply_angle_correction')
-        if val is not None:
-            config.apply_angle_correction = bool(val)
-
-        val = _param('mtf.esf_smooth_mode')
-        if val:
-            config.esf_smooth_mode = str(val)
-        val = _param('mtf.esf_sg_window')
-        if val is not None:
-            try:
-                config.esf_sg_window = int(val)
-            except Exception:
-                pass
-        val = _param('mtf.esf_sg_poly')
-        if val is not None:
-            try:
-                config.esf_sg_poly = int(val)
+                setattr(config, attr_name, cast(raw))
             except Exception:
                 pass
 
-        # Validation / clipping / dual curves
-        val = _param('mtf.edge_validation_mode')
-        if val:
-            config.edge_validation_mode = str(val)
-        val = _param('mtf.edge_validation_percentile')
-        if val is not None:
-            try:
-                config.edge_validation_percentile = float(val)
-            except Exception:
-                pass
-        val = _param('mtf.edge_validation_min_points')
-        if val is not None:
-            try:
-                config.edge_validation_min_points = int(val)
-            except Exception:
-                pass
-        val = _param('mtf.edge_validation_only_auto')
-        if bool(val) and not auto_roi:
+        # Validation-only switch for auto ROI mode
+        if self._param_bool('mtf.edge_validation_only_auto', False) and not auto_roi:
             config.edge_validation_mode = "off"
 
-        val = _param('mtf.clip_to_nyquist')
-        if val is not None:
-            config.clip_to_nyquist = bool(val)
-        val = _param('mtf.export_dual_curves')
-        if val is not None:
-            config.export_dual_curves = bool(val)
-        val = _param('mtf.clip_max')
-        if val is not None:
-            try:
-                config.mtf_clip_max = float(val)
-            except Exception:
-                pass
-        val = _param('mtf.warn_threshold')
-        if val is not None:
-            try:
-                config.mtf_warn_threshold = float(val)
-            except Exception:
-                pass
-
         # Apply profile last (overrides for ease-of-use)
-        profile = str(_param('mtf.profile') or "default").strip().lower()
+        profile = self._param_str('mtf.profile', "default").strip().lower()
         if profile in ("scientific", "debug"):
             config.derivative_mode = "iso"
             config.apply_derivative_correction = True
@@ -234,32 +187,6 @@ class MTFCallbacks(CallbackBase):
 
         return response
 
-    def _wait_for_next_image(self, timeout=1.0):
-        """Waits for a strictly newer image than the current one."""
-        if self._node.latest_image_msg is None:
-            return None
-        
-        start_ts = self._node.latest_image_msg.header.stamp
-        start_ns = start_ts.sec * 1_000_000_000 + start_ts.nanosec
-        
-        deadline = time.time() + timeout
-        
-        while time.time() < deadline:
-            curr_msg = self._node.latest_image_msg
-            if curr_msg:
-                curr_ts = curr_msg.header.stamp
-                curr_ns = curr_ts.sec * 1_000_000_000 + curr_ts.nanosec
-                
-                if curr_ns > start_ns:
-                    try:
-                        return self._node.bridge.imgmsg_to_cv2(curr_msg, 'bgr8')
-                    except Exception:
-                        return None
-            time.sleep(0.01)
-        
-        self._node.get_logger().warn("Timeout waiting for next image in averaging loop")
-        return None
-
     @handle_service_errors()
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
@@ -282,16 +209,12 @@ class MTFCallbacks(CallbackBase):
             if switched_image is not None:
                 cv_image = switched_image
 
-            pixel_size_um = self._node.get_parameter('pixel_size_um').value
+            pixel_size_um = self._param_float('pixel_size_um', MTF_DEFAULT_PIXEL_SIZE_UM)
             if not pixel_size_um or pixel_size_um <= 0:
-                pixel_size_um = 2.40  # IDS U3-3800CP (Sony IMX183)
+                pixel_size_um = MTF_DEFAULT_PIXEL_SIZE_UM
 
-            min_edge_angle = 2.0
-            max_edge_angle = 10.0
-            if self._node.has_parameter('mtf_min_edge_angle'):
-                min_edge_angle = float(self._node.get_parameter('mtf_min_edge_angle').value or min_edge_angle)
-            if self._node.has_parameter('mtf_max_edge_angle'):
-                max_edge_angle = float(self._node.get_parameter('mtf_max_edge_angle').value or max_edge_angle)
+            min_edge_angle = self._param_float('mtf_min_edge_angle', 2.0)
+            max_edge_angle = self._param_float('mtf_max_edge_angle', 10.0)
 
             # Pass edge angle limits into analyzer (applied per ROI below)
 
@@ -310,7 +233,7 @@ class MTFCallbacks(CallbackBase):
                     
                     # Use improved edge extraction with coordinate tracking
                     edge_rois = RoiDetector.create_edge_rois_from_rect(
-                        cv_image, largest_square, roi_width=60
+                        cv_image, largest_square, roi_width=MTF_AUTO_ROI_EDGE_WIDTH
                     )
                     
                     # Filter by contrast
@@ -333,7 +256,7 @@ class MTFCallbacks(CallbackBase):
                     
                     # Use new EdgeROI extraction for bars too
                     edge_rois = RoiDetector.create_edge_rois_from_rect(
-                        cv_image, largest_bar, roi_width=60
+                        cv_image, largest_bar, roi_width=MTF_AUTO_ROI_EDGE_WIDTH
                     )
                     
                     if edge_rois:
@@ -390,7 +313,7 @@ class MTFCallbacks(CallbackBase):
             last_error = "Unknown error"
             
             for edge_roi in edge_rois:
-                if edge_roi.contrast < 0.2:
+                if edge_roi.contrast < MTF_MIN_EDGE_CONTRAST:
                     self._node.get_logger().warn(
                         f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
                     )
@@ -426,22 +349,32 @@ class MTFCallbacks(CallbackBase):
                             f"MTF warning ({edge_roi.edge_name}): {result.warning_msg}"
                         )
                     # --- Averaging Logic ---
-                    num_samples = 10
+                    num_samples = MTF_AVG_SAMPLES
                     valid_samples = [result]
                     
                     if num_samples > 1:
                         self._node.get_logger().info(f"Edge valid. Measuring {num_samples-1} more frames for averaging...")
                         roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
+                        _, last_ts = self._get_latest_cv_image()
+                        if last_ts is None:
+                            last_ts = 0
                         
-                        for i in range(num_samples - 1):
-                            next_img = self._wait_for_next_image(timeout=1.0)
+                        for _ in range(num_samples - 1):
+                            next_img, next_ts = self._wait_for_new_image(
+                                int(last_ts),
+                                timeout=MTF_SAMPLE_TIMEOUT_S,
+                            )
                             if next_img is not None:
+                                if next_ts is not None:
+                                    last_ts = next_ts
                                 # Ensure ROI is within bounds (in case image size changed?? unlikely but safe)
                                 if roi_y+roi_h <= next_img.shape[0] and roi_x+roi_w <= next_img.shape[1]:
                                     crop_img = next_img[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
                                     sample_res = analyzer.compute_mtf(crop_img)
                                     if sample_res.valid:
                                         valid_samples.append(sample_res)
+                            else:
+                                self._node.get_logger().warn("Timeout waiting for next image in averaging loop")
                     
                     # Compute Averages
                     avg_mtf50 = float(np.mean([r.mtf50 for r in valid_samples]))
