@@ -215,7 +215,164 @@ def estimate_peak_position(
     return float(best_pos)
 
 
+def annotate_correlation_mtf_quality(
+    rows: list[dict],
+    *,
+    position_key: str = "position_mm",
+    mtf_key: str = "mtf50_lpmm",
+    tenengrad_key: str = "tenengrad",
+    valid_key: str = "valid",
+) -> dict[str, float | int]:
+    """Annotate rows with suspicious MTF diagnostics for correlation scans.
+
+    Adds in-place keys per row:
+    - mtf_quality_class: normal | suspicious | invalid
+    - mtf_is_suspicious: bool
+    - mtf_suspicion_score: float [0..1]
+    - mtf_suspicion_reasons: semicolon-joined rule explanations
+    - mtf50_robust_z: robust z-score vs all valid MTF points
+    - mtf50_neighbor_median_lpmm: local median from adjacent valid points
+    - tenengrad_norm: normalized Tenengrad in [0..1]
+    - mtf50_norm: normalized MTF50 in [0..1]
+    """
+    if not rows:
+        return {
+            "points_valid": 0,
+            "points_suspicious": 0,
+            "suspicious_ratio": 0.0,
+            "reference_mtf50_median_lpmm": 0.0,
+            "reference_mtf50_upper_lpmm": 0.0,
+        }
+
+    indexed: list[tuple[int, float, float, float]] = []
+    for idx, row in enumerate(rows):
+        pos = _to_float(row.get(position_key))
+        mtf = _to_float(row.get(mtf_key))
+        ten = _to_float(row.get(tenengrad_key))
+        is_valid = _row_is_valid({"valid": row.get(valid_key, False)})
+        if not is_valid or mtf is None or ten is None or mtf <= 0.0:
+            row["mtf_quality_class"] = "invalid"
+            row["mtf_is_suspicious"] = False
+            row["mtf_suspicion_score"] = 0.0
+            row["mtf_suspicion_reasons"] = ""
+            row["mtf50_robust_z"] = 0.0
+            row["mtf50_neighbor_median_lpmm"] = ""
+            row["tenengrad_norm"] = ""
+            row["mtf50_norm"] = ""
+            continue
+
+        if pos is None:
+            pos = float(idx)
+        indexed.append((idx, float(pos), float(mtf), float(ten)))
+
+    if not indexed:
+        return {
+            "points_valid": 0,
+            "points_suspicious": 0,
+            "suspicious_ratio": 0.0,
+            "reference_mtf50_median_lpmm": 0.0,
+            "reference_mtf50_upper_lpmm": 0.0,
+        }
+
+    indexed.sort(key=lambda item: item[1])
+    mtf_vals = np.array([item[2] for item in indexed], dtype=float)
+    ten_vals = np.array([item[3] for item in indexed], dtype=float)
+
+    mtf_min, mtf_max = float(np.min(mtf_vals)), float(np.max(mtf_vals))
+    ten_min, ten_max = float(np.min(ten_vals)), float(np.max(ten_vals))
+    mtf_span = max(mtf_max - mtf_min, 1e-12)
+    ten_span = max(ten_max - ten_min, 1e-12)
+
+    mtf_norm = (mtf_vals - mtf_min) / mtf_span
+    ten_norm = (ten_vals - ten_min) / ten_span
+
+    mtf_median = float(np.median(mtf_vals))
+    mtf_mad = float(np.median(np.abs(mtf_vals - mtf_median)))
+
+    reference_mask = ten_norm >= 0.7
+    if int(np.sum(reference_mask)) < 3:
+        reference_mask = ten_norm >= 0.5
+    if int(np.sum(reference_mask)) < 2:
+        threshold = float(np.percentile(ten_norm, 65.0))
+        reference_mask = ten_norm >= threshold
+
+    ref_values = mtf_vals[reference_mask] if np.any(reference_mask) else mtf_vals
+    ref_median = float(np.median(ref_values)) if ref_values.size > 0 else 0.0
+    ref_upper = (
+        float(np.percentile(ref_values, 95.0))
+        if ref_values.size > 0
+        else 0.0
+    )
+
+    suspicious_count = 0
+    for sorted_idx, (orig_idx, _, mtf, ten) in enumerate(indexed):
+        row = rows[orig_idx]
+        reasons: list[str] = []
+
+        tn = float(ten_norm[sorted_idx])
+        mn = float(mtf_norm[sorted_idx])
+
+        if mtf_mad > 1e-12:
+            robust_z = float(0.6745 * (mtf - mtf_median) / mtf_mad)
+        else:
+            robust_z = 0.0
+
+        neighbor_candidates: list[float] = []
+        if sorted_idx - 1 >= 0:
+            neighbor_candidates.append(float(indexed[sorted_idx - 1][2]))
+        if sorted_idx + 1 < len(indexed):
+            neighbor_candidates.append(float(indexed[sorted_idx + 1][2]))
+        if sorted_idx - 2 >= 0:
+            neighbor_candidates.append(float(indexed[sorted_idx - 2][2]))
+        if sorted_idx + 2 < len(indexed):
+            neighbor_candidates.append(float(indexed[sorted_idx + 2][2]))
+
+        local_median = float(np.median(neighbor_candidates)) if neighbor_candidates else 0.0
+
+        if tn < 0.25 and mn > 0.65:
+            reasons.append(
+                f"low_ten_high_mtf(ten_norm={tn:.2f},mtf_norm={mn:.2f})"
+            )
+
+        if local_median > 0.0 and mtf > (1.6 * local_median) and tn < 0.45:
+            reasons.append(
+                f"local_spike(mtf={mtf:.2f},neighbor_med={local_median:.2f})"
+            )
+
+        if robust_z > 3.5 and tn < 0.55:
+            reasons.append(f"robust_outlier(z={robust_z:.2f})")
+
+        if ref_upper > 0.0 and mtf > (1.25 * ref_upper) and tn < 0.55:
+            reasons.append(
+                f"above_sharp_reference(mtf={mtf:.2f},ref95={ref_upper:.2f})"
+            )
+
+        is_suspicious = len(reasons) > 0
+        if is_suspicious:
+            suspicious_count += 1
+
+        row["mtf_quality_class"] = "suspicious" if is_suspicious else "normal"
+        row["mtf_is_suspicious"] = bool(is_suspicious)
+        row["mtf_suspicion_score"] = float(min(1.0, 0.35 * len(reasons)))
+        row["mtf_suspicion_reasons"] = "; ".join(reasons)
+        row["mtf50_robust_z"] = float(robust_z)
+        row["mtf50_neighbor_median_lpmm"] = float(local_median) if neighbor_candidates else ""
+        row["tenengrad_norm"] = float(tn)
+        row["mtf50_norm"] = float(mn)
+
+    points_valid = int(len(indexed))
+    suspicious_ratio = float(suspicious_count / points_valid) if points_valid else 0.0
+    return {
+        "points_valid": points_valid,
+        "points_suspicious": int(suspicious_count),
+        "suspicious_ratio": suspicious_ratio,
+        "reference_mtf50_median_lpmm": float(ref_median),
+        "reference_mtf50_upper_lpmm": float(ref_upper),
+    }
+
+
 __all__ = [
+    "annotate_correlation_mtf_quality",
     "estimate_peak_position",
     "extract_metric_values",
     "summarize_numeric_values",

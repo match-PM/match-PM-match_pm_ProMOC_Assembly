@@ -14,7 +14,10 @@ from promoc_core.promoc_exceptions import (
     ImageProcessingError,
     ServiceCallFailedError,
 )
-from verification.algorithms.mtf_verification_stats import estimate_peak_position
+from verification.algorithms.mtf_verification_stats import (
+    annotate_correlation_mtf_quality,
+    estimate_peak_position,
+)
 
 from camera_nodes.algorithms.focus_metrics import tenengrad as tenengrad_metric
 from camera_nodes.algorithms.roi_detection import RoiDetector
@@ -199,6 +202,13 @@ class CorrelationVerificationCallbacks:
         )
 
         results = []
+        quality_summary = {
+            "points_valid": 0,
+            "points_suspicious": 0,
+            "suspicious_ratio": 0.0,
+            "reference_mtf50_median_lpmm": 0.0,
+            "reference_mtf50_upper_lpmm": 0.0,
+        }
 
         try:
             for idx, pos in enumerate(positions, start=1):
@@ -336,6 +346,24 @@ class CorrelationVerificationCallbacks:
                 )
         finally:
             if results:
+                quality_summary = annotate_correlation_mtf_quality(results)
+                metadata.update(
+                    {
+                        "mtf_quality_points_valid": quality_summary["points_valid"],
+                        "mtf_quality_points_suspicious": quality_summary[
+                            "points_suspicious"
+                        ],
+                        "mtf_quality_suspicious_ratio": quality_summary[
+                            "suspicious_ratio"
+                        ],
+                        "mtf_quality_reference_median_lpmm": quality_summary[
+                            "reference_mtf50_median_lpmm"
+                        ],
+                        "mtf_quality_reference_upper_lpmm": quality_summary[
+                            "reference_mtf50_upper_lpmm"
+                        ],
+                    }
+                )
                 self.get_logger().info(
                     f"Saving {len(results)} correlation results (partial or complete)..."
                 )
@@ -359,6 +387,14 @@ class CorrelationVerificationCallbacks:
                         "edge_samples_requested",
                         "edge_samples_used",
                         "warning_count",
+                        "mtf_quality_class",
+                        "mtf_is_suspicious",
+                        "mtf_suspicion_score",
+                        "mtf_suspicion_reasons",
+                        "mtf50_robust_z",
+                        "mtf50_neighbor_median_lpmm",
+                        "tenengrad_norm",
+                        "mtf50_norm",
                         "roi_x1",
                         "roi_y1",
                         "roi_x2",
@@ -380,24 +416,44 @@ class CorrelationVerificationCallbacks:
         if not valid_mtf_rows:
             raise ImageProcessingError("No valid MTF data collected during scan")
 
+        filtered_mtf_rows = [
+            row for row in valid_mtf_rows if not bool(row.get("mtf_is_suspicious", False))
+        ]
+        mtf_peak_rows = filtered_mtf_rows if filtered_mtf_rows else valid_mtf_rows
+        mtf_peak_basis = (
+            "filtered_valid_mtf" if filtered_mtf_rows else "raw_valid_mtf_fallback"
+        )
+
         af_peak = estimate_peak_position(
             results, position_key="position_mm", value_key="tenengrad"
         )
         mtf_peak = estimate_peak_position(
-            valid_mtf_rows, position_key="position_mm", value_key="mtf50_lpmm"
+            mtf_peak_rows, position_key="position_mm", value_key="mtf50_lpmm"
         )
 
         if af_peak is None:
             af_peak = max(results, key=lambda x: x["tenengrad"])["position_mm"]
         if mtf_peak is None:
-            mtf_peak = max(valid_mtf_rows, key=lambda x: x["mtf50_lpmm"])["position_mm"]
+            mtf_peak = max(mtf_peak_rows, key=lambda x: x["mtf50_lpmm"])["position_mm"]
 
         peak_shift = float(af_peak) - float(mtf_peak)
+
+        suspicious_rows = [
+            row for row in valid_mtf_rows if bool(row.get("mtf_is_suspicious", False))
+        ]
+        suspicious_examples = "; ".join(
+            str(row.get("mtf_suspicion_reasons", "")).strip()
+            for row in suspicious_rows[:3]
+            if str(row.get("mtf_suspicion_reasons", "")).strip()
+        )
 
         summary_row = {
             "timestamp": datetime.now().isoformat(),
             "points_total": int(len(results)),
-            "points_valid_mtf": int(len(valid_mtf_rows)),
+            "points_valid_mtf": int(len(mtf_peak_rows)),
+            "points_valid_mtf_raw": int(len(valid_mtf_rows)),
+            "points_suspicious_mtf": int(len(suspicious_rows)),
+            "suspicious_ratio": float(quality_summary["suspicious_ratio"]),
             "scan_start_mm": float(scan_start),
             "scan_end_mm": float(scan_end),
             "step_mm": float(step_size),
@@ -408,6 +464,14 @@ class CorrelationVerificationCallbacks:
             "roi_source": str(roi_source),
             "edge_rois_count": int(len(edge_boxes)),
             "frames_per_measurement": int(frames_per_measurement),
+            "mtf_peak_basis": mtf_peak_basis,
+            "mtf_reference_median_lpmm": float(
+                quality_summary["reference_mtf50_median_lpmm"]
+            ),
+            "mtf_reference_upper_lpmm": float(
+                quality_summary["reference_mtf50_upper_lpmm"]
+            ),
+            "suspicion_examples": suspicious_examples,
             "af_peak_mm": float(af_peak),
             "mtf_peak_mm": float(mtf_peak),
             "peak_shift_mm": float(peak_shift),
@@ -419,6 +483,9 @@ class CorrelationVerificationCallbacks:
                 "timestamp",
                 "points_total",
                 "points_valid_mtf",
+                "points_valid_mtf_raw",
+                "points_suspicious_mtf",
+                "suspicious_ratio",
                 "scan_start_mm",
                 "scan_end_mm",
                 "step_mm",
@@ -427,6 +494,10 @@ class CorrelationVerificationCallbacks:
                 "roi_source",
                 "edge_rois_count",
                 "frames_per_measurement",
+                "mtf_peak_basis",
+                "mtf_reference_median_lpmm",
+                "mtf_reference_upper_lpmm",
+                "suspicion_examples",
                 "af_peak_mm",
                 "mtf_peak_mm",
                 "peak_shift_mm",

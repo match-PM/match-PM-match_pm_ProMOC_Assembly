@@ -19,6 +19,7 @@ extract_metric_values = stats_module.extract_metric_values
 summarize_numeric_values = stats_module.summarize_numeric_values
 summarize_mtf_by_group = stats_module.summarize_mtf_by_group
 summarize_mtf_by_direction = stats_module.summarize_mtf_by_direction
+annotate_correlation_mtf_quality = stats_module.annotate_correlation_mtf_quality
 
 
 def test_extract_metric_values_valid_only():
@@ -100,3 +101,35 @@ def test_estimate_peak_position_boundary_fallback():
     ]
     peak = estimate_peak_position(rows, position_key="position_mm", value_key="tenengrad")
     assert peak == pytest.approx(0.0)
+
+
+def test_annotate_correlation_mtf_quality_flags_suspicious_low_tenengrad_spike():
+    rows = [
+        {"position_mm": 0.0, "tenengrad": 95.0, "mtf50_lpmm": 35.0, "valid": True},
+        {"position_mm": 1.0, "tenengrad": 88.0, "mtf50_lpmm": 34.0, "valid": True},
+        {"position_mm": 2.0, "tenengrad": 12.0, "mtf50_lpmm": 82.0, "valid": True},
+        {"position_mm": 3.0, "tenengrad": 80.0, "mtf50_lpmm": 33.0, "valid": True},
+        {"position_mm": 4.0, "tenengrad": 92.0, "mtf50_lpmm": 34.0, "valid": True},
+    ]
+
+    summary = annotate_correlation_mtf_quality(rows)
+
+    suspicious = [r for r in rows if r.get("mtf_is_suspicious")]
+    assert summary["points_valid"] == 5
+    assert summary["points_suspicious"] >= 1
+    assert len(suspicious) >= 1
+    assert any("low_ten_high_mtf" in r.get("mtf_suspicion_reasons", "") for r in suspicious)
+
+
+def test_annotate_correlation_mtf_quality_marks_invalid_rows():
+    rows = [
+        {"position_mm": 0.0, "tenengrad": 10.0, "mtf50_lpmm": 0.0, "valid": False},
+        {"position_mm": 1.0, "tenengrad": 20.0, "mtf50_lpmm": 25.0, "valid": True},
+        {"position_mm": 2.0, "tenengrad": 25.0, "mtf50_lpmm": 27.0, "valid": True},
+    ]
+
+    summary = annotate_correlation_mtf_quality(rows)
+
+    assert summary["points_valid"] == 2
+    assert rows[0]["mtf_quality_class"] == "invalid"
+    assert rows[0]["mtf_suspicion_reasons"] == ""
