@@ -177,6 +177,8 @@ class CameraNode(Node):
         self.declare_parameter('autofocus.fly_over.full_scan_for_peak', True)
         self.declare_parameter('autofocus.fly_over.peak_window_ratio', 0.9)
         self.declare_parameter('autofocus.fly_over.peak_window_margin_mm', 1.0)
+        self.declare_parameter('autofocus.fly_over.peak_window_guard_mm', 1.5)
+        self.declare_parameter('autofocus.fly_over.min_peak_window_width_mm', 6.0)
         # Objective-aware tuning for high magnification
         self.declare_parameter('autofocus.fly_over.high_mag_threshold_x', 4.0)
         self.declare_parameter('autofocus.fly_over.very_high_mag_threshold_x', 6.0)
@@ -223,7 +225,7 @@ class CameraNode(Node):
         self.declare_parameter('mtf.warn_threshold', 1.05)
         # Runtime camera format switch for MTF:
         # Start cropped for autofocus, temporarily switch to full frame for MTF.
-        self.declare_parameter('mtf.use_full_frame', True)
+        self.declare_parameter('mtf.use_full_frame', False)
         self.declare_parameter('mtf.full_frame_width', 5536)
         self.declare_parameter('mtf.full_frame_height', 3692)
         self.declare_parameter('mtf.full_frame_offset_x', 0)

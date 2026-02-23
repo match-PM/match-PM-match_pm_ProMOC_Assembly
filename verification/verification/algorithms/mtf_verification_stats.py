@@ -230,8 +230,12 @@ def annotate_correlation_mtf_quality(
     - mtf_is_suspicious: bool
     - mtf_suspicion_score: float [0..1]
     - mtf_suspicion_reasons: semicolon-joined rule explanations
+    - mtf_defocus_zone: bool (low Tenengrad region)
     - mtf50_robust_z: robust z-score vs all valid MTF points
     - mtf50_neighbor_median_lpmm: local median from adjacent valid points
+    - mtf50_delta_neighbor_lpmm: mtf50 - local neighbor median
+    - mtf50_ratio_neighbor: mtf50 / local neighbor median
+    - mtf_exclude_from_peak_fit: bool, recommended filter flag
     - tenengrad_norm: normalized Tenengrad in [0..1]
     - mtf50_norm: normalized MTF50 in [0..1]
     """
@@ -255,8 +259,12 @@ def annotate_correlation_mtf_quality(
             row["mtf_is_suspicious"] = False
             row["mtf_suspicion_score"] = 0.0
             row["mtf_suspicion_reasons"] = ""
+            row["mtf_defocus_zone"] = ""
             row["mtf50_robust_z"] = 0.0
             row["mtf50_neighbor_median_lpmm"] = ""
+            row["mtf50_delta_neighbor_lpmm"] = ""
+            row["mtf50_ratio_neighbor"] = ""
+            row["mtf_exclude_from_peak_fit"] = True
             row["tenengrad_norm"] = ""
             row["mtf50_norm"] = ""
             continue
@@ -328,6 +336,9 @@ def annotate_correlation_mtf_quality(
             neighbor_candidates.append(float(indexed[sorted_idx + 2][2]))
 
         local_median = float(np.median(neighbor_candidates)) if neighbor_candidates else 0.0
+        is_defocus_zone = bool(tn < 0.35)
+        delta_neighbor = float(mtf - local_median) if local_median > 0.0 else 0.0
+        ratio_neighbor = float(mtf / local_median) if local_median > 0.0 else 0.0
 
         if tn < 0.25 and mn > 0.65:
             reasons.append(
@@ -355,8 +366,12 @@ def annotate_correlation_mtf_quality(
         row["mtf_is_suspicious"] = bool(is_suspicious)
         row["mtf_suspicion_score"] = float(min(1.0, 0.35 * len(reasons)))
         row["mtf_suspicion_reasons"] = "; ".join(reasons)
+        row["mtf_defocus_zone"] = bool(is_defocus_zone)
         row["mtf50_robust_z"] = float(robust_z)
         row["mtf50_neighbor_median_lpmm"] = float(local_median) if neighbor_candidates else ""
+        row["mtf50_delta_neighbor_lpmm"] = float(delta_neighbor) if neighbor_candidates else ""
+        row["mtf50_ratio_neighbor"] = float(ratio_neighbor) if neighbor_candidates else ""
+        row["mtf_exclude_from_peak_fit"] = bool(is_suspicious)
         row["tenengrad_norm"] = float(tn)
         row["mtf50_norm"] = float(mn)
 

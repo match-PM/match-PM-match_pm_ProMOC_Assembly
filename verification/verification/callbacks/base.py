@@ -7,6 +7,13 @@ import time
 
 import numpy as np
 
+try:
+    from rcl_interfaces.msg import ParameterType
+    from rcl_interfaces.srv import GetParameters
+except Exception:  # pragma: no cover - only relevant in ROS runtime
+    ParameterType = None
+    GetParameters = None
+
 
 class ScientificVerificationBase:
     """Base mixin with image and file I/O helper methods."""
@@ -132,3 +139,82 @@ class ScientificVerificationBase:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+
+    def _stamp_tuple_to_ns(self, stamp: tuple[int, int] | None) -> int | None:
+        """Convert ROS (sec, nsec) tuple to epoch ns."""
+        if stamp is None:
+            return None
+        try:
+            sec, nsec = stamp
+            return int(sec) * 1_000_000_000 + int(nsec)
+        except Exception:
+            return None
+
+    def _query_camera_numeric_parameter(
+        self, names: list[str], timeout_s: float = 0.4
+    ) -> float | None:
+        """Best-effort query for a numeric camera parameter via get_parameters."""
+        if GetParameters is None or ParameterType is None or not names:
+            return None
+
+        service_names = (
+            "/promoc/assembly_camera/get_parameters",
+            "/promoc/assembly_camera_controller/get_parameters",
+        )
+
+        for service_name in service_names:
+            try:
+                client = self.create_client(GetParameters, service_name)
+                if not client.wait_for_service(timeout_sec=0.2):
+                    continue
+
+                req = GetParameters.Request()
+                req.names = list(names)
+                future = client.call_async(req)
+                start_wait = time.time()
+                while not future.done() and (time.time() - start_wait) < timeout_s:
+                    time.sleep(0.01)
+                if not future.done():
+                    continue
+
+                res = future.result()
+                if not res or not getattr(res, "values", None):
+                    continue
+
+                for value in res.values:
+                    if value.type == ParameterType.PARAMETER_INTEGER:
+                        return float(value.integer_value)
+                    if value.type == ParameterType.PARAMETER_DOUBLE:
+                        return float(value.double_value)
+            except Exception:
+                continue
+
+        return None
+
+    def _read_camera_exposure_gain_gamma(self) -> dict:
+        """Read camera exposure/gain/gamma best-effort from camera parameter services."""
+        exposure = self._query_camera_numeric_parameter(
+            [
+                "ExposureTime",
+                "AcquisitionControl.ExposureTime",
+                "ImageAcquisitionControl.ExposureTime",
+            ]
+        )
+        gain = self._query_camera_numeric_parameter(
+            [
+                "Gain",
+                "AnalogControl.Gain",
+                "ImageAnalogControl.Gain",
+            ]
+        )
+        gamma = self._query_camera_numeric_parameter(
+            [
+                "Gamma",
+                "ImageProcessingControl.Gamma",
+            ]
+        )
+        return {
+            "camera_exposure_time": exposure if exposure is not None else "",
+            "camera_gain": gain if gain is not None else "",
+            "camera_gamma": gamma if gamma is not None else "",
+        }

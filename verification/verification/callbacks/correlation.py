@@ -50,7 +50,7 @@ class CorrelationVerificationCallbacks:
             fpm_source = "parameter"
         frame_timeout_s = self._param_float("verify_correlation.frame_timeout_s", 2.0)
         use_autofocus_anchor = self._param_bool("verify_correlation.use_autofocus_anchor", True)
-        scan_half_range_mm = self._param_float("verify_correlation.scan_half_range_mm", 1.5)
+        scan_half_range_mm = self._param_float("verify_correlation.scan_half_range_mm", 1.0)
         autofocus_mode = self._param_int("verify_correlation.autofocus_focus_mode", 5)
         autofocus_skip_flyover = self._param_bool("verify_correlation.autofocus_skip_flyover", True)
         objective_magnification_x = self._param_float("verify_correlation.objective_magnification_x", 0.0)
@@ -237,7 +237,7 @@ class CorrelationVerificationCallbacks:
                     self.get_logger().warn(f"No image at Z={pos:.2f}")
                     continue
 
-                frame_batch, current_stamp = self._collect_correlation_frame_batch(
+                frame_batch, current_stamp, frame_stamps = self._collect_correlation_frame_batch(
                     first_frame=first_frame,
                     first_stamp=current_stamp,
                     frames_per_measurement=frames_per_measurement,
@@ -248,6 +248,29 @@ class CorrelationVerificationCallbacks:
                         f"Correlation Z={effective_pos:.3f}: only "
                         f"{len(frame_batch)}/{frames_per_measurement} frames collected."
                     )
+
+                frame_stamp_ns = [
+                    ns for ns in (self._stamp_tuple_to_ns(stamp) for stamp in frame_stamps)
+                    if ns is not None
+                ]
+                frame_stamp_first_ns = frame_stamp_ns[0] if frame_stamp_ns else ""
+                frame_stamp_last_ns = frame_stamp_ns[-1] if frame_stamp_ns else ""
+                frame_span_ms = (
+                    float((frame_stamp_ns[-1] - frame_stamp_ns[0]) / 1_000_000.0)
+                    if len(frame_stamp_ns) >= 2
+                    else ""
+                )
+                frame_interval_median_ms = ""
+                if len(frame_stamp_ns) >= 2:
+                    intervals_ms = [
+                        (b - a) / 1_000_000.0
+                        for a, b in zip(frame_stamp_ns[:-1], frame_stamp_ns[1:])
+                        if b >= a
+                    ]
+                    if intervals_ms:
+                        frame_interval_median_ms = float(np.median(intervals_ms))
+
+                camera_state = self._read_camera_exposure_gain_gamma()
 
                 tenengrad_values = []
                 valid_mtf_values = []
@@ -287,8 +310,27 @@ class CorrelationVerificationCallbacks:
                     continue
 
                 tenengrad = float(np.mean(tenengrad_values))
+                ten_std = float(np.std(tenengrad_values)) if tenengrad_values else 0.0
+                ten_p10 = float(np.percentile(tenengrad_values, 10)) if tenengrad_values else 0.0
+                ten_p90 = float(np.percentile(tenengrad_values, 90)) if tenengrad_values else 0.0
                 mtf_valid = len(valid_mtf_values) > 0
                 mtf_val = float(np.mean(valid_mtf_values)) if mtf_valid else 0.0
+                mtf_std = float(np.std(valid_mtf_values)) if mtf_valid else 0.0
+                mtf_p10 = float(np.percentile(valid_mtf_values, 10)) if mtf_valid else 0.0
+                mtf_p90 = float(np.percentile(valid_mtf_values, 90)) if mtf_valid else 0.0
+                mtf_min = float(np.min(valid_mtf_values)) if mtf_valid else 0.0
+                mtf_max = float(np.max(valid_mtf_values)) if mtf_valid else 0.0
+                frames_missing = int(max(0, frames_per_measurement - len(frame_batch)))
+                edge_samples_requested = int(len(frame_batch) * len(edge_boxes))
+                edge_samples_used = int(len(valid_mtf_values))
+                edge_sample_valid_ratio = (
+                    float(edge_samples_used / edge_samples_requested)
+                    if edge_samples_requested > 0
+                    else 0.0
+                )
+                axis_error_um = ""
+                if axis_position_mm is not None:
+                    axis_error_um = float((float(axis_position_mm) - float(pos)) * 1000.0)
                 unique_warnings = list(dict.fromkeys(warning_msgs))
                 if mtf_valid and unique_warnings:
                     self.get_logger().warn(
@@ -321,17 +363,37 @@ class CorrelationVerificationCallbacks:
                             if axis_position_mm is not None
                             else ""
                         ),
+                        "axis_error_um": axis_error_um,
+                        "frame_stamp_first_ns": frame_stamp_first_ns,
+                        "frame_stamp_last_ns": frame_stamp_last_ns,
+                        "frame_span_ms": frame_span_ms,
+                        "frame_interval_median_ms": frame_interval_median_ms,
+                        "frame_stamps_count": int(len(frame_stamp_ns)),
+                        "frame_stamps_unique_count": int(len(set(frame_stamp_ns))),
+                        "camera_exposure_time": camera_state["camera_exposure_time"],
+                        "camera_gain": camera_state["camera_gain"],
+                        "camera_gamma": camera_state["camera_gamma"],
                         "tenengrad": float(tenengrad),
+                        "tenengrad_std": float(ten_std),
+                        "tenengrad_p10": float(ten_p10),
+                        "tenengrad_p90": float(ten_p90),
                         "mtf50_lpmm": float(mtf_val),
+                        "mtf50_std_lpmm": float(mtf_std),
+                        "mtf50_p10_lpmm": float(mtf_p10),
+                        "mtf50_p90_lpmm": float(mtf_p90),
+                        "mtf50_min_lpmm": float(mtf_min),
+                        "mtf50_max_lpmm": float(mtf_max),
                         "valid": bool(mtf_valid),
                         "frames_requested": int(frames_per_measurement),
                         "frames_collected": int(len(frame_batch)),
+                        "frames_missing": int(frames_missing),
                         # Legacy alias for compatibility with existing tooling.
                         "frames_used_mtf": int(len(valid_mtf_values)),
                         "mtf_edge_samples_used": int(len(valid_mtf_values)),
                         "edge_rois_count": int(len(edge_boxes)),
-                        "edge_samples_requested": int(len(frame_batch) * len(edge_boxes)),
-                        "edge_samples_used": int(len(valid_mtf_values)),
+                        "edge_samples_requested": int(edge_samples_requested),
+                        "edge_samples_used": int(edge_samples_used),
+                        "edge_sample_valid_ratio": float(edge_sample_valid_ratio),
                         "warning_count": int(len(unique_warnings)),
                         "roi_x1": int(roi_x1),
                         "roi_y1": int(roi_y1),
@@ -376,23 +438,47 @@ class CorrelationVerificationCallbacks:
                         "position_mm",
                         "command_position_mm",
                         "axis_position_mm",
+                        "axis_error_um",
+                        "frame_stamp_first_ns",
+                        "frame_stamp_last_ns",
+                        "frame_span_ms",
+                        "frame_interval_median_ms",
+                        "frame_stamps_count",
+                        "frame_stamps_unique_count",
+                        "camera_exposure_time",
+                        "camera_gain",
+                        "camera_gamma",
                         "tenengrad",
+                        "tenengrad_std",
+                        "tenengrad_p10",
+                        "tenengrad_p90",
                         "mtf50_lpmm",
+                        "mtf50_std_lpmm",
+                        "mtf50_p10_lpmm",
+                        "mtf50_p90_lpmm",
+                        "mtf50_min_lpmm",
+                        "mtf50_max_lpmm",
                         "valid",
                         "frames_requested",
                         "frames_collected",
+                        "frames_missing",
                         "mtf_edge_samples_used",
                         "frames_used_mtf",
                         "edge_rois_count",
                         "edge_samples_requested",
                         "edge_samples_used",
+                        "edge_sample_valid_ratio",
                         "warning_count",
                         "mtf_quality_class",
                         "mtf_is_suspicious",
                         "mtf_suspicion_score",
                         "mtf_suspicion_reasons",
+                        "mtf_defocus_zone",
                         "mtf50_robust_z",
                         "mtf50_neighbor_median_lpmm",
+                        "mtf50_delta_neighbor_lpmm",
+                        "mtf50_ratio_neighbor",
+                        "mtf_exclude_from_peak_fit",
                         "tenengrad_norm",
                         "mtf50_norm",
                         "roi_x1",
@@ -580,6 +666,7 @@ class CorrelationVerificationCallbacks:
     ):
         """Collect fresh frames for temporal averaging at a single scan point."""
         frames = [first_frame]
+        stamps = [first_stamp] if first_stamp is not None else []
         stamp = first_stamp
         for _ in range(max(0, int(frames_per_measurement) - 1)):
             next_frame, stamp = self._wait_for_fresh_cv_image(
@@ -588,7 +675,9 @@ class CorrelationVerificationCallbacks:
             if next_frame is None:
                 break
             frames.append(next_frame)
-        return frames, stamp
+            if stamp is not None:
+                stamps.append(stamp)
+        return frames, stamp, stamps
 
     def _select_locked_correlation_edge_rois(
         self,

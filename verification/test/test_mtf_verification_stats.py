@@ -119,6 +119,9 @@ def test_annotate_correlation_mtf_quality_flags_suspicious_low_tenengrad_spike()
     assert summary["points_suspicious"] >= 1
     assert len(suspicious) >= 1
     assert any("low_ten_high_mtf" in r.get("mtf_suspicion_reasons", "") for r in suspicious)
+    assert any(bool(r.get("mtf_defocus_zone")) for r in suspicious)
+    assert any(bool(r.get("mtf_exclude_from_peak_fit")) for r in suspicious)
+    assert any(float(r.get("mtf50_ratio_neighbor", 0.0) or 0.0) > 1.0 for r in suspicious)
 
 
 def test_annotate_correlation_mtf_quality_marks_invalid_rows():

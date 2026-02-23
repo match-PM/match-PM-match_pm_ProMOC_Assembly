@@ -41,6 +41,43 @@ def export_debug(
         stem = f"{config.debug_export_prefix}_{safe_label}_{time.time_ns()}"
 
         if config.debug_export_csv:
+            # ESF CSV (separate)
+            esf_len = int(esf.size)
+            if esf_len > 0:
+                esf_cols = [np.arange(esf_len, dtype=int), esf]
+                esf_headers = ["index", "esf_used"]
+                if esf_raw is not None and esf_raw.size > 0:
+                    esf_raw_pad = np.full(esf_len, np.nan)
+                    esf_raw_pad[:min(esf_len, esf_raw.size)] = esf_raw[:min(esf_len, esf_raw.size)]
+                    esf_cols.append(esf_raw_pad)
+                    esf_headers.append("esf_raw")
+                np.savetxt(
+                    out_dir / f"{stem}_esf.csv",
+                    np.column_stack(esf_cols),
+                    delimiter=",",
+                    header=",".join(esf_headers),
+                    comments="",
+                )
+
+            # LSF CSV (separate)
+            lsf_len = int(max(lsf.size, lsf_windowed.size))
+            if lsf_len > 0:
+                lsf_pad = np.full(lsf_len, np.nan)
+                lsfw_pad = np.full(lsf_len, np.nan)
+                lsf_pad[:lsf.size] = lsf
+                lsfw_pad[:lsf_windowed.size] = lsf_windowed
+                np.savetxt(
+                    out_dir / f"{stem}_lsf.csv",
+                    np.column_stack([
+                        np.arange(lsf_len, dtype=int),
+                        lsf_pad,
+                        lsfw_pad,
+                    ]),
+                    delimiter=",",
+                    header="index,lsf,lsf_windowed",
+                    comments="",
+                )
+
             max_len = max(esf.size, lsf.size, lsf_windowed.size)
             esf_pad = np.full(max_len, np.nan)
             lsf_pad = np.full(max_len, np.nan)

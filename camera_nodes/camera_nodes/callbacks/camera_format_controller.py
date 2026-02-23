@@ -136,15 +136,29 @@ class CameraFormatController:
     def _is_switch_logging_enabled(self) -> bool:
         return self._get_bool_param('mtf.log_format_switch', True)
 
+    @staticmethod
+    def _collect_mismatches(actual: dict, target: dict, keys: list[str]) -> list[str]:
+        """Return list of key mismatch diagnostics in the form key=actual!=target."""
+        mismatches = []
+        for key in keys:
+            if key not in actual or key not in target:
+                continue
+            if int(actual[key]) != int(target[key]):
+                mismatches.append(f"{key}={actual[key]}!={target[key]}")
+        return mismatches
+
     def read_state(self):
         """Read current ROI/Binning state from camera parameter services."""
+        last_failure_reason = ""
         for set_service in self.PARAM_SET_SERVICES:
             clients = self._get_service_clients(set_service)
             set_client = clients['set']
             get_client = clients['get']
-            if not set_client.wait_for_service(timeout_sec=0.5):
+            if not set_client.wait_for_service(timeout_sec=1.0):
+                last_failure_reason = f"set service unavailable: {set_service}"
                 continue
-            if not get_client.wait_for_service(timeout_sec=0.5):
+            if not get_client.wait_for_service(timeout_sec=1.0):
+                last_failure_reason = f"get service unavailable: {clients['get_service']}"
                 continue
 
             for names in self.FORMAT_PARAM_NAME_VARIANTS:
@@ -152,8 +166,16 @@ class CameraFormatController:
                 query_names = [names[k] for k in keys]
                 res = self._call_get_parameters(get_client, query_names)
                 if not res or not res.values or len(res.values) != len(query_names):
+                    last_failure_reason = (
+                        f"empty/incomplete get_parameters response from {clients['get_service']} "
+                        f"for names={query_names}"
+                    )
                     continue
                 if all(v.type == ParameterType.PARAMETER_NOT_SET for v in res.values):
+                    last_failure_reason = (
+                        f"all queried format params not-set on {clients['get_service']} "
+                        f"for names={query_names}"
+                    )
                     continue
 
                 values = {}
@@ -165,6 +187,10 @@ class CameraFormatController:
                         available_keys.add(key)
 
                 if 'width' not in values or 'height' not in values:
+                    last_failure_reason = (
+                        f"format params missing width/height on {clients['get_service']} "
+                        f"for names={query_names}"
+                    )
                     continue
 
                 return {
@@ -174,7 +200,47 @@ class CameraFormatController:
                     'available_keys': sorted(available_keys),
                 }
 
+        if self._is_switch_logging_enabled() and last_failure_reason:
+            self._node.get_logger().warn(
+                f"Camera format read_state failed: {last_failure_reason}"
+            )
         return None
+
+    def _try_set_full_frame_without_state(self, target: dict) -> bool:
+        """Fallback: try switching to full-frame even when current state is unreadable."""
+        for set_service in self.PARAM_SET_SERVICES:
+            clients = self._get_service_clients(set_service)
+            set_client = clients['set']
+            if not set_client.wait_for_service(timeout_sec=1.0):
+                continue
+
+            for names in self.FORMAT_PARAM_NAME_VARIANTS:
+                state_full = {
+                    'set_service': set_service,
+                    'names': names,
+                    'available_keys': [k for k in ('width', 'height', 'offset_x', 'offset_y', 'bin_h', 'bin_v') if k in names],
+                }
+                if self.set_format(state_full, target):
+                    if self._is_switch_logging_enabled():
+                        self._node.get_logger().info(
+                            f"Camera format fallback switch succeeded via {set_service} with names={list(names.values())}"
+                        )
+                    return True
+
+                # Retry with minimal required keys only (width/height)
+                state_min = {
+                    'set_service': set_service,
+                    'names': names,
+                    'available_keys': [k for k in ('width', 'height') if k in names],
+                }
+                minimal_target = {k: target[k] for k in ('width', 'height') if k in target}
+                if self.set_format(state_min, minimal_target):
+                    if self._is_switch_logging_enabled():
+                        self._node.get_logger().info(
+                            f"Camera format fallback switch (minimal) succeeded via {set_service} with names={list(names.values())}"
+                        )
+                    return True
+        return False
 
     def set_format(self, state: dict, target_values: dict) -> bool:
         """Apply target ROI/Binning values via parameter service."""
@@ -268,11 +334,42 @@ class CameraFormatController:
 
         state = self.read_state()
         if state is None:
-            self._node.get_logger().warn(
-                'Could not read current camera ROI/Binning state. '
-                'Proceeding with current image for MTF.'
-            )
-            return None, None
+            full_w_default = self._get_int_param('mtf.full_frame_width', 5536)
+            full_h_default = self._get_int_param('mtf.full_frame_height', 3692)
+            target = {
+                'width': int(full_w_default),
+                'height': int(full_h_default),
+                'offset_x': self._get_int_param('mtf.full_frame_offset_x', 0),
+                'offset_y': self._get_int_param('mtf.full_frame_offset_y', 0),
+                'bin_h': self._get_int_param('mtf.full_frame_binning', 1),
+                'bin_v': self._get_int_param('mtf.full_frame_binning', 1),
+            }
+            if self._is_switch_logging_enabled():
+                self._node.get_logger().warn(
+                    'Could not read current camera ROI/Binning state. '
+                    'Trying fallback full-frame switch without restore-state.'
+                )
+            if not self._try_set_full_frame_without_state(target):
+                self._node.get_logger().warn(
+                    'Fallback full-frame switch failed. Proceeding with current image for MTF.'
+                )
+                return None, None
+
+            settle_s = self._get_float_param('mtf.full_frame_settle_s', 0.25)
+            if settle_s > 0:
+                time.sleep(settle_s)
+
+            timeout_s = self._get_float_param('mtf.full_frame_image_timeout_s', 2.0)
+            new_image, _ = wait_for_new_image_fn(last_ts_ns, timeout=timeout_s)
+            if new_image is None:
+                new_image, _ = get_latest_image_fn()
+
+            if self._is_switch_logging_enabled() and new_image is not None:
+                img_h, img_w = new_image.shape[:2]
+                self._node.get_logger().info(
+                    f'MTF fallback switch image: {img_w}x{img_h}'
+                )
+            return None, new_image
 
         current = dict(state.get('values', {}))
         restore_state = {
@@ -318,10 +415,25 @@ class CameraFormatController:
             applied_state = self.read_state()
             if applied_state:
                 applied_values = applied_state.get('values', {})
+                verify_keys = [
+                    key for key in ('width', 'height', 'offset_x', 'offset_y', 'bin_h', 'bin_v')
+                    if key in applied_values and key in target
+                ]
+                mismatches = self._collect_mismatches(applied_values, target, verify_keys)
                 self._node.get_logger().info(
                     f"MTF format switch applied: actual={self._format_values(applied_values)} "
                     f"service={applied_state.get('set_service', '?')}"
                 )
+                if mismatches:
+                    self._node.get_logger().warn(
+                        'MTF format switch verification MISMATCH: '
+                        + ', '.join(mismatches)
+                        + ' (crop might still be active).'
+                    )
+                else:
+                    self._node.get_logger().info(
+                        'MTF format switch verification OK: crop OFF, FULL resolution active.'
+                    )
             else:
                 self._node.get_logger().warn(
                     'MTF format switch verification unavailable: failed to read back camera state.'

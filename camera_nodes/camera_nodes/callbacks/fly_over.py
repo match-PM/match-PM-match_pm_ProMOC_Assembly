@@ -212,6 +212,8 @@ class FlyOverDetector:
         peak_ratio: float,
         margin: float,
         backtrack: float,
+        guard: float,
+        min_window_width: float,
         threshold: float,
     ) -> FlyOverResult:
         """Analyze collected fly-over data and determine peak window."""
@@ -284,8 +286,17 @@ class FlyOverDetector:
         peak_window_min = float(positions[seg_start])
         peak_window_max = float(positions[seg_end])
 
-        peak_window_min_m = peak_window_min - max(margin, backtrack)
-        peak_window_max_m = peak_window_max + margin
+        peak_window_min_m = peak_window_min - max(margin, backtrack) - max(0.0, guard)
+        peak_window_max_m = peak_window_max + margin + max(0.0, guard)
+
+        # Safety net against local maxima lock-in:
+        # enforce a minimum coarse search width around the detected peak center.
+        enforced_min_width = max(0.0, float(min_window_width))
+        current_width = float(peak_window_max_m - peak_window_min_m)
+        if enforced_min_width > 0.0 and current_width < enforced_min_width:
+            half = 0.5 * enforced_min_width
+            peak_window_min_m = min(peak_window_min_m, max_stddev_pos - half)
+            peak_window_max_m = max(peak_window_max_m, max_stddev_pos + half)
 
         self._node.get_logger().info(
             f"Fly-Over: Peak at {max_stddev_pos:.2f}mm (std={max_stddev:.2f}, source={peak_source}, "
@@ -294,7 +305,8 @@ class FlyOverDetector:
             f"Window points={int(np.count_nonzero(valid_mask))} "
             f"(ratio_thr={dynamic_threshold:.2f}, baseline={baseline_stddev:.2f}, "
             f"noise_sigma={noise_sigma:.3f}, snr_thr={snr_threshold:.2f}). "
-            f"Auto-Window: {peak_window_min_m:.2f}-{peak_window_max_m:.2f}mm (margin={margin}mm)"
+            f"Auto-Window: {peak_window_min_m:.2f}-{peak_window_max_m:.2f}mm "
+            f"(margin={margin}mm, guard={guard}mm, min_width={enforced_min_width}mm)"
         )
 
         peak_start = max(start_pos, peak_window_min_m)
@@ -314,6 +326,8 @@ class FlyOverDetector:
 
         margin = self._param_float("autofocus.fly_over.peak_window_margin_mm", 8.0)
         backtrack = self._param_float("autofocus.fly_over.backtrack_mm", 8.0)
+        guard = self._param_float("autofocus.fly_over.peak_window_guard_mm", 0.0)
+        min_window_width = self._param_float("autofocus.fly_over.min_peak_window_width_mm", 0.0)
         full_scan = self._param_bool("autofocus.fly_over.full_scan_for_peak", True)
         threshold = self._param_float("autofocus.fly_over.detection_stddev_threshold", 0.0)
 
@@ -350,6 +364,7 @@ class FlyOverDetector:
         poll_s = min(base_poll_s, max(0.005, max_sample_step_mm / max(effective_real_speed, 1e-6)))
         self._node.get_logger().info(
             f"Fly-Over Params: ratio={peak_ratio:.2f}, margin={margin:.2f}mm, backtrack={backtrack:.2f}mm, "
+            f"guard={guard:.2f}mm, min_width={min_window_width:.2f}mm, "
             f"target_speed={target_scan_speed:.2f}mm/s cmd_speed={cmd_scan_speed:.2f}mm/s "
             f"est_real_speed={effective_real_speed:.2f}mm/s axis_scale={axis_speed_scale:.3f} poll={poll_s:.3f}s"
         )
@@ -372,5 +387,7 @@ class FlyOverDetector:
             peak_ratio=float(peak_ratio),
             margin=float(margin),
             backtrack=float(backtrack),
+            guard=float(guard),
+            min_window_width=float(min_window_width),
             threshold=float(threshold),
         )

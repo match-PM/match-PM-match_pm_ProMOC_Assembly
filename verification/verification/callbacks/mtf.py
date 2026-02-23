@@ -1,5 +1,6 @@
 """MTF verification callbacks and helper methods."""
 
+from collections import Counter
 import csv
 from datetime import datetime
 from pathlib import Path
@@ -161,6 +162,7 @@ class MTFVerificationCallbacks:
                 rep_valid_edges = 0
                 rep_total_edges = 0
                 rep_mtf50_values = []
+                rep_error_reasons = Counter()
 
                 rep_vis, _, rep_squares = RoiDetector.detect_targets(cv_image)
                 if rep_vis is None or rep_vis.size == 0:
@@ -226,7 +228,7 @@ class MTFVerificationCallbacks:
                             except Exception:
                                 pass
 
-                    frame_batch, current_stamp = self._collect_frame_batch(
+                    frame_batch, current_stamp, frame_stamps = self._collect_frame_batch(
                         first_frame=cv_image,
                         first_stamp=current_stamp,
                         frames_per_measurement=frames_per_measurement,
@@ -237,6 +239,35 @@ class MTFVerificationCallbacks:
                             f"Rep {rep + 1}: only {len(frame_batch)}/{frames_per_measurement} "
                             f"frames collected for averaging."
                         )
+
+                    frame_stamp_ns = [
+                        ns for ns in (self._stamp_tuple_to_ns(stamp) for stamp in frame_stamps)
+                        if ns is not None
+                    ]
+                    frame_stamp_first_ns = frame_stamp_ns[0] if frame_stamp_ns else ""
+                    frame_stamp_last_ns = frame_stamp_ns[-1] if frame_stamp_ns else ""
+                    frame_span_ms = (
+                        float((frame_stamp_ns[-1] - frame_stamp_ns[0]) / 1_000_000.0)
+                        if len(frame_stamp_ns) >= 2
+                        else ""
+                    )
+                    frame_interval_median_ms = ""
+                    if len(frame_stamp_ns) >= 2:
+                        intervals_ms = [
+                            (b - a) / 1_000_000.0
+                            for a, b in zip(frame_stamp_ns[:-1], frame_stamp_ns[1:])
+                            if b >= a
+                        ]
+                        if intervals_ms:
+                            frame_interval_median_ms = float(np.median(intervals_ms))
+                    frames_missing = int(max(0, frames_per_measurement - len(frame_batch)))
+                    axis_delta_from_start_um = ""
+                    axis_start = metadata.get("axis_position_start_mm", "")
+                    if axis_position_mm is not None and axis_start not in ("", None):
+                        axis_delta_from_start_um = float(
+                            (float(axis_position_mm) - float(axis_start)) * 1000.0
+                        )
+                    camera_state = self._read_camera_exposure_gain_gamma()
 
                     for roi_img, (x, y, w_box, h_box), edge_name in edges_with_boxes:
                         rep_total_edges += 1
@@ -279,6 +310,17 @@ class MTFVerificationCallbacks:
                                 if axis_position_mm is not None
                                 else ""
                             ),
+                            "axis_delta_from_start_um": axis_delta_from_start_um,
+                            "frame_stamp_first_ns": frame_stamp_first_ns,
+                            "frame_stamp_last_ns": frame_stamp_last_ns,
+                            "frame_span_ms": frame_span_ms,
+                            "frame_interval_median_ms": frame_interval_median_ms,
+                            "frame_stamps_count": int(len(frame_stamp_ns)),
+                            "frame_stamps_unique_count": int(len(set(frame_stamp_ns))),
+                            "frames_missing": int(frames_missing),
+                            "camera_exposure_time": camera_state["camera_exposure_time"],
+                            "camera_gain": camera_state["camera_gain"],
+                            "camera_gamma": camera_state["camera_gamma"],
                             "position": pos_name,
                             "edge": edge_name,
                             "roi_x": int(x),
@@ -330,6 +372,7 @@ class MTFVerificationCallbacks:
                                     mtf_curves_plot.append(curve)
                         else:
                             edges_failed += 1
+                            rep_error_reasons[str(edge_error or "no_valid_mtf_sample")] += 1
                             row.update(
                                 {
                                     "mtf50_lpmm": "0",
@@ -349,10 +392,16 @@ class MTFVerificationCallbacks:
                         if rep_mtf50_values
                         else "n/a"
                     )
+                    top_error_txt = ""
+                    if rep_error_reasons:
+                        top_reasons = rep_error_reasons.most_common(2)
+                        top_error_txt = " | fail_reasons=" + "; ".join(
+                            f"{reason}:{count}" for reason, count in top_reasons
+                        )
                     self.get_logger().info(
                         f"MTF Rep {rep + 1}/{repetitions}: done "
                         f"(valid_edges={rep_valid_edges}/{rep_total_edges}, "
-                        f"mtf50_mean={mtf50_mean_txt})"
+                        f"mtf50_mean={mtf50_mean_txt}{top_error_txt})"
                     )
         finally:
             if results:
@@ -364,6 +413,17 @@ class MTFVerificationCallbacks:
                     "config",
                     "repetition",
                     "axis_position_mm",
+                    "axis_delta_from_start_um",
+                    "frame_stamp_first_ns",
+                    "frame_stamp_last_ns",
+                    "frame_span_ms",
+                    "frame_interval_median_ms",
+                    "frame_stamps_count",
+                    "frame_stamps_unique_count",
+                    "frames_missing",
+                    "camera_exposure_time",
+                    "camera_gain",
+                    "camera_gamma",
                     "position",
                     "edge",
                     "roi_x",
@@ -459,6 +519,7 @@ class MTFVerificationCallbacks:
     ):
         """Collect a time series of fresh frames for temporal averaging."""
         frames = [first_frame]
+        stamps = [first_stamp] if first_stamp is not None else []
         stamp = first_stamp
         for _ in range(max(0, int(frames_per_measurement) - 1)):
             next_frame, stamp = self._wait_for_fresh_cv_image(
@@ -467,7 +528,9 @@ class MTFVerificationCallbacks:
             if next_frame is None:
                 break
             frames.append(next_frame)
-        return frames, stamp
+            if stamp is not None:
+                stamps.append(stamp)
+        return frames, stamp, stamps
 
     def _compute_edge_mtf_average(self, analyzer, frame_batch, bbox, pos_name, edge_name):
         """Compute averaged edge MTF metrics over a frame batch."""
