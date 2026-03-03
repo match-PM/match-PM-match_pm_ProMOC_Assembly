@@ -40,7 +40,7 @@ def test_camera_axis_topic_supports_canonical_and_legacy_paths():
         ROOT / "camera_nodes" / "camera_nodes" / "camera_node.py"
     ).read_text(encoding="utf-8", errors="ignore")
     simulator_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "camera_simulator.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "nodes" / "camera_simulator.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "/promoc/linear_axis/" in node_content

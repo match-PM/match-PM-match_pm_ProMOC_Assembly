@@ -38,13 +38,20 @@ Release N compatibility:
 
 - legacy aliases under `/promoc/camera_node/*` remain available with deprecation warnings.
 
+Internal package layout (simplified):
+
+- `camera_nodes/camera_nodes/camera_node.py` (main node)
+- `camera_nodes/camera_nodes/nodes/camera_simulator.py` (sim-only node)
+- `camera_nodes/camera_nodes/handlers/` (service logic)
+- `camera_nodes/camera_nodes/support/` (shared parameter/MTF/image-processing helpers)
+
 ## Where To Edit
 
 | Goal | Start Here | Then Check |
 |---|---|---|
 | Change service wiring and registration | `camera_nodes/camera_nodes/camera_node.py` | `camera_nodes/camera_nodes/services.py` |
 | Change autofocus behavior | `camera_nodes/camera_nodes/handlers/autofocus_handler.py` | `camera_nodes/camera_nodes/algorithms/autofocus.py` |
-| Change MTF behavior and export mapping | `camera_nodes/camera_nodes/handlers/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/mtf_param_mapping.py` |
+| Change MTF behavior and export mapping | `camera_nodes/camera_nodes/handlers/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/support/mtf_param_mapping.py` |
 | Change camera parameter model/defaults | `camera_nodes/camera_nodes/config.py` | `promoc_bringup/config/cameras/*.yaml` |
 | Change hardware/sim driver behavior | `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py` | `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py` |
 

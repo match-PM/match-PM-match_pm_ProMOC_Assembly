@@ -86,7 +86,7 @@ from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 
 # Local imports
-from .camera_image_processing import CameraImageProcessing
+from .support.image_processing import CameraImageProcessing
 from .config import (
     declare_camera_parameters,
     load_camera_runtime_config,

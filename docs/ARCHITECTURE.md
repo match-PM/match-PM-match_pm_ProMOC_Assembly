@@ -18,7 +18,7 @@ This document explains how the repository is structured and where to add or chan
 | Package | Responsibility | Main Entrypoints | Depends On |
 |---|---|---|---|
 | `promoc_bringup` | Launch files, runtime-mode resolution, user config mapping | `launch/system.launch.py`, `launch/camera.launch.py`, `promoc_bringup/launch_utils.py` | all runtime node packages |
-| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_node.py`, `camera_nodes/services.py`, `camera_nodes/handlers/*` | `promoc_assembly_interfaces`, `promoc_core` |
+| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/camera_node.py`, `camera_nodes/camera_nodes/services.py`, `camera_nodes/camera_nodes/handlers/*`, `camera_nodes/camera_nodes/support/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/lts300_node.py`, `lts300_interface.py`, `lts300_service_callbacks.py` | `promoc_assembly_interfaces`, `promoc_core` |
 | `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/mover_node.py`, `mover_pmc_interface.py`, `callbacks/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `promoc_assembly_interfaces` | ROS2 `srv`/`msg` contracts | `srv/*`, `msg/*` | none |

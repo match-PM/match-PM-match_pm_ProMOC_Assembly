@@ -23,7 +23,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-from .drivers import SimulatedCameraDriver
+from ..drivers import SimulatedCameraDriver
 
 
 class CameraSimulator(Node):

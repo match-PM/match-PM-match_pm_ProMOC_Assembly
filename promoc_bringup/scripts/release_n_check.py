@@ -42,6 +42,16 @@ def _check_contains(
     return CheckResult(name=name, ok=ok, detail=detail)
 
 
+def _check_not_contains(
+    root: Path, rel_path: str, needles: list[str], name: str
+) -> CheckResult:
+    content = _read_text(root, rel_path)
+    present = [needle for needle in needles if needle in content]
+    ok = len(present) == 0
+    detail = "" if ok else f"{rel_path}: unexpected {present}"
+    return CheckResult(name=name, ok=ok, detail=detail)
+
+
 def _evaluate(root: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
 
@@ -85,6 +95,46 @@ def _evaluate(root: Path) -> list[CheckResult]:
                 "/promoc/camera_node/detect_rois",
             ],
             "camera services expose canonical + legacy paths",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "camera_nodes/camera_nodes/camera_node.py",
+            ["from .support.image_processing import CameraImageProcessing"],
+            "camera node imports image processing from support package",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "camera_nodes/setup.py",
+            ["camera_simulator = camera_nodes.nodes.camera_simulator:main"],
+            "camera simulator entrypoint uses nodes subpackage",
+        )
+    )
+    results.append(
+        _check_not_contains(
+            root,
+            "camera_nodes/setup.py",
+            ["camera_watchdog"],
+            "camera watchdog entrypoint removed from package setup",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "promoc_bringup/launch/camera.launch.py",
+            ['executable="camera_simulator"'],
+            "camera launch includes simulator node",
+        )
+    )
+    results.append(
+        _check_not_contains(
+            root,
+            "promoc_bringup/launch/camera.launch.py",
+            ["camera_watchdog"],
+            "camera launch no longer starts watchdog node",
         )
     )
     results.append(

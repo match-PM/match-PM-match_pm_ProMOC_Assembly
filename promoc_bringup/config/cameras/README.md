@@ -207,7 +207,7 @@ Before production use:
 - ✅ Verify calibration accuracy
 - ✅ Measure actual MTF
 - ✅ Check frame rate stability
-- ✅ Test auto-recovery (watchdog)
+- ✅ Verify stable recovery path via pre-launch reset + restart flow
 
 ### 5. **Backup Calibration**
 Save calibration files separately:
@@ -278,3 +278,4 @@ For camera configuration assistance:
 
 **Last Updated**: 2026-01-29  
 **Default Camera**: IDS U3-3800CP-c-HQ Rev.2.2
+

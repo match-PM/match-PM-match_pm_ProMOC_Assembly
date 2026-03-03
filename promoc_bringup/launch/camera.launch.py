@@ -214,24 +214,6 @@ def launch_setup(context, *args, **kwargs):
             )
         )
 
-        actions.append(
-            Node(
-                package="camera_nodes",
-                executable="camera_watchdog",
-                name="camera_watchdog",
-                namespace="promoc",
-                output="screen",
-                arguments=["--ros-args", "--log-level", "INFO"],
-                parameters=[
-                    {
-                        "image_topic": "/promoc/assembly_camera/stream0/image_raw",
-                        "timeout_seconds": 10.0,
-                        "enable_auto_reset": True,
-                        "reset_cooldown_seconds": 30.0,
-                    }
-                ],
-            )
-        )
     except Exception as exc:
         logger.error(f"Failed to load camera configuration: {exc}")
 

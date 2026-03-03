@@ -11,7 +11,7 @@ from .base import CallbackBase
 from .camera_format_controller import CameraFormatController
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
-from ..mtf_param_mapping import apply_mtf_param_mapping
+from ..support.mtf_param_mapping import apply_mtf_param_mapping
 from promoc_core.error_handling import handle_service_errors
 
 MTF_AVG_SAMPLES = 10
