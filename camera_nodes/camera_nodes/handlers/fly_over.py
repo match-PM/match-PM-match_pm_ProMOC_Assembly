@@ -7,7 +7,11 @@ import time
 
 import numpy as np
 
-from promoc_assembly_interfaces.srv import GetOperationStatus, GetVelocityParameters, MoveAbsolute
+from promoc_assembly_interfaces.srv import (
+    GetOperationStatus,
+    GetVelocityParameters,
+    MoveAbsolute,
+)
 from promoc_core.promoc_exceptions import ServiceError
 
 from .axis_helpers import temporary_velocity
@@ -103,7 +107,9 @@ class FlyOverDetector:
         return smoothed
 
     @staticmethod
-    def _select_component_bounds(mask: np.ndarray, center_index: int) -> tuple[int, int] | None:
+    def _select_component_bounds(
+        mask: np.ndarray, center_index: int
+    ) -> tuple[int, int] | None:
         """Select connected True segment nearest to center_index."""
         indices = np.flatnonzero(mask)
         if indices.size == 0:
@@ -122,7 +128,10 @@ class FlyOverDetector:
                 return int(start - center_index)
             return int(center_index - end)
 
-        best = min(zip(starts, ends), key=lambda seg: _distance_to_segment(int(seg[0]), int(seg[1])))
+        best = min(
+            zip(starts, ends),
+            key=lambda seg: _distance_to_segment(int(seg[0]), int(seg[1])),
+        )
         return int(best[0]), int(best[1])
 
     def _collect_scan_data(
@@ -162,10 +171,17 @@ class FlyOverDetector:
             if current_pos < 0 or (time.time() - last_pos_time > 1.0):
                 use_estimate = True
                 elapsed = time.time() - scan_start_time
-                current_pos = max(start_pos, min(end_pos, scan_start_pos + (effective_real_speed * elapsed)))
+                current_pos = max(
+                    start_pos,
+                    min(end_pos, scan_start_pos + (effective_real_speed * elapsed)),
+                )
 
             cv_image, image_ts = self._get_latest_cv_image()
-            if cv_image is not None and image_ts is not None and image_ts != last_image_ts:
+            if (
+                cv_image is not None
+                and image_ts is not None
+                and image_ts != last_image_ts
+            ):
                 last_image_ts = image_ts
                 green = cv_image[:, :, 1] if len(cv_image.shape) == 3 else cv_image
                 roi = self._get_center_roi(green, roi_size)
@@ -174,7 +190,9 @@ class FlyOverDetector:
 
                 if time.time() - last_log_time >= 0.1:
                     action_tag = "EST" if use_estimate else "REAL"
-                    self._node.get_logger().info(f"Fly-Over [{action_tag}]: x={current_pos:.2f}mm std={stddev:.2f}")
+                    self._node.get_logger().info(
+                        f"Fly-Over [{action_tag}]: x={current_pos:.2f}mm std={stddev:.2f}"
+                    )
                     last_log_time = time.time()
 
             if status and status.operation_status == "idle":
@@ -211,7 +229,9 @@ class FlyOverDetector:
         std_values_raw = np.array([s for _, s in scan_data], dtype=np.float64)
 
         smooth_window = self._param_int("autofocus.fly_over.smooth_window_samples", 5)
-        baseline_percentile = self._param_float("autofocus.fly_over.baseline_percentile", 20.0)
+        baseline_percentile = self._param_float(
+            "autofocus.fly_over.baseline_percentile", 20.0
+        )
         baseline_percentile = min(50.0, max(0.0, baseline_percentile))
         snr_threshold = self._param_float("autofocus.fly_over.snr_threshold", 3.0)
         snr_threshold = max(0.5, snr_threshold)
@@ -235,7 +255,9 @@ class FlyOverDetector:
         max_stddev = float(std_values_eval[peak_index])
 
         baseline_stddev = float(np.percentile(std_values_eval, baseline_percentile))
-        dynamic_threshold = baseline_stddev + (max_stddev - baseline_stddev) * peak_ratio
+        dynamic_threshold = (
+            baseline_stddev + (max_stddev - baseline_stddev) * peak_ratio
+        )
         dynamic_threshold = min(max_stddev, max(0.0, dynamic_threshold))
 
         noise_sigma = self._robust_mad_sigma(std_values_raw - std_values_smooth)
@@ -264,7 +286,9 @@ class FlyOverDetector:
 
         segment_bounds = self._select_component_bounds(valid_mask, peak_index)
         if segment_bounds is None:
-            self._node.get_logger().warn("No connected valid segment around fly-over peak.")
+            self._node.get_logger().warn(
+                "No connected valid segment around fly-over peak."
+            )
             return FlyOverResult(None, None, max_stddev)
 
         seg_start, seg_end = segment_bounds
@@ -298,11 +322,22 @@ class FlyOverDetector:
         peak_end = min(end_pos, peak_window_max_m)
         return FlyOverResult(peak_start, peak_end, max_stddev)
 
-    def detect(self, start_pos: float, end_pos: float, clients, focus_profile: dict | None = None) -> FlyOverResult:
+    def detect(
+        self,
+        start_pos: float,
+        end_pos: float,
+        clients,
+        focus_profile: dict | None = None,
+    ) -> FlyOverResult:
         """Run fly-over scan and return detected peak window."""
         roi_size = self._param_int("autofocus.fly_over.roi_size", 512)
         base_poll_s = self._param_float("autofocus.fly_over.detection_poll_s", 0.05)
-        max_sample_step_mm = float((focus_profile or {}).get("max_sample_step_mm", self._param_float("autofocus.fly_over.max_sample_step_mm", 0.1)))
+        max_sample_step_mm = float(
+            (focus_profile or {}).get(
+                "max_sample_step_mm",
+                self._param_float("autofocus.fly_over.max_sample_step_mm", 0.1),
+            )
+        )
 
         peak_ratio = self._param_float("autofocus.fly_over.peak_window_ratio", 0.5)
         if peak_ratio <= 0.0:
@@ -312,15 +347,24 @@ class FlyOverDetector:
         margin = self._param_float("autofocus.fly_over.peak_window_margin_mm", 8.0)
         backtrack = self._param_float("autofocus.fly_over.backtrack_mm", 8.0)
         guard = self._param_float("autofocus.fly_over.peak_window_guard_mm", 0.0)
-        min_window_width = self._param_float("autofocus.fly_over.min_peak_window_width_mm", 0.0)
+        min_window_width = self._param_float(
+            "autofocus.fly_over.min_peak_window_width_mm", 0.0
+        )
         full_scan = self._param_bool("autofocus.fly_over.full_scan_for_peak", True)
-        threshold = self._param_float("autofocus.fly_over.detection_stddev_threshold", 0.0)
+        threshold = self._param_float(
+            "autofocus.fly_over.detection_stddev_threshold", 0.0
+        )
 
         vel_backup = clients["get_vel"].call(GetVelocityParameters.Request())
         if not vel_backup or not vel_backup.success:
             raise ServiceError("Failed to read velocity parameters")
 
-        target_scan_speed = float((focus_profile or {}).get("scan_speed_mm_s", self._param_float("autofocus.fly_over.scan_speed_fast", 5.0)))
+        target_scan_speed = float(
+            (focus_profile or {}).get(
+                "scan_speed_mm_s",
+                self._param_float("autofocus.fly_over.scan_speed_fast", 5.0),
+            )
+        )
         axis_speed_scale = float((focus_profile or {}).get("axis_speed_scale", 1.0))
         if axis_speed_scale <= 0:
             axis_speed_scale = 1.0
@@ -342,11 +386,17 @@ class FlyOverDetector:
                 )
                 effective_real_speed = speed_cap
                 cmd_scan_speed = max(0.01, effective_real_speed / axis_speed_scale)
-                if vel_backup.max_velocity > 0 and cmd_scan_speed > vel_backup.max_velocity:
+                if (
+                    vel_backup.max_velocity > 0
+                    and cmd_scan_speed > vel_backup.max_velocity
+                ):
                     cmd_scan_speed = float(vel_backup.max_velocity)
                     effective_real_speed = max(0.01, cmd_scan_speed * axis_speed_scale)
 
-        poll_s = min(base_poll_s, max(0.005, max_sample_step_mm / max(effective_real_speed, 1e-6)))
+        poll_s = min(
+            base_poll_s,
+            max(0.005, max_sample_step_mm / max(effective_real_speed, 1e-6)),
+        )
         self._node.get_logger().info(
             f"Fly-Over Params: ratio={peak_ratio:.2f}, margin={margin:.2f}mm, backtrack={backtrack:.2f}mm, "
             f"guard={guard:.2f}mm, min_width={min_window_width:.2f}mm, "

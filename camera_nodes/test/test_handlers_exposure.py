@@ -72,7 +72,9 @@ class _Response:
 
 def test_exposure_handler_sets_exposure_on_valid_request():
     driver = _Driver()
-    node = _Node({"exposure.settle_frames_after_set": 0, "exposure.frame_timeout_s": 0.1})
+    node = _Node(
+        {"exposure.settle_frames_after_set": 0, "exposure.frame_timeout_s": 0.1}
+    )
     handler = ExposureHandler(node=node, camera_driver=driver)
     response = handler.manual_set_exposure_callback(_Request(2500.0), _Response())
 

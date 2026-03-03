@@ -69,4 +69,3 @@ def test_deprecated_override_warning():
 
     assert node.warnings
     assert "mtf_csv_path" in node.warnings[0]
-

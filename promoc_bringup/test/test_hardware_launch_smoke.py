@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_system_launch_defaults_to_hardware_mode():
-    content = (
-        ROOT / "promoc_bringup" / "launch" / "system.launch.py"
-    ).read_text(encoding="utf-8", errors="ignore")
+    content = (ROOT / "promoc_bringup" / "launch" / "system.launch.py").read_text(
+        encoding="utf-8", errors="ignore"
+    )
     assert "DeclareLaunchArgument(" in content
     assert '"runtime_mode"' in content
     assert "hardware" in content

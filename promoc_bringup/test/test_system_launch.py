@@ -14,9 +14,9 @@ def test_system_launch_file_exists():
 
 
 def test_system_launch_includes_camera_and_mover():
-    content = (
-        ROOT / "promoc_bringup" / "launch" / "system.launch.py"
-    ).read_text(encoding="utf-8", errors="ignore")
+    content = (ROOT / "promoc_bringup" / "launch" / "system.launch.py").read_text(
+        encoding="utf-8", errors="ignore"
+    )
     assert "camera.launch.py" in content
     assert "planar_motor_nodes" in content
     assert "mover_node" in content

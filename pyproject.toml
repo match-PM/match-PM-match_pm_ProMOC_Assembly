@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [
+  "build",
+  "install",
+  "log",
+  ".venv",
+  "local_libs",
+  # Legacy and vendor-heavy areas that are outside the Release N active lint scope
+  "camera_nodes/camera_nodes/algorithms",
+  "camera_nodes/camera_nodes/drivers",
+  "camera_nodes/camera_nodes/camera_watchdog.py",
+  "camera_nodes/test/test_autofocus_benchmark.py",
+  "linear_axis_nodes/linear_axis_nodes/drivers",
+  "planar_motor_nodes/planar_motor_nodes/drivers",
+  "planar_motor_nodes/planar_motor_nodes/mover_pmc_interface.py",
+  "promoc_bringup/launch/planar_motor_demo.launch.py",
+  "promoc_bringup/launch/promoc_assembly_demo.launch.py",
+  "promoc_bringup/promoc_bringup/service_helper.py",
+  "promoc_bringup/promoc_bringup/unified_demo.py",
+]

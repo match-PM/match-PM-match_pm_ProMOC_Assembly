@@ -4,31 +4,17 @@
 SHELL := /bin/bash
 
 DEV_PYTHON ?= python
-LINT_PATHS := \
-	camera_nodes/camera_nodes/camera_node.py \
-	camera_nodes/camera_nodes/config.py \
-	camera_nodes/camera_nodes/mtf_param_mapping.py \
-	camera_nodes/camera_nodes/parameter_access.py \
-	camera_nodes/camera_nodes/services.py \
-	camera_nodes/camera_nodes/handlers \
-	linear_axis_nodes/linear_axis_nodes/lts300_node.py \
-	planar_motor_nodes/planar_motor_nodes/mover_node.py \
-	promoc_bringup/promoc_bringup/launch_utils.py \
-	promoc_bringup/launch/system.launch.py \
-	promoc_bringup/launch/camera.launch.py \
-	promoc_bringup/launch/optical_measurement_system.launch.py \
-	promoc_bringup/scripts/release_n_check.py \
-	promoc_bringup/scripts/release_n_smoke.py \
-	camera_nodes/test/test_config.py \
-	camera_nodes/test/test_handlers_exposure.py \
-	camera_nodes/test/test_handlers_mtf.py \
-	camera_nodes/test/test_handlers_autofocus.py \
-	camera_nodes/test/test_service_namespace_migration.py \
-	linear_axis_nodes/test/test_linear_axis_namespace_migration.py \
-	planar_motor_nodes/test/test_mover_namespace_migration.py \
-	promoc_bringup/test/test_system_launch.py \
-	promoc_bringup/test/test_launch_runtime_mode.py \
-	promoc_bringup/test/test_release_n_check.py
+LINT_DIRS := \
+	camera_nodes/camera_nodes \
+	camera_nodes/test \
+	linear_axis_nodes/linear_axis_nodes \
+	linear_axis_nodes/test \
+	planar_motor_nodes/planar_motor_nodes \
+	planar_motor_nodes/test \
+	promoc_bringup/promoc_bringup \
+	promoc_bringup/launch \
+	promoc_bringup/scripts \
+	promoc_bringup/test
 
 .PHONY: all build clean sim hardware hw camera-hw doctor-hw test lint format test-unit release-n-check smoke-sim smoke-hw check install-dev help
 
@@ -43,7 +29,7 @@ help:
 	@echo "  make camera-hw - Run camera stack in hardware mode"
 	@echo "  make sim       - Optional/experimental simulation path"
 	@echo "  make install-dev - Install development dependencies"
-	@echo "  make format    - Auto-format Release-N Python files (ruff format)"
+	@echo "  make format    - Auto-format Python source with ruff format"
 	@echo "  make test      - Run tests"
 	@echo "  make lint      - Lint/type/syntax checks for Python"
 	@echo "  make test-unit - Run hardware-independent unit tests"
@@ -80,10 +66,10 @@ test:
 	colcon test-result --all
 
 lint:
-	$(DEV_PYTHON) -m ruff check $(LINT_PATHS)
-	$(DEV_PYTHON) -m ruff format --check $(LINT_PATHS)
+	$(DEV_PYTHON) -m ruff check $(LINT_DIRS)
+	$(DEV_PYTHON) -m ruff format --check $(LINT_DIRS)
 	@set -e; \
-	files=$$(for p in $(LINT_PATHS); do \
+	files=$$(for p in $(LINT_DIRS); do \
 		if [ -d "$$p" ]; then find "$$p" -type f -name '*.py'; \
 		elif [ -f "$$p" ]; then echo "$$p"; \
 		fi; \
@@ -91,7 +77,7 @@ lint:
 	if [ -n "$$files" ]; then $(DEV_PYTHON) -m py_compile $$files; fi
 
 format:
-	$(DEV_PYTHON) -m ruff format $(LINT_PATHS)
+	$(DEV_PYTHON) -m ruff format $(LINT_DIRS)
 
 test-unit:
 	PYTHONPATH=promoc_core:camera_nodes $(DEV_PYTHON) -m pytest \

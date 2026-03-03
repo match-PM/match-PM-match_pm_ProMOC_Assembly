@@ -16,7 +16,11 @@ def test_verification_interfaces_removed():
     removed = [
         ROOT / "promoc_assembly_interfaces" / "srv" / "camera" / "VerifyAutofocus.srv",
         ROOT / "promoc_assembly_interfaces" / "srv" / "camera" / "VerifyMTF.srv",
-        ROOT / "promoc_assembly_interfaces" / "srv" / "camera" / "VerifyCorrelation.srv",
+        ROOT
+        / "promoc_assembly_interfaces"
+        / "srv"
+        / "camera"
+        / "VerifyCorrelation.srv",
         ROOT / "promoc_assembly_interfaces" / "srv" / "camera" / "RunVerification.srv",
     ]
     for path in removed:

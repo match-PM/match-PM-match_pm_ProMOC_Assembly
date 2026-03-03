@@ -161,4 +161,3 @@ def test_build_mtf_config_mapping_ignores_invalid_casts_and_applies_profile():
     # Profile applied after parameter mapping.
     assert config.derivative_mode == "iso"
     assert config.apply_derivative_correction is True
-

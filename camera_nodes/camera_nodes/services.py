@@ -15,4 +15,3 @@ class CameraServiceHandlers:
         self.autofocus = AutofocusHandler(node, camera_driver)
         self.mtf = MTFHandler(node, camera_driver)
         self.exposure = ExposureHandler(node, camera_driver)
-

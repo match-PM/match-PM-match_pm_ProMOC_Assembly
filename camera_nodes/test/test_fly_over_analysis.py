@@ -125,4 +125,3 @@ def test_analyze_peak_handles_empty_scan_data():
     assert result.peak_start is None
     assert result.peak_end is None
     assert result.max_stddev == 0.0
-

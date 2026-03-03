@@ -38,7 +38,9 @@ from promoc_core.promoc_exceptions import ServiceError  # noqa: E402
 
 
 class _VelocityResponse:
-    def __init__(self, success=True, min_velocity=0.1, acceleration=1.0, max_velocity=5.0):
+    def __init__(
+        self, success=True, min_velocity=0.1, acceleration=1.0, max_velocity=5.0
+    ):
         self.success = success
         self.min_velocity = min_velocity
         self.acceleration = acceleration
@@ -86,4 +88,3 @@ def test_temporary_velocity_raises_when_backup_unavailable():
     with pytest.raises(ServiceError):
         with temporary_velocity(clients, max_velocity=1.0):
             pass
-

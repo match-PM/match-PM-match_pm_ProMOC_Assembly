@@ -1,41 +1,29 @@
-# ProMOC Assembly Camera Launch File
+"""Deprecated compatibility wrapper for `camera.launch.py`.
+
+Release N keeps this file so existing operator scripts do not break.
+Use `camera.launch.py` directly for new workflows.
+"""
+
+from __future__ import annotations
+
 import os
-from ament_index_python import get_package_share_directory
-import launch
-from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription, LogInfo
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
-os.environ['RCUTILS_CONSOLE_OUTPUT_FORMAT'] = '{time}: [{name}] [{severity}]\t{message}'
 
-
-def generate_launch_description():
-
-    camera_node = Node(
-        name='assembly_camera',
-        namespace='promoc',
-        package='camera_aravis2',
-        executable='camera_driver_uv',
-        output='screen',
-        emulate_tty=True,
-        parameters=[
-            {
-                'guid': 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781',
-                'frame_id': 'camera_frame',
-                'stream_names': ['stream0'],
-                'camera_info_urls': [os.path.join(
-                    get_package_share_directory('camera_aravis2'),
-                    'config/camera_info_example_uv.yaml')],
-                'verbose': True,
-
-                'ImageFormatControl': {
-                    'PixelFormat': ['RGB8'],
-                    'Width': 2448,
-                    'Height': 2048
-                },
-                'AcquisitionControl': {
-                    'AcquisitionFrameRateEnable': True,
-                    'AcquisitionFrameRate': 10.0
-                }
-            }
+def generate_launch_description() -> LaunchDescription:
+    share_dir = get_package_share_directory("promoc_bringup")
+    camera_launch = os.path.join(share_dir, "launch", "camera.launch.py")
+    return LaunchDescription(
+        [
+            LogInfo(
+                msg=(
+                    "[Deprecated] Use "
+                    "'ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware|sim'"
+                )
+            ),
+            IncludeLaunchDescription(PythonLaunchDescriptionSource(camera_launch)),
         ]
     )
-    return launch.LaunchDescription([camera_node])

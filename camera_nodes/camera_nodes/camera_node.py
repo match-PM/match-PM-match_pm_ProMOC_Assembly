@@ -68,6 +68,7 @@ Example Service Calls:
     # Measure MTF:
     ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
+
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.srv import (
     AutoFocus,

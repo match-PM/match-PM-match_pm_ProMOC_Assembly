@@ -101,7 +101,9 @@ class FocusProfileBuilder:
             tokens.append(text)
         return tokens
 
-    def _get_profile_overrides(self, mag_x: float | None, beamsplitter: bool) -> tuple[dict, str]:
+    def _get_profile_overrides(
+        self, mag_x: float | None, beamsplitter: bool
+    ) -> tuple[dict, str]:
         """Load optional autofocus profile overrides from JSON parameter."""
         raw = self._param_str("autofocus.profile_table_json", "").strip()
         if not raw:
@@ -142,27 +144,57 @@ class FocusProfileBuilder:
 
     def build(self, request) -> FocusProfile:
         """Build a focus profile from node parameters and autofocus request."""
-        objective = self._param_str("measurement_conditions.camera_objective", "").strip()
+        objective = self._param_str(
+            "measurement_conditions.camera_objective", ""
+        ).strip()
         req_mag = float(getattr(request, "objective_magnification_x", 0.0) or 0.0)
         beamsplitter = bool(getattr(request, "use_beamsplitter", False))
-        mag_x = req_mag if req_mag > 0 else self._parse_objective_magnification_x(objective)
+        mag_x = (
+            req_mag if req_mag > 0 else self._parse_objective_magnification_x(objective)
+        )
 
-        base_scan_speed = self._param_float("autofocus.fly_over.scan_speed_fast", FLY_OVER_SPEED_MM_S)
-        base_coarse_step = self._param_float("autofocus.fly_over.step_size_coarse", COARSE_STEP_MM)
+        base_scan_speed = self._param_float(
+            "autofocus.fly_over.scan_speed_fast", FLY_OVER_SPEED_MM_S
+        )
+        base_coarse_step = self._param_float(
+            "autofocus.fly_over.step_size_coarse", COARSE_STEP_MM
+        )
         base_min_step = self._param_float("autofocus.min_step_mm", 0.01)
         base_settle_s = self._param_float("autofocus.fly_over.settle_fine_s", 0.1)
-        base_max_sample_step = self._param_float("autofocus.fly_over.max_sample_step_mm", 0.1)
-        base_axis_speed_scale = self._param_float("autofocus.fly_over.axis_speed_scale_default", 1.0)
+        base_max_sample_step = self._param_float(
+            "autofocus.fly_over.max_sample_step_mm", 0.1
+        )
+        base_axis_speed_scale = self._param_float(
+            "autofocus.fly_over.axis_speed_scale_default", 1.0
+        )
 
-        high_mag_threshold = self._param_float("autofocus.fly_over.high_mag_threshold_x", 4.0)
-        very_high_mag_threshold = self._param_float("autofocus.fly_over.very_high_mag_threshold_x", 6.0)
-        high_mag_scan_speed = self._param_float("autofocus.fly_over.scan_speed_high_mag", 2.0)
-        very_high_mag_scan_speed = self._param_float("autofocus.fly_over.scan_speed_very_high_mag", 1.0)
-        high_mag_coarse_step = self._param_float("autofocus.fly_over.coarse_step_high_mag_mm", 0.1)
-        very_high_mag_coarse_step = self._param_float("autofocus.fly_over.coarse_step_very_high_mag_mm", 0.05)
-        high_mag_min_step = self._param_float("autofocus.fly_over.min_step_high_mag_mm", 0.005)
-        high_mag_settle_s = self._param_float("autofocus.fly_over.settle_high_mag_s", 0.2)
-        very_high_mag_settle_s = self._param_float("autofocus.fly_over.settle_very_high_mag_s", 0.25)
+        high_mag_threshold = self._param_float(
+            "autofocus.fly_over.high_mag_threshold_x", 4.0
+        )
+        very_high_mag_threshold = self._param_float(
+            "autofocus.fly_over.very_high_mag_threshold_x", 6.0
+        )
+        high_mag_scan_speed = self._param_float(
+            "autofocus.fly_over.scan_speed_high_mag", 2.0
+        )
+        very_high_mag_scan_speed = self._param_float(
+            "autofocus.fly_over.scan_speed_very_high_mag", 1.0
+        )
+        high_mag_coarse_step = self._param_float(
+            "autofocus.fly_over.coarse_step_high_mag_mm", 0.1
+        )
+        very_high_mag_coarse_step = self._param_float(
+            "autofocus.fly_over.coarse_step_very_high_mag_mm", 0.05
+        )
+        high_mag_min_step = self._param_float(
+            "autofocus.fly_over.min_step_high_mag_mm", 0.005
+        )
+        high_mag_settle_s = self._param_float(
+            "autofocus.fly_over.settle_high_mag_s", 0.2
+        )
+        very_high_mag_settle_s = self._param_float(
+            "autofocus.fly_over.settle_very_high_mag_s", 0.25
+        )
 
         scan_speed = base_scan_speed
         coarse_step = base_coarse_step
@@ -183,18 +215,32 @@ class FocusProfileBuilder:
                 min_step = min(min_step, high_mag_min_step)
                 settle_s = max(settle_s, high_mag_settle_s)
 
-        profile_overrides, profile_source = self._get_profile_overrides(mag_x, beamsplitter)
-        if "scan_speed_mm_s" in profile_overrides and profile_overrides["scan_speed_mm_s"] > 0:
+        profile_overrides, profile_source = self._get_profile_overrides(
+            mag_x, beamsplitter
+        )
+        if (
+            "scan_speed_mm_s" in profile_overrides
+            and profile_overrides["scan_speed_mm_s"] > 0
+        ):
             scan_speed = profile_overrides["scan_speed_mm_s"]
-        if "coarse_step_mm" in profile_overrides and profile_overrides["coarse_step_mm"] > 0:
+        if (
+            "coarse_step_mm" in profile_overrides
+            and profile_overrides["coarse_step_mm"] > 0
+        ):
             coarse_step = profile_overrides["coarse_step_mm"]
         if "min_step_mm" in profile_overrides and profile_overrides["min_step_mm"] > 0:
             min_step = profile_overrides["min_step_mm"]
         if "settle_s" in profile_overrides and profile_overrides["settle_s"] >= 0:
             settle_s = profile_overrides["settle_s"]
-        if "max_sample_step_mm" in profile_overrides and profile_overrides["max_sample_step_mm"] > 0:
+        if (
+            "max_sample_step_mm" in profile_overrides
+            and profile_overrides["max_sample_step_mm"] > 0
+        ):
             max_sample_step_mm = profile_overrides["max_sample_step_mm"]
-        if "axis_speed_scale" in profile_overrides and profile_overrides["axis_speed_scale"] > 0:
+        if (
+            "axis_speed_scale" in profile_overrides
+            and profile_overrides["axis_speed_scale"] > 0
+        ):
             axis_speed_scale = profile_overrides["axis_speed_scale"]
 
         return FocusProfile(

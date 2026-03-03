@@ -111,8 +111,8 @@ ros2 run linear_axis_nodes lts300_node --ros-args \
 # Find your camera GUID first
 arv-tool-0.8
 
-# Start camera driver
-ros2 launch promoc_bringup assembly_camera.launch.py
+# Start camera stack (hardware mode)
+ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware
 ```
 
 ### Full System (via Launch Files)

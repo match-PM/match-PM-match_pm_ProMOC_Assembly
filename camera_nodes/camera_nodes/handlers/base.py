@@ -20,7 +20,7 @@ from ..parameter_access import ParameterAccessor
 
 class CallbackBase:
     """Common functionality for all camera service callbacks.
-    
+
     Attributes:
         _node: Parent ROS2 node
         _driver: Camera driver instance
@@ -48,7 +48,7 @@ class CallbackBase:
     def _param_int(self, name: str, default: int) -> int:
         return self.params.as_int(name, default)
 
-    def _param_str(self, name: str, default: str = '') -> str:
+    def _param_str(self, name: str, default: str = "") -> str:
         return self.params.as_str(name, default)
 
     def _param_bool(self, name: str, default: bool = False) -> bool:
@@ -60,7 +60,7 @@ class CallbackBase:
 
     def _get_latest_cv_image(self):
         """Retrieves the latest camera image as OpenCV array.
-        
+
         Returns:
             tuple: (cv_image, timestamp_ns) or (None, None)
         """
@@ -68,23 +68,23 @@ class CallbackBase:
         if msg is None:
             return None, None
         try:
-            cv_img = self._node.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            cv_img = self._node.bridge.imgmsg_to_cv2(msg, "bgr8")
             # msg.header.stamp is a Time object in rclpy, but here it might be a msg object.
             # In ROS2 python msg, stamp has sec and nanosec.
             ts = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
             return cv_img, ts
         except Exception as e:
-            self.logger.warn(f'Failed to convert image: {e}')
+            self.logger.warn(f"Failed to convert image: {e}")
             return None, None
 
     def _wait_for_new_image(self, last_timestamp: int, timeout: float = 1.0):
         """Waits for an image with a newer timestamp."""
         start = time.time()
         while time.time() - start < timeout:
-             _, ts = self._get_latest_cv_image()
-             if ts is not None and ts > last_timestamp:
-                 return self._get_latest_cv_image()
-             time.sleep(0.01)
+            _, ts = self._get_latest_cv_image()
+            if ts is not None and ts > last_timestamp:
+                return self._get_latest_cv_image()
+            time.sleep(0.01)
         return None, None
 
     def _wait_for_new_frames(self, frame_count: int, timeout_per_frame: float = 1.0):
@@ -101,7 +101,9 @@ class CallbackBase:
                 return None, None
 
         for _ in range(frame_count):
-            next_img, next_ts = self._wait_for_new_image(last_ts, timeout=timeout_per_frame)
+            next_img, next_ts = self._wait_for_new_image(
+                last_ts, timeout=timeout_per_frame
+            )
             if next_img is None or next_ts is None:
                 return None, None
             last_img, last_ts = next_img, next_ts
@@ -125,17 +127,17 @@ class CallbackBase:
 
         def _runner():
             try:
-                result_box['value'] = asyncio.run(awaitable_obj)
+                result_box["value"] = asyncio.run(awaitable_obj)
             except Exception as exc:  # pragma: no cover - best effort fallback
-                error_box['error'] = exc
+                error_box["error"] = exc
 
         thread = threading.Thread(target=_runner, daemon=True)
         thread.start()
         thread.join()
 
-        if 'error' in error_box:
-            raise error_box['error']
-        return result_box.get('value')
+        if "error" in error_box:
+            raise error_box["error"]
+        return result_box.get("value")
 
     def _set_exposure_us(self, exposure_time_us: float) -> bool:
         """Set exposure robustly from sync callback code."""
@@ -145,8 +147,8 @@ class CallbackBase:
         success = bool(True if result is None else result)
         if not success:
             raise HardwareError(
-                message='Failed to set exposure',
-                details={'exposure_time_us': float(exposure_time_us)}
+                message="Failed to set exposure",
+                details={"exposure_time_us": float(exposure_time_us)},
             )
         return True
 
@@ -166,19 +168,18 @@ class CallbackBase:
     # SHARPNESS METRICS
     # ==========================================================================
 
-    def _calculate_sharpness(self, image, metric: str = 'tenengrad') -> float:
+    def _calculate_sharpness(self, image, metric: str = "tenengrad") -> float:
         """Calculates image sharpness using Tenengrad metric."""
         return tenengrad(image)
 
     def _get_sift(self):
         """Lazy initialization for SIFT detector."""
         if self._sift is None:
-            if hasattr(cv2, 'SIFT_create'):
+            if hasattr(cv2, "SIFT_create"):
                 self._sift = cv2.SIFT_create()
             else:
                 self._sift = False
-                self._node.get_logger().warn(
-                    'SIFT not available in this OpenCV build.')
+                self._node.get_logger().warn("SIFT not available in this OpenCV build.")
         return self._sift
 
     def _sift_weight(self, roi_gray: np.ndarray) -> float:
@@ -187,8 +188,9 @@ class CallbackBase:
         if sift is False or roi_gray.size == 0:
             return 1.0
 
-        roi_small = cv2.resize(roi_gray, None, fx=0.5, fy=0.5, 
-                               interpolation=cv2.INTER_AREA)
+        roi_small = cv2.resize(
+            roi_gray, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA
+        )
         if roi_small.size == 0:
             return 1.0
 
@@ -201,32 +203,34 @@ class CallbackBase:
     # CSV EXPORT
     # ==========================================================================
 
-    def _get_output_dir(self, subdirectory: str = '', operator_name: str | None = None) -> Path:
+    def _get_output_dir(
+        self, subdirectory: str = "", operator_name: str | None = None
+    ) -> Path:
         """Creates and returns the output directory."""
-        username = ''
-        operator_clean = (operator_name or '').strip()
+        username = ""
+        operator_clean = (operator_name or "").strip()
         if operator_clean:
             username = operator_clean
         else:
-            username = self._param_str('measurement.username', '').strip()
+            username = self._param_str("measurement.username", "").strip()
 
         base_dir = None
         try:
-            base_param = self._param_str('measurement.base_path', '').strip()
+            base_param = self._param_str("measurement.base_path", "").strip()
             if base_param:
                 base_dir = Path(base_param).expanduser()
         except Exception:
             base_dir = None
         if base_dir is None:
-            base_dir = Path.home() / 'Dokumente' / 'Messungen'
+            base_dir = Path.home() / "Dokumente" / "Messungen"
         if username:
             output_dir = base_dir / username / subdirectory
         else:
             output_dir = base_dir / subdirectory
-        
+
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
     def _get_timestamp(self) -> str:
         """Returns the current timestamp as a string."""
-        return datetime.now().strftime('%Y%m%d_%H%M%S')
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
