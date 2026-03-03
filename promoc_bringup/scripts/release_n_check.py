@@ -147,6 +147,14 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
+            "pytest.ini",
+            ["[pytest]", "-p no:cacheprovider"],
+            "pytest config disables cacheprovider for stable Windows runs",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
             "Makefile",
             ["release-n-check", "check: lint test-unit release-n-check"],
             "Makefile wires release-n-check into make check",
