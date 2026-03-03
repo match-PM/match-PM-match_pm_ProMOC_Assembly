@@ -66,6 +66,7 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 
 Detailed module boundaries:
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Beginner-first file map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 
 ## 5. Where To Change What
 
@@ -81,6 +82,7 @@ If you want to implement a feature quickly, start with these package-level chang
 
 - Beginner path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
 - Beginner path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
+- Project structure guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 - Migration details: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 
 ## 7. Legacy Compatibility (Release N)

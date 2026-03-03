@@ -32,6 +32,7 @@ ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/Meas
 
 ## Schritt 5: Modulgrenzen verstehen (5 min)
 
+- Projektstruktur-Guide: [`docs/PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
 - Architekturkarte: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
 - Einstiegsablauf: [`START_HERE.md`](../START_HERE.md)
 

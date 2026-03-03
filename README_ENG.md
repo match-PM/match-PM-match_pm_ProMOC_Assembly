@@ -41,6 +41,7 @@ Canonical launch argument:
 ## Documentation
 
 - Architecture map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Project structure guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 - Root onboarding flow: [`START_HERE.md`](START_HERE.md)
 - Learning path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
 - Learning path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)

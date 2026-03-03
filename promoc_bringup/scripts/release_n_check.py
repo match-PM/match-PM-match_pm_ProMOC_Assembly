@@ -187,6 +187,14 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
+            "docs/PROJECT_STRUCTURE.md",
+            ["Task-Oriented Entry Points", "Dependency Direction"],
+            "project structure guide exists with task-oriented navigation",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
             "camera_nodes/docs/callbacks_user_guide_de.md",
             ["/promoc/camera/autofocus", "/promoc/camera/measure_mtf"],
             "DE callback guide uses canonical camera services",

@@ -41,6 +41,7 @@ Kanonisches Launch-Argument:
 ## Dokumentation
 
 - Architekturkarte: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Projektstruktur-Guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 - Einstieg: [`START_HERE.md`](START_HERE.md)
 - Lernpfad (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
 - Lernpfad (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
