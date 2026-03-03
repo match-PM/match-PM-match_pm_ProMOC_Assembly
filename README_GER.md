@@ -49,4 +49,7 @@ Kanonisches Launch-Argument:
 - Setup-Skripte: [`setup/README.md`](setup/README.md)
 - Bringup/Launch: [`promoc_bringup/README.md`](promoc_bringup/README.md)
 - Kamera-Package: [`camera_nodes/README.md`](camera_nodes/README.md)
+- Linearachsen-Package: [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md)
+- Planarmotor-Package: [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md)
 - Interfaces: [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md)
+- Gemeinsames Core-Package: [`promoc_core/README.md`](promoc_core/README.md)

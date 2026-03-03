@@ -203,6 +203,84 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
+            "promoc_bringup/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "bringup README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "camera_nodes/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "camera README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "linear_axis_nodes/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "linear-axis README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "planar_motor_nodes/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "planar-motor README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "promoc_assembly_interfaces/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "interfaces README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "promoc_core/README.md",
+            [
+                "## Purpose",
+                "## How To Run / Build",
+                "## Where To Edit",
+                "## Verify Changes",
+            ],
+            "promoc_core README follows unified package template",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
             "camera_nodes/docs/callbacks_user_guide_de.md",
             ["/promoc/camera/autofocus", "/promoc/camera/measure_mtf"],
             "DE callback guide uses canonical camera services",

@@ -1,75 +1,70 @@
-# Camera Nodes (Hardware-First)
+# Camera Nodes
 
-This package provides camera processing services for the ProMOC system.
+## Purpose
 
-Official workflow is hardware-first. Simulation is optional and experimental.
+`camera_nodes` provides camera-facing ROS services for autofocus, MTF measurement,
+ROI detection, and exposure control.
 
-## Core Services
+## How To Run / Build
+
+Run via system launch (hardware-first):
+
+```bash
+make hw
+```
+
+Camera-only hardware launch:
+
+```bash
+make camera-hw
+```
+
+Optional simulation path:
+
+```bash
+make sim
+```
+
+## Key APIs
+
+Canonical services:
 
 - `/promoc/camera/autofocus`
 - `/promoc/camera/measure_mtf`
 - `/promoc/camera/detect_rois`
-- `/promoc/camera/set_exposure` (hardware mode only)
+- `/promoc/camera/set_exposure` (hardware path only)
 
-Legacy aliases under `/promoc/camera_node/*` are still available in Release N with deprecation warnings.
+Release N compatibility:
 
-## Start Commands
+- legacy aliases under `/promoc/camera_node/*` remain available with deprecation warnings.
 
-```bash
-# Full hardware system
-make hw
-```
+## Where To Edit
 
-```bash
-# Camera stack only (hardware mode)
-make camera-hw
-```
-
-```bash
-# Optional/experimental simulation
-make sim
-```
-
-## Current Internal Structure
-
-```text
-camera_nodes/camera_nodes/
-  camera_node.py
-  services.py
-  config.py
-  parameter_access.py
-  handlers/
-    autofocus_handler.py
-    exposure_handler.py
-    mtf_handler.py
-  algorithms/
-    autofocus.py
-    mtf/
-  drivers/
-    aravis_camera_driver.py
-    simulated_camera_driver.py
-camera_nodes/scripts/
-  reproduce_mtf.py
-```
-
-## Change Guide (First Files To Open)
-
-| You want to change... | Start here | Then check |
+| Goal | Start Here | Then Check |
 |---|---|---|
-| Camera service names or routing | `camera_nodes/camera_nodes/services.py` | `camera_nodes/camera_nodes/camera_node.py` |
-| Autofocus behavior | `camera_nodes/camera_nodes/handlers/autofocus_handler.py` | `camera_nodes/camera_nodes/algorithms/autofocus.py` |
-| MTF behavior or CSV mapping | `camera_nodes/camera_nodes/handlers/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/mtf_param_mapping.py` |
-| Parameter defaults or validation | `camera_nodes/camera_nodes/config.py` | `camera_nodes/camera_nodes/parameter_access.py`, `promoc_bringup/config/cameras/*.yaml` |
-| Real/sim camera driver behavior | `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py` | `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py`, `camera_nodes/camera_nodes/drivers/camera_driver.py` |
+| Change service wiring and registration | `camera_nodes/camera_nodes/camera_node.py` | `camera_nodes/camera_nodes/services.py` |
+| Change autofocus behavior | `camera_nodes/camera_nodes/handlers/autofocus_handler.py` | `camera_nodes/camera_nodes/algorithms/autofocus.py` |
+| Change MTF behavior and export mapping | `camera_nodes/camera_nodes/handlers/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/mtf_param_mapping.py` |
+| Change camera parameter model/defaults | `camera_nodes/camera_nodes/config.py` | `promoc_bringup/config/cameras/*.yaml` |
+| Change hardware/sim driver behavior | `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py` | `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py` |
 
-## Camera Setup Notes
+## Verify Changes
 
-1. Ensure `camera_aravis2` is installed (via `dependencies.repos` + setup scripts).
-2. Check camera visibility:
-   - `arv-tool-0.8`
-3. Check permissions for IDS USB3 cameras (udev + user groups).
+```bash
+make lint
+make test-unit
+make release-n-check
+```
 
-## Callback User Guides
+Package-level tests:
 
-- German: [`docs/callbacks_user_guide_de.md`](docs/callbacks_user_guide_de.md)
-- English: [`docs/callbacks_user_guide_en.md`](docs/callbacks_user_guide_en.md)
+```bash
+colcon test --packages-select camera_nodes
+colcon test-result --verbose
+```
+
+## Related Docs
+
+- Root onboarding: [`START_HERE.md`](../START_HERE.md)
+- Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- Callback guides (EN/DE): [`camera_nodes/docs/`](docs/)

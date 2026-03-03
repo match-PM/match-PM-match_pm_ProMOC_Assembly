@@ -77,6 +77,7 @@ If you want to implement a feature quickly, start with these package-level chang
 - Linear-axis behavior and safety rules: [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md)
 - Planar-motor behavior and motion callbacks: [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md)
 - ROS interface contracts (`srv`, `msg`): [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md)
+- Shared core helpers (validation/logging/errors): [`promoc_core/README.md`](promoc_core/README.md)
 
 ## 6. Next Docs
 

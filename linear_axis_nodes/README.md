@@ -1,61 +1,26 @@
 # Linear Axis Nodes
 
-ROS2 package for controlling Thorlabs LTS300 stages in ProMOC.
+## Purpose
 
-This package exposes canonical services under:
-- `/promoc/linear_axis/<axis_name>/*`
+`linear_axis_nodes` controls Thorlabs LTS300 axes and exposes canonical ROS APIs
+for axis motion and status in ProMOC.
 
-Release N also keeps legacy aliases for migration:
-- `/<axis_name>/*`
-- `/{namespace}/<axis_name>/position`
+## How To Run / Build
 
-## Main Entry Point
-
-- Node executable: `lts300_node`
-- Typical node names:
-  - `lts300_x_axis`
-  - `lts300_z_axis`
-
-## Current Internal Structure
-
-```text
-linear_axis_nodes/linear_axis_nodes/
-  lts300_node.py
-  config.py
-  lts300_interface.py
-  lts300_service_callbacks.py
-  drivers/
-    linear_axis_driver.py
-    thorlabs_lts300_driver.py
-  simulated_linear_axis_driver.py
-```
-
-## Change Guide (First Files To Open)
-
-| You want to change... | Start here | Then check |
-|---|---|---|
-| Service behavior (validation, motion rules) | `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py` | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` |
-| Service/topic namespace wiring | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` | `promoc_bringup/launch/system.launch.py` |
-| Parameter defaults and typed config | `linear_axis_nodes/linear_axis_nodes/config.py` | `linear_axis_nodes/linear_axis_nodes/lts300_node.py`, `promoc_bringup/config/linear_axes_params.yaml` |
-| Hardware communication flow | `linear_axis_nodes/linear_axis_nodes/lts300_interface.py` | `linear_axis_nodes/linear_axis_nodes/drivers/thorlabs_lts300_driver.py` |
-| Simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/simulated_linear_axis_driver.py` | `linear_axis_nodes/linear_axis_nodes/lts300_interface.py` |
-
-## Quick Start
-
-Hardware-first (recommended):
+Hardware-first system run:
 
 ```bash
 make doctor-hw
 make hw
 ```
 
-Simulation:
+Optional simulation path:
 
 ```bash
 make sim
 ```
 
-Direct node run (example):
+Direct node run example:
 
 ```bash
 ros2 run linear_axis_nodes lts300_node --ros-args \
@@ -64,62 +29,35 @@ ros2 run linear_axis_nodes lts300_node --ros-args \
   -p serial_number:=45874027
 ```
 
-## Canonical Services
+## Key APIs
 
-Examples for `lts300_x_axis`:
+Canonical namespace:
 
-```bash
-ros2 service call /promoc/linear_axis/lts300_x_axis/move_absolute \
-  promoc_assembly_interfaces/srv/MoveAbsolute "{axis_position: 50.0}"
-```
+- `/promoc/linear_axis/<axis_name>/*`
 
-```bash
-ros2 service call /promoc/linear_axis/lts300_x_axis/move_relative \
-  promoc_assembly_interfaces/srv/MoveRelative "{axis_distance: 10.0}"
-```
+Example services for `lts300_x_axis`:
 
-```bash
-ros2 service call /promoc/linear_axis/lts300_x_axis/home \
-  promoc_assembly_interfaces/srv/Home "{}"
-```
+- `/promoc/linear_axis/lts300_x_axis/move_absolute`
+- `/promoc/linear_axis/lts300_x_axis/move_relative`
+- `/promoc/linear_axis/lts300_x_axis/home`
+- topic: `/promoc/linear_axis/lts300_x_axis/position`
 
-```bash
-ros2 topic echo /promoc/linear_axis/lts300_x_axis/position
-```
+Release N compatibility:
 
-## Parameters
+- legacy service aliases under `/<axis_name>/*`
+- legacy cross-axis topic aliases under `/{namespace}/<axis_name>/position`
 
-Important ROS parameters:
-- `use_sim_time`
-- `serial_port`
-- `serial_number`
-- `collision_threshold`
-- `max_position`
-- `min_position`
-- `max_single_move`
-- `homing_timeout`
-- `velocity_conversion_factor`
-- `position_poll_interval_s`
+## Where To Edit
 
-Primary config file:
-- `promoc_bringup/config/linear_axes_params.yaml`
+| Goal | Start Here | Then Check |
+|---|---|---|
+| Change service behavior and motion rules | `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py` | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` |
+| Change service/topic namespace wiring | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` | `promoc_core/promoc_core/service_alias.py` |
+| Change parameter defaults and typed config | `linear_axis_nodes/linear_axis_nodes/config.py` | `promoc_bringup/config/linear_axes_params.yaml` |
+| Change driver connection flow | `linear_axis_nodes/linear_axis_nodes/lts300_interface.py` | `linear_axis_nodes/linear_axis_nodes/drivers/thorlabs_lts300_driver.py` |
+| Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/simulated_linear_axis_driver.py` | `linear_axis_nodes/linear_axis_nodes/lts300_interface.py` |
 
-## Safety Notes
-
-- Collision checks are performed using the other axis position topic.
-- Soft limits are enforced in service callbacks.
-- Use homing before precision moves after startup.
-
-## Development and Tests
-
-Run package tests:
-
-```bash
-colcon test --packages-select linear_axis_nodes
-colcon test-result --verbose
-```
-
-Repository-level fast checks:
+## Verify Changes
 
 ```bash
 make lint
@@ -127,13 +65,15 @@ make test-unit
 make release-n-check
 ```
 
-## Troubleshooting
+Package-level tests:
 
-Connection problems:
-- Verify USB device visibility (`/dev/ttyUSB*`).
-- Check user permissions (dialout/udev on Linux).
-- Verify configured `serial_number` matches hardware.
+```bash
+colcon test --packages-select linear_axis_nodes
+colcon test-result --verbose
+```
 
-Service issues:
-- Confirm node name (`ros2 node list`).
-- Confirm canonical service names (`ros2 service list | grep /promoc/linear_axis`).
+## Related Docs
+
+- Root onboarding: [`START_HERE.md`](../START_HERE.md)
+- Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- Interfaces: [`promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md)

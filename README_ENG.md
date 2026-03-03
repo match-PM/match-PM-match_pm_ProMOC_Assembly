@@ -49,4 +49,7 @@ Canonical launch argument:
 - Setup scripts: [`setup/README.md`](setup/README.md)
 - Bringup/launch: [`promoc_bringup/README.md`](promoc_bringup/README.md)
 - Camera package: [`camera_nodes/README.md`](camera_nodes/README.md)
+- Linear-axis package: [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md)
+- Planar-motor package: [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md)
 - Interfaces: [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md)
+- Shared core package: [`promoc_core/README.md`](promoc_core/README.md)
