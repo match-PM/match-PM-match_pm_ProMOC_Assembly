@@ -1,0 +1,10 @@
+# Test Fixtures
+
+This directory contains non-runtime helper code and data used for tests and
+algorithm validation.
+
+- `synthetic_targets.py`: synthetic slanted-edge and square target generators
+  for MTF validation workflows.
+
+Do not import these helpers from production runtime modules under
+`camera_nodes/camera_nodes/`.

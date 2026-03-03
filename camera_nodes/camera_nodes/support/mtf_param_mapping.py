@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..algorithms.mtf_analysis import MTFConfig
+from ..algorithms.mtf import MTFConfig
 
 
 MTF_PARAM_MAP = (

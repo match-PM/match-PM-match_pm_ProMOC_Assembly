@@ -31,7 +31,6 @@ Important:
     - OpenCV (`cv2`) is required for conversion and some filters.
 """
 
-from typing import Optional
 import numpy as np
 
 try:

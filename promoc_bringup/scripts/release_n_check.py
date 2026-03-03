@@ -33,6 +33,12 @@ def _check_file_exists(root: Path, rel_path: str, name: str) -> CheckResult:
     return CheckResult(name=name, ok=exists, detail=rel_path if not exists else "")
 
 
+def _check_file_absent(root: Path, rel_path: str, name: str) -> CheckResult:
+    exists = (root / rel_path).exists()
+    detail = "" if not exists else f"{rel_path}: should be removed"
+    return CheckResult(name=name, ok=not exists, detail=detail)
+
+
 def _check_contains(
     root: Path, rel_path: str, needles: list[str], name: str
 ) -> CheckResult:
@@ -127,6 +133,48 @@ def _evaluate(root: Path) -> list[CheckResult]:
             "promoc_bringup/launch/camera.launch.py",
             ['executable="camera_simulator"'],
             "camera launch includes simulator node",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "camera_nodes/test/fixtures/synthetic_targets.py",
+            "camera test fixtures contain synthetic mtf target helpers",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "camera_nodes/camera_nodes/support/mtf_param_mapping.py",
+            "camera support package contains centralized mtf parameter mapping",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/algorithms/synthetic_targets.py",
+            "synthetic mtf fixtures removed from runtime algorithms package",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/algorithms/mtf_analysis.py",
+            "legacy mtf_analysis wrapper removed from algorithms package",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/algorithms/autofocus_algo.py",
+            "legacy autofocus_algo shim removed from algorithms package",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/algorithms/test_mspr.py",
+            "legacy standalone mspr test script removed from algorithms package",
         )
     )
     results.append(

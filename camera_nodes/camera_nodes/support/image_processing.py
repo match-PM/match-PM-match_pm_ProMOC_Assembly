@@ -4,7 +4,7 @@ Image processing wrapper for MTF calculation.
 This module provides the CameraImageProcessing class as a thin wrapper
 around MTFAnalyzer for backward compatibility.
 
-DEPRECATED: Prefer using `algorithms.mtf_analysis.MTFAnalyzer` directly.
+DEPRECATED: Prefer using `algorithms.mtf.MTFAnalyzer` directly.
 This wrapper exists for backward compatibility with older code.
 """
 
@@ -12,14 +12,14 @@ import csv
 from typing import Optional
 import numpy as np
 
-from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
+from ..algorithms.mtf import MTFAnalyzer, MTFConfig
 
 
 class CameraImageProcessing:
     """
     Image processing wrapper for MTF calculation.
 
-    DEPRECATED: Use `algorithms.mtf_analysis.MTFAnalyzer` directly.
+    DEPRECATED: Use `algorithms.mtf.MTFAnalyzer` directly.
 
     This class provides backward compatibility with the old interface.
     Internally delegates to MTFAnalyzer for all MTF calculations.

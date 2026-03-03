@@ -33,6 +33,7 @@ If you want to add or change something, start here:
 | Add camera service behavior | `camera_nodes/camera_nodes/services.py`, `camera_nodes/camera_nodes/handlers/` |
 | Change shared camera helper code | `camera_nodes/camera_nodes/support/` |
 | Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/algorithms/` |
+| Add synthetic MTF validation fixtures | `camera_nodes/test/fixtures/` |
 | Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py` |
 | Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/callbacks/` |
 | Add shared conversion/validation/helper | `promoc_core/promoc_core/` |
