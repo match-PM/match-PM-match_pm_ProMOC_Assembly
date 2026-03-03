@@ -3,6 +3,11 @@ local_libs/
 
 # Python cache files
 __pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+pytest-cache-files-*/
+**/pytest-cache-files-*/
 *.py[cod]
 *$py.class
 *.so
