@@ -8,7 +8,7 @@ Dieses Dokument erklaert die Kamera-Services so, dass sie auch ohne Programmierw
 - `measure_mtf`: Misst die optische Schaerfe (MTF) am aktuellen Bild.
 - `select_roi`: Laesst einen Bildbereich (ROI) manuell auswaehlen und auswerten.
 - `detect_rois`: Erzeugt Debug-Bilder fuer erkannte Testziele.
-- `manual_set_exposure`: Setzt die Belichtungszeit der Kamera.
+- `set_exposure`: Setzt die Belichtungszeit der Kamera.
 
 ## Ablauf pro Service
 ### Autofokus
@@ -48,17 +48,17 @@ flowchart TD
 
 ## Typische Service-Aufrufe
 ```bash
-ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \
+ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus \
 "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"
 ```
 
 ```bash
-ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF \
+ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF \
 "{auto_roi: true, target_edge: 'any'}"
 ```
 
 ```bash
-ros2 service call /camera_node/manual_set_exposure promoc_assembly_interfaces/srv/ManualSetExposure \
+ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure \
 "{exposure_time: 12000.0}"
 ```
 

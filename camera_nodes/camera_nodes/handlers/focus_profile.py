@@ -1,10 +1,12 @@
-"""Objective-aware focus profile builder for autofocus callbacks."""
+"""Objective-aware focus profile builder for autofocus handler."""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import json
 import re
+
+from ..parameter_access import ParameterAccessor
 
 
 COARSE_STEP_MM = 0.5
@@ -36,28 +38,16 @@ class FocusProfileBuilder:
 
     def __init__(self, node):
         self._node = node
+        self.params = ParameterAccessor(node)
 
     def _param_raw(self, name: str, default=None):
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return value
+        return self.params.raw(name, default)
 
     def _param_float(self, name: str, default: float) -> float:
-        value = self._param_raw(name, default)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
+        return self.params.as_float(name, default)
 
     def _param_str(self, name: str, default: str = "") -> str:
-        value = self._param_raw(name, default)
-        try:
-            return str(value)
-        except Exception:
-            return str(default)
+        return self.params.as_str(name, default)
 
     @staticmethod
     def _parse_objective_magnification_x(objective: str) -> float | None:

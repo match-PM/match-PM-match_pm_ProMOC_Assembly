@@ -10,7 +10,7 @@ class MSPRAutofocusMock:
 
     def _calculate_subpixel_peak(self, x_vals, scores):
         """
-        Implementation copied from autofocus.py for verification.
+        Implementation copied from autofocus.py for local interpolation tests.
         """
         if len(scores) < 3:
             return x_vals[np.argmax(scores)] if x_vals else 0.0

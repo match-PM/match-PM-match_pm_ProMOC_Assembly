@@ -8,6 +8,8 @@ from typing import Callable
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import GetParameters, SetParameters
 
+from ..parameter_access import ParameterAccessor
+
 
 class CameraFormatController:
     """Encapsulates ROS parameter-based camera format changes."""
@@ -38,6 +40,7 @@ class CameraFormatController:
     def __init__(self, node):
         self._node = node
         self._service_clients = {}
+        self.params = ParameterAccessor(node)
 
     def _get_service_clients(self, set_service: str):
         """Get cached set/get parameter clients for a service name."""
@@ -110,28 +113,13 @@ class CameraFormatController:
         return None
 
     def _get_float_param(self, name: str, default: float) -> float:
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return float(value)
+        return self.params.as_float(name, default)
 
     def _get_int_param(self, name: str, default: int) -> int:
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return int(value)
+        return self.params.as_int(name, default)
 
     def _get_bool_param(self, name: str, default: bool) -> bool:
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return bool(value)
+        return self.params.as_bool(name, default)
 
     def _is_switch_logging_enabled(self) -> bool:
         return self._get_bool_param('mtf.log_format_switch', True)
@@ -426,17 +414,17 @@ class CameraFormatController:
                 )
                 if mismatches:
                     self._node.get_logger().warn(
-                        'MTF format switch verification MISMATCH: '
+                        'MTF format switch readback mismatch: '
                         + ', '.join(mismatches)
                         + ' (crop might still be active).'
                     )
                 else:
                     self._node.get_logger().info(
-                        'MTF format switch verification OK: crop OFF, FULL resolution active.'
+                        'MTF format switch readback OK: crop OFF, FULL resolution active.'
                     )
             else:
                 self._node.get_logger().warn(
-                    'MTF format switch verification unavailable: failed to read back camera state.'
+                    'MTF format switch readback unavailable: failed to read camera state.'
                 )
             if new_image is not None:
                 img_h, img_w = new_image.shape[:2]
@@ -481,5 +469,5 @@ class CameraFormatController:
                 )
             else:
                 self._node.get_logger().warn(
-                    'MTF format restore verification unavailable: failed to read back camera state.'
+                    'MTF format restore readback unavailable: failed to read camera state.'
                 )

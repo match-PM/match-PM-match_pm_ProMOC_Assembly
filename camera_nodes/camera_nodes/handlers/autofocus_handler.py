@@ -1,4 +1,4 @@
-"""Autofocus callbacks with fly-over detection and refinement.
+"""Autofocus handler with fly-over detection and refinement.
 
 Process:
     1. Fly-Over: Fast scan over entire range → Peak detection via stddev
@@ -57,8 +57,8 @@ AUTOFOCUS_MAX_STEPS_DEFAULT = 500
 AUTOFOCUS_NEW_IMAGE_TIMEOUT_S = 2.0
 
 
-class AutofocusCallbacks(CallbackBase):
-    """Callbacks for autofocus with fly-over detection."""
+class AutofocusHandler(CallbackBase):
+    """Handler for autofocus with fly-over detection."""
 
     def _build_focus_profile(self, request) -> dict:
         """Build objective-aware autofocus profile for fly-over and refinement."""
@@ -343,7 +343,7 @@ class AutofocusCallbacks(CallbackBase):
             response.best_image_path = str(img_path)
             self._node.get_logger().info(f'Saved best image: {img_path}')
 
-        # Export measurement series for verification
+        # Export measurement series for autofocus result inspection
         try:
             measurements = getattr(af, '_measurements', []) or []
             response.measurement_positions = [float(m.position_mm) for m in measurements]
@@ -572,3 +572,4 @@ class AutofocusCallbacks(CallbackBase):
         return self._run_comparison(
             peak_start, peak_end, request, response, clients, start_time, focus_profile
         )
+

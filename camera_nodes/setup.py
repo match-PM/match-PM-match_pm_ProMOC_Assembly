@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='pmlab',
     maintainer_email='thesterni91@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Camera services for autofocus, MTF measurement, and exposure control',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

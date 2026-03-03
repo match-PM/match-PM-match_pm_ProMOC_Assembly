@@ -1,7 +1,6 @@
 """Base class with common helper methods for camera callbacks."""
 
 import asyncio
-import csv
 from datetime import datetime
 import inspect
 from pathlib import Path
@@ -11,16 +10,12 @@ import time
 import cv2
 import numpy as np
 
-from promoc_core.promoc_exceptions import (
-    ConfigurationError,
-    HardwareError,
-    ImageProcessingError,
-    ServiceError,
-)
+from promoc_core.promoc_exceptions import HardwareError
 
 from promoc_core.logging import TaggedLogger, LogTags
 
 from ..algorithms import tenengrad
+from ..parameter_access import ParameterAccessor
 
 
 class CallbackBase:
@@ -37,6 +32,7 @@ class CallbackBase:
         self._driver = camera_driver
         self.logger = TaggedLogger(node.get_logger(), LogTags.CAM)
         self._sift = None
+        self.params = ParameterAccessor(node)
 
     # ==========================================================================
     # PARAMETER HELPERS
@@ -44,40 +40,19 @@ class CallbackBase:
 
     def _param_raw(self, name: str, default=None):
         """Read parameter value with fallback if missing/None."""
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return value
+        return self.params.raw(name, default)
 
     def _param_float(self, name: str, default: float) -> float:
-        value = self._param_raw(name, default)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
+        return self.params.as_float(name, default)
 
     def _param_int(self, name: str, default: int) -> int:
-        value = self._param_raw(name, default)
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return int(default)
+        return self.params.as_int(name, default)
 
     def _param_str(self, name: str, default: str = '') -> str:
-        value = self._param_raw(name, default)
-        try:
-            return str(value)
-        except Exception:
-            return str(default)
+        return self.params.as_str(name, default)
 
     def _param_bool(self, name: str, default: bool = False) -> bool:
-        value = self._param_raw(name, default)
-        try:
-            return bool(value)
-        except Exception:
-            return bool(default)
+        return self.params.as_bool(name, default)
 
     # ==========================================================================
     # IMAGE HELPERS

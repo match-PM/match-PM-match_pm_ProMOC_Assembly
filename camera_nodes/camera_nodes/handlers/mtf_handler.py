@@ -1,4 +1,4 @@
-"""MTF callbacks for Modulation Transfer Function measurements."""
+"""MTF handler for Modulation Transfer Function measurements."""
 
 import cv2
 import numpy as np
@@ -11,6 +11,7 @@ from .base import CallbackBase
 from .camera_format_controller import CameraFormatController
 from ..algorithms.mtf_analysis import MTFAnalyzer, MTFConfig
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
+from ..mtf_param_mapping import apply_mtf_param_mapping
 from promoc_core.error_handling import handle_service_errors
 
 MTF_AVG_SAMPLES = 10
@@ -19,31 +20,11 @@ MTF_AUTO_ROI_EDGE_WIDTH = 60
 MTF_MIN_EDGE_CONTRAST = 0.2
 MTF_SAMPLE_TIMEOUT_S = 1.0
 
-_MTF_PARAM_MAP = (
-    ("mtf.lsf_window_mode", "lsf_window_mode", str, True),
-    ("mtf.lsf_peak_window_size", "lsf_peak_window_size", int, False),
-    ("mtf.derivative_mode", "derivative_mode", str, True),
-    ("mtf.apply_derivative_correction", "apply_derivative_correction", bool, False),
-    ("mtf.derivative_correction_max", "derivative_correction_max", float, False),
-    ("mtf.apply_angle_correction", "apply_angle_correction", bool, False),
-    ("mtf.esf_smooth_mode", "esf_smooth_mode", str, True),
-    ("mtf.esf_sg_window", "esf_sg_window", int, False),
-    ("mtf.esf_sg_poly", "esf_sg_poly", int, False),
-    ("mtf.edge_validation_mode", "edge_validation_mode", str, True),
-    ("mtf.edge_validation_percentile", "edge_validation_percentile", float, False),
-    ("mtf.edge_validation_min_points", "edge_validation_min_points", int, False),
-    ("mtf.clip_to_nyquist", "clip_to_nyquist", bool, False),
-    ("mtf.export_dual_curves", "export_dual_curves", bool, False),
-    ("mtf.clip_max", "mtf_clip_max", float, False),
-    ("mtf.warn_threshold", "mtf_warn_threshold", float, False),
-)
-
-
-class MTFCallbacks(CallbackBase):
-    """Callbacks for MTF measurements and ROI selection."""
+class MTFHandler(CallbackBase):
+    """Handler for MTF measurements and ROI selection."""
 
     def __init__(self, node, camera_driver):
-        """Initialize MTF callbacks and shared camera format controller."""
+        """Initialize MTF handler and shared camera format controller."""
         super().__init__(node, camera_driver)
         self._camera_format_controller = CameraFormatController(node)
 
@@ -109,17 +90,8 @@ class MTFCallbacks(CallbackBase):
             if self._param_raw('mtf.debug_export_png', None) is not None:
                 config.debug_export_png = self._param_bool('mtf.debug_export_png', config.debug_export_png)
 
-        # Declarative parameter mapping
-        for param_name, attr_name, cast, require_truthy in _MTF_PARAM_MAP:
-            raw = self._param_raw(param_name, None)
-            if raw is None:
-                continue
-            if require_truthy and not raw:
-                continue
-            try:
-                setattr(config, attr_name, cast(raw))
-            except Exception:
-                pass
+        # Centralized declarative parameter mapping
+        apply_mtf_param_mapping(config, self._param_raw)
 
         # Validation-only switch for auto ROI mode
         if self._param_bool('mtf.edge_validation_only_auto', False) and not auto_roi:
@@ -510,3 +482,4 @@ class MTFCallbacks(CallbackBase):
         response.squares_detected = len(squares)
             
         return response
+

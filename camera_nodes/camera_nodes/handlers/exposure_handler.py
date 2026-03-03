@@ -1,12 +1,12 @@
-"""Exposure callbacks for camera control."""
+"""Exposure handler for camera control."""
 
 from promoc_core.promoc_exceptions import ConfigurationError
 from promoc_core.error_handling import handle_service_errors
 from .base import CallbackBase
 
 
-class ExposureCallbacks(CallbackBase):
-    """Callbacks for exposure control."""
+class ExposureHandler(CallbackBase):
+    """Handler for exposure control."""
 
     @handle_service_errors()
     def manual_set_exposure_callback(self, request, response):
@@ -39,3 +39,4 @@ class ExposureCallbacks(CallbackBase):
         response.status_message = f'Exposure set to {request.exposure_time} µs'
 
         return response
+

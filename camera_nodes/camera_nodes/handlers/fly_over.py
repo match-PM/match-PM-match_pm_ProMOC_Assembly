@@ -1,4 +1,4 @@
-"""Fly-over target detection for autofocus callbacks."""
+"""Fly-over target detection for autofocus handler."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from promoc_assembly_interfaces.srv import GetOperationStatus, GetVelocityParame
 from promoc_core.promoc_exceptions import ServiceError
 
 from .axis_helpers import temporary_velocity
+from ..parameter_access import ParameterAccessor
 
 
 @dataclass(frozen=True)
@@ -38,35 +39,19 @@ class FlyOverDetector:
         self._get_center_roi = get_center_roi
         self._wait_for_axis_idle = wait_for_axis_idle
         self._get_position = get_position
+        self.params = ParameterAccessor(node)
 
     def _param_raw(self, name: str, default=None):
-        if not self._node.has_parameter(name):
-            return default
-        value = self._node.get_parameter(name).value
-        if value is None:
-            return default
-        return value
+        return self.params.raw(name, default)
 
     def _param_float(self, name: str, default: float) -> float:
-        value = self._param_raw(name, default)
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
+        return self.params.as_float(name, default)
 
     def _param_int(self, name: str, default: int) -> int:
-        value = self._param_raw(name, default)
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return int(default)
+        return self.params.as_int(name, default)
 
     def _param_bool(self, name: str, default: bool = False) -> bool:
-        value = self._param_raw(name, default)
-        try:
-            return bool(value)
-        except Exception:
-            return bool(default)
+        return self.params.as_bool(name, default)
 
     def _estimate_frame_period_s(self, timeout_s: float = 0.8) -> float | None:
         """Estimate camera frame period from image timestamps."""

@@ -38,8 +38,8 @@ from .field_curvature import (
 )
 
 
-# Centralized algorithm definitions for autofocus
-# Used by autofocus callbacks and verification services
+# Centralized algorithm definitions for autofocus.
+# Used by autofocus callbacks and tooling.
 AUTOFOCUS_ALGORITHMS = [
     (0, 'goldensection', GoldenSectionAutofocus),
     (1, 'hillclimbing', HillClimbingAutofocus),

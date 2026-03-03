@@ -18,7 +18,7 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from camera_nodes.callbacks.base import CallbackBase  # noqa: E402
+from camera_nodes.handlers.base import CallbackBase  # noqa: E402
 
 
 class _Param:
@@ -103,3 +103,4 @@ def test_wait_for_new_image_requires_strictly_new_timestamp():
     img, ts = base._wait_for_new_image(last_timestamp=5, timeout=0.05)
     assert img == "img_new"
     assert ts == 6
+

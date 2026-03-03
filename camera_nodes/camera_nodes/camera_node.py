@@ -16,7 +16,7 @@ The node follows a dependency injection pattern for flexibility:
         │     └── SimulatedCameraDriver → Simulator for testing
         │
         ├── CameraImageProcessing  → Image processing algorithms (MTF)
-        └── CameraServiceCallbacks → Service business logic (Autofocus, MTF)
+        └── CameraServiceHandlers → Service business logic (Autofocus, MTF, Exposure)
 
 Driver Selection:
 =================
@@ -47,7 +47,7 @@ Startup Sequence:
 3. Instantiate components:
    - CameraDriver (Simulated or Aravis)
    - CameraImageProcessing for algorithms.
-   - CameraServiceCallbacks for service logic.
+   - CameraServiceHandlers for service logic.
 4. Create a subscriber for the raw camera image stream.
 5. Register services (autofocus, measure_mtf, select_roi, etc.).
 
@@ -62,16 +62,20 @@ Usage:
 Example Service Calls:
 ======================
     # Perform autofocus:
-    ros2 service call /camera_node/autofocus promoc_assembly_interfaces/srv/AutoFocus \
+    ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus \
         "{start_position: 0.0, end_position: 30.0, focus_mode: 0}"
 
     # Measure MTF:
-    ros2 service call /camera_node/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
+    ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF
 """
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.srv import (
-    AutoFocus, MeasureMTF, SetExposure, DetectRois,
+    AutoFocus,
+    MeasureMTF,
+    SetExposure,
+    DetectRois,
 )
+from promoc_assembly_interfaces.msg import LinearAxisInfo
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -82,7 +86,12 @@ from std_srvs.srv import Trigger
 
 # Local imports
 from .camera_image_processing import CameraImageProcessing
-from .callbacks import CameraServiceCallbacks
+from .config import (
+    declare_camera_parameters,
+    load_camera_runtime_config,
+    warn_on_deprecated_parameter_overrides,
+)
+from .services import CameraServiceHandlers
 
 # Driver abstraction
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
@@ -99,7 +108,7 @@ class CameraNode(Node):
     Architecture:
     - Phase 1: Load parameters
     - Phase 2: Select and initialize driver (simulator or real)
-    - Phase 3: Create components (ImageProcessing, ServiceCallbacks)
+    - Phase 3: Create components (ImageProcessing, ServiceHandlers)
     - Phase 4: Register subscriber and publisher
     - Phase 5: Register services (autofocus, MTF, exposure)
 
@@ -107,7 +116,7 @@ class CameraNode(Node):
         bridge (CvBridge): ROS-OpenCV converter
         camera_driver (CameraDriver): Camera driver abstraction
         image_processor (CameraImageProcessing): Image processing algorithms
-        service_callbacks (CameraServiceCallbacks): Service business logic
+        service_handlers (CameraServiceHandlers): Service business logic
         latest_image_msg: Last received image from subscriber
     """
 
@@ -119,133 +128,24 @@ class CameraNode(Node):
         1. Create ROS2 node
         2. Declare and load parameters
         3. Select driver based on use_simulator parameter
-        4. Create components (ImageProcessing, ServiceCallbacks)
+        4. Create components (ImageProcessing, ServiceHandlers)
         5. Register image subscriber
         6. Register services
         """
-        super().__init__('camera_node')
-        
+        super().__init__("camera_node")
+
         # Setup TaggedLogger for this node
         self.log = TaggedLogger(self.get_logger(), LogTags.CAM)
 
-
-        # Phase 1: Load parameters
-
-        self.declare_parameter('use_simulator', False)
-        self.declare_parameter('mtf_csv_path', '')
-        self.declare_parameter('pixel_size_um', 2.40)  # IDS U3-3800CP (Sony IMX183)
-        self.declare_parameter('default_roi_width', 200)
-        self.declare_parameter('default_roi_height', 200)
-        # Name of x-axis node for autofocus
-        self.declare_parameter('x_axis_node_name', 'lts300_x_axis')
-        
-        # Measurement parameters
-        self.declare_parameter('measurement.username', '')
-        self.declare_parameter('measurement.base_path', '')
-        
-        # Debug overlay parameter
-        self.declare_parameter('enable_debug_overlay', False)
-
-        # Autofocus refinement parameters
-        self.declare_parameter('autofocus.refinement_samples', 51)
-        self.declare_parameter('autofocus.min_step_mm', 0.01)  # 10um
-        self.declare_parameter('autofocus.refinement_shrink_factor', 0.35)
-        self.declare_parameter('autofocus.profile_table_json', '')
-        # Autofocus mode selection: 0=standard, 1=fast (hillclimb), 2=parabolic
-        self.declare_parameter('autofocus.refinement_mode', 0)
-
-        # Fly-over autofocus parameters (defaults)
-        self.declare_parameter('autofocus.fly_over.scan_speed_fast', 10.0)
-        self.declare_parameter('autofocus.fly_over.step_size_coarse', 0.5)
-        self.declare_parameter('autofocus.fly_over.step_size_fine', 0.01)
-        self.declare_parameter('autofocus.fly_over.detection_stddev_threshold', 15.0)
-        self.declare_parameter('autofocus.fly_over.roi_size', 512)
-        self.declare_parameter('autofocus.fly_over.backtrack_mm', 2.0)
-        self.declare_parameter('autofocus.fly_over.coarse_scan_range_mm', 10.0)
-        self.declare_parameter('autofocus.fly_over.fine_scan_range_mm', 0.3)
-        self.declare_parameter('autofocus.fly_over.coarse_drop_ratio', 0.6)
-        self.declare_parameter('autofocus.fly_over.fine_drop_ratio', 0.8)
-        self.declare_parameter('autofocus.fly_over.settle_coarse_s', 0.2)
-        self.declare_parameter('autofocus.fly_over.settle_fine_s', 0.3)
-        self.declare_parameter('autofocus.fly_over.use_sift_weighting', False)
-        self.declare_parameter('autofocus.fly_over.detection_poll_s', 0.05)
-        self.declare_parameter('autofocus.fly_over.max_sample_step_mm', 0.10)
-        self.declare_parameter('autofocus.fly_over.axis_speed_scale_default', 1.0)
-        self.declare_parameter('autofocus.fly_over.smooth_window_samples', 5)
-        self.declare_parameter('autofocus.fly_over.baseline_percentile', 20.0)
-        self.declare_parameter('autofocus.fly_over.snr_threshold', 3.0)
-        self.declare_parameter('autofocus.fly_over.full_scan_for_peak', True)
-        self.declare_parameter('autofocus.fly_over.peak_window_ratio', 0.9)
-        self.declare_parameter('autofocus.fly_over.peak_window_margin_mm', 1.0)
-        self.declare_parameter('autofocus.fly_over.peak_window_guard_mm', 1.5)
-        self.declare_parameter('autofocus.fly_over.min_peak_window_width_mm', 6.0)
-        # Objective-aware tuning for high magnification
-        self.declare_parameter('autofocus.fly_over.high_mag_threshold_x', 4.0)
-        self.declare_parameter('autofocus.fly_over.very_high_mag_threshold_x', 6.0)
-        self.declare_parameter('autofocus.fly_over.scan_speed_high_mag', 2.0)
-        self.declare_parameter('autofocus.fly_over.scan_speed_very_high_mag', 1.0)
-        self.declare_parameter('autofocus.fly_over.coarse_step_high_mag_mm', 0.10)
-        self.declare_parameter('autofocus.fly_over.coarse_step_very_high_mag_mm', 0.05)
-        self.declare_parameter('autofocus.fly_over.min_step_high_mag_mm', 0.005)
-        self.declare_parameter('autofocus.fly_over.settle_high_mag_s', 0.20)
-        self.declare_parameter('autofocus.fly_over.settle_very_high_mag_s', 0.25)
-        # Refinement strategy: 'linear' (default, fine scan), 'standard' (Autofocus), 'fast' (HillClimbing), 'parabolic'
-        self.declare_parameter('autofocus.fly_over.refinement_strategy', 'linear')
-        # Numeric refinement mode: 1=standard, 2=fast, 3=parabolic (overrides refinement_strategy when set)
-        self.declare_parameter('autofocus.fly_over.refinement_mode', 0)
-        
-        # Measurement conditions for scientific documentation
-        self.declare_parameter('measurement_conditions.coaxial_light_voltage', 0.0)
-        self.declare_parameter('measurement_conditions.coaxial_light_current', 0.0)
-        self.declare_parameter('measurement_conditions.camera_objective', 'unknown')
-        self.declare_parameter('measurement_conditions.notes', '')
-
-        # MTF debug / tuning parameters
-        self.declare_parameter('mtf.debug_export_dir', '')
-        self.declare_parameter('mtf.debug_export_prefix', 'mtf')
-        self.declare_parameter('mtf.debug_export_csv', True)
-        self.declare_parameter('mtf.debug_export_png', False)
-        self.declare_parameter('mtf.profile', 'default')  # default | scientific | debug
-        self.declare_parameter('mtf.lsf_window_mode', 'full')  # full | peak | none
-        self.declare_parameter('mtf.lsf_peak_window_size', 0)  # samples; 0 = auto
-        self.declare_parameter('mtf.derivative_mode', 'iso')  # diff | iso
-        self.declare_parameter('mtf.apply_derivative_correction', True)
-        self.declare_parameter('mtf.derivative_correction_max', 0.0)  # 0 disables cap
-        self.declare_parameter('mtf.apply_angle_correction', True)
-        self.declare_parameter('mtf.esf_smooth_mode', 'none')  # none | sg
-        self.declare_parameter('mtf.esf_sg_window', 11)
-        self.declare_parameter('mtf.esf_sg_poly', 2)
-        self.declare_parameter('mtf.edge_validation_mode', 'warn')  # off | warn | fail
-        self.declare_parameter('mtf.edge_validation_percentile', 90.0)
-        self.declare_parameter('mtf.edge_validation_min_points', 50)
-        self.declare_parameter('mtf.edge_validation_only_auto', False)
-        self.declare_parameter('mtf.clip_to_nyquist', True)
-        self.declare_parameter('mtf.export_dual_curves', False)
-        self.declare_parameter('mtf.clip_max', 0.0)  # 0 disables clipping
-        self.declare_parameter('mtf.warn_threshold', 1.05)
-        # Runtime camera format switch for MTF:
-        # Start cropped for autofocus, temporarily switch to full frame for MTF.
-        self.declare_parameter('mtf.use_full_frame', False)
-        self.declare_parameter('mtf.full_frame_width', 5536)
-        self.declare_parameter('mtf.full_frame_height', 3692)
-        self.declare_parameter('mtf.full_frame_offset_x', 0)
-        self.declare_parameter('mtf.full_frame_offset_y', 0)
-        self.declare_parameter('mtf.full_frame_binning', 1)
-        self.declare_parameter('mtf.full_frame_settle_s', 0.25)
-        self.declare_parameter('mtf.full_frame_image_timeout_s', 2.0)
-        self.declare_parameter('mtf.restore_after_measurement', True)
-        self.declare_parameter('mtf.restore_settle_s', 0.15)
-        self.declare_parameter('mtf.log_format_switch', True)
-        # Generic exposure/frame settling
-        self.declare_parameter('exposure.settle_frames_after_set', 2)
-        self.declare_parameter('exposure.frame_timeout_s', 1.0)
-
-        self.use_simulator = self.get_parameter(
-            'use_simulator').get_parameter_value().bool_value
+        # Phase 1: Load parameters via centralized declaration/typed loader
+        declare_camera_parameters(self)
+        self.runtime_config = load_camera_runtime_config(self)
+        warn_on_deprecated_parameter_overrides(self)
+        self.use_simulator = self.runtime_config.core.use_simulator
 
         self.log.info(
-            f"Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode...")
-
+            f"Camera Node starting in {'SIMULATOR' if self.use_simulator else 'REAL'} mode..."
+        )
 
         # Phase 2: Select driver
 
@@ -255,97 +155,118 @@ class CameraNode(Node):
         # Connect to driver
         self.camera_driver.connect()
 
-
         # Phase 3: Create components
 
-        self.image_processor = CameraImageProcessing(self.log)
-        self.service_callbacks = CameraServiceCallbacks(
-            self, self.camera_driver)
+        self.image_processor = CameraImageProcessing(
+            self.log,
+            pixel_size_um=self.runtime_config.core.pixel_size_um,
+        )
+        self.service_handlers = CameraServiceHandlers(self, self.camera_driver)
 
         self.latest_image_msg = None
         self.latest_camera_info = None
         self.current_axis_position = -1.0
 
-
         # Phase 4: Register subscribers/publishers
 
         self.assembly_image_sub = self.create_subscription(
-            Image, '/promoc/assembly_camera/stream0/image_raw', self.assembly_image_callback, 10)
+            Image,
+            "/promoc/assembly_camera/stream0/image_raw",
+            self.assembly_image_callback,
+            10,
+        )
 
-        axis_name = self.get_parameter('x_axis_node_name').value
+        axis_name = self.runtime_config.core.x_axis_node_name
         self.axis_pos_sub = self.create_subscription(
-            Float64,
-            f'/{axis_name}/position',
+            LinearAxisInfo,
+            f"/promoc/linear_axis/{axis_name}/position",
             self.axis_position_callback,
-            10
+            10,
+        )
+        self.axis_pos_sub_legacy_ns = self.create_subscription(
+            LinearAxisInfo,
+            f"/promoc_assembly/{axis_name}/position",
+            self.axis_position_callback_legacy_ns,
+            10,
+        )
+        self.axis_pos_sub_legacy_float = self.create_subscription(
+            Float64,
+            f"/{axis_name}/position",
+            self.axis_position_callback_legacy_float,
+            10,
         )
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
-            '/promoc/assembly_camera/stream0/camera_info',
+            "/promoc/assembly_camera/stream0/camera_info",
             self.camera_info_callback,
-            10
+            10,
         )
 
         self.processed_assembly_pub = self.create_publisher(
-            Image, '/camera/assembly/processed', 10)
-        
-        # Debug image publisher with crosshair overlay
-        self.debug_image_pub = self.create_publisher(
-            Image, '/camera/image_debug', 10)
+            Image, "/camera/assembly/processed", 10
+        )
 
+        # Debug image publisher with crosshair overlay
+        self.debug_image_pub = self.create_publisher(Image, "/camera/image_debug", 10)
 
         # Phase 5: Register services
 
         self.cb_group = ReentrantCallbackGroup()
 
-        self.select_roi_service = self.create_service(
-            Trigger,
-            '~/select_roi',
-            self.service_callbacks.select_roi_callback,
-            callback_group=self.cb_group,
+        self.select_roi_service, self.select_roi_service_legacy = (
+            self._register_service_pair(
+                Trigger,
+                "/promoc/camera/select_roi",
+                "/promoc/camera_node/select_roi",
+                self.service_handlers.mtf.select_roi_callback,
+            )
         )
-        self.autofocus_service = self.create_service(
-            AutoFocus,
-            '~/autofocus',
-            self.service_callbacks.autofocus_callback,
-            callback_group=self.cb_group,
+        self.autofocus_service, self.autofocus_service_legacy = (
+            self._register_service_pair(
+                AutoFocus,
+                "/promoc/camera/autofocus",
+                "/promoc/camera_node/autofocus",
+                self.service_handlers.autofocus.autofocus_callback,
+            )
         )
-        self.autofocus_comparison_service = self.create_service(
-            AutoFocus,
-            '~/autofocus_comparison',
-            self.service_callbacks.autofocus_comparison_callback,
-            callback_group=self.cb_group,
+        self.autofocus_comparison_service, self.autofocus_comparison_service_legacy = (
+            self._register_service_pair(
+                AutoFocus,
+                "/promoc/camera/autofocus_comparison",
+                "/promoc/camera_node/autofocus_comparison",
+                self.service_handlers.autofocus.autofocus_comparison_callback,
+            )
         )
-        self.mtf_service = self.create_service(
+        self.mtf_service, self.mtf_service_legacy = self._register_service_pair(
             MeasureMTF,
-            '~/measure_mtf',
-            self.service_callbacks.measure_mtf_callback,
-            callback_group=self.cb_group,
+            "/promoc/camera/measure_mtf",
+            "/promoc/camera_node/measure_mtf",
+            self.service_handlers.mtf.measure_mtf_callback,
         )
-        self.detect_rois_service = self.create_service(
-            DetectRois,
-            '~/detect_rois',
-            self.service_callbacks.detect_rois_callback,
-            callback_group=self.cb_group,
+        self.detect_rois_service, self.detect_rois_service_legacy = (
+            self._register_service_pair(
+                DetectRois,
+                "/promoc/camera/detect_rois",
+                "/promoc/camera_node/detect_rois",
+                self.service_handlers.mtf.detect_rois_callback,
+            )
         )
 
         # Exposure service only for real hardware
         if not self.use_simulator and self.camera_driver.is_connected:
-            self.manual_set_exposure_service = self.create_service(
-                SetExposure,
-                '~/set_exposure',
-                self.service_callbacks.manual_set_exposure_callback,
-                callback_group=self.cb_group,
+            self.set_exposure_service, self.set_exposure_service_legacy = (
+                self._register_service_pair(
+                    SetExposure,
+                    "/promoc/camera/set_exposure",
+                    "/promoc/camera_node/set_exposure",
+                    self.service_handlers.exposure.manual_set_exposure_callback,
+                )
             )
 
-
-
-        self.log.info('Camera Node initialized successfully')
-
+        self.log.info("Camera Node initialized successfully")
 
     # DRIVER CREATION
-
 
     def _create_driver(self) -> CameraDriver:
         """
@@ -355,15 +276,38 @@ class CameraNode(Node):
             CameraDriver: An instance of the selected driver (Simulated or Aravis).
         """
         if self.use_simulator:
-            self.log.info('📷 Using SimulatedCameraDriver')
+            self.log.info("Using SimulatedCameraDriver")
             return SimulatedCameraDriver(TaggedLogger(self.get_logger(), LogTags.MOCK))
-        else:
-            self.log.info('📷 Using AravisCameraDriver')
-            return AravisCameraDriver(self, self.log)
+        self.log.info("Using AravisCameraDriver")
+        return AravisCameraDriver(self, self.log)
 
+    def _legacy_service_wrapper(self, legacy_name: str, canonical_name: str, callback):
+        def _wrapped_callback(request, response):
+            self.log.warning(
+                f"Deprecated service '{legacy_name}' called. Use '{canonical_name}' instead."
+            )
+            return callback(request, response)
+
+        return _wrapped_callback
+
+    def _register_service_pair(
+        self, service_type, canonical_name: str, legacy_name: str, callback
+    ):
+        canonical_service = self.create_service(
+            service_type,
+            canonical_name,
+            callback,
+            callback_group=self.cb_group,
+        )
+        legacy_service = self.create_service(
+            service_type,
+            legacy_name,
+            self._legacy_service_wrapper(legacy_name, canonical_name, callback),
+            callback_group=self.cb_group,
+        )
+        return canonical_service, legacy_service
 
     # IMAGE CALLBACKS
-
 
     def assembly_image_callback(self, msg: Image):
         """
@@ -373,50 +317,86 @@ class CameraNode(Node):
         only stores the image for later access.
         """
         # Enhanced debugging with connection monitoring
-        if not hasattr(self, '_image_count'):
+        if not hasattr(self, "_image_count"):
             self._image_count = 0
             self._last_log_time = 0.0
             import time
+
             self._start_time = time.time()
-        
+
         self._image_count += 1
-        
-        # Log every 50 images or every 10 seconds for connection verification (DEBUG level)
+
+        # Log every 50 images or every 10 seconds for connection health checks (DEBUG level)
         import time
+
         current_time = time.time()
         if (self._image_count % 50 == 0) or (current_time - self._last_log_time > 10.0):
             runtime = current_time - self._start_time
             fps = self._image_count / runtime if runtime > 0 else 0
             self.log.debug(
-                f"📷 Camera active: {self._image_count} images, "
+                f"Camera active: {self._image_count} images, "
                 f"{fps:.1f} FPS, Size: {msg.width}x{msg.height}"
             )
             self._last_log_time = current_time
-        
+
         self.latest_image_msg = msg
 
         # Pass the image to the driver for caching (used by Aravis driver)
-        if hasattr(self.camera_driver, 'set_latest_image'):
+        if hasattr(self.camera_driver, "set_latest_image"):
             try:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
                 self.camera_driver.set_latest_image(cv_image)
             except Exception as e:
-                self.get_logger().warning(f'Image conversion failed: {e}')
-        
+                self.get_logger().warning(f"Image conversion failed: {e}")
+
         # Publish debug image with crosshair overlay if enabled
-        if self.get_parameter('enable_debug_overlay').get_parameter_value().bool_value:
+        if self.runtime_config.core.enable_debug_overlay:
             try:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
                 cv_image_with_crosshair = self.image_processor.draw_crosshair(cv_image)
-                debug_msg = self.bridge.cv2_to_imgmsg(cv_image_with_crosshair, encoding='bgr8')
+                debug_msg = self.bridge.cv2_to_imgmsg(
+                    cv_image_with_crosshair, encoding="bgr8"
+                )
                 debug_msg.header = msg.header  # Preserve timestamp and frame_id
                 self.debug_image_pub.publish(debug_msg)
             except Exception as e:
-                self.log.warning(f'Failed to publish debug image: {e}')
+                self.log.warning(f"Failed to publish debug image: {e}")
 
-    def axis_position_callback(self, msg: Float64):
-        """Receive and cache axis position."""
-        self.current_axis_position = msg.data
+    def axis_position_callback(self, msg):
+        """Receive and cache axis position from canonical/legacy topic types."""
+        if hasattr(msg, "axis_position"):
+            self.current_axis_position = msg.axis_position
+            return
+        if hasattr(msg, "data"):
+            self.current_axis_position = float(msg.data)
+            return
+        self.log.warning(f"Unknown axis position message type: {type(msg)}")
+
+    def axis_position_callback_legacy_ns(self, msg: LinearAxisInfo):
+        """Release N compatibility for legacy namespaced axis topic."""
+        if not hasattr(self, "_legacy_axis_topic_ns_warned"):
+            self._legacy_axis_topic_ns_warned = False
+        if not self._legacy_axis_topic_ns_warned:
+            axis_name = self.runtime_config.core.x_axis_node_name
+            self.log.warning(
+                f"Deprecated topic '/promoc_assembly/{axis_name}/position' received. "
+                f"Use '/promoc/linear_axis/{axis_name}/position' instead."
+            )
+            self._legacy_axis_topic_ns_warned = True
+        self.axis_position_callback(msg)
+
+    def axis_position_callback_legacy_float(self, msg: Float64):
+        """Release N compatibility for very old Float64 axis topic."""
+        if not hasattr(self, "_legacy_axis_topic_float_warned"):
+            self._legacy_axis_topic_float_warned = False
+        if not self._legacy_axis_topic_float_warned:
+            axis_name = self.runtime_config.core.x_axis_node_name
+            self.log.warning(
+                f"Deprecated topic '/{axis_name}/position' received. "
+                f"Use '/promoc/linear_axis/{axis_name}/position' instead."
+            )
+            self._legacy_axis_topic_float_warned = True
+        self.axis_position_callback(msg)
 
     def camera_info_callback(self, msg: CameraInfo):
         """Receive and cache camera calibration info."""
@@ -440,5 +420,5 @@ def main(args=None):
             pass  # Already shut down
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

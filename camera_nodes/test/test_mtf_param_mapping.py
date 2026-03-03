@@ -58,7 +58,7 @@ if "rcl_interfaces" not in sys.modules:
     sys.modules["rcl_interfaces"] = rcl_pkg
 
 from camera_nodes.algorithms.mtf_analysis import MTFConfig  # noqa: E402
-from camera_nodes.callbacks.mtf import MTFCallbacks  # noqa: E402
+from camera_nodes.handlers.mtf_handler import MTFHandler  # noqa: E402
 
 
 class _Param:
@@ -92,8 +92,8 @@ class _Node:
         return self._logger
 
 
-def _callbacks(params: dict) -> MTFCallbacks:
-    return MTFCallbacks(node=_Node(params), camera_driver=object())
+def _callbacks(params: dict) -> MTFHandler:
+    return MTFHandler(node=_Node(params), camera_driver=object())
 
 
 def test_build_mtf_config_mapping_applies_and_respects_auto_roi_override():
@@ -161,3 +161,4 @@ def test_build_mtf_config_mapping_ignores_invalid_casts_and_applies_profile():
     # Profile applied after parameter mapping.
     assert config.derivative_mode == "iso"
     assert config.apply_derivative_correction is True
+

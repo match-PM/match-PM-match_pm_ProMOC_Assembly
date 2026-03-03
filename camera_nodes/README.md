@@ -1,81 +1,73 @@
-## Camera Integration Setup
+# Camera Nodes (Hardware-First)
 
-This guide covers the installation and configuration of IDS cameras using the camera_aravis2 package.
+This package provides camera processing services for the ProMOC system.
 
-### 1. Install External Dependencies
+Official workflow is hardware-first. Simulation is optional and experimental.
 
-The camera integration depends on the external `camera_aravis2` package:
+## Core Services
 
-```bash
-# Navigate to your workspace
-cd ~/ros2_ws/src
+- `/promoc/camera/autofocus`
+- `/promoc/camera/measure_mtf`
+- `/promoc/camera/detect_rois`
+- `/promoc/camera/set_exposure` (hardware mode only)
 
-# Clone camera_aravis2 (if not already done via dependencies.repos)
-git clone https://github.com/FraunhoferIOSB/camera_aravis2.git
+Legacy aliases under `/promoc/camera_node/*` are still available in Release N with deprecation warnings.
 
-# Install system dependencies
-sudo apt install libaravis-dev aravis-tools
-```
-### Setup IDS Camera Permissions
-
-For IDS USB3Vision cameras, create udev rules to allow user access:
+## Start Commands
 
 ```bash
-sudo tee /etc/udev/rules.d/99-ids-cameras.rules <<EOF
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8000", MODE="0666"
-EOF
+# Full hardware system
+make hw
 ```
-
-### 2. Use vcs tool (Recommended)
-
-If you have vcs installed, you can use the dependencies file:
 
 ```bash
-cd ~/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly
-vcs import ~/ros2_ws/src < dependencies.repos
+# Camera stack only (hardware mode)
+make camera-hw
 ```
-
-### 3. Build the packages
 
 ```bash
-cd ~/ros2_ws
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --packages-select camera_aravis2 camera_nodes
+# Optional/experimental simulation
+make sim
 ```
 
-### 4. Test the installation
+## Current Internal Structure
 
-```bash
-# Test camera discovery
-ros2 run camera_aravis2 camera_finder
-
-# Test your camera manager
-ros2 run camera_nodes camera_manager
-
-# Test with launch file
-ros2 launch camera_nodes camera_launch.py
+```text
+camera_nodes/camera_nodes/
+  camera_node.py
+  services.py
+  config.py
+  parameter_access.py
+  handlers/
+    autofocus_handler.py
+    exposure_handler.py
+    mtf_handler.py
+  algorithms/
+    autofocus.py
+    mtf/
+  drivers/
+    aravis_camera_driver.py
+    simulated_camera_driver.py
+camera_nodes/scripts/
+  reproduce_mtf.py
 ```
 
-### 5. Camera Configuration
+## Change Guide (First Files To Open)
 
-Find your camera GUID and update the launch files accordingly:
+| You want to change... | Start here | Then check |
+|---|---|---|
+| Camera service names or routing | `camera_nodes/camera_nodes/services.py` | `camera_nodes/camera_nodes/camera_node.py` |
+| Autofocus behavior | `camera_nodes/camera_nodes/handlers/autofocus_handler.py` | `camera_nodes/camera_nodes/algorithms/autofocus.py` |
+| MTF behavior or CSV mapping | `camera_nodes/camera_nodes/handlers/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/mtf_param_mapping.py` |
+| Parameter defaults or validation | `camera_nodes/camera_nodes/config.py` | `camera_nodes/camera_nodes/parameter_access.py`, `promoc_bringup/config/cameras/*.yaml` |
+| Real/sim camera driver behavior | `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py` | `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py`, `camera_nodes/camera_nodes/drivers/camera_driver.py` |
 
-```bash
-# List available cameras
-arv-tool-0.8
+## Camera Setup Notes
 
-# Or use the ROS2 tool
-ros2 run camera_aravis2 camera_finder
-```
-
-### External Dependencies
-
-- **camera_aravis2**: https://github.com/FraunhoferIOSB/camera_aravis2
-  - License: 3-clause BSD License
-  - Maintainer: Fraunhofer IOSB
-  - Purpose: GenICam camera driver for GigEVision and USB3Vision cameras
-
-This setup keeps external dependencies separate from your project code while providing seamless integration.
+1. Ensure `camera_aravis2` is installed (via `dependencies.repos` + setup scripts).
+2. Check camera visibility:
+   - `arv-tool-0.8`
+3. Check permissions for IDS USB3 cameras (udev + user groups).
 
 ## Callback User Guides
 
