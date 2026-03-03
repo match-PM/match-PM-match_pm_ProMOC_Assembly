@@ -119,7 +119,7 @@ ros2 launch promoc_bringup assembly_camera.launch.py
 
 ```bash
 # Launch complete assembly system
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 ```
 
 ---
@@ -167,7 +167,6 @@ promoc_assembly/
 │   └── match-PM-match_pm_ProMOC_Assembly/
 │       ├── camera_nodes/         # Camera integration
 │       ├── linear_axis_nodes/    # Thorlabs LTS300 control
-│       ├── lens_testing_nodes/   # Autofocus & MTF measurement
 │       ├── planar_motor_nodes/   # Planar motor (PMCLib)
 │       ├── promoc_bringup/       # Launch files & config
 │       ├── promoc_core/          # Shared utilities & exceptions
@@ -212,3 +211,5 @@ promoc_assembly/
 ---
 
 *Last updated: 2024-12-06*
+
+

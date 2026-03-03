@@ -109,7 +109,7 @@ New setups should not rely on it.
 ```bash
 # Use built-in mock implementation (no PMCLib needed)
 export USE_MOCK_PMC=true
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
 ```
 
 ## ✅ Validation and Testing
@@ -132,16 +132,19 @@ This checks:
 python3 test_basic_functionality.py
 ```
 
-### Launch Simulation Test
+### Launch Test (Hardware-First)
 ```bash
 # Source workspace first
 source ../install/setup.bash
 
-# Test complete system (planar motor + linear axes)
-ros2 launch promoc_bringup promoc_assembly_launch.py
+# Official path: complete system in hardware mode
+ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 
 # Test with demo controller
-ros2 launch promoc_bringup promoc_assembly_demo_launch.py
+ros2 launch promoc_bringup promoc_assembly_demo.launch.py
+
+# Optional/experimental simulation path
+ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
 
 # Test individual components
 ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
@@ -154,8 +157,8 @@ ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true
 ./validate_setup_enhanced.sh
 
 # Test hardware services
-ros2 service call /mover_node/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"
-ros2 service call /lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
+ros2 service call /promoc/mover/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"
+ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
 
 ## 🐛 Troubleshooting
