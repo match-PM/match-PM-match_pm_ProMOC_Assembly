@@ -4,8 +4,8 @@
   <name>promoc_core</name>
   <version>0.0.0</version>
   <description>Core functionality for ProMOC Assembly</description>
-  <maintainer email="user@todo.todo">user</maintainer>
-  <license>TODO: License declaration</license>
+  <maintainer email="promoc@match.uni-hannover.de">ProMOC Team</maintainer>
+  <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
   <build_depend>setuptools</build_depend>

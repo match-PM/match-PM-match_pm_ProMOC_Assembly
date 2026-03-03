@@ -13,10 +13,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='user',
-    maintainer_email='user@todo.todo',
+    maintainer='ProMOC Team',
+    maintainer_email='promoc@match.uni-hannover.de',
     description='Core functionality for ProMOC Assembly',
-    license='TODO: License declaration',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

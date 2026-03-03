@@ -16,7 +16,7 @@ int32 focus_mode
 
 # --- OPTIONAL: Skip fly-over detection (use full range) ---
 # If true, skips fly-over and uses start_position to end_position directly
-# Used by verification to test all algorithms on same range
+# Useful for deterministic algorithm comparisons on the same scan range
 bool skip_flyover
 
 # --- OPTIONAL: Save best image ---
