@@ -32,11 +32,11 @@ Configuration:
 Usage Example:
 ==================
     utils = MoverUtils(logger, pmc_interface, config)
-    
+
     # Get position
     pos = utils.get_current_position(0)
     print(f"XBot is at x={pos[0]*1000:.1f}mm, y={pos[1]*1000:.1f}mm")
-    
+
     # Monitor motion
     result = utils.wait_for_motion_completion(
         xbot_id=0,
@@ -51,15 +51,16 @@ Usage Example:
 import time
 import math
 from typing import Dict, List, Optional
-from enum import Enum
 
 # Explicit imports for a clean architecture
 from .mover_pmc_interface import PmcInterface
+from .config import MoverNodeConfig
+
 # XbotState from Mock (guaranteed to be available)
 from .drivers.mock_pmclib import XbotState
 
 # Common utilities from promoc_core
-from promoc_core.motion import MotionStatus, check_position_reached
+from promoc_core.motion import MotionStatus
 from promoc_core.validation import is_in_range, validate_id_range
 from promoc_core.conversions import rad_to_deg, mm_to_m, m_to_mm
 
@@ -81,12 +82,12 @@ class MoverUtils:
     Attributes:
         logger: ROS2 logger for output.
         pmc (PmcInterface): Hardware interface.
-        config (dict): Configuration with bounds.
+        config (MoverNodeConfig): Typed node configuration with bounds.
         is_mock (bool): True if mock mode is active.
         velocity_params (dict): Velocity parameters per XBot.
     """
 
-    def __init__(self, logger, pmc_interface: PmcInterface, config: dict):
+    def __init__(self, logger, pmc_interface: PmcInterface, config: MoverNodeConfig):
         """
         Initializes the utilities with dependencies.
 
@@ -98,7 +99,7 @@ class MoverUtils:
         self.logger = logger
         self.pmc = pmc_interface
         self.config = config
-        self.is_mock = self.pmc.status['is_mock']
+        self.is_mock = self.pmc.status["is_mock"]
         self._logged_no_data = False
         self._logged_warnings = set()
 
@@ -164,13 +165,13 @@ class MoverUtils:
             # Defaults are conservative. They can be tuned via
             # callback_set_velocity_acceleration.
             self.velocity_params[xbot_id] = {
-                'xy_vel': 0.05,
-                'xy_max_accel': 0.2,
-                'z_vel': 0.01,
-                'z_max_accel': 0.05,
-                'rx_vel': self.deg_to_rad(10.0),
-                'ry_vel': self.deg_to_rad(10.0),
-                'rz_vel': self.deg_to_rad(15.0),
+                "xy_vel": 0.05,
+                "xy_max_accel": 0.2,
+                "z_vel": 0.01,
+                "z_max_accel": 0.05,
+                "rx_vel": self.deg_to_rad(10.0),
+                "ry_vel": self.deg_to_rad(10.0),
+                "rz_vel": self.deg_to_rad(15.0),
             }
 
         # Return a copy to avoid accidental external mutation.
@@ -220,23 +221,28 @@ class MoverUtils:
                 if warning_key not in self._logged_warnings:
                     self.logger.warning(
                         f"XBot {xbot_id} not available. Available: {len(xbot_data_list)}. "
-                        f"Using XBot 0 as fallback.")
+                        f"Using XBot 0 as fallback."
+                    )
                     self._logged_warnings.add(warning_key)
                 xbot_id = 0
 
             xbot_data = xbot_data_list[xbot_id]
             position = [
-                float(xbot_data.x_pos), float(
-                    xbot_data.y_pos), float(xbot_data.z_pos),
-                float(xbot_data.rx_pos), float(
-                    xbot_data.ry_pos), float(xbot_data.rz_pos)
+                float(xbot_data.x_pos),
+                float(xbot_data.y_pos),
+                float(xbot_data.z_pos),
+                float(xbot_data.rx_pos),
+                float(xbot_data.ry_pos),
+                float(xbot_data.rz_pos),
             ]
             return position
 
         except Exception as e:
             if not self.is_mock:
                 self.logger.error(
-                    f"Error in get_current_position for XBot {xbot_id}: {e}", exc_info=True)
+                    f"Error in get_current_position for XBot {xbot_id}: {e}",
+                    exc_info=True,
+                )
             return None
 
     def get_xbot_status_info(self, xbot_id: int = 0) -> Optional[dict]:
@@ -263,20 +269,18 @@ class MoverUtils:
                 xbot_state_str = self._xbot_state_to_string(xbot_state_enum)
             except Exception as e:
                 if not self.is_mock:
-                    self.logger.warning(
-                        f"Could not get status for XBot {xbot_id}: {e}")
+                    self.logger.warning(f"Could not get status for XBot {xbot_id}: {e}")
                 xbot_state_enum = XbotState.XBOT_UNKNOWN
                 xbot_state_str = "UNKNOWN"
 
             return {
-                'position': current_pos,
-                'xbot_state': xbot_state_enum,
-                'xbot_state_string': xbot_state_str,
+                "position": current_pos,
+                "xbot_state": xbot_state_enum,
+                "xbot_state_string": xbot_state_str,
             }
         except Exception as e:
             if not self.is_mock:
-                self.logger.error(
-                    f"Error getting XBot status info: {e}", exc_info=True)
+                self.logger.error(f"Error getting XBot status info: {e}", exc_info=True)
             return None
 
     def get_xbot_state_string(self, xbot_id: int = 0) -> str:
@@ -299,7 +303,7 @@ class MoverUtils:
     def _xbot_state_to_string(self, xbot_state) -> str:
         """Converts an XbotState enum to a readable string."""
         try:
-            if hasattr(xbot_state, 'name'):
+            if hasattr(xbot_state, "name"):
                 return xbot_state.name
             else:
                 state_map = {v.value: v.name for v in XbotState}
@@ -311,8 +315,13 @@ class MoverUtils:
     # MOTION MONITORING
     # ══════════════════════════════════════════════════════════════════════════
 
-    def wait_for_motion_completion(self, xbot_id: int, target_position: List[float],
-                                   position_tolerance: float, max_wait_time: float = 10.0) -> MotionStatus:
+    def wait_for_motion_completion(
+        self,
+        xbot_id: int,
+        target_position: List[float],
+        position_tolerance: float,
+        max_wait_time: float = 10.0,
+    ) -> MotionStatus:
         """
         Waits for a motion to complete.
 
@@ -347,13 +356,15 @@ class MoverUtils:
 
             if state_str in ["XBOT_ERROR", "ERROR", "XBOT_STOPPED"]:
                 self.logger.error(
-                    f"Motion error for XBot {xbot_id} - State: {state_str}")
+                    f"Motion error for XBot {xbot_id} - State: {state_str}"
+                )
                 return MotionStatus.ERROR
 
             time.sleep(0.1)
 
         self.logger.warning(
-            f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s")
+            f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s"
+        )
         return MotionStatus.TIMEOUT
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -375,9 +386,11 @@ class MoverUtils:
             y: [y_min, y_max] (Default: 0.055 - 0.180 m)
             z: [z_min, z_max] (Default: 0.000 - 0.004 m)
         """
-        return (is_in_range(x, self.config['x_min'], self.config['x_max']) and
-                is_in_range(y, self.config['y_min'], self.config['y_max']) and
-                is_in_range(z, self.config['z_min'], self.config['z_max']))
+        return (
+            is_in_range(x, self.config.x_min, self.config.x_max)
+            and is_in_range(y, self.config.y_min, self.config.y_max)
+            and is_in_range(z, self.config.z_min, self.config.z_max)
+        )
 
     def validate_xbot_id(self, xbot_id: int) -> bool:
         """
@@ -390,29 +403,33 @@ class MoverUtils:
             True if valid, False otherwise.
         """
         valid, error_msg = validate_id_range(
-            xbot_id, min_id=0, max_id=15, name="XBot ID")
+            xbot_id, min_id=0, max_id=15, name="XBot ID"
+        )
         if not valid:
             self.logger.error(error_msg)
         return valid
 
     def diagnose_xbot_availability(self) -> dict:
         """Diagnoses which XBots are available and responding."""
-        diagnosis = {'available_xbots': [], 'total_from_get_all': 0}
+        diagnosis = {"available_xbots": [], "total_from_get_all": 0}
         try:
             data_list = self.pmc.bot.get_all_xbot_info(0)
-            diagnosis['total_from_get_all'] = len(
-                data_list) if data_list else 0
+            diagnosis["total_from_get_all"] = len(data_list) if data_list else 0
 
             for xbot_id in range(4):  # Test the first 4 IDs
                 try:
                     status = self.pmc.bot.get_xbot_status(xbot_id)
-                    diagnosis['available_xbots'].append({
-                        'id': xbot_id, 'status': 'available',
-                        'state': self._xbot_state_to_string(status.xbot_state)
-                    })
+                    diagnosis["available_xbots"].append(
+                        {
+                            "id": xbot_id,
+                            "status": "available",
+                            "state": self._xbot_state_to_string(status.xbot_state),
+                        }
+                    )
                 except Exception as e:
-                    diagnosis['available_xbots'].append(
-                        {'id': xbot_id, 'status': 'error', 'error': str(e)})
+                    diagnosis["available_xbots"].append(
+                        {"id": xbot_id, "status": "error", "error": str(e)}
+                    )
         except Exception as e:
             self.logger.error(f"General diagnosis error: {e}")
         return diagnosis

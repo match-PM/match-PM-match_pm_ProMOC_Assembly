@@ -13,7 +13,7 @@ def generate_launch_description():
 
     mover_node = Node(
         package='planar_motor_nodes',
-        executable='mover_service_node_test',
+        executable='mover_node',
         name='mover_node',
         parameters=[params_file],
         output='screen',

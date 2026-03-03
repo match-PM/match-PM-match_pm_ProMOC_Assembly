@@ -3,9 +3,9 @@
 <package format="3">
   <name>linear_axis_nodes</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ROS2 nodes and drivers for Thorlabs LTS300 linear axes.</description>
   <maintainer email="promoc@todo.todo">promoc</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>   <!-- Use ament_python for Python packages -->
   <build_depend>setuptools</build_depend>             <!-- Required for building Python packages -->

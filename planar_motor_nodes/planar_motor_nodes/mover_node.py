@@ -10,7 +10,7 @@ The node follows a dependency injection pattern for better testability:
 
     MoverServiceNode (Orchestrator)
         │
-    ├── Config (dict)       → Configuration from ROS parameters (bounds, tolerances, mock mode)
+    ├── Config (MoverNodeConfig) → Typed ROS parameter configuration
         ├── PmcInterface        → Hardware abstraction (PMCLib wrapper)
         ├── MoverUtils          → Helper functions (position, conversions)
         └── ServiceCallbacks    → Business logic (motion processing)
@@ -51,31 +51,35 @@ Usage:
 Example Service Calls:
 ======================
     # Move XBot linearly (in mm):
-    ros2 service call /mover/linear_motion_si promoc_assembly_interfaces/srv/LinearMotionSI \\
+    ros2 service call /promoc/mover/linear_motion_si promoc_assembly_interfaces/srv/LinearMotionSi \\
         "{xbot_id: 0, target_x: 100.0, target_y: 50.0}"
 
     # Stop motion:
-    ros2 service call /mover/stop_motion promoc_assembly_interfaces/srv/StopMotion \\
+    ros2 service call /promoc/mover/stop_motion promoc_assembly_interfaces/srv/StopMotion \\
         "{xbot_id: 0}"
 """
 
 import rclpy
-import time
-import math
+from dataclasses import asdict
 from rclpy.node import Node
 from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import (
-    ActivateXbots, ArcMotionSi, LevitationXbots,
-    LinearMotionSi, RotaryMotion, SetVelocityAcceleration,
-    SixDofMotion, StopMotion
+    ActivateXbots,
+    ArcMotionSi,
+    LevitationXbots,
+    LinearMotionSi,
+    RotaryMotion,
+    SetVelocityAcceleration,
+    SixDofMotion,
+    StopMotion,
 )
 
 # Import our new, clean components
 from .mover_pmc_interface import PmcInterface
 from .mover_utils import MoverUtils
 from .callbacks import ServiceCallbacks
-from promoc_core.conversions import m_to_mm, mm_to_m, rad_to_deg, deg_to_rad
-from promoc_core.promoc_exceptions import ConnectionError
+from .config import MoverNodeConfig
+from promoc_core.conversions import m_to_mm, rad_to_deg
 from promoc_core.logging import TaggedLogger, LogTags
 
 
@@ -113,7 +117,7 @@ class MoverServiceNode(Node):
        - Services wait for incoming requests.
 
     Attributes:
-        config (dict): Configuration (bounds, tolerances, XBot ID).
+        config (MoverNodeConfig): Typed node configuration.
         pmc (PmcInterface): Hardware abstraction for the PMC controller.
         mover_utils (MoverUtils): Helper functions for position calculation.
         service_callbacks (ServiceCallbacks): Callback logic for services.
@@ -132,7 +136,7 @@ class MoverServiceNode(Node):
         Sequence (Step-by-Step):
         -------------------------
         1. Create ROS2 node named "mover_node".
-        2. Load configuration from ROS parameters → Config (dict).
+        2. Load configuration from ROS parameters -> MoverNodeConfig.
         3. Create components:
            - PmcInterface: Hardware connection.
            - MoverUtils: Helper functions.
@@ -141,7 +145,7 @@ class MoverServiceNode(Node):
         5. Start a connection timer (attempts to connect to PMC).
         """
         super().__init__("mover_node")
-        
+
         # Setup TaggedLogger for this node
         self.log = TaggedLogger(self.get_logger(), LogTags.PMC)
 
@@ -157,22 +161,25 @@ class MoverServiceNode(Node):
         # ══════════════════════════════════════════════════════════════════════
         # Each component gets its dependencies passed in explicitly.
         # This makes the system testable and the dependencies clear.
-        
+
         # PMC Interface gets specific [PMC:CONN] logger
         self.pmc = PmcInterface(
-            TaggedLogger(self.get_logger(), LogTags.PMC_CONN), 
-            use_mock=self.config['use_mock']
+            TaggedLogger(self.get_logger(), LogTags.PMC_CONN),
+            use_mock=self.config.use_mock,
         )
-        
+
         # MoverUtils gets node logger [PMC]
         self.mover_utils = MoverUtils(self.log, self.pmc, self.config)
-        
+
         # ServiceCallbacks gets raw logger (it wraps it internally with [PMC:MOTION])
         self.callbacks = ServiceCallbacks(
-            self.get_logger(), self.pmc, self.mover_utils, self.config)
-            
-        self.xbot_pos_publisher = self.create_publisher(
-            XBotInfo, "xbot_info", 10)
+            self.get_logger(), self.pmc, self.mover_utils, self.config
+        )
+
+        self.xbot_pos_publisher = self.create_publisher(XBotInfo, "xbot_info", 10)
+        self.xbot_pos_publisher_canonical = self.create_publisher(
+            XBotInfo, "/promoc/mover/xbot_info", 10
+        )
 
         # ══════════════════════════════════════════════════════════════════════
         # PHASE 3: Register ROS2 Services
@@ -184,8 +191,7 @@ class MoverServiceNode(Node):
         # ══════════════════════════════════════════════════════════════════════
         # Timer tries to connect to the PMC controller every 100ms.
         # On success, it stops itself and activates the system.
-        self.log.info(
-            f"Connecting to PMC at {self.config['pmc_ip']}...")
+        self.log.info(f"Connecting to PMC at {self.config.pmc_ip}...")
         self.connection_timer = self.create_timer(0.1, self._try_connect)
 
         self.log.info("Mover Service Node initialized. Waiting for PMC connection...")
@@ -209,7 +215,7 @@ class MoverServiceNode(Node):
         """
         try:
             while not self.is_connected:
-                self.is_connected = self.pmc.connect(self.config['pmc_ip'])
+                self.is_connected = self.pmc.connect(self.config.pmc_ip)
             self.log.info("PMC Connected! Activating system.")
 
             # Stop the timer - connection is established
@@ -236,10 +242,9 @@ class MoverServiceNode(Node):
             self.log.info("XBot Activated")
             self._start_publisher_timer()
         except Exception as e:
-            self.log.error(
-                f"Failed to activate XBots after connection: {e}")
+            self.log.error(f"Failed to activate XBots after connection: {e}")
 
-    def _load_config(self) -> dict:
+    def _load_config(self) -> MoverNodeConfig:
         """
         Loads configuration from ROS parameters.
 
@@ -247,7 +252,7 @@ class MoverServiceNode(Node):
         launch files or the command line.
 
         Returns:
-            dict: A dictionary with all configuration values.
+            MoverNodeConfig: Typed configuration object.
 
         Parameter Categories:
         ---------------------
@@ -266,38 +271,38 @@ class MoverServiceNode(Node):
            - six_d_tolerance: Accuracy for 6-DOF movements.
         """
         # Declare all parameters with their default values
-        self.declare_parameter('use_mock', False)
-        self.declare_parameter('xbot_id', 0)
-        self.declare_parameter('publish_rate', 10.0)
-        self.declare_parameter('pmc_ip', '192.168.10.100')
+        self.declare_parameter("use_mock", False)
+        self.declare_parameter("xbot_id", 0)
+        self.declare_parameter("publish_rate", 10.0)
+        self.declare_parameter("pmc_ip", "192.168.10.100")
 
         # Movement boundaries and tolerances
-        self.declare_parameter('xy_tolerance', 0.001)
-        self.declare_parameter('six_d_tolerance', 0.001)
-        self.declare_parameter('x_min', 0.055)
-        self.declare_parameter('x_max', 0.420)
-        self.declare_parameter('y_min', 0.055)
-        self.declare_parameter('y_max', 0.180)
-        self.declare_parameter('z_min', 0.000)
-        self.declare_parameter('z_max', 0.004)
+        self.declare_parameter("xy_tolerance", 0.001)
+        self.declare_parameter("six_d_tolerance", 0.001)
+        self.declare_parameter("x_min", 0.055)
+        self.declare_parameter("x_max", 0.420)
+        self.declare_parameter("y_min", 0.055)
+        self.declare_parameter("y_max", 0.180)
+        self.declare_parameter("z_min", 0.000)
+        self.declare_parameter("z_max", 0.004)
 
-        config = {
-            'use_mock': self.get_parameter('use_mock').value,
-            'xbot_id': self.get_parameter('xbot_id').value,
-            'publish_rate': self.get_parameter('publish_rate').value,
-            'pmc_ip': self.get_parameter('pmc_ip').value,
-            'xy_tolerance': self.get_parameter('xy_tolerance').value,
-            'six_d_tolerance': self.get_parameter('six_d_tolerance').value,
-            'x_min': self.get_parameter('x_min').value,
-            'x_max': self.get_parameter('x_max').value,
-            'y_min': self.get_parameter('y_min').value,
-            'y_max': self.get_parameter('y_max').value,
-            'z_min': self.get_parameter('z_min').value,
-            'z_max': self.get_parameter('z_max').value,
-        }
+        self.config_model = MoverNodeConfig(
+            use_mock=bool(self.get_parameter("use_mock").value),
+            xbot_id=int(self.get_parameter("xbot_id").value),
+            publish_rate=float(self.get_parameter("publish_rate").value),
+            pmc_ip=str(self.get_parameter("pmc_ip").value),
+            xy_tolerance=float(self.get_parameter("xy_tolerance").value),
+            six_d_tolerance=float(self.get_parameter("six_d_tolerance").value),
+            x_min=float(self.get_parameter("x_min").value),
+            x_max=float(self.get_parameter("x_max").value),
+            y_min=float(self.get_parameter("y_min").value),
+            y_max=float(self.get_parameter("y_max").value),
+            z_min=float(self.get_parameter("z_min").value),
+            z_max=float(self.get_parameter("z_max").value),
+        )
 
-        self.log.info(f"Configuration loaded: {config}")
-        return config
+        self.log.info(f"Configuration loaded: {asdict(self.config_model)}")
+        return self.config_model
 
     def _setup_services(self):
         """
@@ -314,27 +319,54 @@ class MoverServiceNode(Node):
         - rotary_motion: Rotational motion (Rz).
         - set_velocity_acceleration: Set velocity/acceleration.
 
-        Each service is created with the node name as a prefix,
-        e.g., /mover_node/linear_motion_si
+        Each service is created under the canonical namespace with a legacy alias:
+        /promoc/mover/linear_motion_si (legacy: /mover_node/linear_motion_si)
         """
         services = [
-            ('linear_motion_si', LinearMotionSi,
-             self.callbacks.callback_linear_motion_si),
-            ('six_dof_motion', SixDofMotion, self.callbacks.callback_six_d_motion),
-            ('activate_xbots', ActivateXbots,
-             self.callbacks.callback_activate_xbot),
-            ('levitation_xbots', LevitationXbots,
-             self.callbacks.callback_levitation_xbot),
-            ('arc_motion_si', ArcMotionSi, self.callbacks.callback_arc_motion_si),
-            ('stop_motion', StopMotion, self.callbacks.callback_stop_motion),
-            ('rotary_motion', RotaryMotion, self.callbacks.callback_rotary_motion),
-            ('set_velocity_acceleration', SetVelocityAcceleration,
-             self.callbacks.callback_set_velocity_acceleration)
+            (
+                "linear_motion_si",
+                LinearMotionSi,
+                self.callbacks.callback_linear_motion_si,
+            ),
+            ("six_dof_motion", SixDofMotion, self.callbacks.callback_six_d_motion),
+            ("activate_xbots", ActivateXbots, self.callbacks.callback_activate_xbot),
+            (
+                "levitation_xbots",
+                LevitationXbots,
+                self.callbacks.callback_levitation_xbot,
+            ),
+            ("arc_motion_si", ArcMotionSi, self.callbacks.callback_arc_motion_si),
+            ("stop_motion", StopMotion, self.callbacks.callback_stop_motion),
+            ("rotary_motion", RotaryMotion, self.callbacks.callback_rotary_motion),
+            (
+                "set_velocity_acceleration",
+                SetVelocityAcceleration,
+                self.callbacks.callback_set_velocity_acceleration,
+            ),
         ]
         for name, srv_type, callback in services:
-            self.create_service(
-                srv_type, f"{self.get_name()}/{name}", callback)
+            self._create_service_alias_pair(name, srv_type, callback)
         self.log.info("All services are created.")
+
+    def _create_service_alias_pair(self, service_name: str, srv_type, callback):
+        legacy_path = f"{self.get_name()}/{service_name}"
+        canonical_path = f"/promoc/mover/{service_name}"
+
+        self.create_service(srv_type, canonical_path, callback)
+        self.create_service(
+            srv_type,
+            legacy_path,
+            self._legacy_service_wrapper(legacy_path, canonical_path, callback),
+        )
+
+    def _legacy_service_wrapper(self, legacy_path: str, canonical_path: str, callback):
+        def _wrapped_callback(request, response):
+            self.log.warning(
+                f"Deprecated service '{legacy_path}' called. Use '{canonical_path}' instead."
+            )
+            return callback(request, response)
+
+        return _wrapped_callback
 
     def _start_publisher_timer(self):
         """
@@ -347,12 +379,14 @@ class MoverServiceNode(Node):
         1. Position Timer: Publishes XBot position (default: 10 Hz).
         2. Diagnosis Timer: Checks XBot availability every 5s (only on real hardware).
         """
-        publish_interval = 1.0 / self.config['publish_rate']
+        publish_interval = 1.0 / self.config.publish_rate
         self.xbot_position_timer = self.create_timer(
-            publish_interval, self._publish_xbot_position)
-        if not self.pmc.status['is_mock']:
+            publish_interval, self._publish_xbot_position
+        )
+        if not self.pmc.status["is_mock"]:
             self.xbot_diagnosis_timer = self.create_timer(
-                5.0, self.mover_utils.diagnose_xbot_availability)
+                5.0, self.mover_utils.diagnose_xbot_availability
+            )
         self.log.info("Timers started.")
 
     def _publish_xbot_position(self):
@@ -380,6 +414,7 @@ class MoverServiceNode(Node):
 
             msg.xbot_state = self.mover_utils.get_xbot_state_string(0)
             self.xbot_pos_publisher.publish(msg)
+            self.xbot_pos_publisher_canonical.publish(msg)
         except Exception as e:
             self.log.error(f"Position publishing error: {e}")
 

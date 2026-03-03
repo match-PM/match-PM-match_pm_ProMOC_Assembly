@@ -16,8 +16,8 @@ setup(
     include_package_data=True,
     maintainer='pmlab_mover',
     maintainer_email='pmlab_mover@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='ROS2 nodes for planar motor control with PMCLib integration',
+    license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='promoc',
     maintainer_email='promoc@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='ROS2 nodes for Thorlabs LTS300 linear axis control',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

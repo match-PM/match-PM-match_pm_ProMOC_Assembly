@@ -50,7 +50,7 @@ class MotionCallbacks(ServiceCallbacksBase):
         """
         Execute a linear XY motion.
 
-        Service: /mover_node/linear_motion_si
+        Service: /promoc/mover/linear_motion_si (legacy: /mover_node/linear_motion_si)
 
         Args:
             request: LinearMotionSi with xbot_id, x_pos, y_pos (in mm).
@@ -60,17 +60,22 @@ class MotionCallbacks(ServiceCallbacksBase):
         target_pos = self._process_motion_input(request, motion_type="linear")
 
         # Step 2: Bounds Check
-        if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
+        if not self.mover_utils.is_position_in_bounds(
+            target_pos[0], target_pos[1], target_pos[2]
+        ):
             raise PositionOutOfBoundsError(
                 "Target position outside valid bounds",
-                details={'target': target_pos[:3], 'xbot_id': request.xbot_id}
+                details={"target": target_pos[:3], "xbot_id": request.xbot_id},
             )
 
         # Step 3: Execute Motion
         speed_params = self.mover_utils.get_speed_params(request.xbot_id)
         travel_time = self.pmc.bot.linear_motion_si(
-            request.xbot_id, target_pos[0], target_pos[1],
-            speed_params['xy_vel'], speed_params['xy_max_accel']
+            request.xbot_id,
+            target_pos[0],
+            target_pos[1],
+            speed_params["xy_vel"],
+            speed_params["xy_max_accel"],
         )
 
         # Step 4: Wait for Completion
@@ -81,11 +86,11 @@ class MotionCallbacks(ServiceCallbacksBase):
             min_s=LINEAR_TIMEOUT_MIN_S,
         )
         motion_result = self.mover_utils.wait_for_motion_completion(
-            request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
+            request.xbot_id, target_pos, self.config.xy_tolerance, timeout
         )
 
         # Step 5: Return Result
-        response.success = (motion_result == MotionStatus.COMPLETED)
+        response.success = motion_result == MotionStatus.COMPLETED
         response.status_message = f"Motion status: {motion_result.value}"
 
         return response
@@ -95,26 +100,35 @@ class MotionCallbacks(ServiceCallbacksBase):
         """
         Execute a 6-DOF motion (X, Y, Z, Rx, Ry, Rz).
 
-        Service: /mover_node/six_dof_motion
+        Service: /promoc/mover/six_dof_motion (legacy: /mover_node/six_dof_motion)
 
         Use NO_CHANGE (-999999) for any axis to keep its current position.
         """
         target_pos = self._process_motion_input(request, motion_type="6dof")
 
-        if not self.mover_utils.is_position_in_bounds(target_pos[0], target_pos[1], target_pos[2]):
+        if not self.mover_utils.is_position_in_bounds(
+            target_pos[0], target_pos[1], target_pos[2]
+        ):
             raise PositionOutOfBoundsError(
                 "Target position outside valid bounds",
-                details={'target': target_pos, 'xbot_id': request.xbot_id}
+                details={"target": target_pos, "xbot_id": request.xbot_id},
             )
 
         speed_params = self.mover_utils.get_speed_params(request.xbot_id)
         travel_time = self.pmc.bot.six_d_of_motion_si(
             request.xbot_id,
-            target_pos[0], target_pos[1], target_pos[2],
-            target_pos[3], target_pos[4], target_pos[5],
-            speed_params['xy_vel'], speed_params['xy_max_accel'],
-            speed_params['z_vel'], speed_params['rx_vel'],
-            speed_params['ry_vel'], speed_params['rz_vel']
+            target_pos[0],
+            target_pos[1],
+            target_pos[2],
+            target_pos[3],
+            target_pos[4],
+            target_pos[5],
+            speed_params["xy_vel"],
+            speed_params["xy_max_accel"],
+            speed_params["z_vel"],
+            speed_params["rx_vel"],
+            speed_params["ry_vel"],
+            speed_params["rz_vel"],
         )
 
         timeout = _motion_timeout(
@@ -125,10 +139,10 @@ class MotionCallbacks(ServiceCallbacksBase):
             fallback_s=SIX_D_TIMEOUT_FALLBACK_S,
         )
         motion_result = self.mover_utils.wait_for_motion_completion(
-            request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout
+            request.xbot_id, target_pos, self.config.six_d_tolerance, timeout
         )
 
-        response.success = (motion_result == MotionStatus.COMPLETED)
+        response.success = motion_result == MotionStatus.COMPLETED
         response.status_message = f"Motion status: {motion_result.value}"
 
         return response
@@ -138,7 +152,7 @@ class MotionCallbacks(ServiceCallbacksBase):
         """
         Execute a rotational motion around the Z-axis.
 
-        Service: /mover_node/rotary_motion
+        Service: /promoc/mover/rotary_motion (legacy: /mover_node/rotary_motion)
 
         rot_mode: 0=direct, 1=CCW, 2=CW
         """
@@ -151,7 +165,7 @@ class MotionCallbacks(ServiceCallbacksBase):
             request.max_rz_speed,
             request.max_accel_rz,
             0,  # cmd_lb
-            rot_mode
+            rot_mode,
         )
 
         timeout = _motion_timeout(
@@ -161,21 +175,23 @@ class MotionCallbacks(ServiceCallbacksBase):
             min_s=ROTARY_TIMEOUT_MIN_S,
         )
         motion_result = self.mover_utils.wait_for_motion_completion(
-            request.xbot_id, target_pos, self.config['six_d_tolerance'], timeout
+            request.xbot_id, target_pos, self.config.six_d_tolerance, timeout
         )
 
         rot_mode_names = {0: "direct", 1: "CCW", 2: "CW"}
-        response.success = (motion_result == MotionStatus.COMPLETED)
-        response.status_message = f"Rotary: {motion_result.value} (mode: {rot_mode_names.get(rot_mode)})"
+        response.success = motion_result == MotionStatus.COMPLETED
+        response.status_message = (
+            f"Rotary: {motion_result.value} (mode: {rot_mode_names.get(rot_mode)})"
+        )
 
         return response
 
-    @handle_service_errors() 
+    @handle_service_errors()
     def callback_arc_motion_si(self, request, response):
         """
         Execute an arc motion with SI units.
 
-        Service: /mover_node/arc_motion_si
+        Service: /promoc/mover/arc_motion_si (legacy: /mover_node/arc_motion_si)
         """
         target_pos = self._process_motion_input(request, motion_type="arc_si")
 
@@ -190,12 +206,18 @@ class MotionCallbacks(ServiceCallbacksBase):
 
         travel_time = self.pmc.bot.arc_motion_si(
             request.xbot_id,
-            target_x_m, target_y_m, radius_m,
-            max_speed_ms, max_accel_ms2,
+            target_x_m,
+            target_y_m,
+            radius_m,
+            max_speed_ms,
+            max_accel_ms2,
             0,  # cmd_lb
-            request.arc_mode, request.arc_type,
-            request.arc_direction, request.pos_mode,
-            final_speed_ms, angle_rad
+            request.arc_mode,
+            request.arc_type,
+            request.arc_direction,
+            request.pos_mode,
+            final_speed_ms,
+            angle_rad,
         )
 
         timeout = _motion_timeout(
@@ -205,10 +227,10 @@ class MotionCallbacks(ServiceCallbacksBase):
             min_s=ARC_TIMEOUT_MIN_S,
         )
         motion_result = self.mover_utils.wait_for_motion_completion(
-            request.xbot_id, target_pos, self.config['xy_tolerance'], timeout
+            request.xbot_id, target_pos, self.config.xy_tolerance, timeout
         )
 
-        response.success = (motion_result == MotionStatus.COMPLETED)
+        response.success = motion_result == MotionStatus.COMPLETED
         response.status_message = f"Arc motion: {motion_result.value}"
 
         return response

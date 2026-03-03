@@ -110,13 +110,13 @@ class UnifiedDemoController(Node):
 
         if self.demo_mode in ['full', 'planar_motor']:
             self.activate_client = self.create_client(
-                ActivateXbots, '/mover_node/activate_xbots'
+                ActivateXbots, '/promoc/mover/activate_xbots'
             )
             self.levitation_client = self.create_client(
-                LevitationXbots, '/mover_node/levitation_xbots'
+                LevitationXbots, '/promoc/mover/levitation_xbots'
             )
             self.six_dof_client = self.create_client(
-                SixDofMotion, '/mover_node/six_d_mover_motion'
+                SixDofMotion, '/promoc/mover/six_dof_motion'
             )
 
         if self.demo_mode in ['full', 'linear_axes']:
@@ -128,10 +128,10 @@ class UnifiedDemoController(Node):
 
         for axis_name in self.axes_names:
             move_client = self.create_client(
-                MoveAbsolute, f'/{axis_name}/move_absolute'
+                MoveAbsolute, f'/promoc/linear_axis/{axis_name}/move_absolute'
             )
             home_client = self.create_client(
-                Home, f'/{axis_name}/home'
+                Home, f'/promoc/linear_axis/{axis_name}/home'
             )
 
             # Try to connect with short timeout
@@ -146,7 +146,7 @@ class UnifiedDemoController(Node):
 
                 self.create_subscription(
                     LinearAxisInfo,
-                    f'/promoc_assembly/{axis_name}/position',
+                    f'/promoc/linear_axis/{axis_name}/position',
                     lambda msg, name=axis_name: self._axis_position_callback(
                         msg, name),
                     10

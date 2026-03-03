@@ -43,7 +43,7 @@ The system will automatically load: `config/cameras/basler_ace_2500.yaml`
 ### Simulation Mode
 
 ```bash
-ros2 launch promoc_bringup camera.launch.py sim_mode:=true
+ros2 launch promoc_bringup camera.launch.py runtime_mode:=sim
 ```
 
 ## ➕ Adding a New Camera

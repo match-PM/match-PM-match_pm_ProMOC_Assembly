@@ -20,7 +20,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Activate or deactivate the XBots.
 
-        Service: /mover_node/activate_xbots
+        Service: /promoc/mover/activate_xbots (legacy: /mover_node/activate_xbots)
 
         Args:
             request.activation_status: True to activate, False to deactivate.
@@ -39,7 +39,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Start or stop levitation (floating above the stator).
 
-        Service: /mover_node/levitation_xbots
+        Service: /promoc/mover/levitation_xbots (legacy: /mover_node/levitation_xbots)
 
         IMPORTANT: XBot must be activated first.
 
@@ -49,7 +49,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         command = 1 if request.levitation else 0
         self.pmc.bot.levitation_command(0, command)  # 0 = all XBots
 
-        action = 'enabled' if request.levitation else 'disabled'
+        action = "enabled" if request.levitation else "disabled"
         response.status_message = f"Levitation {action} globally"
         response.success = True
         self.logger.info(response.status_message)
@@ -60,7 +60,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Stop the current motion of an XBot immediately.
 
-        Service: /mover_node/stop_motion
+        Service: /promoc/mover/stop_motion (legacy: /mover_node/stop_motion)
 
         EMERGENCY FUNCTION: Stops motion instantly.
 
@@ -77,31 +77,31 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Set velocity and acceleration parameters for an XBot.
 
-        Service: /mover_node/set_velocity_acceleration
+        Service: /promoc/mover/set_velocity_acceleration (legacy: /mover_node/set_velocity_acceleration)
         """
         # Validate XBot ID
         if request.xbot_id < 0:
             raise InvalidParameterError(
                 f"XBot ID must be non-negative, got: {request.xbot_id}",
-                details={'parameter': 'xbot_id', 'value': request.xbot_id}
+                details={"parameter": "xbot_id", "value": request.xbot_id},
             )
 
         # Validate all parameters are positive
         params = {
-            'xy_vel': request.xy_vel,
-            'z_vel': request.z_vel,
-            'rx_vel': request.rx_vel,
-            'ry_vel': request.ry_vel,
-            'rz_vel': request.rz_vel,
-            'xy_max_accel': request.xy_max_accel,
-            'z_max_accel': request.z_max_accel
+            "xy_vel": request.xy_vel,
+            "z_vel": request.z_vel,
+            "rx_vel": request.rx_vel,
+            "ry_vel": request.ry_vel,
+            "rz_vel": request.rz_vel,
+            "xy_max_accel": request.xy_max_accel,
+            "z_max_accel": request.z_max_accel,
         }
 
         for name, value in params.items():
             if value <= 0:
                 raise InvalidParameterError(
                     f"{name} must be positive, got: {value}",
-                    details={'parameter': name, 'value': value}
+                    details={"parameter": name, "value": value},
                 )
 
         # Set parameters

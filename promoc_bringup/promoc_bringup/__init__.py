@@ -14,7 +14,7 @@ Quick Start:
     ros2 launch promoc_bringup system.launch.py
     
     # Launch with simulation mode
-    ros2 launch promoc_bringup system.launch.py sim_mode:=true
+    ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
     
     # Run unified demo
     ros2 run promoc_bringup unified_demo --ros-args -p demo_mode:=full
