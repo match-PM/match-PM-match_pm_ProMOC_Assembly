@@ -81,6 +81,7 @@ from .callbacks import ServiceCallbacks
 from .config import MoverNodeConfig
 from promoc_core.conversions import m_to_mm, rad_to_deg
 from promoc_core.logging import TaggedLogger, LogTags
+from promoc_core.service_alias import register_service_alias_pair
 
 
 class MoverServiceNode(Node):
@@ -175,6 +176,7 @@ class MoverServiceNode(Node):
         self.callbacks = ServiceCallbacks(
             self.get_logger(), self.pmc, self.mover_utils, self.config
         )
+        self._service_alias_handles = []
 
         self.xbot_pos_publisher = self.create_publisher(XBotInfo, "xbot_info", 10)
         self.xbot_pos_publisher_canonical = self.create_publisher(
@@ -352,21 +354,15 @@ class MoverServiceNode(Node):
         legacy_path = f"{self.get_name()}/{service_name}"
         canonical_path = f"/promoc/mover/{service_name}"
 
-        self.create_service(srv_type, canonical_path, callback)
-        self.create_service(
-            srv_type,
-            legacy_path,
-            self._legacy_service_wrapper(legacy_path, canonical_path, callback),
+        canonical_service, legacy_service = register_service_alias_pair(
+            node=self,
+            service_type=srv_type,
+            canonical_path=canonical_path,
+            legacy_path=legacy_path,
+            callback=callback,
+            warn=self.log.warning,
         )
-
-    def _legacy_service_wrapper(self, legacy_path: str, canonical_path: str, callback):
-        def _wrapped_callback(request, response):
-            self.log.warning(
-                f"Deprecated service '{legacy_path}' called. Use '{canonical_path}' instead."
-            )
-            return callback(request, response)
-
-        return _wrapped_callback
+        self._service_alias_handles.extend((canonical_service, legacy_service))
 
     def _start_publisher_timer(self):
         """

@@ -98,6 +98,7 @@ from .services import CameraServiceHandlers
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
 
 from promoc_core.logging import TaggedLogger, LogTags
+from promoc_core.service_alias import register_service_alias_pair
 
 
 class CameraNode(Node):
@@ -216,52 +217,70 @@ class CameraNode(Node):
         self.cb_group = ReentrantCallbackGroup()
 
         self.select_roi_service, self.select_roi_service_legacy = (
-            self._register_service_pair(
-                Trigger,
-                "/promoc/camera/select_roi",
-                "/promoc/camera_node/select_roi",
-                self.service_handlers.mtf.select_roi_callback,
+            register_service_alias_pair(
+                node=self,
+                service_type=Trigger,
+                canonical_path="/promoc/camera/select_roi",
+                legacy_path="/promoc/camera_node/select_roi",
+                callback=self.service_handlers.mtf.select_roi_callback,
+                warn=self.log.warning,
+                callback_group=self.cb_group,
             )
         )
         self.autofocus_service, self.autofocus_service_legacy = (
-            self._register_service_pair(
-                AutoFocus,
-                "/promoc/camera/autofocus",
-                "/promoc/camera_node/autofocus",
-                self.service_handlers.autofocus.autofocus_callback,
+            register_service_alias_pair(
+                node=self,
+                service_type=AutoFocus,
+                canonical_path="/promoc/camera/autofocus",
+                legacy_path="/promoc/camera_node/autofocus",
+                callback=self.service_handlers.autofocus.autofocus_callback,
+                warn=self.log.warning,
+                callback_group=self.cb_group,
             )
         )
         self.autofocus_comparison_service, self.autofocus_comparison_service_legacy = (
-            self._register_service_pair(
-                AutoFocus,
-                "/promoc/camera/autofocus_comparison",
-                "/promoc/camera_node/autofocus_comparison",
-                self.service_handlers.autofocus.autofocus_comparison_callback,
+            register_service_alias_pair(
+                node=self,
+                service_type=AutoFocus,
+                canonical_path="/promoc/camera/autofocus_comparison",
+                legacy_path="/promoc/camera_node/autofocus_comparison",
+                callback=self.service_handlers.autofocus.autofocus_comparison_callback,
+                warn=self.log.warning,
+                callback_group=self.cb_group,
             )
         )
-        self.mtf_service, self.mtf_service_legacy = self._register_service_pair(
-            MeasureMTF,
-            "/promoc/camera/measure_mtf",
-            "/promoc/camera_node/measure_mtf",
-            self.service_handlers.mtf.measure_mtf_callback,
+        self.mtf_service, self.mtf_service_legacy = register_service_alias_pair(
+            node=self,
+            service_type=MeasureMTF,
+            canonical_path="/promoc/camera/measure_mtf",
+            legacy_path="/promoc/camera_node/measure_mtf",
+            callback=self.service_handlers.mtf.measure_mtf_callback,
+            warn=self.log.warning,
+            callback_group=self.cb_group,
         )
         self.detect_rois_service, self.detect_rois_service_legacy = (
-            self._register_service_pair(
-                DetectRois,
-                "/promoc/camera/detect_rois",
-                "/promoc/camera_node/detect_rois",
-                self.service_handlers.mtf.detect_rois_callback,
+            register_service_alias_pair(
+                node=self,
+                service_type=DetectRois,
+                canonical_path="/promoc/camera/detect_rois",
+                legacy_path="/promoc/camera_node/detect_rois",
+                callback=self.service_handlers.mtf.detect_rois_callback,
+                warn=self.log.warning,
+                callback_group=self.cb_group,
             )
         )
 
         # Exposure service only for real hardware
         if not self.use_simulator and self.camera_driver.is_connected:
             self.set_exposure_service, self.set_exposure_service_legacy = (
-                self._register_service_pair(
-                    SetExposure,
-                    "/promoc/camera/set_exposure",
-                    "/promoc/camera_node/set_exposure",
-                    self.service_handlers.exposure.manual_set_exposure_callback,
+                register_service_alias_pair(
+                    node=self,
+                    service_type=SetExposure,
+                    canonical_path="/promoc/camera/set_exposure",
+                    legacy_path="/promoc/camera_node/set_exposure",
+                    callback=self.service_handlers.exposure.manual_set_exposure_callback,
+                    warn=self.log.warning,
+                    callback_group=self.cb_group,
                 )
             )
 
@@ -281,32 +300,6 @@ class CameraNode(Node):
             return SimulatedCameraDriver(TaggedLogger(self.get_logger(), LogTags.MOCK))
         self.log.info("Using AravisCameraDriver")
         return AravisCameraDriver(self, self.log)
-
-    def _legacy_service_wrapper(self, legacy_name: str, canonical_name: str, callback):
-        def _wrapped_callback(request, response):
-            self.log.warning(
-                f"Deprecated service '{legacy_name}' called. Use '{canonical_name}' instead."
-            )
-            return callback(request, response)
-
-        return _wrapped_callback
-
-    def _register_service_pair(
-        self, service_type, canonical_name: str, legacy_name: str, callback
-    ):
-        canonical_service = self.create_service(
-            service_type,
-            canonical_name,
-            callback,
-            callback_group=self.cb_group,
-        )
-        legacy_service = self.create_service(
-            service_type,
-            legacy_name,
-            self._legacy_service_wrapper(legacy_name, canonical_name, callback),
-            callback_group=self.cb_group,
-        )
-        return canonical_service, legacy_service
 
     # IMAGE CALLBACKS
 

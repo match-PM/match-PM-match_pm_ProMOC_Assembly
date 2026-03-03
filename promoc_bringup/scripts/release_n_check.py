@@ -91,7 +91,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
         _check_contains(
             root,
             "linear_axis_nodes/linear_axis_nodes/lts300_node.py",
-            ["/promoc/linear_axis/", "legacy_path = f", "Deprecated service"],
+            ["/promoc/linear_axis/", "legacy_path = f", "register_service_alias_pair"],
             "linear-axis services expose canonical + legacy paths",
         )
     )
@@ -99,8 +99,16 @@ def _evaluate(root: Path) -> list[CheckResult]:
         _check_contains(
             root,
             "planar_motor_nodes/planar_motor_nodes/mover_node.py",
-            ["/promoc/mover/", "legacy_path = f", "Deprecated service"],
+            ["/promoc/mover/", "legacy_path = f", "register_service_alias_pair"],
             "mover services expose canonical + legacy paths",
+        )
+    )
+    results.append(
+        _check_contains(
+            root,
+            "promoc_core/promoc_core/service_alias.py",
+            ["register_service_alias_pair", "Deprecated service"],
+            "shared service alias helper provides legacy deprecation warning",
         )
     )
 

@@ -82,6 +82,7 @@ from .config import LTS300NodeConfig
 from .lts300_interface import Lts300Interface
 from .lts300_service_callbacks import ServiceCallbacks
 from promoc_core.logging import TaggedLogger, LogTags
+from promoc_core.service_alias import register_service_alias_pair
 
 
 class LTS300Node(Node):
@@ -149,6 +150,7 @@ class LTS300Node(Node):
         )
         # Callbacks gets raw logger (wraps it internally with [LTS:MOVE])
         self.callbacks = ServiceCallbacks(self.log, self.interface, self.config)
+        self._service_alias_handles = []
 
         try:
             # ══════════════════════════════════════════════════════════════════
@@ -298,20 +300,20 @@ class LTS300Node(Node):
                 f"/promoc/linear_axis/{node_name}/position",
                 10,
             )
-            self.create_timer(0.1, self.publish_position)
+            self.position_timer = self.create_timer(0.1, self.publish_position)
             self.log.info("Publisher and timer created")
 
             # ── Subscriber for Collision Avoidance ──
             # Subscribes to the position of the other axis (X<->Z).
             axis_type = self.interface.driver.get_axis_type()
             other_axis = "z" if axis_type == "x" else "x"
-            self.create_subscription(
+            self.other_axis_subscription = self.create_subscription(
                 LinearAxisInfo,
                 f"/promoc/linear_axis/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
                 10,
             )
-            self.create_subscription(
+            self.other_axis_subscription_legacy = self.create_subscription(
                 LinearAxisInfo,
                 f"/{self.config.namespace}/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback_legacy,
@@ -445,21 +447,15 @@ class LTS300Node(Node):
     ):
         legacy_path = f"{node_name}/{suffix}"
         canonical_path = f"/promoc/linear_axis/{node_name}/{suffix}"
-        self.create_service(service_type, canonical_path, callback)
-        self.create_service(
-            service_type,
-            legacy_path,
-            self._legacy_service_wrapper(legacy_path, canonical_path, callback),
+        canonical_service, legacy_service = register_service_alias_pair(
+            node=self,
+            service_type=service_type,
+            canonical_path=canonical_path,
+            legacy_path=legacy_path,
+            callback=callback,
+            warn=self.log.warning,
         )
-
-    def _legacy_service_wrapper(self, legacy_path: str, canonical_path: str, callback):
-        def _wrapped_callback(request, response):
-            self.log.warning(
-                f"Deprecated service '{legacy_path}' called. Use '{canonical_path}' instead."
-            )
-            return callback(request, response)
-
-        return _wrapped_callback
+        self._service_alias_handles.extend((canonical_service, legacy_service))
 
     def other_axis_position_callback(self, msg):
         """Stores the position of the other axis."""

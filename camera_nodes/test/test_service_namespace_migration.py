@@ -25,10 +25,14 @@ def test_camera_node_registers_canonical_and_legacy_services():
 
 
 def test_camera_node_logs_deprecation_for_legacy_service_calls():
-    content = (ROOT / "camera_nodes" / "camera_nodes" / "camera_node.py").read_text(
-        encoding="utf-8", errors="ignore"
-    )
-    assert "Deprecated service" in content
+    node_content = (
+        ROOT / "camera_nodes" / "camera_nodes" / "camera_node.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+    helper_content = (
+        ROOT / "promoc_core" / "promoc_core" / "service_alias.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+    assert "register_service_alias_pair" in node_content
+    assert "Deprecated service" in helper_content
 
 
 def test_camera_axis_topic_supports_canonical_and_legacy_paths():

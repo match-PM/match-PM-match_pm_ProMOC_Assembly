@@ -56,14 +56,14 @@ Der ROS2 Node sollte nur ein "dummer" Wrapper sein.
 
 * **Cheat Sheet:** Ein kurzes Markdown-Dokument (`CHEATSHEET.md`) mit den 5-10 wichtigsten Befehlen (Build, Run Camera, Run Fake Camera, Test Autofocus), ohne den Ballast der kompletten README.
 * **Mock-Treiber stark bewerben:** Der `SimulatedCameraDriver` ist exzellent für Neueinsteiger! Darauf sollte stärker fokussiert werden (z.B. ein Makefile-Target `make run-sim`).
-* **Format-Rules:** Einrichtung von `pre-commit` Hooks mit `black` (Code Formatting) und `ruff` (Linting), damit der Code für alle einheitlich aussieht und triviale Fehler sofort markiert werden.
+* **Format-Rules:** Einrichtung von `pre-commit` Hooks mit `ruff format` (Code Formatting) und `ruff check` (Linting), damit der Code für alle einheitlich aussieht und triviale Fehler sofort markiert werden.
 
 ## 3. Empfohlener Fahrplan (Roadmap)
 
 Um das Projekt zu vereinfachen, ohne die Funktionalität zu brechen, schlage ich folgenden Workflow vor:
 
 1. **Phase 1: Cleanup & Tooling (Geringes Risiko)**
-   - Einführung von `black` und `ruff`.
+   - Einführung von `ruff format` und `ruff check`.
    - Makefile erweitern (z.B. `make format`, `make test`, `make sim`).
    - `CHEATSHEET.md` anlegen.
 

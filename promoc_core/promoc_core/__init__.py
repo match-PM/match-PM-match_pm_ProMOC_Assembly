@@ -86,6 +86,7 @@ from . import validation
 from . import motion
 from . import error_handling
 from . import logging
+from . import service_alias
 
 __all__ = [
     'promoc_exceptions',
@@ -94,4 +95,5 @@ __all__ = [
     'validation',
     'motion',
     'logging',
+    'service_alias',
 ]

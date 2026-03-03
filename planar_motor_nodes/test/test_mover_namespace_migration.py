@@ -12,10 +12,14 @@ def test_mover_node_registers_canonical_and_legacy_services():
     content = (
         ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "mover_node.py"
     ).read_text(encoding="utf-8", errors="ignore")
+    helper_content = (
+        ROOT / "promoc_core" / "promoc_core" / "service_alias.py"
+    ).read_text(encoding="utf-8", errors="ignore")
 
     assert "/promoc/mover/" in content
     assert 'legacy_path = f"{self.get_name()}/{service_name}"' in content
-    assert "Deprecated service" in content
+    assert "register_service_alias_pair" in content
+    assert "Deprecated service" in helper_content
 
 
 def test_mover_node_publishes_canonical_and_legacy_xbot_info_topics():
