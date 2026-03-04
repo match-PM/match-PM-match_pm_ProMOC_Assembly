@@ -56,7 +56,7 @@ Available Classes
 """
 
 from dataclasses import dataclass
-from typing import Tuple, Optional, List, Union
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -285,7 +285,7 @@ def validate_position_6d(
         return False, "Position and bounds must have 6 elements"
 
     errors = []
-    for i, (val, (min_val, max_val), name) in enumerate(zip(position, bounds, axis_names)):
+    for val, (min_val, max_val), name in zip(position, bounds, axis_names):
         if not is_in_range(val, min_val, max_val):
             errors.append(
                 f"{name}={val:.4f} out of range [{min_val:.4f}, {max_val:.4f}]")

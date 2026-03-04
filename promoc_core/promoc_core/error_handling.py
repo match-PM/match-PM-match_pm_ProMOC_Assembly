@@ -200,11 +200,19 @@ def retry_on_error(config: Optional[RetryConfig] = None):
     """
     if config is None:
         config = RetryConfig()
+    if config.max_attempts < 1:
+        raise ValueError("RetryConfig.max_attempts must be >= 1")
+    if config.delay < 0:
+        raise ValueError("RetryConfig.delay must be >= 0")
+    if config.backoff_factor <= 0:
+        raise ValueError("RetryConfig.backoff_factor must be > 0")
+    if config.max_delay < 0:
+        raise ValueError("RetryConfig.max_delay must be >= 0")
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
-            last_exception = None
+            last_exception: Optional[Exception] = None
             delay = config.delay
 
             for attempt in range(config.max_attempts):
@@ -233,6 +241,10 @@ def retry_on_error(config: Optional[RetryConfig] = None):
                             )
 
             # All retries exhausted
+            if last_exception is None:
+                raise RuntimeError(
+                    "retry_on_error exhausted without captured exception"
+                )
             raise last_exception
 
         return wrapper

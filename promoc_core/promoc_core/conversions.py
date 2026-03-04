@@ -58,7 +58,6 @@ Categories
 - Speed:    m/s ↔ mm/s
 """
 import math
-from typing import Union
 
 
 # =============================================================================

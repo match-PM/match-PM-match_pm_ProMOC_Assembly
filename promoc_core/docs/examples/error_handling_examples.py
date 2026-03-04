@@ -7,6 +7,7 @@ error handling utilities in the ProMOC Assembly system.
 Author: ProMOC Assembly Team
 Date: 29. Oktober 2025
 """
+# ruff: noqa: E402, F401
 
 # Example 1: Basic Exception Usage
 # ============================================================================

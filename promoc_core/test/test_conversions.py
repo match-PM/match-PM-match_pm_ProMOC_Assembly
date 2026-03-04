@@ -37,6 +37,7 @@ def test_angle_conversions():
     # mrad <-> deg
     # 1 mrad approx 0.0572958 degrees
     assert mrad_to_deg(1000.0) == pytest.approx(math.degrees(1.0))
+    assert deg_to_mrad(1.0) == pytest.approx(math.radians(1.0) * 1000.0)
 
 def test_velocity_conversions():
     """Test velocity conversions."""

@@ -1,5 +1,3 @@
-
-import pytest
 from promoc_core.validation import (
     is_in_range, clamp,
     validate_position_3d, validate_position_6d,
