@@ -15,7 +15,7 @@ from promoc_assembly_interfaces.srv import (
 from promoc_core.promoc_exceptions import ServiceError
 
 from .axis_helpers import temporary_velocity
-from ..support.parameter_access import ParameterAccessor
+from .parameter_access import ParameterAccessor
 
 
 @dataclass(frozen=True)
@@ -215,9 +215,9 @@ class FlyOverDetector:
         peak_ratio: float,
         margin: float,
         backtrack: float,
-        guard: float,
-        min_window_width: float,
-        threshold: float,
+        guard: float = 0.0,
+        min_window_width: float = 0.0,
+        threshold: float = 0.0,
     ) -> FlyOverResult:
         """Analyze collected fly-over data and determine peak window."""
         if not scan_data:

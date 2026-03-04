@@ -18,7 +18,7 @@ This document explains how the repository is structured and where to add or chan
 | Package | Responsibility | Main Entrypoints | Depends On |
 |---|---|---|---|
 | `promoc_bringup` | Launch files, runtime-mode resolution, user config mapping | `launch/system.launch.py`, `launch/camera.launch.py`, `promoc_bringup/launch_utils.py` | all runtime node packages |
-| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/camera_node.py`, `camera_nodes/camera_nodes/services.py`, `camera_nodes/camera_nodes/handlers/*`, `camera_nodes/camera_nodes/support/*` | `promoc_assembly_interfaces`, `promoc_core` |
+| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/camera_node.py`, `camera_nodes/camera_nodes/services/*`, `camera_nodes/camera_nodes/helpers/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/lts300_node.py`, `lts300_interface.py`, `lts300_service_callbacks.py` | `promoc_assembly_interfaces`, `promoc_core` |
 | `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/mover_node.py`, `mover_pmc_interface.py`, `callbacks/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `promoc_assembly_interfaces` | ROS2 `srv`/`msg` contracts | `srv/*`, `msg/*` | none |
@@ -29,7 +29,7 @@ This document explains how the repository is structured and where to add or chan
 
 1. Launch/Config Layer (`promoc_bringup`)
 2. Node Orchestration Layer (`*_node.py`)
-3. Service/Handler Layer (`callbacks/*`, `handlers/*`)
+3. Service/Handler Layer (`callbacks/*`, `services/*`)
 4. Driver/Hardware Layer (`drivers/*`, `*_interface.py`)
 5. Shared Core Utilities (`promoc_core`)
 
@@ -58,8 +58,8 @@ This document explains how the repository is structured and where to add or chan
   - add/modify `promoc_assembly_interfaces/srv/*.srv`
   - then wire node callbacks in package-specific node files
 - New camera behavior:
-  - `camera_nodes/camera_nodes/handlers/*`
-  - expose via `camera_nodes/camera_nodes/services.py`
+  - `camera_nodes/camera_nodes/services/*`
+  - reuse `camera_nodes/camera_nodes/helpers/*` for shared helper logic
 - New linear-axis behavior:
   - `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py`
 - New mover behavior:

@@ -15,7 +15,7 @@ from promoc_core.promoc_exceptions import HardwareError
 from promoc_core.logging import TaggedLogger, LogTags
 
 from ..algorithms import tenengrad
-from ..support.parameter_access import ParameterAccessor
+from ..helpers.parameter_access import ParameterAccessor
 
 
 class CallbackBase:

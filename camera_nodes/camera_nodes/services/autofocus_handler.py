@@ -41,8 +41,8 @@ from ..algorithms import (
     AUTOFOCUS_ALGORITHMS,
 )
 from .base import CallbackBase
-from .focus_profile import FocusProfileBuilder
-from .fly_over import FlyOverDetector
+from ..helpers.focus_profile import FocusProfileBuilder
+from ..helpers.fly_over import FlyOverDetector
 from promoc_core.error_handling import handle_service_errors
 
 # Build algorithm lookup from centralized list

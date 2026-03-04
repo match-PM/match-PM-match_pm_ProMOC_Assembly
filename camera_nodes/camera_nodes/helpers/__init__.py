@@ -1,8 +1,8 @@
-"""Shared helper modules for camera node internals."""
+"""Shared helper utilities for camera services and node internals."""
 
 from .image_processing import CameraImageProcessing
-from .mtf_param_mapping import apply_mtf_param_mapping
 from .parameter_access import ParameterAccessor
+from .mtf_param_mapping import apply_mtf_param_mapping
 
 __all__ = [
     "CameraImageProcessing",

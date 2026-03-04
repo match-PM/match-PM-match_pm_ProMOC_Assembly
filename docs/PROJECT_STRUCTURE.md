@@ -30,8 +30,8 @@ If you want to add or change something, start here:
 |---|---|
 | Start/stop different node sets | `promoc_bringup/launch/system.launch.py`, `promoc_bringup/launch/camera.launch.py` |
 | Add launch argument or config mapping | `promoc_bringup/promoc_bringup/launch_utils.py` |
-| Add camera service behavior | `camera_nodes/camera_nodes/services.py`, `camera_nodes/camera_nodes/handlers/` |
-| Change shared camera helper code | `camera_nodes/camera_nodes/support/` |
+| Add camera service behavior | `camera_nodes/camera_nodes/services/` |
+| Change shared camera helper code | `camera_nodes/camera_nodes/helpers/` |
 | Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/algorithms/` |
 | Add synthetic MTF validation fixtures | `camera_nodes/test/fixtures/` |
 | Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py` |

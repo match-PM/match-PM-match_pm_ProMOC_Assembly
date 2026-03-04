@@ -8,7 +8,7 @@ from typing import Callable
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import GetParameters, SetParameters
 
-from ..support.parameter_access import ParameterAccessor
+from .parameter_access import ParameterAccessor
 
 
 class CameraFormatController:

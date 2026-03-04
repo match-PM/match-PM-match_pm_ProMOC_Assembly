@@ -33,7 +33,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.handlers.axis_helpers import temporary_velocity  # noqa: E402
+from camera_nodes.helpers.axis_helpers import temporary_velocity  # noqa: E402
 from promoc_core.promoc_exceptions import ServiceError  # noqa: E402
 
 

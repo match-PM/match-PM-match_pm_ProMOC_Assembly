@@ -1,6 +1,7 @@
-"""Feature handlers for camera services."""
+"""Service layer for camera node callbacks."""
 
 __all__ = [
+    "CameraServiceHandlers",
     "AutofocusHandler",
     "MTFHandler",
     "ExposureHandler",
@@ -8,7 +9,11 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Lazy-import handlers to keep module import side effects minimal."""
+    """Lazy-import service handlers to keep import side effects minimal."""
+    if name == "CameraServiceHandlers":
+        from .registry import CameraServiceHandlers
+
+        return CameraServiceHandlers
     if name == "AutofocusHandler":
         from .autofocus_handler import AutofocusHandler
 

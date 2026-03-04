@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-import tempfile
 import types
 
 
@@ -58,7 +57,7 @@ if "rcl_interfaces" not in sys.modules:
     sys.modules["rcl_interfaces"] = rcl_pkg
 
 from camera_nodes.algorithms.mtf import MTFConfig  # noqa: E402
-from camera_nodes.handlers.mtf_handler import MTFHandler  # noqa: E402
+from camera_nodes.services.mtf_handler import MTFHandler  # noqa: E402
 
 
 class _Param:
@@ -97,36 +96,39 @@ def _callbacks(params: dict) -> MTFHandler:
 
 
 def test_build_mtf_config_mapping_applies_and_respects_auto_roi_override():
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        callbacks = _callbacks(
-            {
-                "mtf.debug_export_dir": tmp_dir,
-                "mtf.debug_export_prefix": "run",
-                "mtf.debug_export_csv": True,
-                "mtf.debug_export_png": False,
-                "mtf.lsf_window_mode": "peak",
-                "mtf.lsf_peak_window_size": 13,
-                "mtf.derivative_mode": "iso",
-                "mtf.apply_derivative_correction": True,
-                "mtf.derivative_correction_max": 0.5,
-                "mtf.apply_angle_correction": True,
-                "mtf.esf_smooth_mode": "sg",
-                "mtf.esf_sg_window": 9,
-                "mtf.esf_sg_poly": 2,
-                "mtf.edge_validation_mode": "warn",
-                "mtf.edge_validation_percentile": 85.0,
-                "mtf.edge_validation_min_points": 25,
-                "mtf.edge_validation_only_auto": True,
-                "mtf.clip_to_nyquist": True,
-                "mtf.export_dual_curves": False,
-                "mtf.clip_max": 0.9,
-                "mtf.warn_threshold": 1.15,
-                "mtf.profile": "default",
-            }
-        )
-        config = callbacks._build_mtf_config(2.4, 2.0, 10.0, auto_roi=False)
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    tmp_root.mkdir(exist_ok=True)
+    tmp_dir = tmp_root / "mtf_param_mapping"
+    tmp_dir.mkdir(exist_ok=True)
+    callbacks = _callbacks(
+        {
+            "mtf.debug_export_dir": str(tmp_dir),
+            "mtf.debug_export_prefix": "run",
+            "mtf.debug_export_csv": True,
+            "mtf.debug_export_png": False,
+            "mtf.lsf_window_mode": "peak",
+            "mtf.lsf_peak_window_size": 13,
+            "mtf.derivative_mode": "iso",
+            "mtf.apply_derivative_correction": True,
+            "mtf.derivative_correction_max": 0.5,
+            "mtf.apply_angle_correction": True,
+            "mtf.esf_smooth_mode": "sg",
+            "mtf.esf_sg_window": 9,
+            "mtf.esf_sg_poly": 2,
+            "mtf.edge_validation_mode": "warn",
+            "mtf.edge_validation_percentile": 85.0,
+            "mtf.edge_validation_min_points": 25,
+            "mtf.edge_validation_only_auto": True,
+            "mtf.clip_to_nyquist": True,
+            "mtf.export_dual_curves": False,
+            "mtf.clip_max": 0.9,
+            "mtf.warn_threshold": 1.15,
+            "mtf.profile": "default",
+        }
+    )
+    config = callbacks._build_mtf_config(2.4, 2.0, 10.0, auto_roi=False)
 
-    assert config.debug_export_dir == tmp_dir
+    assert config.debug_export_dir == str(tmp_dir)
     assert config.debug_export_prefix == "run"
     assert config.lsf_window_mode == "peak"
     assert config.lsf_peak_window_size == 13

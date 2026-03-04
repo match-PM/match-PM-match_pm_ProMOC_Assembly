@@ -107,8 +107,8 @@ def _evaluate(root: Path) -> list[CheckResult]:
         _check_contains(
             root,
             "camera_nodes/camera_nodes/camera_node.py",
-            ["from .support.image_processing import CameraImageProcessing"],
-            "camera node imports image processing from support package",
+            ["from .helpers.image_processing import CameraImageProcessing"],
+            "camera node imports image processing from helpers package",
         )
     )
     results.append(
@@ -145,8 +145,36 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_file_exists(
             root,
-            "camera_nodes/camera_nodes/support/mtf_param_mapping.py",
-            "camera support package contains centralized mtf parameter mapping",
+            "camera_nodes/camera_nodes/helpers/mtf_param_mapping.py",
+            "camera helpers package contains centralized mtf parameter mapping",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "camera_nodes/camera_nodes/services/registry.py",
+            "camera services package contains service composition registry",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/services.py",
+            "legacy flat services.py module removed in favor of services package",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/handlers/__init__.py",
+            "legacy handlers compatibility package removed",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "camera_nodes/camera_nodes/support/__init__.py",
+            "legacy support compatibility package removed",
         )
     )
     results.append(

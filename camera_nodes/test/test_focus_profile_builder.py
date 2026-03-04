@@ -13,7 +13,7 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-from camera_nodes.handlers.focus_profile import FocusProfileBuilder  # noqa: E402
+from camera_nodes.helpers.focus_profile import FocusProfileBuilder  # noqa: E402
 
 
 class _Param:

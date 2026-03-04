@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import json
 import re
 
-from ..support.parameter_access import ParameterAccessor
+from .parameter_access import ParameterAccessor
 
 
 COARSE_STEP_MM = 0.5
