@@ -19,7 +19,6 @@ Note: Deprecated launch argument compatibility is intentionally kept for Release
 from __future__ import annotations
 
 import os
-import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -33,19 +32,10 @@ import launch
 
 from promoc_bringup.launch_utils import (
     discover_thorlabs_devices as discover_connected_devices,
+    get_config_path,
+    load_yaml_config,
     resolve_runtime_mode,
 )
-
-
-def load_axes_config(bringup_pkg_share: str):
-    """Load linear axes configuration from YAML."""
-    config_path = os.path.join(bringup_pkg_share, "config", "linear_axes_params.yaml")
-    try:
-        with open(config_path, "r", encoding="utf-8") as file_handle:
-            return yaml.safe_load(file_handle), config_path
-    except Exception as exc:
-        launch.logging.get_logger().error(f"Error loading axes config: {exc}")
-        return {}, None
 
 
 def generate_launch_description():
@@ -70,7 +60,7 @@ def launch_setup(context, *args, **kwargs):
     runtime_mode = resolve_runtime_mode(
         context,
         logger=launch.logging.get_logger(),
-        legacy_arg_names=("sim_mode",),
+        legacy_arg_names=('sim_mode',),
     )
     sim_mode = runtime_mode == "sim"
     bringup_pkg = get_package_share_directory("promoc_bringup")
@@ -102,9 +92,22 @@ def launch_setup(context, *args, **kwargs):
     else:
         logger.error(f"Mover config not found: {mover_config}")
 
-    axes_config, axes_config_path = load_axes_config(bringup_pkg)
+    axes_config_path = get_config_path(bringup_pkg, "linear_axes_params.yaml")
+    axes_config_raw, axes_error = load_yaml_config(axes_config_path)
+    if axes_error:
+        logger.error(f"Failed to load linear axes configuration: {axes_error}")
+        return actions
+
+    axes_config = {}
+    for node_name, node_cfg in axes_config_raw.items():
+        if isinstance(node_cfg, dict) and isinstance(node_cfg.get("ros__parameters"), dict):
+            axes_config[node_name] = node_cfg
+
     if not axes_config:
-        logger.warn("No linear axes configuration found")
+        logger.warn(
+            "No valid linear-axis entries found in linear_axes_params.yaml "
+            "(expected '<node_name>.ros__parameters')."
+        )
         return actions
 
     if sim_mode:
