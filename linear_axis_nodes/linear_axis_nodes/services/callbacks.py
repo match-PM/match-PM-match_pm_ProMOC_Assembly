@@ -11,7 +11,6 @@ import threading
 
 from promoc_core.promoc_exceptions import (
     CollisionDetectedError,
-    HomingFailedError,
     SoftLimitViolationError,
 )
 from promoc_core.validation import check_collision_risk, is_in_range
@@ -74,7 +73,11 @@ class ServiceCallbacks:
     # VALIDATION
     # ══════════════════════════════════════════════════════════════════════════
 
-    def _collision_check(self, other_axis_position: float):
+    def _collision_check(
+        self,
+        other_axis_position: float,
+        axis_position: float = 0.0,
+    ):
         """
         Check the collision risk with the other axis.
 
@@ -90,10 +93,13 @@ class ServiceCallbacks:
 
         """
         is_safe, warning_msg = check_collision_risk(
-            axis_position=0,
+            axis_position=axis_position,
             other_axis_position=other_axis_position,
             collision_threshold=self.config.collision_threshold,
         )
+
+        if warning_msg:
+            self.logger.warn(warning_msg)
 
         if not is_safe:
             raise CollisionDetectedError(
@@ -275,28 +281,19 @@ class ServiceCallbacks:
             self.logger.info("Homing operation completed successfully")
 
         except Exception as e:
-            # Handle specific timeout errors
+            # Handle specific timeout errors and keep state machine consistent.
             if "ThorlabsTimeoutError" in str(type(e)) or "timeout" in str(e).lower():
                 error_msg = (
                     "Homing timeout - operation may still be in progress on hardware"
                 )
                 self.logger.warn(f"{error_msg}")
-                # Wrap in HomingFailedError for consistent error handling
-                raise HomingFailedError(
-                    error_msg,
-                    details={
-                        "timeout": self.config.homing_timeout,
-                        "original_error": str(e),
-                        "error_type": "timeout",
-                    },
-                )
             else:
                 error_msg = str(e) if str(e).strip() else "Unknown error during homing"
                 self.logger.error(f"Homing operation failed: {error_msg}")
-                raise HomingFailedError(
-                    error_msg,
-                    details={"original_error": str(e), "error_type": type(e).__name__},
-                )
+
+            with self.operation_lock:
+                self.operation_status = OperationStatus.ERROR
+                self.last_operation_message = f"Homing failed: {error_msg}"
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
         """
@@ -320,7 +317,16 @@ class ServiceCallbacks:
 
         Uses custom exceptions for precise error handling.
         """
-        # Check if another operation is already running
+        # Safety validation - will raise SoftLimitViolationError if invalid
+        self._validate_position(request.axis_position)
+
+        # Collision check - will raise CollisionDetectedError if detected
+        self._collision_check(
+            other_axis_position,
+            axis_position=float(request.axis_position),
+        )
+
+        # Reserve operation state before starting async thread to avoid races.
         with self.operation_lock:
             if self.operation_status != OperationStatus.IDLE:
                 response.success = False
@@ -329,12 +335,10 @@ class ServiceCallbacks:
                 )
                 self.logger.warn(response.status_message)
                 return response
-
-        # Safety validation - will raise SoftLimitViolationError if invalid
-        self._validate_position(request.axis_position)
-
-        # Collision check - will raise CollisionDetectedError if detected
-        self._collision_check(other_axis_position)
+            self.operation_status = OperationStatus.MOVING
+            self.last_operation_message = (
+                f"Starting absolute movement to {request.axis_position:.2f}mm..."
+            )
 
         # Start movement in background thread
         self.logger.debug(
@@ -357,16 +361,6 @@ class ServiceCallbacks:
 
         Uses custom exceptions for precise error handling.
         """
-        # Check if another operation is already running
-        with self.operation_lock:
-            if self.operation_status != OperationStatus.IDLE:
-                response.success = False
-                response.status_message = (
-                    f"Operation already in progress: {self.operation_status.value}"
-                )
-                self.logger.warn(response.status_message)
-                return response
-
         # Safety validation for movement distance - will raise if invalid
         self._validate_distance(request.axis_position)
 
@@ -375,7 +369,24 @@ class ServiceCallbacks:
         self._validate_target_position(current_pos, request.axis_position)
 
         # Collision check - will raise CollisionDetectedError if detected
-        self._collision_check(other_axis_position)
+        self._collision_check(
+            other_axis_position,
+            axis_position=float(current_pos + request.axis_position),
+        )
+
+        # Reserve operation state before starting async thread to avoid races.
+        with self.operation_lock:
+            if self.operation_status != OperationStatus.IDLE:
+                response.success = False
+                response.status_message = (
+                    f"Operation already in progress: {self.operation_status.value}"
+                )
+                self.logger.warn(response.status_message)
+                return response
+            self.operation_status = OperationStatus.MOVING
+            self.last_operation_message = (
+                f"Starting relative movement by {request.axis_position:.2f}mm..."
+            )
 
         # Start movement in background thread
         self.logger.debug(
@@ -428,6 +439,10 @@ class ServiceCallbacks:
                 response.status_message = (
                     "Homing started - check status with get_position service"
                 )
+
+            # Reserve operation state before starting async thread to avoid races.
+            self.operation_status = OperationStatus.HOMING
+            self.last_operation_message = "Homing in progress..."
 
         # Start homing in background thread (this will handle the reset automatically)
         self.logger.info("Starting asynchronous homing operation...")
@@ -640,21 +655,30 @@ class ServiceCallbacks:
         direction_str = "positive" if step_size >= 0 else "negative"
         self.logger.debug(f"Jog step: {step_size:+.2f}mm ({direction_str} direction)")
 
-        # Use the simplified driver method
-        if step_size >= 0:
-            self.driver.jog_positive(abs(step_size))
-        else:
-            self.driver.jog_negative(abs(step_size))
+        try:
+            # Use the simplified driver method
+            if step_size >= 0:
+                self.driver.jog_positive(abs(step_size))
+            else:
+                self.driver.jog_negative(abs(step_size))
 
-        # Get final position
-        final_pos = self.driver.get_position()
+            # Get final position
+            final_pos = self.driver.get_position()
 
-        with self.operation_lock:
-            self.operation_status = OperationStatus.IDLE
-            self.last_operation_message = f"Jog completed - position: {final_pos:.2f}mm"
+            with self.operation_lock:
+                self.operation_status = OperationStatus.IDLE
+                self.last_operation_message = (
+                    f"Jog completed - position: {final_pos:.2f}mm"
+                )
 
-        response.success = True
-        response.final_position = final_pos
-        response.status_message = f"Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm"
-
-        return response
+            response.success = True
+            response.final_position = final_pos
+            response.status_message = (
+                f"Jog {step_size:+.2f}mm completed: {final_pos:.2f}mm"
+            )
+            return response
+        except Exception as e:
+            with self.operation_lock:
+                self.operation_status = OperationStatus.ERROR
+                self.last_operation_message = f"Jog failed: {e}"
+            raise

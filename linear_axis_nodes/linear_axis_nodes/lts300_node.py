@@ -323,71 +323,59 @@ class LTS300Node(Node):
 
             # ── Services ──
             # The other_axis_position is passed to move callbacks for collision checking.
-            self._create_service_alias_pair(
-                node_name,
-                MoveAbsolute,
-                "move_absolute",
-                lambda req, res: self.callbacks.callback_move_absolute(
-                    req,
-                    res,
-                    self.other_axis_position,
+            service_specs = [
+                (
+                    MoveAbsolute,
+                    "move_absolute",
+                    lambda req, res: self.callbacks.callback_move_absolute(
+                        req,
+                        res,
+                        self.other_axis_position,
+                    ),
                 ),
-            )
-            self._create_service_alias_pair(
-                node_name,
-                MoveRelative,
-                "move_relative",
-                lambda req, res: self.callbacks.callback_move_relative(
-                    req,
-                    res,
-                    self.other_axis_position,
+                (
+                    MoveRelative,
+                    "move_relative",
+                    lambda req, res: self.callbacks.callback_move_relative(
+                        req,
+                        res,
+                        self.other_axis_position,
+                    ),
                 ),
-            )
-            self._create_service_alias_pair(
-                node_name, Home, "home", self.callbacks.callback_home
-            )
-            self._create_service_alias_pair(
-                node_name,
-                GetPosition,
-                "get_position",
-                self.callbacks.callback_get_position,
-            )
-            self._create_service_alias_pair(
-                node_name,
-                GetOperationStatus,
-                "get_operation_status",
-                self.callbacks.callback_get_operation_status,
-            )
-            self._create_service_alias_pair(
-                node_name,
-                SetVelocityParameters,
-                "set_velocity_parameters",
-                self.callbacks.callback_set_velocity_parameters,
-            )
-            self._create_service_alias_pair(
-                node_name,
-                GetVelocityParameters,
-                "get_velocity_parameters",
-                self.callbacks.callback_get_velocity_parameters,
-            )
-            self._create_service_alias_pair(
-                node_name,
-                ShutdownLinearAxis,
-                "shutdown",
-                self.callbacks.callback_shutdown,
-            )
-            self._create_service_alias_pair(
-                node_name,
-                EmergencyStop,
-                "emergency_stop",
-                self.callbacks.callback_emergency_stop,
-            )
-            self._create_service_alias_pair(
-                node_name, Stop, "stop", self.callbacks.callback_stop
-            )
-            self._create_service_alias_pair(
-                node_name, JogAxis, "jog_axis", self.callbacks.callback_jog_axis
-            )
+                (Home, "home", self.callbacks.callback_home),
+                (GetPosition, "get_position", self.callbacks.callback_get_position),
+                (
+                    GetOperationStatus,
+                    "get_operation_status",
+                    self.callbacks.callback_get_operation_status,
+                ),
+                (
+                    SetVelocityParameters,
+                    "set_velocity_parameters",
+                    self.callbacks.callback_set_velocity_parameters,
+                ),
+                (
+                    GetVelocityParameters,
+                    "get_velocity_parameters",
+                    self.callbacks.callback_get_velocity_parameters,
+                ),
+                (ShutdownLinearAxis, "shutdown", self.callbacks.callback_shutdown),
+                (
+                    EmergencyStop,
+                    "emergency_stop",
+                    self.callbacks.callback_emergency_stop,
+                ),
+                (Stop, "stop", self.callbacks.callback_stop),
+                (JogAxis, "jog_axis", self.callbacks.callback_jog_axis),
+            ]
+
+            for service_type, suffix, callback in service_specs:
+                self._create_service_alias_pair(
+                    node_name,
+                    service_type,
+                    suffix,
+                    callback,
+                )
             self.log.info("All services created")
 
         except Exception as e:
