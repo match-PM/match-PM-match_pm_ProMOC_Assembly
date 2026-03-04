@@ -47,9 +47,9 @@ def log_msg(msg):
 class SimulatedXBot:
     def __init__(self):
         # Initialize default position and orientation values
-        self.x_pos = 120.0  # X position in mm
-        self.y_pos = 120.0  # Y position in mm
-        self.z_pos = 1.5    # Z position in mm
+        self.x_pos = 0.120  # X position in meters
+        self.y_pos = 0.120  # Y position in meters
+        self.z_pos = 0.0015  # Z position in meters
         self.rx_pos = 0.0   # Rotation around X-axis in radians
         self.ry_pos = 0.0   # Rotation around Y-axis in radians
         self.rz_pos = 0.0   # Rotation around Z-axis in radians
@@ -194,12 +194,19 @@ class xbot_commands:
     def get_all_xbot_info(xbot_id):
         # Return information about the specific XBot or all XBots
         if xbot_id == 0:
-            # Return all XBots
-            return list(simulated_xbots.values()) if simulated_xbots else []
+            # Return all XBots (ensure at least one default XBot exists).
+            if not simulated_xbots:
+                get_or_create_xbot(0)
+            return list(simulated_xbots.values())
         else:
             # Return specific XBot
             xbot = get_or_create_xbot(xbot_id)
             return [xbot]
+
+    @staticmethod
+    def get_xbot_data():
+        """Compatibility API for callers expecting get_xbot_data()."""
+        return xbot_commands.get_all_xbot_info(0)
 
     @staticmethod
     def get_xbot_status(xbot_id, feedback_type=FeedbackType.POSITION):
@@ -331,7 +338,46 @@ class xbot_commands:
         return travel_time
 
     @staticmethod
-    def rotary_motion(xbot_id, target_rz, max_speed, max_accel):
+    def arc_motion_si(
+        xbot_id,
+        target_x,
+        target_y,
+        radius_m,
+        max_speed,
+        max_accel,
+        cmd_lb=0,
+        arc_mode=0,
+        arc_type=0,
+        arc_direction=0,
+        pos_mode=0,
+        final_speed=0.0,
+        angle_rad=0.0,
+    ):
+        """PMCLib-compatible arc API used by the planar motor callbacks."""
+        _ = cmd_lb, arc_mode, angle_rad
+        return xbot_commands.arc_motion_target_radius(
+            xbot_id=xbot_id,
+            x_pos=target_x,
+            y_pos=target_y,
+            arc_type=arc_type,
+            postion_mode=pos_mode,
+            arc_dir=arc_direction,
+            radius_meters=radius_m,
+            xy_max_speed=max_speed,
+            xy_max_accl=max_accel,
+            final_speed=final_speed,
+        )
+
+    @staticmethod
+    def rotary_motion(
+        xbot_id,
+        target_rz,
+        max_speed,
+        max_accel,
+        cmd_lb=0,
+        rot_mode=0,
+    ):
+        _ = cmd_lb, rot_mode
         # Simulate rotary motion by updating Z-rotation
         log_msg(f"Mock: Rotary motion for XBot {xbot_id}")
         xbot = get_or_create_xbot(xbot_id)
@@ -425,13 +471,13 @@ class MockPMCLib:
         """Get XBot information"""
         return xbot_commands.get_all_xbot_info(xbot_id)
 
-    def move_linear(self, xbot_id, x, y, z):
-        """Mock linear motion"""
-        xbot_commands.linear_motion_si(xbot_id, x, y, z)
+    def move_linear(self, xbot_id, x, y, xy_speed=0.05, xy_accel=0.2):
+        """Mock linear motion."""
+        xbot_commands.linear_motion_si(xbot_id, x, y, xy_speed, xy_accel)
 
     def move_rotary(self, xbot_id, rz):
         """Mock rotary motion"""
-        xbot_commands.rotary_motion(xbot_id, rz)
+        xbot_commands.rotary_motion(xbot_id, rz, max_speed=1.0, max_accel=1.0)
 
     def stop_motion(self, xbot_id):
         """Mock stop motion"""

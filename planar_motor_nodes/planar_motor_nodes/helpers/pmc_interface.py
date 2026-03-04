@@ -44,9 +44,7 @@ Usage:
     pmc.bot.linear_motion_si(xbot_id=0, x=0.1, y=0.05)
 """
 
-import sys
-import os
-from promoc_core.promoc_exceptions import ConnectionError, DriverNotAvailableError
+from promoc_core.promoc_exceptions import ConnectionError
 from promoc_core.logging import TaggedLogger, LogTags
 
 

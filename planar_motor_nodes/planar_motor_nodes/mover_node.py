@@ -215,9 +215,17 @@ class MoverServiceNode(Node):
            - Log at debug level (to avoid spamming the console).
            - Next attempt in 100ms.
         """
+        if self.is_connected:
+            return
+
         try:
-            while not self.is_connected:
-                self.is_connected = self.pmc.connect(self.config.pmc_ip)
+            self.is_connected = self.pmc.connect(self.config.pmc_ip)
+        except Exception as e:
+            # Debug level to avoid spam during startup
+            self.log.debug(f"Connection attempt failed: {e}")
+            return
+
+        if self.is_connected:
             self.log.info("PMC Connected! Activating system.")
 
             # Stop the timer - connection is established
@@ -225,10 +233,6 @@ class MoverServiceNode(Node):
 
             # Activate the system (XBots + publisher)
             self._activate_system()
-
-        except Exception as e:
-            # Debug level to avoid spam during startup
-            self.log.debug(f"Connection attempt failed: {e}")
 
     def _activate_system(self):
         """
@@ -397,8 +401,9 @@ class MoverServiceNode(Node):
             return
 
         msg = XBotInfo()
+        xbot_id = self.config.xbot_id
         try:
-            current_pos = self.mover_utils.get_current_position(0)
+            current_pos = self.mover_utils.get_current_position(xbot_id)
             if current_pos:
                 # Convert: m → mm, rad → deg
                 msg.x_pos = m_to_mm(current_pos[0])
@@ -408,7 +413,7 @@ class MoverServiceNode(Node):
                 msg.ry_pos = rad_to_deg(current_pos[4])
                 msg.rz_pos = rad_to_deg(current_pos[5])
 
-            msg.xbot_state = self.mover_utils.get_xbot_state_string(0)
+            msg.xbot_state = self.mover_utils.get_xbot_state_string(xbot_id)
             self.xbot_pos_publisher.publish(msg)
             self.xbot_pos_publisher_canonical.publish(msg)
         except Exception as e:

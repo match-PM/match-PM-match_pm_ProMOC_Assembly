@@ -208,13 +208,26 @@ class MoverUtils:
         3. Return the position as a list.
         """
         try:
-            xbot_data_list = self.pmc.bot.get_xbot_data()
+            get_xbot_data = getattr(self.pmc.bot, "get_xbot_data", None)
+            if callable(get_xbot_data):
+                xbot_data_list = get_xbot_data()
+            else:
+                # Compatibility path for drivers exposing only get_all_xbot_info.
+                get_all_xbot_info = getattr(self.pmc.bot, "get_all_xbot_info", None)
+                if not callable(get_all_xbot_info):
+                    raise AttributeError(
+                        "PMCLib backend exposes neither get_xbot_data nor get_all_xbot_info"
+                    )
+                xbot_data_list = get_all_xbot_info(0)
 
             if not xbot_data_list:
                 if not self._logged_no_data:
                     self.logger.error("No XBot data returned from PMCLib")
                     self._logged_no_data = True
                 return None
+
+            # Reset once valid data is available again.
+            self._logged_no_data = False
 
             if xbot_id >= len(xbot_data_list):
                 warning_key = f"xbot_{xbot_id}_unavailable"
@@ -298,7 +311,7 @@ class MoverUtils:
             xbot_status = self.pmc.bot.get_xbot_status(xbot_id)
             return self._xbot_state_to_string(xbot_status.xbot_state)
         except Exception:
-            return "IDLE"
+            return "UNKNOWN"
 
     def _xbot_state_to_string(self, xbot_state) -> str:
         """Converts an XbotState enum to a readable string."""
