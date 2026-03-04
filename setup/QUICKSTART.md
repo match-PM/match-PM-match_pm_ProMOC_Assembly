@@ -189,7 +189,7 @@ promoc_assembly/
 | Package | Purpose | Installation |
 |---------|---------|--------------|
 | camera_aravis2 | IDS USB3 camera driver | `./install_camera_aravis2.sh` |
-| PMCLib | Planar motor control | Copy to `local_libs/pmclib/` |
+| PMCLib | Planar motor control | Install wheel (`pip install /path/to/pmclib-*.whl`) or checkout to `planar_motor_nodes/planar_motor_nodes/drivers/pmclib/` |
 | pylablib | Thorlabs hardware | `pip install pylablib` |
 | pythonnet | .NET integration | `pip install pythonnet` |
 
