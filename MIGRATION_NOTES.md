@@ -134,6 +134,29 @@ As of **March 4, 2026**, linear-axis internals were split into `services/` and `
 | `from linear_axis_nodes.lts300_service_callbacks import ServiceCallbacks` | `from linear_axis_nodes.services.callbacks import ServiceCallbacks` |
 | `from linear_axis_nodes.lts300_interface import Lts300Interface` | `from linear_axis_nodes.helpers.lts300_interface import Lts300Interface` |
 
+## Planar Motor Module Structure (Breaking Change)
+
+As of **March 4, 2026**, planar-motor internals were aligned to a `services/` + `helpers/` layout.
+
+### Canonical module roots
+
+- `planar_motor_nodes.services.*`
+- `planar_motor_nodes.helpers.*`
+
+### Removed legacy module paths
+
+- `planar_motor_nodes.mover_pmc_interface`
+- `planar_motor_nodes.mover_utils`
+- `planar_motor_nodes.callbacks.*`
+
+### Import mapping examples
+
+| Old import | New import |
+|---|---|
+| `from planar_motor_nodes.mover_pmc_interface import PmcInterface` | `from planar_motor_nodes.helpers.pmc_interface import PmcInterface` |
+| `from planar_motor_nodes.mover_utils import MoverUtils` | `from planar_motor_nodes.helpers.mover_utils import MoverUtils` |
+| `from planar_motor_nodes.callbacks import ServiceCallbacks` | `from planar_motor_nodes.services import ServiceCallbacks` |
+
 ## Release N+1 Plan
 
 - Remove all legacy aliases.

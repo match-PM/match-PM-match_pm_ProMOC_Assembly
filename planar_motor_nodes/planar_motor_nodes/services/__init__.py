@@ -1,12 +1,4 @@
-"""
-Callbacks Package for Planar Motor Node.
-
-This package contains the service callbacks split into logical modules:
-
-- base: Base class with shared utilities and input processing
-- motion: Motion callbacks (linear, 6dof, rotary, arc)
-- control: Control callbacks (activate, levitate, stop, velocity)
-"""
+"""Service layer for planar motor node callbacks."""
 
 from .base import ServiceCallbacksBase
 from .motion import MotionCallbacks

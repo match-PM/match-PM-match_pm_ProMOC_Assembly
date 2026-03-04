@@ -35,7 +35,7 @@ If you want to add or change something, start here:
 | Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/algorithms/` |
 | Add synthetic MTF validation fixtures | `camera_nodes/test/fixtures/` |
 | Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/services/callbacks.py` |
-| Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/callbacks/` |
+| Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/services/` |
 | Add shared conversion/validation/helper | `promoc_core/promoc_core/` |
 | Add a new ROS service contract | `promoc_assembly_interfaces/srv/` then wire in node packages |
 

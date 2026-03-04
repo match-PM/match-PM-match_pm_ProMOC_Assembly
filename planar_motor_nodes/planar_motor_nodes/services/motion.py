@@ -8,7 +8,8 @@ Contains callbacks for all motion-related services:
 - Arc motion
 """
 
-from .base import ServiceCallbacksBase, MotionStatus, PositionOutOfBoundsError
+from .base import ServiceCallbacksBase, PositionOutOfBoundsError
+from promoc_core.motion import MotionStatus
 from promoc_core.error_handling import handle_service_errors
 
 LINEAR_TIMEOUT_MULTIPLIER = 1.5

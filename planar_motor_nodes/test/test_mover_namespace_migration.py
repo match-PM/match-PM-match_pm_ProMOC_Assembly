@@ -19,6 +19,9 @@ def test_mover_node_registers_canonical_and_legacy_services():
     assert "/promoc/mover/" in content
     assert 'legacy_path = f"{self.get_name()}/{service_name}"' in content
     assert "register_service_alias_pair" in content
+    assert "from .helpers.pmc_interface import PmcInterface" in content
+    assert "from .helpers.mover_utils import MoverUtils" in content
+    assert "from .services import ServiceCallbacks" in content
     assert "Deprecated service" in helper_content
 
 

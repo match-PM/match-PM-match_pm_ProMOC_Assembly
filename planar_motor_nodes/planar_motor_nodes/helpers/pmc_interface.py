@@ -115,7 +115,11 @@ class PmcInterface:
 
         # Step 1: Local developer version
         try:
-            from .drivers.match_pm_xBot import xbot_commands, system_commands, pmc_types
+            from ..drivers.match_pm_xBot import (
+                xbot_commands,
+                system_commands,
+                pmc_types,
+            )
             self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
             self.status = {'source': 'local_driver', 'is_mock': False}
             self.logger.info(
@@ -156,7 +160,7 @@ class PmcInterface:
 
         The mock library simulates all movements and returns realistic positions.
         """
-        from .drivers import mock_pmclib
+        from ..drivers import mock_pmclib
         # Create a specific logger for the mock library
         mock_lib_logger = TaggedLogger(self.logger._logger, LogTags.MOCK)
         mock_pmclib.set_logger(mock_lib_logger)

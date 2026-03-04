@@ -75,9 +75,9 @@ from promoc_assembly_interfaces.srv import (
 )
 
 # Import our new, clean components
-from .mover_pmc_interface import PmcInterface
-from .mover_utils import MoverUtils
-from .callbacks import ServiceCallbacks
+from .helpers.pmc_interface import PmcInterface
+from .helpers.mover_utils import MoverUtils
+from .services import ServiceCallbacks
 from .config import MoverNodeConfig
 from promoc_core.conversions import m_to_mm, rad_to_deg
 from promoc_core.logging import TaggedLogger, LogTags

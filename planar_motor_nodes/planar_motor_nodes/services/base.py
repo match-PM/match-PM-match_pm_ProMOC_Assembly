@@ -5,8 +5,8 @@ This module contains the base class with shared utilities including
 the central _process_motion_input() method used by all motion callbacks.
 """
 
-from ..mover_pmc_interface import PmcInterface
-from ..mover_utils import MoverUtils
+from ..helpers.pmc_interface import PmcInterface
+from ..helpers.mover_utils import MoverUtils
 from ..config import MoverNodeConfig
 from promoc_core.promoc_exceptions import (
     ConfigurationError,

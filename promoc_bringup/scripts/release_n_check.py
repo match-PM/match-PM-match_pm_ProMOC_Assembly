@@ -259,8 +259,64 @@ def _evaluate(root: Path) -> list[CheckResult]:
         _check_contains(
             root,
             "planar_motor_nodes/planar_motor_nodes/mover_node.py",
-            ["/promoc/mover/", "legacy_path = f", "register_service_alias_pair"],
+            [
+                "/promoc/mover/",
+                "legacy_path = f",
+                "register_service_alias_pair",
+                "from .helpers.pmc_interface import PmcInterface",
+                "from .helpers.mover_utils import MoverUtils",
+                "from .services import ServiceCallbacks",
+            ],
             "mover services expose canonical + legacy paths",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/services/motion.py",
+            "mover services package contains motion callback implementation",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/services/control.py",
+            "mover services package contains control callback implementation",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/helpers/pmc_interface.py",
+            "mover helpers package contains pmc interface",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/helpers/mover_utils.py",
+            "mover helpers package contains runtime motion utilities",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/mover_pmc_interface.py",
+            "legacy flat mover_pmc_interface module removed",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/mover_utils.py",
+            "legacy flat mover_utils module removed",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "planar_motor_nodes/planar_motor_nodes/callbacks/__init__.py",
+            "legacy callbacks package removed in favor of services package",
         )
     )
     results.append(
