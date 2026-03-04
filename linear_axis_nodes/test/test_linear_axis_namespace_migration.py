@@ -20,6 +20,8 @@ def test_lts300_node_registers_canonical_and_legacy_services():
     assert "legacy_path = f" in content
     assert "{node_name}/{suffix}" in content
     assert "register_service_alias_pair" in content
+    assert "from .helpers.lts300_interface import Lts300Interface" in content
+    assert "from .services.callbacks import ServiceCallbacks" in content
     assert "Deprecated service" in helper_content
 
 

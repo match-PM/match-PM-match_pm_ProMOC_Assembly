@@ -87,6 +87,53 @@ Deprecated parameters are still declared in Release N and should be migrated:
 | `autofocus.fly_over.fine_drop_ratio` | `autofocus.fly_over.peak_window_ratio` |
 | `autofocus.fly_over.settle_coarse_s` | `autofocus.fly_over.settle_fine_s` |
 
+## Python Module Structure (Breaking Change)
+
+As of **March 4, 2026**, camera internals were refactored to feature-oriented packages and legacy wrapper modules were removed.
+
+### Canonical module roots
+
+- `camera_nodes.services.*`
+- `camera_nodes.helpers.*`
+
+### Removed legacy module roots
+
+- `camera_nodes.handlers.*`
+- `camera_nodes.support.*`
+- `camera_nodes.services` (single-file module `services.py`)
+
+### Import mapping examples
+
+| Old import | New import |
+|---|---|
+| `from camera_nodes.handlers.autofocus_handler import AutofocusHandler` | `from camera_nodes.services.autofocus_handler import AutofocusHandler` |
+| `from camera_nodes.handlers.mtf_handler import MTFHandler` | `from camera_nodes.services.mtf_handler import MTFHandler` |
+| `from camera_nodes.handlers.exposure_handler import ExposureHandler` | `from camera_nodes.services.exposure_handler import ExposureHandler` |
+| `from camera_nodes.handlers.base import CallbackBase` | `from camera_nodes.services.base import CallbackBase` |
+| `from camera_nodes.handlers.fly_over import FlyOverDetector` | `from camera_nodes.helpers.fly_over import FlyOverDetector` |
+| `from camera_nodes.support.parameter_access import ParameterAccessor` | `from camera_nodes.helpers.parameter_access import ParameterAccessor` |
+
+## Linear Axis Module Structure (Breaking Change)
+
+As of **March 4, 2026**, linear-axis internals were split into `services/` and `helpers/`.
+
+### Canonical module roots
+
+- `linear_axis_nodes.services.*`
+- `linear_axis_nodes.helpers.*`
+
+### Removed legacy module files
+
+- `linear_axis_nodes.lts300_service_callbacks`
+- `linear_axis_nodes.lts300_interface`
+
+### Import mapping examples
+
+| Old import | New import |
+|---|---|
+| `from linear_axis_nodes.lts300_service_callbacks import ServiceCallbacks` | `from linear_axis_nodes.services.callbacks import ServiceCallbacks` |
+| `from linear_axis_nodes.lts300_interface import Lts300Interface` | `from linear_axis_nodes.helpers.lts300_interface import Lts300Interface` |
+
 ## Release N+1 Plan
 
 - Remove all legacy aliases.

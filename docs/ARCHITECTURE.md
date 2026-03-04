@@ -19,7 +19,7 @@ This document explains how the repository is structured and where to add or chan
 |---|---|---|---|
 | `promoc_bringup` | Launch files, runtime-mode resolution, user config mapping | `launch/system.launch.py`, `launch/camera.launch.py`, `promoc_bringup/launch_utils.py` | all runtime node packages |
 | `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/camera_node.py`, `camera_nodes/camera_nodes/services/*`, `camera_nodes/camera_nodes/helpers/*` | `promoc_assembly_interfaces`, `promoc_core` |
-| `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/lts300_node.py`, `lts300_interface.py`, `lts300_service_callbacks.py` | `promoc_assembly_interfaces`, `promoc_core` |
+| `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/lts300_node.py`, `helpers/lts300_interface.py`, `services/callbacks.py` | `promoc_assembly_interfaces`, `promoc_core` |
 | `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/mover_node.py`, `mover_pmc_interface.py`, `callbacks/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `promoc_assembly_interfaces` | ROS2 `srv`/`msg` contracts | `srv/*`, `msg/*` | none |
 | `promoc_core` | Shared validation, conversions, logging, motion helpers | `promoc_core/*` | none |
@@ -61,7 +61,7 @@ This document explains how the repository is structured and where to add or chan
   - `camera_nodes/camera_nodes/services/*`
   - reuse `camera_nodes/camera_nodes/helpers/*` for shared helper logic
 - New linear-axis behavior:
-  - `linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py`
+  - `linear_axis_nodes/linear_axis_nodes/services/callbacks.py`
 - New mover behavior:
   - `planar_motor_nodes/planar_motor_nodes/callbacks/*`
 

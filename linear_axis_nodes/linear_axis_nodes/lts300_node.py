@@ -79,8 +79,8 @@ import rclpy
 from rclpy.node import Node
 
 from .config import LTS300NodeConfig
-from .lts300_interface import Lts300Interface
-from .lts300_service_callbacks import ServiceCallbacks
+from .helpers.lts300_interface import Lts300Interface
+from .services.callbacks import ServiceCallbacks
 from promoc_core.logging import TaggedLogger, LogTags
 from promoc_core.service_alias import register_service_alias_pair
 

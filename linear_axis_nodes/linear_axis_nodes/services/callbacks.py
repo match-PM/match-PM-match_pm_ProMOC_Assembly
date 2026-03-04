@@ -18,8 +18,8 @@ from promoc_core.validation import check_collision_risk, is_in_range
 from promoc_core.logging import TaggedLogger, LogTags
 from promoc_core.error_handling import handle_service_errors
 
-from .config import LTS300NodeConfig
-from .lts300_interface import Lts300Interface
+from ..config import LTS300NodeConfig
+from ..helpers.lts300_interface import Lts300Interface
 
 
 class OperationStatus(Enum):

@@ -217,8 +217,42 @@ def _evaluate(root: Path) -> list[CheckResult]:
         _check_contains(
             root,
             "linear_axis_nodes/linear_axis_nodes/lts300_node.py",
-            ["/promoc/linear_axis/", "legacy_path = f", "register_service_alias_pair"],
+            [
+                "/promoc/linear_axis/",
+                "legacy_path = f",
+                "register_service_alias_pair",
+                "from .helpers.lts300_interface import Lts300Interface",
+                "from .services.callbacks import ServiceCallbacks",
+            ],
             "linear-axis services expose canonical + legacy paths",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "linear_axis_nodes/linear_axis_nodes/services/callbacks.py",
+            "linear-axis services package contains callback implementation",
+        )
+    )
+    results.append(
+        _check_file_exists(
+            root,
+            "linear_axis_nodes/linear_axis_nodes/helpers/lts300_interface.py",
+            "linear-axis helpers package contains lts300 interface",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "linear_axis_nodes/linear_axis_nodes/lts300_service_callbacks.py",
+            "legacy flat lts300_service_callbacks module removed",
+        )
+    )
+    results.append(
+        _check_file_absent(
+            root,
+            "linear_axis_nodes/linear_axis_nodes/lts300_interface.py",
+            "legacy flat lts300_interface module removed",
         )
     )
     results.append(
