@@ -34,10 +34,6 @@ Canonical services:
 - `/promoc/camera/detect_rois`
 - `/promoc/camera/set_exposure` (hardware path only)
 
-Release N compatibility:
-
-- legacy aliases under `/promoc/camera_node/*` remain available with deprecation warnings.
-
 Internal package layout (simplified):
 
 - `camera_nodes/camera_nodes/camera_node.py` (main node)
@@ -50,7 +46,7 @@ Internal package layout (simplified):
 | Goal | Start Here | Then Check |
 |---|---|---|
 | Change service wiring and registration | `camera_nodes/camera_nodes/camera_node.py` | `camera_nodes/camera_nodes/services/registry.py` |
-| Change autofocus behavior | `camera_nodes/camera_nodes/services/autofocus_handler.py` | `camera_nodes/camera_nodes/algorithms/autofocus.py` |
+| Change autofocus behavior | `camera_nodes/camera_nodes/services/autofocus_handler.py` | `camera_nodes/camera_nodes/services/autofocus_runner.py`, `camera_nodes/camera_nodes/services/autofocus_axis_clients.py`, `camera_nodes/camera_nodes/algorithms/autofocus.py` |
 | Change MTF behavior and export mapping | `camera_nodes/camera_nodes/services/mtf_handler.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/helpers/mtf_param_mapping.py` |
 | Change camera parameter model/defaults | `camera_nodes/camera_nodes/config.py` | `promoc_bringup/config/cameras/*.yaml` |
 | Change hardware/sim driver behavior | `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py` | `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py` |
@@ -60,7 +56,7 @@ Internal package layout (simplified):
 ```bash
 make lint
 make test-unit
-make release-n-check
+make release-n1-check
 ```
 
 Package-level tests:
@@ -75,3 +71,4 @@ colcon test-result --verbose
 - Root onboarding: [`START_HERE.md`](../START_HERE.md)
 - Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
 - Callback guides (EN/DE): [`camera_nodes/docs/`](docs/)
+

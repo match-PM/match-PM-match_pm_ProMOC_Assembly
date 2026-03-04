@@ -1,7 +1,5 @@
 """Camera stack launch file with canonical runtime mode support."""
 
-# Deprecated launch argument compatibility is intentionally kept for Release N.
-
 from __future__ import annotations
 
 import os
@@ -16,6 +14,11 @@ from launch_ros.actions import Node
 import launch
 
 from promoc_bringup.launch_utils import resolve_runtime_mode
+from promoc_bringup.camera_launch_builder import (
+    build_camera_node_parameters,
+    build_driver_node_parameters,
+    resolve_binning_factor,
+)
 
 
 def generate_launch_description():
@@ -23,18 +26,8 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "runtime_mode",
-                default_value="",
+                default_value="hardware",
                 description="Canonical runtime mode: hardware|sim",
-            ),
-            DeclareLaunchArgument(
-                "sim_mode",
-                default_value="",
-                description="[Deprecated] Legacy alias true|false",
-            ),
-            DeclareLaunchArgument(
-                "use_simulator",
-                default_value="",
-                description="[Deprecated] Legacy alias true|false",
             ),
             DeclareLaunchArgument(
                 "camera_type",
@@ -52,12 +45,8 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
-    runtime_mode = resolve_runtime_mode(
-        context,
-        logger=launch.logging.get_logger(),
-        legacy_arg_names=("sim_mode", "use_simulator"),
-    )
-    sim_mode = runtime_mode == "sim"
+    runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
+    is_sim = runtime_mode == "sim"
     camera_type = LaunchConfiguration("camera_type").perform(context).strip()
     binning_override = LaunchConfiguration("binning_factor").perform(context).strip()
     logger = launch.logging.get_logger()
@@ -83,10 +72,10 @@ def launch_setup(context, *args, **kwargs):
             logger.error(f"Camera configuration file not found: {camera_config_file}")
             return []
 
-    if not sim_mode:
+    if not is_sim:
         _run_prelaunch_reset(bringup_pkg_share)
 
-    if sim_mode:
+    if is_sim:
         actions.append(
             Node(
                 package="camera_nodes",
@@ -103,7 +92,13 @@ def launch_setup(context, *args, **kwargs):
                 name="camera_node",
                 namespace="promoc",
                 output="screen",
-                parameters=[{"use_simulator": True, "mtf_csv_path": ""}],
+                parameters=[
+                    build_camera_node_parameters(
+                        None,
+                        None,
+                        use_simulator=True,
+                    )
+                ],
                 arguments=["--ros-args", "--log-level", "INFO"],
             )
         )
@@ -128,14 +123,11 @@ def launch_setup(context, *args, **kwargs):
         with open(dynamic_parameters_yaml, "w", encoding="utf-8") as file_handle:
             file_handle.write(yaml.dump(camera_config["dynamic_parameters"]))
 
-        binning_factor = camera_params.get("binning_factor", 1)
-        if binning_override:
-            try:
-                binning_factor = int(binning_override)
-            except ValueError:
-                logger.warn(
-                    f"Invalid binning_factor override '{binning_override}', using config value."
-                )
+        binning_factor = resolve_binning_factor(
+            camera_params,
+            binning_override,
+            logger,
+        )
 
         actions.append(
             Node(
@@ -147,27 +139,13 @@ def launch_setup(context, *args, **kwargs):
                 emulate_tty=True,
                 arguments=["--ros-args", "--log-level", "INFO"],
                 parameters=[
-                    {
-                        "guid": camera_params["guid"],
-                        "frame_id": camera_params["cameraname"],
-                        "stream_names": ["stream0"],
-                        "camera_info_urls": [f"file://{camera_info_yaml}"],
-                        "dynamic_parameters_yaml_url": dynamic_parameters_yaml,
-                        "DeviceControl": {"DeviceLinkThroughputLimit": 125000000},
-                        "AcquisitionControl": {
-                            "AcquisitionFrameRateEnable": True,
-                            "AcquisitionFrameRate": 15.0,
-                            "ExposureTime": 30000.0,
-                            "AcquisitionMode": "Continuous",
-                        },
-                        "ImageFormatControl": {
-                            "PixelFormat": [camera_params["pixel_format"]],
-                            "Width": camera_config["camera_info"]["image_width"],
-                            "Height": camera_config["camera_info"]["image_height"],
-                            "BinningHorizontal": binning_factor,
-                            "BinningVertical": binning_factor,
-                        },
-                    }
+                    build_driver_node_parameters(
+                        camera_params,
+                        camera_config,
+                        camera_info_yaml,
+                        dynamic_parameters_yaml,
+                        binning_factor,
+                    )
                 ],
             )
         )
@@ -194,22 +172,11 @@ def launch_setup(context, *args, **kwargs):
                 output="screen",
                 arguments=["--ros-args", "--log-level", "INFO"],
                 parameters=[
-                    {
-                        "use_simulator": False,
-                        "mtf_csv_path": "",
-                        "mtf.use_full_frame": True,
-                        "mtf.full_frame_width": camera_params.get(
-                            "sensor_resolution_h",
-                            camera_config["camera_info"]["image_width"],
-                        ),
-                        "mtf.full_frame_height": camera_params.get(
-                            "sensor_resolution_v",
-                            camera_config["camera_info"]["image_height"],
-                        ),
-                        "mtf.full_frame_offset_x": 0,
-                        "mtf.full_frame_offset_y": 0,
-                        "mtf.full_frame_binning": 1,
-                    }
+                    build_camera_node_parameters(
+                        camera_params,
+                        camera_config,
+                        use_simulator=False,
+                    )
                 ],
             )
         )

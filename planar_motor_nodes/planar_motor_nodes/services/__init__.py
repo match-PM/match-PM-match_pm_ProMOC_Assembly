@@ -1,25 +1,31 @@
 """Service layer for planar motor node callbacks."""
 
-from .base import ServiceCallbacksBase
-from .motion import MotionCallbacks
+from __future__ import annotations
+
+from .base import ServiceCallbacksBase, ServiceRegistration
 from .control import ControlCallbacks
-
-
-class ServiceCallbacks(MotionCallbacks, ControlCallbacks):
-    """
-    Combined service callbacks class.
-
-    Inherits from MotionCallbacks and ControlCallbacks, which both
-    inherit from ServiceCallbacksBase. This provides all callbacks
-    in a single class for easy integration with the mover node.
-    """
-
-    pass
+from .motion import MotionCallbacks
+from .motion_input import (
+    MotionInputConverters,
+    MotionInputOptions,
+    ProcessedMotionInput,
+)
+from .service_handlers import (
+    SERVICE_REGISTRY,
+    ServiceCallbacks,
+    ServiceHandlers,
+)
 
 
 __all__ = [
+    "ServiceHandlers",
     "ServiceCallbacks",
     "ServiceCallbacksBase",
+    "ServiceRegistration",
+    "MotionInputConverters",
+    "MotionInputOptions",
+    "ProcessedMotionInput",
     "MotionCallbacks",
     "ControlCallbacks",
+    "SERVICE_REGISTRY",
 ]

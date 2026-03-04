@@ -1,4 +1,4 @@
-"""Smoke tests for Release N automation scripts."""
+"""Smoke tests for Release N+1 automation scripts."""
 
 from __future__ import annotations
 

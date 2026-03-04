@@ -13,7 +13,7 @@ The node follows a dependency injection pattern for better testability:
     ├── Config (MoverNodeConfig) → Typed ROS parameter configuration
         ├── PmcInterface        → Hardware abstraction (PMCLib wrapper)
         ├── MoverUtils          → Helper functions (position, conversions)
-        └── ServiceCallbacks    → Business logic (motion processing)
+        └── ServiceHandlers     → Business logic (motion processing)
 
 Startup Sequence:
 =================
@@ -26,7 +26,7 @@ Startup Sequence:
 3. Component Creation
    ├── PmcInterface  → Tries to load PMCLib (local → installed → mock).
    ├── MoverUtils    → Position tracking and conversions.
-   └── ServiceCallbacks → Callback logic for all services.
+   └── ServiceHandlers → Callback logic for all services.
 
 4. ROS2 Service Registration
    └── linear_motion, six_dof_motion, activate, stop, etc.
@@ -77,11 +77,10 @@ from promoc_assembly_interfaces.srv import (
 # Import our new, clean components
 from .helpers.pmc_interface import PmcInterface
 from .helpers.mover_utils import MoverUtils
-from .services import ServiceCallbacks
+from .services import ServiceHandlers
 from .config import MoverNodeConfig
 from promoc_core.conversions import m_to_mm, rad_to_deg
 from promoc_core.logging import TaggedLogger, LogTags
-from promoc_core.service_alias import register_service_alias_pair
 
 
 class MoverServiceNode(Node):
@@ -98,7 +97,7 @@ class MoverServiceNode(Node):
     1. INIT-PHASE:
        - ROS2 node is initialized.
        - Configuration is loaded from ROS parameters.
-       - Components are created (PmcInterface, MoverUtils, ServiceCallbacks).
+       - Components are created (PmcInterface, MoverUtils, ServiceHandlers).
 
     2. SETUP-PHASE:
        - ROS2 services are registered (linear_motion, activate, stop, etc.).
@@ -121,7 +120,7 @@ class MoverServiceNode(Node):
         config (MoverNodeConfig): Typed node configuration.
         pmc (PmcInterface): Hardware abstraction for the PMC controller.
         mover_utils (MoverUtils): Helper functions for position calculation.
-        service_callbacks (ServiceCallbacks): Callback logic for services.
+        service_callbacks (ServiceHandlers): Callback logic for services.
         xbot_info_publisher: ROS2 publisher for position updates.
 
     Example:
@@ -141,7 +140,7 @@ class MoverServiceNode(Node):
         3. Create components:
            - PmcInterface: Hardware connection.
            - MoverUtils: Helper functions.
-           - ServiceCallbacks: Callback logic.
+           - ServiceHandlers: Callback logic.
         4. Register ROS2 services.
         5. Start a connection timer (attempts to connect to PMC).
         """
@@ -172,14 +171,12 @@ class MoverServiceNode(Node):
         # MoverUtils gets node logger [PMC]
         self.mover_utils = MoverUtils(self.log, self.pmc, self.config)
 
-        # ServiceCallbacks gets raw logger (it wraps it internally with [PMC:MOTION])
-        self.callbacks = ServiceCallbacks(
+        # ServiceHandlers gets raw logger (it wraps it internally with [PMC:MOTION])
+        self.callbacks = ServiceHandlers(
             self.get_logger(), self.pmc, self.mover_utils, self.config
         )
-        self._service_alias_handles = []
 
-        self.xbot_pos_publisher = self.create_publisher(XBotInfo, "xbot_info", 10)
-        self.xbot_pos_publisher_canonical = self.create_publisher(
+        self.xbot_pos_publisher = self.create_publisher(
             XBotInfo, "/promoc/mover/xbot_info", 10
         )
 
@@ -325,48 +322,22 @@ class MoverServiceNode(Node):
         - rotary_motion: Rotational motion (Rz).
         - set_velocity_acceleration: Set velocity/acceleration.
 
-        Each service is created under the canonical namespace with a legacy alias:
-        /promoc/mover/linear_motion_si (legacy: /mover_node/linear_motion_si)
+        Services are created under `/promoc/mover/<service_name>`.
         """
         services = [
-            (
-                "linear_motion_si",
-                LinearMotionSi,
-                self.callbacks.callback_linear_motion_si,
-            ),
-            ("six_dof_motion", SixDofMotion, self.callbacks.callback_six_d_motion),
-            ("activate_xbots", ActivateXbots, self.callbacks.callback_activate_xbot),
-            (
-                "levitation_xbots",
-                LevitationXbots,
-                self.callbacks.callback_levitation_xbot,
-            ),
-            ("arc_motion_si", ArcMotionSi, self.callbacks.callback_arc_motion_si),
-            ("stop_motion", StopMotion, self.callbacks.callback_stop_motion),
-            ("rotary_motion", RotaryMotion, self.callbacks.callback_rotary_motion),
-            (
-                "set_velocity_acceleration",
-                SetVelocityAcceleration,
-                self.callbacks.callback_set_velocity_acceleration,
-            ),
+            ("linear_motion_si", LinearMotionSi),
+            ("six_dof_motion", SixDofMotion),
+            ("activate_xbots", ActivateXbots),
+            ("levitation_xbots", LevitationXbots),
+            ("arc_motion_si", ArcMotionSi),
+            ("stop_motion", StopMotion),
+            ("rotary_motion", RotaryMotion),
+            ("set_velocity_acceleration", SetVelocityAcceleration),
         ]
-        for name, srv_type, callback in services:
-            self._create_service_alias_pair(name, srv_type, callback)
+        for name, srv_type in services:
+            callback = self.callbacks.get_callback(name)
+            self.create_service(srv_type, f"/promoc/mover/{name}", callback)
         self.log.info("All services are created.")
-
-    def _create_service_alias_pair(self, service_name: str, srv_type, callback):
-        legacy_path = f"{self.get_name()}/{service_name}"
-        canonical_path = f"/promoc/mover/{service_name}"
-
-        canonical_service, legacy_service = register_service_alias_pair(
-            node=self,
-            service_type=srv_type,
-            canonical_path=canonical_path,
-            legacy_path=legacy_path,
-            callback=callback,
-            warn=self.log.warning,
-        )
-        self._service_alias_handles.extend((canonical_service, legacy_service))
 
     def _start_publisher_timer(self):
         """
@@ -415,7 +386,6 @@ class MoverServiceNode(Node):
 
             msg.xbot_state = self.mover_utils.get_xbot_state_string(xbot_id)
             self.xbot_pos_publisher.publish(msg)
-            self.xbot_pos_publisher_canonical.publish(msg)
         except Exception as e:
             self.log.error(f"Position publishing error: {e}")
 

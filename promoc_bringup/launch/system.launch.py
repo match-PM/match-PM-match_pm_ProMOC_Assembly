@@ -9,11 +9,6 @@ Starts:
 Canonical launch API:
     ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
     ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
-
-Legacy API (Release N compatibility):
-    sim_mode:=true|false
-
-Note: Deprecated launch argument compatibility is intentionally kept for Release N.
 """
 
 from __future__ import annotations
@@ -43,13 +38,8 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "runtime_mode",
-                default_value="",
+                default_value="hardware",
                 description="Canonical runtime mode: hardware|sim",
-            ),
-            DeclareLaunchArgument(
-                "sim_mode",
-                default_value="",
-                description="[Deprecated] Legacy alias for simulation mode true|false",
             ),
             OpaqueFunction(function=launch_setup),
         ]
@@ -57,12 +47,8 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
-    runtime_mode = resolve_runtime_mode(
-        context,
-        logger=launch.logging.get_logger(),
-        legacy_arg_names=('sim_mode',),
-    )
-    sim_mode = runtime_mode == "sim"
+    runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
+    is_sim = runtime_mode == "sim"
     bringup_pkg = get_package_share_directory("promoc_bringup")
     logger = launch.logging.get_logger()
 
@@ -100,7 +86,9 @@ def launch_setup(context, *args, **kwargs):
 
     axes_config = {}
     for node_name, node_cfg in axes_config_raw.items():
-        if isinstance(node_cfg, dict) and isinstance(node_cfg.get("ros__parameters"), dict):
+        if isinstance(node_cfg, dict) and isinstance(
+            node_cfg.get("ros__parameters"), dict
+        ):
             axes_config[node_name] = node_cfg
 
     if not axes_config:
@@ -110,7 +98,7 @@ def launch_setup(context, *args, **kwargs):
         )
         return actions
 
-    if sim_mode:
+    if is_sim:
         logger.info("Linear axes mode: SIMULATION")
         for node_name in axes_config.keys():
             actions.append(_create_axis_node(node_name, axes_config_path, sim=True))

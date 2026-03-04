@@ -49,12 +49,6 @@ class CameraSimulator(Node):
             self.position_callback,
             10,
         )
-        self.subscription_legacy = self.create_subscription(
-            LinearAxisInfo,
-            "/promoc_assembly/lts300_x_axis/position",
-            self.position_callback_legacy,
-            10,
-        )
 
         # Timer for image publication (10 Hz)
         self.timer = self.create_timer(0.1, self.timer_callback)
@@ -64,18 +58,6 @@ class CameraSimulator(Node):
     def position_callback(self, msg):
         """Updates the focus position in the driver."""
         self.driver.set_focus_position(msg.axis_position)
-
-    def position_callback_legacy(self, msg):
-        """Release N compatibility for legacy linear-axis topic."""
-        if not hasattr(self, "_legacy_axis_topic_warned"):
-            self._legacy_axis_topic_warned = False
-        if not self._legacy_axis_topic_warned:
-            self.get_logger().warning(
-                "Deprecated topic '/promoc_assembly/lts300_x_axis/position' received. "
-                "Use '/promoc/linear_axis/lts300_x_axis/position' instead."
-            )
-            self._legacy_axis_topic_warned = True
-        self.position_callback(msg)
 
     def timer_callback(self):
         """Gets an image from the driver and publishes it."""

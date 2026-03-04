@@ -55,7 +55,7 @@ Use this direction to avoid spaghetti:
 make format
 make lint
 make test-unit
-make release-n-check
+make release-n1-check
 ```
 
 ## Common Beginner Mistakes
@@ -64,3 +64,4 @@ make release-n-check
 - Creating new legacy paths instead of canonical `/promoc/...` paths.
 - Skipping interface contract updates (`srv`/`msg`) when adding new services.
 - Duplicating helper logic that belongs in `promoc_core`.
+

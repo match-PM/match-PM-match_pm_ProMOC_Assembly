@@ -16,7 +16,7 @@ LINT_DIRS := \
 	promoc_bringup/scripts \
 	promoc_bringup/test
 
-.PHONY: all build clean sim hardware hw camera-hw doctor-hw test lint format test-unit release-n-check smoke-sim smoke-hw check install-dev help
+.PHONY: all build clean sim hardware hw camera-hw doctor-hw test lint format test-unit release-n1-check release-n-check smoke-sim smoke-hw check install-dev help
 
 all: build
 
@@ -33,10 +33,11 @@ help:
 	@echo "  make test      - Run tests"
 	@echo "  make lint      - Lint/type/syntax checks for Python"
 	@echo "  make test-unit - Run hardware-independent unit tests"
-	@echo "  make release-n-check - Run automated Release-N acceptance checks"
+	@echo "  make release-n1-check - Run automated Release N+1 acceptance checks"
+	@echo "  make release-n-check  - Alias for release-n1-check"
 	@echo "  make smoke-sim - Print simulation smoke commands"
 	@echo "  make smoke-hw  - Print hardware smoke commands"
-	@echo "  make check     - Run lint + test-unit + release-n-check"
+	@echo "  make check     - Run lint + test-unit + release-n1-check"
 
 build:
 	colcon build --symlink-install
@@ -87,16 +88,19 @@ test-unit:
 		camera_nodes/test/test_handlers_exposure.py \
 		camera_nodes/test/test_handlers_mtf.py \
 		camera_nodes/test/test_handlers_autofocus.py \
-		camera_nodes/test/test_service_namespace_migration.py \
-		linear_axis_nodes/test/test_linear_axis_namespace_migration.py \
-		planar_motor_nodes/test/test_mover_namespace_migration.py \
+		camera_nodes/test/test_autofocus_refactor_contract.py \
+		camera_nodes/test/test_camera_namespace_contract.py \
+		linear_axis_nodes/test/test_linear_axis_namespace_contract.py \
+		planar_motor_nodes/test/test_mover_namespace_contract.py \
 		promoc_bringup/test/test_system_launch.py \
 		promoc_bringup/test/test_launch_runtime_mode.py \
 		promoc_bringup/test/test_release_n_check.py \
 		camera_nodes/test/test_autofocus_benchmark.py -q
 
-release-n-check:
+release-n1-check:
 	$(DEV_PYTHON) promoc_bringup/scripts/release_n_check.py
+
+release-n-check: release-n1-check
 
 smoke-sim:
 	$(DEV_PYTHON) promoc_bringup/scripts/release_n_smoke.py --mode sim
@@ -104,4 +108,4 @@ smoke-sim:
 smoke-hw:
 	$(DEV_PYTHON) promoc_bringup/scripts/release_n_smoke.py --mode hardware
 
-check: lint test-unit release-n-check
+check: lint test-unit release-n1-check

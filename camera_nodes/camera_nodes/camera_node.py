@@ -82,7 +82,6 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
-from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 
 # Local imports
@@ -90,7 +89,6 @@ from .helpers.image_processing import CameraImageProcessing
 from .config import (
     declare_camera_parameters,
     load_camera_runtime_config,
-    warn_on_deprecated_parameter_overrides,
 )
 from .services import CameraServiceHandlers
 
@@ -98,7 +96,6 @@ from .services import CameraServiceHandlers
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
 
 from promoc_core.logging import TaggedLogger, LogTags
-from promoc_core.service_alias import register_service_alias_pair
 
 
 class CameraNode(Node):
@@ -142,7 +139,6 @@ class CameraNode(Node):
         # Phase 1: Load parameters via centralized declaration/typed loader
         declare_camera_parameters(self)
         self.runtime_config = load_camera_runtime_config(self)
-        warn_on_deprecated_parameter_overrides(self)
         self.use_simulator = self.runtime_config.core.use_simulator
 
         self.log.info(
@@ -185,18 +181,6 @@ class CameraNode(Node):
             self.axis_position_callback,
             10,
         )
-        self.axis_pos_sub_legacy_ns = self.create_subscription(
-            LinearAxisInfo,
-            f"/promoc_assembly/{axis_name}/position",
-            self.axis_position_callback_legacy_ns,
-            10,
-        )
-        self.axis_pos_sub_legacy_float = self.create_subscription(
-            Float64,
-            f"/{axis_name}/position",
-            self.axis_position_callback_legacy_float,
-            10,
-        )
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
@@ -216,72 +200,44 @@ class CameraNode(Node):
 
         self.cb_group = ReentrantCallbackGroup()
 
-        self.select_roi_service, self.select_roi_service_legacy = (
-            register_service_alias_pair(
-                node=self,
-                service_type=Trigger,
-                canonical_path="/promoc/camera/select_roi",
-                legacy_path="/promoc/camera_node/select_roi",
-                callback=self.service_handlers.mtf.select_roi_callback,
-                warn=self.log.warning,
-                callback_group=self.cb_group,
-            )
-        )
-        self.autofocus_service, self.autofocus_service_legacy = (
-            register_service_alias_pair(
-                node=self,
-                service_type=AutoFocus,
-                canonical_path="/promoc/camera/autofocus",
-                legacy_path="/promoc/camera_node/autofocus",
-                callback=self.service_handlers.autofocus.autofocus_callback,
-                warn=self.log.warning,
-                callback_group=self.cb_group,
-            )
-        )
-        self.autofocus_comparison_service, self.autofocus_comparison_service_legacy = (
-            register_service_alias_pair(
-                node=self,
-                service_type=AutoFocus,
-                canonical_path="/promoc/camera/autofocus_comparison",
-                legacy_path="/promoc/camera_node/autofocus_comparison",
-                callback=self.service_handlers.autofocus.autofocus_comparison_callback,
-                warn=self.log.warning,
-                callback_group=self.cb_group,
-            )
-        )
-        self.mtf_service, self.mtf_service_legacy = register_service_alias_pair(
-            node=self,
-            service_type=MeasureMTF,
-            canonical_path="/promoc/camera/measure_mtf",
-            legacy_path="/promoc/camera_node/measure_mtf",
-            callback=self.service_handlers.mtf.measure_mtf_callback,
-            warn=self.log.warning,
+        self.select_roi_service = self.create_service(
+            Trigger,
+            "/promoc/camera/select_roi",
+            self.service_handlers.mtf.select_roi_callback,
             callback_group=self.cb_group,
         )
-        self.detect_rois_service, self.detect_rois_service_legacy = (
-            register_service_alias_pair(
-                node=self,
-                service_type=DetectRois,
-                canonical_path="/promoc/camera/detect_rois",
-                legacy_path="/promoc/camera_node/detect_rois",
-                callback=self.service_handlers.mtf.detect_rois_callback,
-                warn=self.log.warning,
-                callback_group=self.cb_group,
-            )
+        self.autofocus_service = self.create_service(
+            AutoFocus,
+            "/promoc/camera/autofocus",
+            self.service_handlers.autofocus.autofocus_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_comparison_service = self.create_service(
+            AutoFocus,
+            "/promoc/camera/autofocus_comparison",
+            self.service_handlers.autofocus.autofocus_comparison_callback,
+            callback_group=self.cb_group,
+        )
+        self.mtf_service = self.create_service(
+            MeasureMTF,
+            "/promoc/camera/measure_mtf",
+            self.service_handlers.mtf.measure_mtf_callback,
+            callback_group=self.cb_group,
+        )
+        self.detect_rois_service = self.create_service(
+            DetectRois,
+            "/promoc/camera/detect_rois",
+            self.service_handlers.mtf.detect_rois_callback,
+            callback_group=self.cb_group,
         )
 
         # Exposure service only for real hardware
         if not self.use_simulator and self.camera_driver.is_connected:
-            self.set_exposure_service, self.set_exposure_service_legacy = (
-                register_service_alias_pair(
-                    node=self,
-                    service_type=SetExposure,
-                    canonical_path="/promoc/camera/set_exposure",
-                    legacy_path="/promoc/camera_node/set_exposure",
-                    callback=self.service_handlers.exposure.manual_set_exposure_callback,
-                    warn=self.log.warning,
-                    callback_group=self.cb_group,
-                )
+            self.set_exposure_service = self.create_service(
+                SetExposure,
+                "/promoc/camera/set_exposure",
+                self.service_handlers.exposure.manual_set_exposure_callback,
+                callback_group=self.cb_group,
             )
 
         self.log.info("Camera Node initialized successfully")
@@ -357,40 +313,11 @@ class CameraNode(Node):
                 self.log.warning(f"Failed to publish debug image: {e}")
 
     def axis_position_callback(self, msg):
-        """Receive and cache axis position from canonical/legacy topic types."""
+        """Receive and cache axis position from canonical LinearAxisInfo topic."""
         if hasattr(msg, "axis_position"):
             self.current_axis_position = msg.axis_position
             return
-        if hasattr(msg, "data"):
-            self.current_axis_position = float(msg.data)
-            return
         self.log.warning(f"Unknown axis position message type: {type(msg)}")
-
-    def axis_position_callback_legacy_ns(self, msg: LinearAxisInfo):
-        """Release N compatibility for legacy namespaced axis topic."""
-        if not hasattr(self, "_legacy_axis_topic_ns_warned"):
-            self._legacy_axis_topic_ns_warned = False
-        if not self._legacy_axis_topic_ns_warned:
-            axis_name = self.runtime_config.core.x_axis_node_name
-            self.log.warning(
-                f"Deprecated topic '/promoc_assembly/{axis_name}/position' received. "
-                f"Use '/promoc/linear_axis/{axis_name}/position' instead."
-            )
-            self._legacy_axis_topic_ns_warned = True
-        self.axis_position_callback(msg)
-
-    def axis_position_callback_legacy_float(self, msg: Float64):
-        """Release N compatibility for very old Float64 axis topic."""
-        if not hasattr(self, "_legacy_axis_topic_float_warned"):
-            self._legacy_axis_topic_float_warned = False
-        if not self._legacy_axis_topic_float_warned:
-            axis_name = self.runtime_config.core.x_axis_node_name
-            self.log.warning(
-                f"Deprecated topic '/{axis_name}/position' received. "
-                f"Use '/promoc/linear_axis/{axis_name}/position' instead."
-            )
-            self._legacy_axis_topic_float_warned = True
-        self.axis_position_callback(msg)
 
     def camera_info_callback(self, msg: CameraInfo):
         """Receive and cache camera calibration info."""

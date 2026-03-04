@@ -3,7 +3,7 @@
 Run automated acceptance:
 
 ```bash
-make release-n-check
+make release-n1-check
 ```
 
 Smoke command sets:
@@ -37,7 +37,7 @@ make smoke-hw
 - [ ] `pip install -r requirements-dev.txt` succeeds
 - [ ] `make lint` succeeds
 - [ ] `make test-unit` succeeds
-- [ ] `make release-n-check` succeeds
+- [ ] `make release-n1-check` succeeds
 - [ ] `make check` succeeds
 - [ ] CI runs matrix for `ROS_DISTRO=humble` and `ROS_DISTRO=jazzy`
 
@@ -46,3 +46,4 @@ make smoke-hw
 - [ ] DE and EN learning-path docs exist and are current
 - [ ] Camera callback guides use canonical service names
 - [ ] `MIGRATION_NOTES.md` is complete and accurate
+

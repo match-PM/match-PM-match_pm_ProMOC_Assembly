@@ -45,11 +45,12 @@ DeviceDisconnectedError = ProMocConnectionError
 
 
 # Type variable for generic functions
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class ErrorSeverity(Enum):
     """Severity levels for errors/warnings."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -72,6 +73,7 @@ class ServiceResponse:
         execution_time: The duration of the operation in seconds.
         details: Additional, response-specific information.
     """
+
     success: bool
     error_code: int = 0
     status_message: str = ""
@@ -85,8 +87,8 @@ class ServiceResponse:
         message: str = "Operation completed successfully",
         execution_time: float = 0.0,
         warnings: Optional[List[str]] = None,
-        **details
-    ) -> 'ServiceResponse':
+        **details,
+    ) -> "ServiceResponse":
         """Creates a successful response."""
         return cls(
             success=True,
@@ -94,16 +96,13 @@ class ServiceResponse:
             status_message=message,
             warnings=warnings or [],
             execution_time=execution_time,
-            details=details
+            details=details,
         )
 
     @classmethod
     def error_response(
-        cls,
-        error: Exception,
-        execution_time: float = 0.0,
-        **details
-    ) -> 'ServiceResponse':
+        cls, error: Exception, execution_time: float = 0.0, **details
+    ) -> "ServiceResponse":
         """Creates an error response from an exception.
 
         Args:
@@ -120,7 +119,7 @@ class ServiceResponse:
                 error_code=error.error_code,
                 status_message=str(error),
                 execution_time=execution_time,
-                details={**error.details, **details}
+                details={**error.details, **details},
             )
         else:
             return cls(
@@ -128,7 +127,7 @@ class ServiceResponse:
                 error_code=9999,  # Unknown error
                 status_message=f"{type(error).__name__}: {str(error)}",
                 execution_time=execution_time,
-                details=details
+                details=details,
             )
 
     def to_ros_response(self, response_obj: Any) -> Any:
@@ -142,13 +141,13 @@ class ServiceResponse:
             The populated response object.
         """
         response_obj.success = self.success
-        if hasattr(response_obj, 'error_code'):
+        if hasattr(response_obj, "error_code"):
             response_obj.error_code = self.error_code
-        if hasattr(response_obj, 'status_message'):
+        if hasattr(response_obj, "status_message"):
             response_obj.status_message = self.status_message
-        if hasattr(response_obj, 'execution_time'):
+        if hasattr(response_obj, "execution_time"):
             response_obj.execution_time = self.execution_time
-        if hasattr(response_obj, 'warnings'):
+        if hasattr(response_obj, "warnings"):
             response_obj.warnings = self.warnings
 
         # Populate additional fields from details
@@ -172,6 +171,7 @@ class RetryConfig:
         retriable_exceptions: A tuple of exception types for which a retry
             is sensible.
     """
+
     max_attempts: int = 3
     delay: float = 1.0
     backoff_factor: float = 2.0
@@ -223,18 +223,17 @@ def retry_on_error(config: Optional[RetryConfig] = None):
 
                     if attempt < config.max_attempts - 1:
                         # Log retry attempt if a logger is available
-                        if args and hasattr(args[0], 'logger'):
+                        if args and hasattr(args[0], "logger"):
                             args[0].logger.warning(
                                 f"Attempt {attempt + 1}/{config.max_attempts} failed: {e}. "
                                 f"Retrying in {delay:.1f}s..."
                             )
 
                         time.sleep(delay)
-                        delay = min(delay * config.backoff_factor,
-                                    config.max_delay)
+                        delay = min(delay * config.backoff_factor, config.max_delay)
                     else:
                         # Last attempt failed
-                        if args and hasattr(args[0], 'logger'):
+                        if args and hasattr(args[0], "logger"):
                             args[0].logger.error(
                                 f"All {config.max_attempts} attempts failed. "
                                 f"Last error: {e}"
@@ -248,6 +247,7 @@ def retry_on_error(config: Optional[RetryConfig] = None):
             raise last_exception
 
         return wrapper
+
     return decorator
 
 
@@ -311,11 +311,10 @@ class HomingRecoveryStrategy(ErrorRecoveryStrategy):
             True if homing was successful.
         """
         try:
-            driver = context.get('driver')
-            if driver and hasattr(driver, 'home'):
+            driver = context.get("driver")
+            if driver and hasattr(driver, "home"):
                 if self.logger:
-                    self.logger.info(
-                        f"Attempting recovery via homing after: {error}")
+                    self.logger.info(f"Attempting recovery via homing after: {error}")
 
                 success = driver.home()
 
@@ -339,10 +338,13 @@ class ReconnectionRecoveryStrategy(ErrorRecoveryStrategy):
     """
 
     def can_recover(self, error: Exception) -> bool:
-        return isinstance(error, (
-            DeviceDisconnectedError,
-            ProMocConnectionError,
-        ))
+        return isinstance(
+            error,
+            (
+                DeviceDisconnectedError,
+                ProMocConnectionError,
+            ),
+        )
 
     def recover(self, error: Exception, context: dict) -> bool:
         """
@@ -357,13 +359,13 @@ class ReconnectionRecoveryStrategy(ErrorRecoveryStrategy):
             True if reconnection was successful.
         """
         try:
-            driver = context.get('driver')
-            if driver and hasattr(driver, 'connect'):
+            driver = context.get("driver")
+            if driver and hasattr(driver, "connect"):
                 if self.logger:
                     self.logger.info(f"Attempting reconnection after: {error}")
 
                 # Get connection parameters from context
-                port = context.get('port')
+                port = context.get("port")
 
                 success = driver.connect(port=port)
 
@@ -419,14 +421,14 @@ class ErrorRecoveryManager:
                     return True
 
         if self.logger:
-            self.logger.warning(
-                f"No recovery strategy succeeded for error: {error}"
-            )
+            self.logger.warning(f"No recovery strategy succeeded for error: {error}")
 
         return False
 
 
-def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryManager] = None):
+def handle_service_errors(
+    logger=None, recovery_manager: Optional[ErrorRecoveryManager] = None
+):
     """
     A decorator for service callbacks with automatic error handling.
 
@@ -443,13 +445,14 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
     Returns:
         A decorated function with error handling.
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Auto-detect logger from self (args[0]) if not provided
             nonlocal logger
             current_logger = logger
-            if current_logger is None and args and hasattr(args[0], 'logger'):
+            if current_logger is None and args and hasattr(args[0], "logger"):
                 current_logger = args[0].logger
 
             start_time = time.time()
@@ -459,7 +462,7 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
                 execution_time = time.time() - start_time
 
                 # Add execution time if the response has the field
-                if hasattr(result, 'execution_time'):
+                if hasattr(result, "execution_time"):
                     result.execution_time = execution_time
 
                 return result
@@ -472,25 +475,27 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
 
                 # Attempt recovery if a manager is available
                 if recovery_manager:
-                    context = {'args': args, 'kwargs': kwargs}
+                    context = {"args": args, "kwargs": kwargs}
                     if recovery_manager.attempt_recovery(e, context):
                         if current_logger:
                             current_logger.info(
-                                "Recovery succeeded, retrying operation")
+                                "Recovery succeeded, retrying operation"
+                            )
                         # Retry the operation after successful recovery
                         try:
                             return func(*args, **kwargs)
                         except Exception as retry_error:
                             if current_logger:
                                 current_logger.error(
-                                    f"Retry after recovery failed: {retry_error}")
+                                    f"Retry after recovery failed: {retry_error}"
+                                )
 
                 # Create an error response
                 response = ServiceResponse.error_response(e, execution_time)
 
                 # If we have a ROS response object in args, populate it
                 for arg in args:
-                    if hasattr(arg, 'success'):
+                    if hasattr(arg, "success"):
                         return response.to_ros_response(arg)
 
                 # Otherwise, return the ServiceResponse
@@ -507,10 +512,11 @@ def handle_service_errors(logger=None, recovery_manager: Optional[ErrorRecoveryM
                 response = ServiceResponse.error_response(e, execution_time)
 
                 for arg in args:
-                    if hasattr(arg, 'success'):
+                    if hasattr(arg, "success"):
                         return response.to_ros_response(arg)
 
                 return response
 
         return wrapper
+
     return decorator

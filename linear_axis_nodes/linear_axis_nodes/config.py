@@ -9,7 +9,6 @@ class LTS300NodeConfig:
     serial_port: str
     serial_number: str
     collision_threshold: float
-    namespace: str
     max_position: float
     min_position: float
     max_single_move: float

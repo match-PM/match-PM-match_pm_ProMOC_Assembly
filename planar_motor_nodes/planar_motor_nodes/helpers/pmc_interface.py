@@ -33,13 +33,13 @@ Usage:
 ======
     # Normal (tries real hardware first):
     pmc = PmcInterface(logger)
-    
+
     # Force simulation:
     pmc = PmcInterface(logger, use_mock=True)
-    
+
     # Connect:
     pmc.connect("192.168.10.100")
-    
+
     # Execute motion:
     pmc.bot.linear_motion_si(xbot_id=0, x=0.1, y=0.05)
 """
@@ -88,7 +88,7 @@ class PmcInterface:
         self.force_mock = use_mock
         self.sys_cmd = None
         self.pmc_types = None
-        self.status = {'source': 'uninitialized', 'is_mock': True}
+        self.status = {"source": "uninitialized", "is_mock": True}
         self._load_pmclib()
 
     def _load_pmclib(self) -> None:
@@ -107,8 +107,7 @@ class PmcInterface:
         # Step 0: Force mock if requested
         if self.force_mock:
             self._load_mock_lib()
-            self.logger.warning(
-                "Forcing MOCK PMCLib as per launch configuration.")
+            self.logger.warning("Forcing MOCK PMCLib as per launch configuration.")
             return
 
         # Step 1: Local developer version
@@ -118,14 +117,19 @@ class PmcInterface:
                 system_commands,
                 pmc_types,
             )
-            self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
-            self.status = {'source': 'local_driver', 'is_mock': False}
-            self.logger.info(
-                "Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
+
+            self.bot, self.sys_cmd, self.pmc_types = (
+                xbot_commands,
+                system_commands,
+                pmc_types,
+            )
+            self.status = {"source": "local_driver", "is_mock": False}
+            self.logger.info("Loaded local PMCLib driver from 'drivers/match_pm_xBot'.")
             return
         except ImportError:
             self.logger.debug(
-                "Local PMCLib driver not found, trying system-installed version.")
+                "Local PMCLib driver not found, trying system-installed version."
+            )
 
         # Step 2: System-installed version
         if self._load_installed_lib():
@@ -133,7 +137,8 @@ class PmcInterface:
 
         # Step 3: Fallback to mock
         self.logger.warning(
-            "Real PMCLib not found. Falling back to MOCK implementation.")
+            "Real PMCLib not found. Falling back to MOCK implementation."
+        )
         self._load_mock_lib()
 
     def _load_installed_lib(self) -> bool:
@@ -145,8 +150,13 @@ class PmcInterface:
         """
         try:
             from pmclib import xbot_commands, system_commands, pmc_types
-            self.bot, self.sys_cmd, self.pmc_types = xbot_commands, system_commands, pmc_types
-            self.status = {'source': 'installed_pmclib', 'is_mock': False}
+
+            self.bot, self.sys_cmd, self.pmc_types = (
+                xbot_commands,
+                system_commands,
+                pmc_types,
+            )
+            self.status = {"source": "installed_pmclib", "is_mock": False}
             self.logger.info("Loaded system-installed PMCLib.")
             return True
         except ImportError:
@@ -159,13 +169,17 @@ class PmcInterface:
         The mock library simulates all movements and returns realistic positions.
         """
         from ..drivers import mock_pmclib
+
         # Create a specific logger for the mock library
         mock_lib_logger = TaggedLogger(self.logger._logger, LogTags.MOCK)
         mock_pmclib.set_logger(mock_lib_logger)
-        
-        self.bot, self.sys_cmd, self.pmc_types = \
-            mock_pmclib.xbot_commands, mock_pmclib.system_commands, mock_pmclib.pmc_types
-        self.status = {'source': 'mock', 'is_mock': True}
+
+        self.bot, self.sys_cmd, self.pmc_types = (
+            mock_pmclib.xbot_commands,
+            mock_pmclib.system_commands,
+            mock_pmclib.pmc_types,
+        )
+        self.status = {"source": "mock", "is_mock": True}
         self.logger.info("Loaded MOCK PMCLib for simulation.")
 
     def connect(self, ip_address: str) -> bool:
@@ -185,6 +199,6 @@ class PmcInterface:
         if not success:
             raise ConnectionError(
                 message=f"Failed to connect to PMC at {ip_address}",
-                details={'ip_address': ip_address}
+                details={"ip_address": ip_address},
             )
         return True

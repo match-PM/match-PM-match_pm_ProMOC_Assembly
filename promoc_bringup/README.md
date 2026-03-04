@@ -40,17 +40,14 @@ Canonical launch argument:
 
 - `runtime_mode:=hardware|sim`
 
-Release N compatibility:
-
-- legacy launch args `sim_mode` and `use_simulator` are still accepted with warnings.
-
 ## Where To Edit
 
 | Goal | Start Here | Then Check |
 |---|---|---|
 | Change which nodes start in full-system launch | `promoc_bringup/launch/system.launch.py` | other launch files in `promoc_bringup/launch/` |
-| Change runtime argument handling or compatibility rules | `promoc_bringup/promoc_bringup/launch_utils.py` (`resolve_runtime_mode`) | launch files that declare runtime args |
-| Change user config schema mapping | `promoc_bringup/promoc_bringup/launch_utils.py` (`_normalize_user_config`, `load_user_config`) | `promoc_bringup/config/README.md`, `promoc_bringup/config/user_config.v2.example.yaml` |
+| Change runtime argument handling | `promoc_bringup/promoc_bringup/launch_utils.py` (`resolve_runtime_mode`) | launch files that declare runtime args |
+| Change camera launch parameter mapping | `promoc_bringup/promoc_bringup/camera_launch_builder.py` | `promoc_bringup/launch/camera.launch.py` |
+| Change user config loading/defaults | `promoc_bringup/promoc_bringup/launch_utils.py` (`load_user_config`) | `promoc_bringup/config/README.md`, `promoc_bringup/config/user_config.v2.example.yaml` |
 | Change default node parameters | `promoc_bringup/config/*.yaml` | package config dataclasses in runtime node packages |
 
 ## Verify Changes
@@ -58,7 +55,7 @@ Release N compatibility:
 ```bash
 make lint
 make test-unit
-make release-n-check
+make release-n1-check
 ```
 
 ## Related Docs
@@ -67,3 +64,4 @@ make release-n-check
 - Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
 - Architecture boundaries: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
 - Bringup config docs: [`promoc_bringup/config/README.md`](config/README.md)
+

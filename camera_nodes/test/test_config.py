@@ -14,7 +14,6 @@ if path_str not in sys.path:
 from camera_nodes.config import (  # noqa: E402
     declare_camera_parameters,
     load_camera_runtime_config,
-    warn_on_deprecated_parameter_overrides,
 )
 
 
@@ -61,11 +60,7 @@ def test_declare_and_load_runtime_config():
     assert cfg.mtf.profile == "debug"
 
 
-def test_deprecated_override_warning():
+def test_deprecated_parameter_removed():
     node = _Node()
     declare_camera_parameters(node)
-    node._params["mtf_csv_path"] = "/tmp/legacy.csv"
-    warn_on_deprecated_parameter_overrides(node)
-
-    assert node.warnings
-    assert "mtf_csv_path" in node.warnings[0]
+    assert "mtf_csv_path" not in node._params

@@ -15,8 +15,7 @@ def test_system_launch_defaults_to_hardware_mode():
     assert "DeclareLaunchArgument(" in content
     assert '"runtime_mode"' in content
     assert "hardware" in content
-    assert "'sim_mode'" in content
-    assert "Deprecated" in content
+    assert '"sim_mode"' not in content
 
 
 def test_optical_launch_has_no_verification_node():

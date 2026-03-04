@@ -14,7 +14,6 @@ if str(CAMERA_PKG) not in sys.path:
 
 from camera_nodes.config import (  # noqa: E402
     ACTIVE_PARAM_VALUES,
-    DEPRECATED_PARAM_VALUES,
 )
 
 
@@ -63,10 +62,6 @@ def main() -> int:
         "## Advanced Tuning",
         "",
         render_table(advanced),
-        "",
-        "## Deprecated (Release N compatibility)",
-        "",
-        render_table(list(DEPRECATED_PARAM_VALUES)),
         "",
     ]
 

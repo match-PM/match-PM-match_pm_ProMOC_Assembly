@@ -44,7 +44,7 @@ Interface groups:
 
 ```bash
 colcon build --packages-select promoc_assembly_interfaces
-make release-n-check
+make release-n1-check
 ```
 
 ## Related Docs

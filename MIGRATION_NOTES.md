@@ -1,163 +1,88 @@
-# Migration Notes (Release N)
+# Migration Notes (Release N+1)
 
-Release N introduces canonical runtime, namespace, and config naming while keeping legacy aliases for one transition release.
+Release N+1 removes all temporary compatibility aliases introduced in Release N.
+Only canonical launch arguments, service namespaces, and config keys are supported.
 
 ## Launch Arguments
 
 Canonical launch argument:
 - `runtime_mode:=hardware|sim`
 
-Legacy launch arguments remain supported in Release N and emit deprecation warnings.
-
-| Legacy argument | Release N behavior | Canonical replacement |
-|---|---|---|
-| `sim_mode:=true|false` | supported, logs warning | `runtime_mode:=sim|hardware` |
-| `use_simulator:=true|false` | supported where applicable, logs warning | `runtime_mode:=sim|hardware` |
+Removed in N+1:
+- `sim_mode`
+- `use_simulator` (as launch argument)
 
 ## Service Namespaces
 
-This section covers service paths and selected topic namespace changes.
+Only canonical service/topic paths are supported.
+Legacy aliases are removed and now return "not found".
 
 ### Camera
 
-| Legacy path | Canonical path |
-|---|---|
-| `/promoc/camera_node/select_roi` | `/promoc/camera/select_roi` |
-| `/promoc/camera_node/autofocus` | `/promoc/camera/autofocus` |
-| `/promoc/camera_node/autofocus_comparison` | `/promoc/camera/autofocus_comparison` |
-| `/promoc/camera_node/measure_mtf` | `/promoc/camera/measure_mtf` |
-| `/promoc/camera_node/detect_rois` | `/promoc/camera/detect_rois` |
-| `/promoc/camera_node/set_exposure` | `/promoc/camera/set_exposure` |
+- `/promoc/camera/select_roi`
+- `/promoc/camera/autofocus`
+- `/promoc/camera/autofocus_comparison`
+- `/promoc/camera/measure_mtf`
+- `/promoc/camera/detect_rois`
+- `/promoc/camera/set_exposure`
 
-### Linear axis
+### Linear Axis
 
-| Legacy path | Canonical path |
-|---|---|
-| `/<axis_name>/move_absolute` | `/promoc/linear_axis/<axis_name>/move_absolute` |
-| `/<axis_name>/move_relative` | `/promoc/linear_axis/<axis_name>/move_relative` |
-| `/<axis_name>/home` | `/promoc/linear_axis/<axis_name>/home` |
-| `/<axis_name>/get_position` | `/promoc/linear_axis/<axis_name>/get_position` |
-| `/<axis_name>/set_velocity_parameters` | `/promoc/linear_axis/<axis_name>/set_velocity_parameters` |
-| `/<axis_name>/get_velocity_parameters` | `/promoc/linear_axis/<axis_name>/get_velocity_parameters` |
-| `/{namespace}/<axis_name>/position` | `/promoc/linear_axis/<axis_name>/position` |
+- `/promoc/linear_axis/<axis_name>/move_absolute`
+- `/promoc/linear_axis/<axis_name>/move_relative`
+- `/promoc/linear_axis/<axis_name>/home`
+- `/promoc/linear_axis/<axis_name>/get_position`
+- `/promoc/linear_axis/<axis_name>/set_velocity_parameters`
+- `/promoc/linear_axis/<axis_name>/get_velocity_parameters`
+- `/promoc/linear_axis/<axis_name>/position`
 
-### Planar motor
+### Planar Motor
 
-| Legacy path | Canonical path |
-|---|---|
-| `/mover_node/activate_xbots` | `/promoc/mover/activate_xbots` |
-| `/mover_node/levitation_xbots` | `/promoc/mover/levitation_xbots` |
-| `/mover_node/linear_motion_si` | `/promoc/mover/linear_motion_si` |
-| `/mover_node/six_dof_motion` | `/promoc/mover/six_dof_motion` |
-| `/mover_node/arc_motion_si` | `/promoc/mover/arc_motion_si` |
-| `/mover_node/rotary_motion` | `/promoc/mover/rotary_motion` |
-| `/mover_node/stop_motion` | `/promoc/mover/stop_motion` |
-| `/mover_node/set_velocity_acceleration` | `/promoc/mover/set_velocity_acceleration` |
-| `xbot_info` | `/promoc/mover/xbot_info` |
+- `/promoc/mover/activate_xbots`
+- `/promoc/mover/levitation_xbots`
+- `/promoc/mover/linear_motion_si`
+- `/promoc/mover/six_dof_motion`
+- `/promoc/mover/arc_motion_si`
+- `/promoc/mover/rotary_motion`
+- `/promoc/mover/stop_motion`
+- `/promoc/mover/set_velocity_acceleration`
+- `/promoc/mover/xbot_info`
 
 ## Config Schema
 
 Canonical user config schema:
 - `promoc_bringup/config/user_config.v2.example.yaml`
 
-### Key mapping (old -> new)
-
-| Legacy key | Release N behavior | Canonical key |
-|---|---|---|
-| `user.name` | accepted, logs warning | `measurement.operator` |
-| `user.measurement_base_path` | accepted, logs warning | `measurement.base_path` |
-| `camera.mtf_csv_path` | accepted but ignored, logs warning | `mtf.debug_export_dir` |
-
 Canonical keys:
 - `runtime.mode`
 - `measurement.operator`
 - `measurement.base_path`
+- `camera.*`
+- `autofocus.*`
+- `mtf.*`
+- `measurement_conditions.*`
 
-## Camera Parameter Deprecations
+Removed compatibility keys in N+1:
+- `user.name`
+- `user.measurement_base_path`
+- `camera.mtf_csv_path`
 
-Deprecated parameters are still declared in Release N and should be migrated:
+## Camera Parameter Contract
 
-| Deprecated parameter | Replacement |
-|---|---|
-| `mtf_csv_path` | `mtf.debug_export_dir` |
-| `autofocus.fly_over.step_size_fine` | `autofocus.min_step_mm` |
-| `autofocus.fly_over.coarse_scan_range_mm` | autofocus request range |
-| `autofocus.fly_over.fine_scan_range_mm` | `autofocus.refinement_shrink_factor` |
-| `autofocus.fly_over.coarse_drop_ratio` | `autofocus.fly_over.peak_window_ratio` |
-| `autofocus.fly_over.fine_drop_ratio` | `autofocus.fly_over.peak_window_ratio` |
-| `autofocus.fly_over.settle_coarse_s` | `autofocus.fly_over.settle_fine_s` |
+Deprecated camera parameter compatibility declarations/mappings were removed.
+`camera_nodes/camera_nodes/config.py` now declares canonical parameters only.
 
-## Python Module Structure (Breaking Change)
+## Internal Module Structure
 
-As of **March 4, 2026**, camera internals were refactored to feature-oriented packages and legacy wrapper modules were removed.
+The service/helper package restructuring introduced in Release N remains in place:
 
-### Canonical module roots
+- `camera_nodes.services.*` and `camera_nodes.helpers.*`
+- `linear_axis_nodes.services.*` and `linear_axis_nodes.helpers.*`
+- `planar_motor_nodes.services.*` and `planar_motor_nodes.helpers.*`
 
-- `camera_nodes.services.*`
-- `camera_nodes.helpers.*`
+## Release N+1 Verification
 
-### Removed legacy module roots
-
-- `camera_nodes.handlers.*`
-- `camera_nodes.support.*`
-- `camera_nodes.services` (single-file module `services.py`)
-
-### Import mapping examples
-
-| Old import | New import |
-|---|---|
-| `from camera_nodes.handlers.autofocus_handler import AutofocusHandler` | `from camera_nodes.services.autofocus_handler import AutofocusHandler` |
-| `from camera_nodes.handlers.mtf_handler import MTFHandler` | `from camera_nodes.services.mtf_handler import MTFHandler` |
-| `from camera_nodes.handlers.exposure_handler import ExposureHandler` | `from camera_nodes.services.exposure_handler import ExposureHandler` |
-| `from camera_nodes.handlers.base import CallbackBase` | `from camera_nodes.services.base import CallbackBase` |
-| `from camera_nodes.handlers.fly_over import FlyOverDetector` | `from camera_nodes.helpers.fly_over import FlyOverDetector` |
-| `from camera_nodes.support.parameter_access import ParameterAccessor` | `from camera_nodes.helpers.parameter_access import ParameterAccessor` |
-
-## Linear Axis Module Structure (Breaking Change)
-
-As of **March 4, 2026**, linear-axis internals were split into `services/` and `helpers/`.
-
-### Canonical module roots
-
-- `linear_axis_nodes.services.*`
-- `linear_axis_nodes.helpers.*`
-
-### Removed legacy module files
-
-- `linear_axis_nodes.lts300_service_callbacks`
-- `linear_axis_nodes.lts300_interface`
-
-### Import mapping examples
-
-| Old import | New import |
-|---|---|
-| `from linear_axis_nodes.lts300_service_callbacks import ServiceCallbacks` | `from linear_axis_nodes.services.callbacks import ServiceCallbacks` |
-| `from linear_axis_nodes.lts300_interface import Lts300Interface` | `from linear_axis_nodes.helpers.lts300_interface import Lts300Interface` |
-
-## Planar Motor Module Structure (Breaking Change)
-
-As of **March 4, 2026**, planar-motor internals were aligned to a `services/` + `helpers/` layout.
-
-### Canonical module roots
-
-- `planar_motor_nodes.services.*`
-- `planar_motor_nodes.helpers.*`
-
-### Removed legacy module paths
-
-- `planar_motor_nodes.mover_pmc_interface`
-- `planar_motor_nodes.mover_utils`
-- `planar_motor_nodes.callbacks.*`
-
-### Import mapping examples
-
-| Old import | New import |
-|---|---|
-| `from planar_motor_nodes.mover_pmc_interface import PmcInterface` | `from planar_motor_nodes.helpers.pmc_interface import PmcInterface` |
-| `from planar_motor_nodes.mover_utils import MoverUtils` | `from planar_motor_nodes.helpers.mover_utils import MoverUtils` |
-| `from planar_motor_nodes.callbacks import ServiceCallbacks` | `from planar_motor_nodes.services import ServiceCallbacks` |
-
-## Release N+1 Plan
-
-- Remove all legacy aliases.
-- Remove deprecated parameter declarations and compatibility mappings.
+- `python promoc_bringup/scripts/release_n_check.py --quiet`
+- `make lint`
+- `make test-unit`
+- ROS2 smoke on target: canonical service calls only

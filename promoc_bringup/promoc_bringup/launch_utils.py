@@ -11,75 +11,25 @@ from typing import Dict, Optional, Tuple
 import yaml
 
 
-def _parse_bool_like(value: str) -> bool | None:
-    normalized = str(value).strip().lower()
-    if normalized in ("1", "true", "yes", "on"):
-        return True
-    if normalized in ("0", "false", "no", "off"):
-        return False
-    return None
-
-
-def resolve_runtime_mode(context, logger, legacy_arg_names: tuple[str, ...]) -> str:
+def resolve_runtime_mode(context, logger) -> str:
     """
-    Resolve canonical runtime mode with Release N legacy argument compatibility.
+    Resolve canonical runtime mode.
 
-    Canonical argument:
-    - runtime_mode:=hardware|sim
-
-    Legacy arguments:
-    - e.g. sim_mode, use_simulator
+    Accepted values:
+    - runtime_mode:=hardware
+    - runtime_mode:=sim
     """
     from launch.substitutions import LaunchConfiguration
 
-    runtime_mode_text = LaunchConfiguration("runtime_mode").perform(context).strip()
-    runtime_mode_raw = runtime_mode_text.lower()
-    if runtime_mode_raw:
-        if runtime_mode_raw not in ("hardware", "sim"):
-            logger.warn(
-                f"Invalid runtime_mode='{runtime_mode_raw}', falling back to 'hardware'."
-            )
-            runtime_mode_raw = "hardware"
-    else:
-        runtime_mode_raw = "hardware"
+    runtime_mode = LaunchConfiguration("runtime_mode").perform(context).strip().lower()
+    if runtime_mode in ("hardware", "sim"):
+        return runtime_mode
 
-    legacy_values: list[bool] = []
-    for arg_name in legacy_arg_names:
-        raw_value = LaunchConfiguration(arg_name).perform(context).strip().lower()
-        if not raw_value:
-            continue
-        parsed = _parse_bool_like(raw_value)
-        if parsed is None:
-            logger.warn(
-                f"Ignoring invalid legacy argument {arg_name}='{raw_value}'. "
-                "Use runtime_mode:=hardware|sim."
-            )
-            continue
-        legacy_values.append(parsed)
-
-    if not legacy_values:
-        return runtime_mode_raw
-
-    first_legacy = legacy_values[0]
-    if any(value != first_legacy for value in legacy_values[1:]):
+    if runtime_mode:
         logger.warn(
-            f"Conflicting legacy arguments {', '.join(legacy_arg_names)} detected. "
-            "Using runtime_mode if provided, otherwise hardware."
+            f"Invalid runtime_mode='{runtime_mode}', falling back to 'hardware'."
         )
-        return runtime_mode_raw
-
-    if runtime_mode_text:
-        logger.warn(
-            f"Both runtime_mode and legacy {', '.join(legacy_arg_names)} were provided. "
-            "Ignoring legacy arguments and using runtime_mode."
-        )
-        return runtime_mode_raw
-
-    logger.warn(
-        f"Deprecated launch argument(s) {', '.join(legacy_arg_names)} detected. "
-        "Use 'runtime_mode:=sim|hardware' instead."
-    )
-    return "sim" if first_legacy else "hardware"
+    return "hardware"
 
 
 def discover_thorlabs_devices() -> Dict[str, str]:
@@ -140,39 +90,6 @@ def get_launch_path(package_share_dir: str, launch_name: str) -> str:
     return os.path.join(package_share_dir, "launch", launch_name)
 
 
-def _normalize_user_config(config: dict) -> dict:
-    """
-    Normalize v2 and legacy user config schemas.
-
-    Release N compatibility:
-    - Accepts canonical keys: `measurement.operator`, `measurement.base_path`, `runtime.mode`.
-    - Accepts legacy keys: `user.*`, `camera.mtf_csv_path` with warning output.
-    """
-    normalized = deepcopy(config or {})
-
-    measurement = normalized.get("measurement")
-    if isinstance(measurement, dict):
-        normalized.setdefault("user", {})
-        if "operator" in measurement:
-            normalized["user"]["name"] = measurement["operator"]
-        if "base_path" in measurement:
-            normalized["user"]["measurement_base_path"] = measurement["base_path"]
-
-    if "user" in normalized:
-        print(
-            "Warning: legacy key 'user.*' detected. Prefer 'measurement.operator/base_path'."
-        )
-
-    camera_cfg = normalized.get("camera")
-    if isinstance(camera_cfg, dict) and "mtf_csv_path" in camera_cfg:
-        print(
-            "Warning: deprecated key 'camera.mtf_csv_path' detected and ignored. "
-            "Use 'mtf.debug_export_dir' instead."
-        )
-
-    return normalized
-
-
 def load_user_config(bringup_share_dir: str) -> dict:
     """
     Load and merge user config with defaults.
@@ -182,9 +99,9 @@ def load_user_config(bringup_share_dir: str) -> dict:
     user_config_path = get_config_path(bringup_share_dir, "user_config.yaml")
 
     defaults = {
-        "user": {
-            "name": "default_user",
-            "measurement_base_path": os.path.join(
+        "measurement": {
+            "operator": "default_user",
+            "base_path": os.path.join(
                 os.path.expanduser("~"), "Dokumente", "Messungen"
             ),
         },
@@ -216,7 +133,7 @@ def load_user_config(bringup_share_dir: str) -> dict:
             print(f"Warning: failed to load user config: {error}")
             return defaults
 
-        normalized = _normalize_user_config(config)
+        normalized = config or {}
         merged = deepcopy(defaults)
         for section in merged:
             if isinstance(normalized.get(section), dict):

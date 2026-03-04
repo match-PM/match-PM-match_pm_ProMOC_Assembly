@@ -78,5 +78,6 @@ This document explains how the repository is structured and where to add or chan
 - `make format`
 - `make lint`
 - `make test-unit`
-- `make release-n-check`
+- `make release-n1-check`
 - `make check`
+

@@ -1,11 +1,9 @@
 # ProMOC User Configuration v2
 #
-# Release N canonical keys:
+# Release N+1 canonical keys:
 # - runtime.mode: hardware|sim
 # - measurement.operator
 # - measurement.base_path
-#
-# Legacy keys (`user.*`) are still accepted in Release N but deprecated.
 
 runtime:
   mode: hardware

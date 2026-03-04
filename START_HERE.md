@@ -8,7 +8,6 @@ Primary onboarding entry for Python beginners and ROS2 newcomers.
 |---|---|---|
 | Officially supported | yes | yes |
 | Launch API | `runtime_mode:=hardware|sim` | `runtime_mode:=hardware|sim` |
-| Legacy launch args | `sim_mode`, `use_simulator` (deprecated) | `sim_mode`, `use_simulator` (deprecated) |
 
 ## 1. Build
 
@@ -86,6 +85,10 @@ If you want to implement a feature quickly, start with these package-level chang
 - Project structure guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 - Migration details: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 
-## 7. Legacy Compatibility (Release N)
+## 7. Contract
 
-Legacy service paths under `/promoc/camera_node/*` remain available in Release N and emit deprecation warnings.
+Release N+1 is canonical-only. Use only:
+- `runtime_mode:=hardware|sim`
+- `/promoc/camera/*`
+- `/promoc/linear_axis/<axis_name>/*`
+- `/promoc/mover/*`

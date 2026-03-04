@@ -30,5 +30,5 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt numpy
 
-      - name: Run lint and unit checks
+      - name: Run lint, unit, and N+1 contract checks
         run: make check

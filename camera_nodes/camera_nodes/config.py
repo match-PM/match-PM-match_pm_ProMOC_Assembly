@@ -8,7 +8,6 @@ from dataclasses import dataclass
 # Keep all camera-node defaults in one place so the node wiring stays compact.
 ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("use_simulator", False),
-    ("mtf_csv_path", ""),
     ("pixel_size_um", 2.40),
     ("default_roi_width", 200),
     ("default_roi_height", 200),
@@ -97,32 +96,7 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("exposure.frame_timeout_s", 1.0),
 )
 
-# Legacy/deprecated parameters that are still declared in Release N for compatibility.
-DEPRECATED_PARAMETER_REPLACEMENTS: dict[str, str] = {
-    "mtf_csv_path": "mtf.debug_export_dir",
-    "autofocus.fly_over.step_size_fine": "autofocus.min_step_mm",
-    "autofocus.fly_over.coarse_scan_range_mm": "AutoFocus.srv request range",
-    "autofocus.fly_over.fine_scan_range_mm": "autofocus.refinement_shrink_factor",
-    "autofocus.fly_over.coarse_drop_ratio": "autofocus.fly_over.peak_window_ratio",
-    "autofocus.fly_over.fine_drop_ratio": "autofocus.fly_over.peak_window_ratio",
-    "autofocus.fly_over.settle_coarse_s": "autofocus.fly_over.settle_fine_s",
-}
-
-ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = tuple(
-    (name, default)
-    for name, default in ALL_PARAM_VALUES
-    if name not in DEPRECATED_PARAMETER_REPLACEMENTS
-)
-
-DEPRECATED_PARAM_VALUES: tuple[tuple[str, object], ...] = tuple(
-    (name, default)
-    for name, default in ALL_PARAM_VALUES
-    if name in DEPRECATED_PARAMETER_REPLACEMENTS
-)
-
-DEPRECATED_PARAM_DEFAULTS: dict[str, object] = {
-    name: default for name, default in DEPRECATED_PARAM_VALUES
-}
+ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = ALL_PARAM_VALUES
 
 
 @dataclass(frozen=True)
@@ -182,30 +156,8 @@ class CameraRuntimeConfig:
 
 def declare_camera_parameters(node) -> None:
     """Declare all parameters required by camera_node and handlers."""
-    for name, default in ACTIVE_PARAM_VALUES:
+    for name, default in ALL_PARAM_VALUES:
         node.declare_parameter(name, default)
-    for name, default in DEPRECATED_PARAM_VALUES:
-        node.declare_parameter(name, default)
-
-
-def warn_on_deprecated_parameter_overrides(node) -> None:
-    """
-    Emit warnings when deprecated parameters are actively overridden.
-
-    Default-valued deprecated parameters remain silent to avoid startup noise.
-    """
-    logger = node.get_logger()
-    for name, replacement in DEPRECATED_PARAMETER_REPLACEMENTS.items():
-        if not node.has_parameter(name):
-            continue
-        value = node.get_parameter(name).value
-        default = DEPRECATED_PARAM_DEFAULTS.get(name)
-        if value is None or value == default:
-            continue
-        logger.warning(
-            f"Deprecated parameter '{name}' is set to '{value}'. "
-            f"Use '{replacement}' instead."
-        )
 
 
 def _read_value(node, name: str, default):

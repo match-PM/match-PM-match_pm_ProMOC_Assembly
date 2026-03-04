@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Optical measurement system launch with canonical runtime mode support."""
 
-# Deprecated launch argument compatibility is intentionally kept for Release N.
-
 from __future__ import annotations
 
 import json
@@ -30,18 +28,8 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "runtime_mode",
-                default_value="",
+                default_value="hardware",
                 description="Canonical runtime mode: hardware|sim",
-            ),
-            DeclareLaunchArgument(
-                "sim_mode",
-                default_value="",
-                description="[Deprecated] Legacy alias true|false",
-            ),
-            DeclareLaunchArgument(
-                "use_simulator",
-                default_value="",
-                description="[Deprecated] Legacy alias true|false",
             ),
             DeclareLaunchArgument("x_axis_port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument("x_axis_name", default_value="lts300_x_axis"),
@@ -51,11 +39,7 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
-    runtime_mode = resolve_runtime_mode(
-        context,
-        logger=launch.logging.get_logger(),
-        legacy_arg_names=("sim_mode", "use_simulator"),
-    )
+    runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
     use_simulator = runtime_mode == "sim"
     bringup_share = get_package_share_directory("promoc_bringup")
 
@@ -136,7 +120,7 @@ def _create_x_axis_node(axis_config: dict):
 
 
 def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
-    base_dir = config.get("user", {}).get("measurement_base_path") or os.path.join(
+    base_dir = config.get("measurement", {}).get("base_path") or os.path.join(
         os.path.expanduser("~"), "Dokumente", "Messungen"
     )
     base_dir = os.path.expanduser(str(base_dir))
@@ -155,12 +139,11 @@ def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
         emulate_tty=True,
         parameters=[
             {
-                "measurement.username": config["user"]["name"],
+                "measurement.username": config["measurement"]["operator"],
                 "measurement.base_path": base_dir,
                 "use_simulator": bool(use_simulator),
                 "x_axis_node_name": LaunchConfiguration("x_axis_name"),
                 "pixel_size_um": config["camera"]["pixel_size_um"],
-                "mtf_csv_path": "",
                 "mtf.use_full_frame": True,
                 "mtf.full_frame_width": camera_config.get("sensor_resolution_h", 5536),
                 "mtf.full_frame_height": camera_config.get("sensor_resolution_v", 3692),

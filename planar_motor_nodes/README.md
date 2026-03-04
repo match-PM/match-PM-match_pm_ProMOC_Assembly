@@ -39,18 +39,13 @@ Common services:
 - `/promoc/mover/stop_motion`
 - topic: `/promoc/mover/xbot_info`
 
-Release N compatibility:
-
-- legacy service aliases under `/mover_node/*`
-- legacy topic alias `xbot_info`
-
 ## Where To Edit
 
 | Goal | Start Here | Then Check |
 |---|---|---|
 | Change motion service behavior | `planar_motor_nodes/planar_motor_nodes/services/motion.py` | `planar_motor_nodes/planar_motor_nodes/helpers/mover_utils.py` |
 | Change control service behavior | `planar_motor_nodes/planar_motor_nodes/services/control.py` | `planar_motor_nodes/planar_motor_nodes/mover_node.py` |
-| Change service/topic namespace wiring | `planar_motor_nodes/planar_motor_nodes/mover_node.py` | `promoc_core/promoc_core/service_alias.py` |
+| Change service/topic namespace wiring | `planar_motor_nodes/planar_motor_nodes/mover_node.py` | `planar_motor_nodes/planar_motor_nodes/services/__init__.py`, `planar_motor_nodes/planar_motor_nodes/services/base.py` |
 | Change parameter defaults and bounds | `planar_motor_nodes/planar_motor_nodes/config.py` | `promoc_bringup/config/mover_node_params.yaml` |
 | Change PMC backend integration | `planar_motor_nodes/planar_motor_nodes/helpers/pmc_interface.py` | `planar_motor_nodes/planar_motor_nodes/drivers/mock_pmclib.py` |
 
@@ -59,7 +54,7 @@ Release N compatibility:
 ```bash
 make lint
 make test-unit
-make release-n-check
+make release-n1-check
 ```
 
 Package-level tests:
@@ -74,3 +69,4 @@ colcon test-result --verbose
 - Root onboarding: [`START_HERE.md`](../START_HERE.md)
 - Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
 - Interfaces: [`promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md)
+

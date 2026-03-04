@@ -87,14 +87,15 @@ class MotionStatus(Enum):
         ...     elif status == MotionStatus.ERROR:
         ...         print("Motion failed!")
     """
-    UNKNOWN = auto()      # Status cannot be determined
-    IDLE = auto()         # Controller is idle, ready for commands
-    MOVING = auto()       # Motion in progress
-    COMPLETED = auto()    # Motion completed successfully
-    ERROR = auto()        # Motion failed with error
-    TIMEOUT = auto()      # Motion timed out
-    ABORTED = auto()      # Motion was aborted by user
-    COLLISION = auto()    # Motion stopped due to collision risk
+
+    UNKNOWN = auto()  # Status cannot be determined
+    IDLE = auto()  # Controller is idle, ready for commands
+    MOVING = auto()  # Motion in progress
+    COMPLETED = auto()  # Motion completed successfully
+    ERROR = auto()  # Motion failed with error
+    TIMEOUT = auto()  # Motion timed out
+    ABORTED = auto()  # Motion was aborted by user
+    COLLISION = auto()  # Motion stopped due to collision risk
 
 
 @dataclass
@@ -129,6 +130,7 @@ class MotionResult:
         ...     if result.error_message:
         ...         print(f"Error: {result.error_message}")
     """
+
     status: MotionStatus
     final_position: Optional[List[float]] = None
     error_message: Optional[str] = None
@@ -141,9 +143,7 @@ class MotionResult:
 
 
 def check_position_reached(
-    target: List[float],
-    current: List[float],
-    tolerance: float = 0.001
+    target: List[float], current: List[float], tolerance: float = 0.001
 ) -> bool:
     """
     Checks if the current position has reached the target within a tolerance.
@@ -181,15 +181,11 @@ def check_position_reached(
         return False
 
     # Step 2: Check each axis
-    return all(
-        abs(t - c) <= tolerance
-        for t, c in zip(target, current)
-    )
+    return all(abs(t - c) <= tolerance for t, c in zip(target, current))
 
 
 def compute_position_error(
-    target: List[float],
-    current: List[float]
+    target: List[float], current: List[float]
 ) -> Tuple[float, List[float]]:
     """
     Calculates the position error between a target and current position.
@@ -224,7 +220,8 @@ def compute_position_error(
     """
     if len(target) != len(current):
         raise ValueError(
-            f"Position dimensions don't match: {len(target)} vs {len(current)}")
+            f"Position dimensions don't match: {len(target)} vs {len(current)}"
+        )
 
     per_axis = [abs(t - c) for t, c in zip(target, current)]
     total = math.sqrt(sum(e**2 for e in per_axis))
@@ -237,7 +234,7 @@ def wait_for_position(
     get_position_fn: Callable[[], Optional[List[float]]],
     tolerance: float = 0.001,
     timeout_s: float = 10.0,
-    poll_interval_s: float = 0.05
+    poll_interval_s: float = 0.05,
 ) -> MotionResult:
     """
     Waits via polling for a target position to be reached.
@@ -298,7 +295,7 @@ def wait_for_position(
                 status=MotionStatus.TIMEOUT,
                 final_position=last_position,
                 error_message=f"Timeout after {timeout_s:.1f}s",
-                duration_s=elapsed
+                duration_s=elapsed,
             )
 
         # Step 4: Get current position
@@ -315,7 +312,7 @@ def wait_for_position(
             return MotionResult(
                 status=MotionStatus.COMPLETED,
                 final_position=current,
-                duration_s=elapsed
+                duration_s=elapsed,
             )
 
         # Step 6: Wait before next check
@@ -327,7 +324,7 @@ def wait_for_idle(
     idle_states: List[str] = None,
     error_states: List[str] = None,
     timeout_s: float = 10.0,
-    poll_interval_s: float = 0.1
+    poll_interval_s: float = 0.1,
 ) -> MotionResult:
     """
     Waits for a motion controller to enter an idle state.
@@ -367,8 +364,7 @@ def wait_for_idle(
     if idle_states is None:
         idle_states = ["IDLE", "XBOT_IDLE", "idle"]
     if error_states is None:
-        error_states = ["ERROR", "XBOT_ERROR",
-                        "STOPPED", "XBOT_STOPPED", "error"]
+        error_states = ["ERROR", "XBOT_ERROR", "STOPPED", "XBOT_STOPPED", "error"]
 
     start_time = time.time()
 
@@ -379,7 +375,7 @@ def wait_for_idle(
             return MotionResult(
                 status=MotionStatus.TIMEOUT,
                 error_message=f"Timeout waiting for idle after {timeout_s:.1f}s",
-                duration_s=elapsed
+                duration_s=elapsed,
             )
 
         try:
@@ -388,20 +384,17 @@ def wait_for_idle(
             return MotionResult(
                 status=MotionStatus.ERROR,
                 error_message=f"Error getting status: {e}",
-                duration_s=elapsed
+                duration_s=elapsed,
             )
 
         if current_status in idle_states:
-            return MotionResult(
-                status=MotionStatus.COMPLETED,
-                duration_s=elapsed
-            )
+            return MotionResult(status=MotionStatus.COMPLETED, duration_s=elapsed)
 
         if current_status in error_states:
             return MotionResult(
                 status=MotionStatus.ERROR,
                 error_message=f"Controller in error state: {current_status}",
-                duration_s=elapsed
+                duration_s=elapsed,
             )
 
         time.sleep(poll_interval_s)
@@ -415,8 +408,9 @@ class VelocityParams:
     Provides a standardized structure for passing motion parameters
     across different controllers.
     """
-    max_velocity: float = 0.1       # m/s or mm/s depending on context
-    max_acceleration: float = 0.5   # m/s² or mm/s²
+
+    max_velocity: float = 0.1  # m/s or mm/s depending on context
+    max_acceleration: float = 0.5  # m/s² or mm/s²
 
     # Optional per-axis or per-DOF parameters
     xy_velocity: Optional[float] = None
@@ -432,11 +426,7 @@ class VelocityParams:
         return self.z_velocity if self.z_velocity is not None else self.max_velocity
 
 
-def interpolate_position(
-    start: List[float],
-    end: List[float],
-    t: float
-) -> List[float]:
+def interpolate_position(start: List[float], end: List[float], t: float) -> List[float]:
     """
     Linear interpolation between two positions.
 

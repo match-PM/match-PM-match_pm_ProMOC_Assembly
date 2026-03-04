@@ -18,7 +18,7 @@ nano user_config.yaml
 ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 ```
 
-## Canonical v2 Keys (Release N)
+## Canonical v2 Keys (Release N+1)
 
 - `runtime.mode`: `hardware` or `sim`
 - `measurement.operator`: operator/user name
@@ -27,14 +27,6 @@ ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 - `autofocus.*`
 - `mtf.*`
 - `measurement_conditions.*`
-
-## Legacy Keys (Still accepted in Release N)
-
-- `user.name`
-- `user.measurement_base_path`
-- `camera.mtf_csv_path` (deprecated and ignored; use `mtf.debug_export_dir`)
-
-Legacy keys trigger deprecation warnings during launch/config load.
 
 ## Note
 

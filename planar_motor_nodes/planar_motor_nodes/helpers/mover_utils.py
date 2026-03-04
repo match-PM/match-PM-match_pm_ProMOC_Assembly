@@ -48,7 +48,6 @@ Usage Example:
         print("Target reached!")
 """
 
-import time
 import math
 from typing import Dict, List, Optional
 
@@ -61,8 +60,30 @@ from ..drivers.mock_pmclib import XbotState
 
 # Common utilities from promoc_core
 from promoc_core.motion import MotionStatus
+from promoc_core.motion_interface import wait_for_idle_state
 from promoc_core.validation import is_in_range, validate_id_range
 from promoc_core.conversions import rad_to_deg, mm_to_m, m_to_mm
+
+
+class _MoverStatusPort:
+    """Minimal MotionPort-compatible view for status polling via mover utils."""
+
+    def __init__(self, mover_utils: "MoverUtils"):
+        self._mover_utils = mover_utils
+
+    def read_position(self, actor_id=None):
+        xbot_id = 0 if actor_id is None else int(actor_id)
+        return self._mover_utils.get_current_position(xbot_id)
+
+    def read_status(self, actor_id=None):
+        xbot_id = 0 if actor_id is None else int(actor_id)
+        return self._mover_utils.get_xbot_state_string(xbot_id)
+
+    def command(self, command, actor_id=None):  # pragma: no cover - not used here
+        raise NotImplementedError
+
+    def stop(self, actor_id=None):  # pragma: no cover - not used here
+        raise NotImplementedError
 
 
 class MoverUtils:
@@ -359,26 +380,30 @@ class MoverUtils:
         3. If ERROR → return ERROR.
         4. If timeout → return TIMEOUT.
         """
-        start_time = time.time()
-        while time.time() - start_time < max_wait_time:
-            state_str = self.get_xbot_state_string(xbot_id)
+        del target_position, position_tolerance  # kept for compatibility
 
-            if state_str in ["XBOT_IDLE", "IDLE"]:
-                self.logger.info(f"Motion completed for XBot {xbot_id}.")
-                return MotionStatus.COMPLETED
-
-            if state_str in ["XBOT_ERROR", "ERROR", "XBOT_STOPPED"]:
-                self.logger.error(
-                    f"Motion error for XBot {xbot_id} - State: {state_str}"
-                )
-                return MotionStatus.ERROR
-
-            time.sleep(0.1)
-
-        self.logger.warning(
-            f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s"
+        result = wait_for_idle_state(
+            _MoverStatusPort(self),
+            actor_id=xbot_id,
+            timeout_s=max_wait_time,
+            poll_interval_s=0.1,
         )
-        return MotionStatus.TIMEOUT
+
+        if result.status == MotionStatus.COMPLETED:
+            self.logger.info(f"Motion completed for XBot {xbot_id}.")
+            return MotionStatus.COMPLETED
+
+        if result.status == MotionStatus.TIMEOUT:
+            self.logger.warning(
+                f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s"
+            )
+            return MotionStatus.TIMEOUT
+
+        # Keep legacy behavior: aborted/unknown are treated as error.
+        self.logger.error(
+            f"Motion error for XBot {xbot_id} - State: {result.status.name}"
+        )
+        return MotionStatus.ERROR
 
     # ══════════════════════════════════════════════════════════════════════════
     # BOUNDS AND VALIDATION

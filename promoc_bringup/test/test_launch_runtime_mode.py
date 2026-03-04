@@ -3,33 +3,47 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_system_launch_supports_runtime_mode_and_legacy_alias():
+def _declares_launch_argument(content: str, arg_name: str) -> bool:
+    pattern = rf"DeclareLaunchArgument\(\s*\"{re.escape(arg_name)}\""
+    return re.search(pattern, content) is not None
+
+
+def test_system_launch_is_runtime_mode_only():
     content = (ROOT / "promoc_bringup" / "launch" / "system.launch.py").read_text(
         encoding="utf-8", errors="ignore"
     )
     assert "runtime_mode" in content
-    assert "sim_mode" in content
-    assert "Deprecated" in content
+    assert not _declares_launch_argument(content, "sim_mode")
 
 
-def test_camera_launch_supports_runtime_mode_and_legacy_aliases():
+def test_camera_launch_is_runtime_mode_only():
     content = (ROOT / "promoc_bringup" / "launch" / "camera.launch.py").read_text(
         encoding="utf-8", errors="ignore"
     )
     assert "runtime_mode" in content
-    assert "sim_mode" in content
-    assert "use_simulator" in content
+    assert not _declares_launch_argument(content, "sim_mode")
+    assert not _declares_launch_argument(content, "use_simulator")
 
 
-def test_optical_launch_supports_runtime_mode_and_legacy_aliases():
+def test_optical_launch_is_runtime_mode_only():
     content = (
         ROOT / "promoc_bringup" / "launch" / "optical_measurement_system.launch.py"
     ).read_text(encoding="utf-8", errors="ignore")
     assert "runtime_mode" in content
-    assert "sim_mode" in content
-    assert "use_simulator" in content
+    assert not _declares_launch_argument(content, "sim_mode")
+    assert not _declares_launch_argument(content, "use_simulator")
+
+
+def test_camera_launch_uses_dedicated_parameter_builder():
+    content = (ROOT / "promoc_bringup" / "launch" / "camera.launch.py").read_text(
+        encoding="utf-8", errors="ignore"
+    )
+    assert "from promoc_bringup.camera_launch_builder import" in content
+    assert "build_camera_node_parameters" in content
+    assert "build_driver_node_parameters" in content

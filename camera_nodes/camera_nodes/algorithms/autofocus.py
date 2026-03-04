@@ -313,6 +313,32 @@ class MSPRAutofocus:
         return base_score
 
     # =========================================================================
+    # PUBLIC HOOKS (HANDLER-FACING API)
+    # =========================================================================
+
+    def score_image(self, image: np.ndarray) -> float:
+        """Public score hook for external orchestrators."""
+        return float(self._calculate_score(image))
+
+    def get_measurement_series(self) -> tuple[list[float], list[float]]:
+        """Return measured positions and scores in acquisition order."""
+        positions = [float(measure.position_mm) for measure in self._measurements]
+        scores = [float(measure.score) for measure in self._measurements]
+        return positions, scores
+
+    def get_best_result(self) -> tuple[float | None, float]:
+        """Return best (position, score) found so far."""
+        if self._best_measurement is None:
+            return None, 0.0
+        return float(self._best_measurement.position_mm), float(
+            self._best_measurement.score
+        )
+
+    def get_scan_step_mm(self) -> float:
+        """Return active scan step if strategy defines one, otherwise config step."""
+        return float(getattr(self, "_scan_step", self.config.step_mm))
+
+    # =========================================================================
     # HELPER METHODS
     # =========================================================================
     

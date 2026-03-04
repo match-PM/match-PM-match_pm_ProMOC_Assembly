@@ -8,7 +8,7 @@ Contains callbacks for control-related services:
 - Velocity/acceleration parameters
 """
 
-from .base import ServiceCallbacksBase, InvalidParameterError
+from .base import InvalidParameterError, ServiceCallbacksBase
 from promoc_core.error_handling import handle_service_errors
 
 
@@ -20,7 +20,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Activate or deactivate the XBots.
 
-        Service: /promoc/mover/activate_xbots (legacy: /mover_node/activate_xbots)
+        Service: /promoc/mover/activate_xbots
 
         Args:
             request.activation_status: True to activate, False to deactivate.
@@ -39,7 +39,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Start or stop levitation (floating above the stator).
 
-        Service: /promoc/mover/levitation_xbots (legacy: /mover_node/levitation_xbots)
+        Service: /promoc/mover/levitation_xbots
 
         IMPORTANT: XBot must be activated first.
 
@@ -60,7 +60,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Stop the current motion of an XBot immediately.
 
-        Service: /promoc/mover/stop_motion (legacy: /mover_node/stop_motion)
+        Service: /promoc/mover/stop_motion
 
         EMERGENCY FUNCTION: Stops motion instantly.
 
@@ -77,7 +77,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         """
         Set velocity and acceleration parameters for an XBot.
 
-        Service: /promoc/mover/set_velocity_acceleration (legacy: /mover_node/set_velocity_acceleration)
+        Service: /promoc/mover/set_velocity_acceleration
         """
         # Validate XBot ID
         if request.xbot_id < 0:

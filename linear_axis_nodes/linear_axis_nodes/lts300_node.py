@@ -12,7 +12,7 @@ The node follows a dependency injection pattern similar to the mover_node:
         │
     ├── Config (LTS300NodeConfig) → Typed ROS parameter configuration
         ├── Lts300Interface    → Hardware abstraction (Real/Simulated)
-        └── ServiceCallbacks   → Business logic (e.g., motion validation)
+        └── ServiceHandlers    → Business logic (e.g., motion validation)
 
 Startup Sequence:
 ==================
@@ -80,9 +80,8 @@ from rclpy.node import Node
 
 from .config import LTS300NodeConfig
 from .helpers.lts300_interface import Lts300Interface
-from .services.callbacks import ServiceCallbacks
+from .services import ServiceHandlers
 from promoc_core.logging import TaggedLogger, LogTags
-from promoc_core.service_alias import register_service_alias_pair
 
 
 class LTS300Node(Node):
@@ -111,7 +110,7 @@ class LTS300Node(Node):
     Attributes:
         config (LTS300NodeConfig): Typed node configuration.
         interface (Lts300Interface): Hardware abstraction layer.
-        callbacks (ServiceCallbacks): Business logic for service callbacks.
+        callbacks (ServiceHandlers): Business logic for service callbacks.
         other_axis_position (float): Position of the other axis for collision avoidance.
 
     Example:
@@ -149,8 +148,7 @@ class LTS300Node(Node):
             TaggedLogger(self.get_logger(), LogTags.LTS_CONN), self.config
         )
         # Callbacks gets raw logger (wraps it internally with [LTS:MOVE])
-        self.callbacks = ServiceCallbacks(self.log, self.interface, self.config)
-        self._service_alias_handles = []
+        self.callbacks = ServiceHandlers(self.log, self.interface, self.config)
 
         try:
             # ══════════════════════════════════════════════════════════════════
@@ -235,7 +233,6 @@ class LTS300Node(Node):
         self.declare_parameter("serial_port", "/dev/ttyUSB0")
         self.declare_parameter("serial_number", "00000000")
         self.declare_parameter("collision_threshold", 300.0)
-        self.declare_parameter("namespace", "promoc_assembly")
         self.declare_parameter("max_position", 300.0)
         self.declare_parameter("min_position", 0.0)
         self.declare_parameter("max_single_move", 300.0)
@@ -248,7 +245,6 @@ class LTS300Node(Node):
             serial_port=str(self.get_parameter("serial_port").value),
             serial_number=str(self.get_parameter("serial_number").value),
             collision_threshold=float(self.get_parameter("collision_threshold").value),
-            namespace=str(self.get_parameter("namespace").value),
             max_position=float(self.get_parameter("max_position").value),
             min_position=float(self.get_parameter("min_position").value),
             max_single_move=float(self.get_parameter("max_single_move").value),
@@ -268,8 +264,7 @@ class LTS300Node(Node):
         Creates:
         --------
         1. Publisher:
-           - Canonical: `/promoc/linear_axis/{node_name}/position`
-           - Legacy: `/{namespace}/{node_name}/position`
+           - `/promoc/linear_axis/{node_name}/position`
 
         2. Subscriber:
            - Subscribes to the other axis's position for collision avoidance.
@@ -292,11 +287,6 @@ class LTS300Node(Node):
             # ── Publisher & Timer ──
             self.position_publisher = self.create_publisher(
                 LinearAxisInfo,
-                f"/{self.config.namespace}/{node_name}/position",
-                10,
-            )
-            self.position_publisher_canonical = self.create_publisher(
-                LinearAxisInfo,
                 f"/promoc/linear_axis/{node_name}/position",
                 10,
             )
@@ -311,12 +301,6 @@ class LTS300Node(Node):
                 LinearAxisInfo,
                 f"/promoc/linear_axis/lts300_{other_axis}_axis/position",
                 self.other_axis_position_callback,
-                10,
-            )
-            self.other_axis_subscription_legacy = self.create_subscription(
-                LinearAxisInfo,
-                f"/{self.config.namespace}/lts300_{other_axis}_axis/position",
-                self.other_axis_position_callback_legacy,
                 10,
             )
             self.log.info(f"Subscriber created for {other_axis}-axis")
@@ -370,10 +354,9 @@ class LTS300Node(Node):
             ]
 
             for service_type, suffix, callback in service_specs:
-                self._create_service_alias_pair(
-                    node_name,
+                self.create_service(
                     service_type,
-                    suffix,
+                    f"/promoc/linear_axis/{node_name}/{suffix}",
                     callback,
                 )
             self.log.info("All services created")
@@ -409,7 +392,6 @@ class LTS300Node(Node):
             msg.operation_status = operation_status.value
 
             self.position_publisher.publish(msg)
-            self.position_publisher_canonical.publish(msg)
             self.log.debug(
                 f"Published position: {msg.axis_position:.2f}mm, "
                 f"status: {operation_status.value}"
@@ -430,38 +412,9 @@ class LTS300Node(Node):
             else:
                 self.log.debug(f"Position publish error (suppressed): {e}")
 
-    def _create_service_alias_pair(
-        self, node_name: str, service_type, suffix: str, callback
-    ):
-        legacy_path = f"{node_name}/{suffix}"
-        canonical_path = f"/promoc/linear_axis/{node_name}/{suffix}"
-        canonical_service, legacy_service = register_service_alias_pair(
-            node=self,
-            service_type=service_type,
-            canonical_path=canonical_path,
-            legacy_path=legacy_path,
-            callback=callback,
-            warn=self.log.warning,
-        )
-        self._service_alias_handles.extend((canonical_service, legacy_service))
-
     def other_axis_position_callback(self, msg):
         """Stores the position of the other axis."""
         self.other_axis_position = msg.axis_position
-
-    def other_axis_position_callback_legacy(self, msg):
-        """Release N compatibility for legacy cross-axis topic."""
-        if not hasattr(self, "_legacy_cross_axis_topic_warned"):
-            self._legacy_cross_axis_topic_warned = False
-        if not self._legacy_cross_axis_topic_warned:
-            axis_type = self.interface.driver.get_axis_type()
-            other_axis = "z" if axis_type == "x" else "x"
-            self.log.warning(
-                f"Deprecated topic '/{self.config.namespace}/lts300_{other_axis}_axis/position' received. "
-                f"Use '/promoc/linear_axis/lts300_{other_axis}_axis/position' instead."
-            )
-            self._legacy_cross_axis_topic_warned = True
-        self.other_axis_position_callback(msg)
 
     def shutdown_device(self):
         """Performs a clean shutdown of the device."""
