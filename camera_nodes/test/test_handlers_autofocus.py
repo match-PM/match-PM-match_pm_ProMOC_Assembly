@@ -43,7 +43,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.services.autofocus_handler import AutofocusHandler  # noqa: E402
+from camera_nodes.services.handlers.autofocus import AutofocusHandler  # noqa: E402
 
 
 class _Param:

@@ -58,7 +58,7 @@ if "rcl_interfaces" not in sys.modules:
     rcl_pkg.srv = sys.modules["rcl_interfaces.srv"]
     sys.modules["rcl_interfaces"] = rcl_pkg
 
-from camera_nodes.services.mtf_handler import MTFHandler  # noqa: E402
+from camera_nodes.services.handlers.mtf import MTFHandler  # noqa: E402
 
 
 class _Param:

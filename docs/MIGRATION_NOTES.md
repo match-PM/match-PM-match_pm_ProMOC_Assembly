@@ -100,6 +100,7 @@ Runtime packages were standardized to the same internal shape:
 - `camera_nodes/camera_nodes/services/mtf_handler.py` -> `camera_nodes/camera_nodes/services/handlers/mtf.py`
 - `camera_nodes/camera_nodes/services/exposure_handler.py` -> `camera_nodes/camera_nodes/services/handlers/exposure.py`
 - `camera_nodes/camera_nodes/services/autofocus_axis_clients.py` -> `camera_nodes/camera_nodes/services/clients/autofocus_axis.py`
+- `camera_nodes/camera_nodes/algorithms/` -> `camera_nodes/camera_nodes/domain/algorithms/`
 - `camera_nodes/camera_nodes/helpers/axis_helpers.py` -> `camera_nodes/camera_nodes/services/clients/axis_velocity.py`
 - `camera_nodes/camera_nodes/helpers/camera_format_controller.py` -> `camera_nodes/camera_nodes/services/clients/camera_format.py`
 - `camera_nodes/camera_nodes/helpers/parameter_access.py` -> `camera_nodes/camera_nodes/services/clients/parameter_access.py`
@@ -141,7 +142,8 @@ Runtime packages were standardized to the same internal shape:
   - `lts300_node`
   - `mover_node`
 - `setup.py` entry points now target canonical `node.py` modules.
-- Legacy module files remain as thin wrappers where needed (old node module names and old service/driver module names).
+- Some legacy module files remain as thin wrappers where needed in other runtime packages.
+- `camera_nodes` is now canonical-only for node, handler, driver, and algorithm module paths.
 - Canonical ROS service/topic namespaces remain unchanged (`/promoc/...`).
 
 ## Release N+1 Verification

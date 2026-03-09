@@ -1,3 +1,12 @@
-"""MTF algorithm bridge for standardized domain layout."""
+"""MTF analysis package (slanted edge)."""
 
-from ....algorithms.mtf import *  # noqa: F401,F403
+from .config import MTFConfig
+from .result import MTFResult
+from .analyzer import MTFAnalyzer, compute_mtf
+
+__all__ = [
+    "MTFAnalyzer",
+    "MTFConfig",
+    "MTFResult",
+    "compute_mtf",
+]

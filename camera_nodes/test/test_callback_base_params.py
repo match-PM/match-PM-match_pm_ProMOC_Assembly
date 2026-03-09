@@ -18,7 +18,7 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from camera_nodes.services.base import CallbackBase  # noqa: E402
+from camera_nodes.services.handlers.base import CallbackBase  # noqa: E402
 
 
 class _Param:

@@ -9,8 +9,8 @@ from promoc_core.promoc_exceptions import (
 )
 from .base import CallbackBase
 from ..clients.camera_format import CameraFormatController
-from ...algorithms.mtf import MTFAnalyzer, MTFConfig
-from ...algorithms.roi_detection import RoiDetector, EdgeROI
+from ...domain.algorithms.mtf import MTFAnalyzer, MTFConfig
+from ...domain.algorithms.roi_detection import RoiDetector, EdgeROI
 from ...adapters.mapping import apply_mtf_param_mapping
 from promoc_core.error_handling import handle_service_errors
 

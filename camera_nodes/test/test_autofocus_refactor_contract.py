@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_autofocus_algorithm_exposes_public_hooks():
     content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "algorithms" / "autofocus.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "domain" / "algorithms" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "def score_image(" in content

@@ -8,7 +8,7 @@ exclude = [
   ".venv",
   "local_libs",
   # Vendor-heavy and non-runtime areas outside active lint scope
-  "camera_nodes/camera_nodes/algorithms",
+  "camera_nodes/camera_nodes/domain/algorithms",
   "camera_nodes/camera_nodes/drivers",
   "camera_nodes/test/test_autofocus_benchmark.py",
   "linear_axis_nodes/linear_axis_nodes/drivers",

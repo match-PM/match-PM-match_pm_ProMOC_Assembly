@@ -6,7 +6,7 @@ Provides tools for measuring MTF across the image field to detect:
 - Overall optical quality distribution
 
 Usage:
-    from camera_nodes.algorithms.field_curvature import analyze_field_curvature
+    from camera_nodes.domain.algorithms.field_curvature import analyze_field_curvature
 
     field_data = analyze_field_curvature(image, pixel_size_um=2.40)
     print(f"Center MTF50: {field_data['center']:.1f} lp/mm")

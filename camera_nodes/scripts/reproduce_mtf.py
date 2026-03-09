@@ -11,7 +11,7 @@ for _path in (_PACKAGE_ROOT, _FIXTURE_DIR):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from camera_nodes.algorithms.mtf import MTFAnalyzer, MTFConfig  # noqa: E402
+from camera_nodes.domain.algorithms.mtf import MTFAnalyzer, MTFConfig  # noqa: E402
 from synthetic_targets import generate_slanted_edge  # noqa: E402
 
 

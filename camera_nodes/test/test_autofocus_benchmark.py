@@ -21,7 +21,7 @@ if str(PYTHON_PACKAGE_ROOT) not in sys.path:
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from camera_nodes.algorithms.autofocus import (  # noqa: E402
+from camera_nodes.domain.algorithms.autofocus import (  # noqa: E402
     AutofocusConfig,
     ExhaustiveAutofocus,
     FibonacciAutofocus,

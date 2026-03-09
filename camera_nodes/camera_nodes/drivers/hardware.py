@@ -161,7 +161,7 @@ class AravisCameraDriver(CameraDriver):
         """
         Returns the most recently received image.
 
-        The image is set by the image subscriber in `camera_node.py`.
+        The image is set by the image subscriber in `node.py`.
 
         Returns:
             np.ndarray: BGR image, or None if no image is available.

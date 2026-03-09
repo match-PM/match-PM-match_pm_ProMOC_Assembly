@@ -11,7 +11,7 @@ import cv2
 from promoc_assembly_interfaces.srv import MoveAbsolute
 from promoc_core.promoc_exceptions import ImageProcessingError
 
-from ...algorithms import AutofocusConfig, AUTOFOCUS_ALGORITHMS
+from ...domain.algorithms import AutofocusConfig, AUTOFOCUS_ALGORITHMS
 from .autofocus_response import fill_single_mode_response
 
 _ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}

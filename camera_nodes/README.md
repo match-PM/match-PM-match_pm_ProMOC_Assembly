@@ -27,22 +27,14 @@ make sim
 | Change service registration details | `camera_nodes/camera_nodes/services/registry.py` |
 | Change autofocus behavior | `camera_nodes/camera_nodes/services/handlers/autofocus.py` |
 | Change MTF behavior | `camera_nodes/camera_nodes/services/handlers/mtf.py` |
+| Change camera algorithms | `camera_nodes/camera_nodes/domain/algorithms/` |
 | Change camera-facing service clients | `camera_nodes/camera_nodes/services/clients/` |
 | Change camera drivers | `camera_nodes/camera_nodes/drivers/hardware.py` or `camera_nodes/camera_nodes/drivers/sim.py` |
 | Change package-level business logic or models | `camera_nodes/camera_nodes/domain/` |
 | Change conversions or response mapping | `camera_nodes/camera_nodes/adapters/` |
 | Change typed config and defaults | `camera_nodes/camera_nodes/config.py`, `promoc_bringup/config/cameras/` |
 
-Use the canonical module paths above. Compatibility wrappers may still exist for migration, but they are not the preferred edit points.
-
-## Legacy Wrappers You May Still See
-
-- `camera_nodes/camera_nodes/camera_node.py`: compatibility wrapper, do not extend
-- `camera_nodes/camera_nodes/services/autofocus_handler.py`: compatibility wrapper, do not extend
-- `camera_nodes/camera_nodes/services/mtf_handler.py`: compatibility wrapper, do not extend
-- `camera_nodes/camera_nodes/services/exposure_handler.py`: compatibility wrapper, do not extend
-- `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py`: compatibility wrapper, do not extend
-- `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py`: compatibility wrapper, do not extend
+Use the canonical module paths above. `camera_nodes` no longer uses parallel legacy module names for handlers, drivers, or algorithms.
 
 ## Verify Changes
 

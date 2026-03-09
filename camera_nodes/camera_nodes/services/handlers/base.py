@@ -14,7 +14,7 @@ from promoc_core.promoc_exceptions import HardwareError
 
 from promoc_core.logging import TaggedLogger, LogTags
 
-from ...algorithms import tenengrad
+from ...domain.algorithms import tenengrad
 from ..clients.parameter_access import ParameterAccessor
 
 

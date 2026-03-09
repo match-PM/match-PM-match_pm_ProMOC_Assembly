@@ -12,7 +12,7 @@ import csv
 from typing import Optional
 import numpy as np
 
-from ..algorithms.mtf import MTFAnalyzer, MTFConfig
+from .algorithms.mtf import MTFAnalyzer, MTFConfig
 
 
 class CameraImageProcessing:

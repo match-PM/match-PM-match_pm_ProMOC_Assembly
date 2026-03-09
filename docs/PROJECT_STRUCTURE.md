@@ -61,11 +61,10 @@ Use these folders consistently:
 - `domain/`: business logic, models, package-specific algorithms
 - `adapters/`: conversions, mapping, boundary validation
 
-Compatibility wrappers may still exist for legacy import paths, but beginner-facing edits should start from the canonical paths above.
+Compatibility wrappers may still exist for some runtime packages, but beginner-facing edits should start from the canonical paths above.
 
 Common examples:
 
-- `camera_nodes/camera_nodes/camera_node.py` -> use `camera_nodes/camera_nodes/node.py`
 - `linear_axis_nodes/linear_axis_nodes/lts300_node.py` -> use `linear_axis_nodes/linear_axis_nodes/node.py`
 - `planar_motor_nodes/planar_motor_nodes/mover_node.py` -> use `planar_motor_nodes/planar_motor_nodes/node.py`
 
