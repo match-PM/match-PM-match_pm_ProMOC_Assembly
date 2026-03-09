@@ -16,3 +16,6 @@ exclude = [
   "promoc_bringup/launch/planar_motor_demo.launch.py",
   "promoc_bringup/launch/promoc_assembly_demo.launch.py",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-p no:cacheprovider --import-mode=importlib"
