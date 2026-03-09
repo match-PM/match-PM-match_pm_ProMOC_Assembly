@@ -27,8 +27,6 @@ Read these in order:
 ## Migration And Refactor Reference
 
 - [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
-- [`refactor/repo_refactor_plan.md`](refactor/repo_refactor_plan.md)
-- [`refactor/path_migration_table.md`](refactor/path_migration_table.md)
 
 ## Learning And Background
 
@@ -36,9 +34,3 @@ Read these in order:
 - [`learning_path_de.md`](learning_path_de.md)
 - [`camera_parameter_reference.md`](camera_parameter_reference.md)
 - [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md)
-
-## Planning And Archive
-
-- [`roadmap/README.md`](roadmap/README.md)
-- [`roadmap/task_plan_n1.md`](roadmap/task_plan_n1.md)
-- `archive/` contains older or non-primary docs kept for reference
