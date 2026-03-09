@@ -22,7 +22,6 @@ Read these in order:
 ## Setup And Operations
 
 - [`../setup/README.md`](../setup/README.md)
-- [`../setup/QUICKSTART.md`](../setup/QUICKSTART.md)
 
 ## Migration And Refactor Reference
 

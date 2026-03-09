@@ -50,7 +50,6 @@ def test_docs_no_legacy_launch_names():
         ROOT / "docs" / "START_HERE.md",
         ROOT / "docs" / "README.md",
         ROOT / "setup" / "README.md",
-        ROOT / "setup" / "QUICKSTART.md",
         ROOT / "promoc_bringup" / "README.md",
     ]
     legacy = ("promoc_assembly_launch.py", "promoc_assembly_demo_launch.py")
