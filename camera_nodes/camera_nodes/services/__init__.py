@@ -15,15 +15,15 @@ def __getattr__(name):
 
         return CameraServiceHandlers
     if name == "AutofocusHandler":
-        from .autofocus_handler import AutofocusHandler
+        from .handlers.autofocus import AutofocusHandler
 
         return AutofocusHandler
     if name == "MTFHandler":
-        from .mtf_handler import MTFHandler
+        from .handlers.mtf import MTFHandler
 
         return MTFHandler
     if name == "ExposureHandler":
-        from .exposure_handler import ExposureHandler
+        from .handlers.exposure import ExposureHandler
 
         return ExposureHandler
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

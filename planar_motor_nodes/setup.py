@@ -20,7 +20,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "mover_node = planar_motor_nodes.mover_node:main",
+            "mover_node = planar_motor_nodes.node:main",
         ],
     },
 )

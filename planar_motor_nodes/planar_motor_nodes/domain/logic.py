@@ -52,11 +52,11 @@ import math
 from typing import Dict, List, Optional
 
 # Explicit imports for a clean architecture
-from .pmc_interface import PmcInterface
+from ..drivers.hardware import PmcInterface
 from ..config import MoverNodeConfig
 
 # XbotState from Mock (guaranteed to be available)
-from ..drivers.mock_pmclib import XbotState
+from ..drivers.mock import XbotState
 
 # Common utilities from promoc_core
 from promoc_core.motion import MotionStatus

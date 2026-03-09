@@ -14,9 +14,9 @@ This guide explains where things live in the repo and which files you should ope
 | Path | What it owns | Open this first |
 |---|---|---|
 | `promoc_bringup/` | Launch files, runtime mode, config wiring | `promoc_bringup/launch/system.launch.py` |
-| `camera_nodes/` | Camera node, autofocus/MTF/exposure services | `camera_nodes/camera_nodes/camera_node.py` |
-| `linear_axis_nodes/` | LTS300 axis node and axis services | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` |
-| `planar_motor_nodes/` | Planar motor mover node and motion services | `planar_motor_nodes/planar_motor_nodes/mover_node.py` |
+| `camera_nodes/` | Camera node, autofocus/MTF/exposure services | `camera_nodes/camera_nodes/node.py` |
+| `linear_axis_nodes/` | LTS300 axis node and axis services | `linear_axis_nodes/linear_axis_nodes/node.py` |
+| `planar_motor_nodes/` | Planar motor mover node and motion services | `planar_motor_nodes/planar_motor_nodes/node.py` |
 | `promoc_assembly_interfaces/` | ROS message/service contracts (`msg`, `srv`) | `promoc_assembly_interfaces/README.md` |
 | `promoc_core/` | Shared utilities (validation, logging, conversions, helpers) | `promoc_core/promoc_core/` |
 | `setup/` | Installation and system checks | `setup/README.md` |
@@ -30,14 +30,41 @@ If you want to add or change something, start here:
 |---|---|
 | Start/stop different node sets | `promoc_bringup/launch/system.launch.py`, `promoc_bringup/launch/camera.launch.py` |
 | Add launch argument or config mapping | `promoc_bringup/promoc_bringup/launch_utils.py` |
-| Add camera service behavior | `camera_nodes/camera_nodes/services/` |
-| Change shared camera helper code | `camera_nodes/camera_nodes/helpers/` |
-| Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/algorithms/` |
+| Add camera service behavior | `camera_nodes/camera_nodes/services/handlers/` |
+| Add camera service client/wiring logic | `camera_nodes/camera_nodes/services/clients/` |
+| Add camera domain logic/models | `camera_nodes/camera_nodes/domain/` |
+| Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/domain/algorithms/` (bridge) or `camera_nodes/camera_nodes/algorithms/` (implementation) |
 | Add synthetic MTF validation fixtures | `camera_nodes/test/fixtures/` |
-| Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/services/callbacks.py` |
-| Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/services/` |
+| Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/services/handlers/` |
+| Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/services/handlers/` |
 | Add shared conversion/validation/helper | `promoc_core/promoc_core/` |
 | Add a new ROS service contract | `promoc_assembly_interfaces/srv/` then wire in node packages |
+
+## Standard Runtime Layout
+
+Runtime packages (`camera_nodes`, `linear_axis_nodes`, `planar_motor_nodes`) now share a common internal shape:
+
+- `node.py`
+- `config.py`
+- `services/`
+  - `registry.py`
+  - `handlers/`
+  - `clients/`
+  - `validation.py`
+- `drivers/`
+  - `base.py`
+  - `hardware.py`
+  - `sim.py` or `mock.py`
+- `domain/`
+  - `logic.py`
+  - `models.py`
+  - `algorithms/` (when needed)
+- `adapters/`
+  - `conversions.py`
+  - `mapping.py`
+  - `validation.py`
+
+Legacy module paths (`camera_node.py`, `lts300_node.py`, `mover_node.py`, old service module names) remain as thin compatibility wrappers where needed.
 
 ## Dependency Direction (Keep It Simple)
 
@@ -63,5 +90,5 @@ make release-n1-check
 - Adding business logic into launch files instead of node/handler modules.
 - Creating new legacy paths instead of canonical `/promoc/...` paths.
 - Skipping interface contract updates (`srv`/`msg`) when adding new services.
-- Duplicating helper logic that belongs in `promoc_core`.
+- Reintroducing generic `helpers/` folders instead of placing code into `services`, `domain`, `adapters`, or `drivers`.
 

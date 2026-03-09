@@ -1,16 +1,6 @@
-"""Operation status definitions for linear-axis service callbacks."""
+"""Compatibility wrapper for legacy status module path."""
 
-from __future__ import annotations
-
-from enum import Enum
+from ..domain.status import OperationStatus
 
 
-class OperationStatus(Enum):
-    """Status of long-running linear-axis operations."""
-
-    IDLE = "idle"
-    HOMING = "homing"
-    MOVING = "moving"
-    JOGGING = "jogging"
-    ERROR = "error"
-    EMERGENCY_STOP = "emergency_stop"
+__all__ = ["OperationStatus"]

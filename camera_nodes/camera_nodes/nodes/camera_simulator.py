@@ -7,7 +7,7 @@ This module provides a standalone ROS2 node that uses the
 
 Note:
     Image generation is handled by `SimulatedCameraDriver` in
-    `drivers/simulated_camera_driver.py` to avoid code duplication.
+    `drivers/sim.py` to avoid code duplication.
 
 Usage:
     ros2 run camera_nodes camera_simulator

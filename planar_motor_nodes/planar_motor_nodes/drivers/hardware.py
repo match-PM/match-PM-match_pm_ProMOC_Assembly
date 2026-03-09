@@ -168,7 +168,7 @@ class PmcInterface:
 
         The mock library simulates all movements and returns realistic positions.
         """
-        from ..drivers import mock_pmclib
+        from . import mock as mock_pmclib
 
         # Create a specific logger for the mock library
         mock_lib_logger = TaggedLogger(self.logger._logger, LogTags.MOCK)

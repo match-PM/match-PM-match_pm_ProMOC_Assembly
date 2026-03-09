@@ -57,9 +57,9 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 ## 4. Repository Map
 
 - Launch and runtime config: `promoc_bringup`
-- Camera services and handlers: `camera_nodes`
-- Linear axis node: `linear_axis_nodes`
-- Planar motor mover node: `planar_motor_nodes`
+- Camera services and handlers: `camera_nodes` (`camera_nodes/camera_nodes/node.py`)
+- Linear axis node: `linear_axis_nodes` (`linear_axis_nodes/linear_axis_nodes/node.py`)
+- Planar motor mover node: `planar_motor_nodes` (`planar_motor_nodes/planar_motor_nodes/node.py`)
 - Shared ROS interfaces (`srv`, `msg`): `promoc_assembly_interfaces`
 - Shared Python utilities: `promoc_core`
 

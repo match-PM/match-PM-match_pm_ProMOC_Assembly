@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from .base import ServiceCallbacksBase, ServiceRegistration
-from .control import ControlCallbacks
-from .motion import MotionCallbacks
-from .motion_input import (
+from .handlers.base import ServiceCallbacksBase, ServiceRegistration
+from .handlers.control import ControlCallbacks
+from .handlers.motion import MotionCallbacks
+from ..adapters.mapping import (
     MotionInputConverters,
     MotionInputOptions,
     ProcessedMotionInput,
 )
-from .service_handlers import (
+from .registry import (
     SERVICE_REGISTRY,
     ServiceCallbacks,
     ServiceHandlers,

@@ -46,11 +46,11 @@ Example services for `lts300_x_axis`:
 
 | Goal | Start Here | Then Check |
 |---|---|---|
-| Change service behavior and motion rules | `linear_axis_nodes/linear_axis_nodes/services/service_handlers.py` | `linear_axis_nodes/linear_axis_nodes/services/motion_callbacks.py`, `linear_axis_nodes/linear_axis_nodes/services/admin_callbacks.py`, `linear_axis_nodes/linear_axis_nodes/services/status.py`, `linear_axis_nodes/linear_axis_nodes/services/validation.py` |
-| Change service/topic namespace wiring | `linear_axis_nodes/linear_axis_nodes/lts300_node.py` | `linear_axis_nodes/README.md` |
+| Change service behavior and motion rules | `linear_axis_nodes/linear_axis_nodes/services/registry.py` | `linear_axis_nodes/linear_axis_nodes/services/handlers/motion.py`, `linear_axis_nodes/linear_axis_nodes/services/handlers/admin.py`, `linear_axis_nodes/linear_axis_nodes/domain/status.py`, `linear_axis_nodes/linear_axis_nodes/services/validation.py` |
+| Change service/topic namespace wiring | `linear_axis_nodes/linear_axis_nodes/node.py` | `linear_axis_nodes/README.md` |
 | Change parameter defaults and typed config | `linear_axis_nodes/linear_axis_nodes/config.py` | `promoc_bringup/config/linear_axes_params.yaml` |
-| Change driver connection flow | `linear_axis_nodes/linear_axis_nodes/helpers/lts300_interface.py` | `linear_axis_nodes/linear_axis_nodes/drivers/thorlabs_lts300_driver.py` |
-| Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/simulated_linear_axis_driver.py` | `linear_axis_nodes/linear_axis_nodes/helpers/lts300_interface.py` |
+| Change driver connection flow | `linear_axis_nodes/linear_axis_nodes/services/clients/lts300_interface.py` | `linear_axis_nodes/linear_axis_nodes/drivers/hardware.py` |
+| Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/sim.py` | `linear_axis_nodes/linear_axis_nodes/services/clients/lts300_interface.py` |
 
 ## Verify Changes
 

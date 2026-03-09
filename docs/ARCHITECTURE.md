@@ -18,9 +18,9 @@ This document explains how the repository is structured and where to add or chan
 | Package | Responsibility | Main Entrypoints | Depends On |
 |---|---|---|---|
 | `promoc_bringup` | Launch files, runtime-mode resolution, user config mapping | `launch/system.launch.py`, `launch/camera.launch.py`, `promoc_bringup/launch_utils.py` | all runtime node packages |
-| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/camera_node.py`, `camera_nodes/camera_nodes/services/*`, `camera_nodes/camera_nodes/helpers/*` | `promoc_assembly_interfaces`, `promoc_core` |
-| `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/lts300_node.py`, `helpers/lts300_interface.py`, `services/callbacks.py` | `promoc_assembly_interfaces`, `promoc_core` |
-| `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/mover_node.py`, `helpers/*`, `services/*` | `promoc_assembly_interfaces`, `promoc_core` |
+| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/node.py`, `camera_nodes/camera_nodes/services/*`, `camera_nodes/camera_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
+| `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/linear_axis_nodes/node.py`, `linear_axis_nodes/linear_axis_nodes/services/*`, `linear_axis_nodes/linear_axis_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
+| `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/planar_motor_nodes/node.py`, `planar_motor_nodes/planar_motor_nodes/services/*`, `planar_motor_nodes/planar_motor_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
 | `promoc_assembly_interfaces` | ROS2 `srv`/`msg` contracts | `srv/*`, `msg/*` | none |
 | `promoc_core` | Shared validation, conversions, logging, motion helpers | `promoc_core/*` | none |
 | `setup` | Environment bootstrap and install scripts | `setup/install_all.sh`, `setup/check_installation.sh` | system tools |
@@ -59,12 +59,12 @@ This document explains how the repository is structured and where to add or chan
   - then wire node callbacks in package-specific node files
 - New camera behavior:
   - `camera_nodes/camera_nodes/services/*`
-  - reuse `camera_nodes/camera_nodes/helpers/*` for shared helper logic
+  - use `camera_nodes/camera_nodes/domain/*` and `camera_nodes/camera_nodes/adapters/*`
 - New linear-axis behavior:
-  - `linear_axis_nodes/linear_axis_nodes/services/callbacks.py`
+  - `linear_axis_nodes/linear_axis_nodes/services/handlers/*`
 - New mover behavior:
   - `planar_motor_nodes/planar_motor_nodes/services/*`
-  - reuse `planar_motor_nodes/planar_motor_nodes/helpers/*` for shared motion/PMC helpers
+  - use `planar_motor_nodes/planar_motor_nodes/domain/*`, `drivers/*`, and `adapters/*`
 
 ## Beginner Reading Order
 

@@ -160,7 +160,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "camera_nodes/camera_nodes/camera_node.py",
+            "camera_nodes/camera_nodes/node.py",
             [
                 "/promoc/camera/autofocus",
                 "/promoc/camera/measure_mtf",
@@ -172,7 +172,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_not_contains(
             root,
-            "camera_nodes/camera_nodes/camera_node.py",
+            "camera_nodes/camera_nodes/node.py",
             [
                 "/promoc/camera_node/",
                 "/promoc_assembly/",
@@ -195,7 +195,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "linear_axis_nodes/linear_axis_nodes/lts300_node.py",
+            "linear_axis_nodes/linear_axis_nodes/node.py",
             ["/promoc/linear_axis/"],
             "linear-axis node uses canonical namespace",
         )
@@ -203,7 +203,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_not_contains(
             root,
-            "linear_axis_nodes/linear_axis_nodes/lts300_node.py",
+            "linear_axis_nodes/linear_axis_nodes/node.py",
             [
                 "register_service_alias_pair",
                 "other_axis_position_callback_legacy",
@@ -217,7 +217,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "planar_motor_nodes/planar_motor_nodes/mover_node.py",
+            "planar_motor_nodes/planar_motor_nodes/node.py",
             ["/promoc/mover/"],
             "mover node uses canonical namespace",
         )
@@ -225,7 +225,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_not_contains(
             root,
-            "planar_motor_nodes/planar_motor_nodes/mover_node.py",
+            "planar_motor_nodes/planar_motor_nodes/node.py",
             ["register_service_alias_pair", 'XBotInfo, "xbot_info", 10'],
             "mover node removed legacy service/topic alias wiring",
         )
@@ -299,8 +299,8 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_file_exists(
             root,
-            "camera_nodes/camera_nodes/helpers/mtf_param_mapping.py",
-            "camera helpers package contains centralized mtf parameter mapping",
+            "camera_nodes/camera_nodes/adapters/mapping.py",
+            "camera adapters package contains centralized mtf parameter mapping",
         )
     )
     results.append(

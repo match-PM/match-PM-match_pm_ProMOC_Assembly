@@ -1,47 +1,18 @@
-"""Shared base classes and aliases for planar motor service callbacks."""
+"""Compatibility wrapper for legacy service base module path."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from promoc_core.logging import LogTags, TaggedLogger
-from promoc_core.promoc_exceptions import ConfigurationError, SafetyError
-
-from ..config import MoverNodeConfig
-from ..helpers.mover_utils import MoverUtils
-from ..helpers.pmc_interface import PmcInterface
+from .handlers.base import (
+    InvalidParameterError,
+    ParameterValidationError,
+    PositionOutOfBoundsError,
+    ServiceCallbacksBase,
+    ServiceRegistration,
+)
 
 
-InvalidParameterError = ConfigurationError
-ParameterValidationError = ConfigurationError
-PositionOutOfBoundsError = SafetyError
-
-
-@dataclass(frozen=True)
-class ServiceRegistration:
-    """Declarative service binding for mover node callback wiring."""
-
-    service_name: str
-    callback_name: str
-
-
-class ServiceCallbacksBase:
-    """Shared constructor and dependencies for planar motor callbacks."""
-
-    NO_CHANGE = -999999
-
-    def __init__(
-        self,
-        logger,
-        pmc_interface: PmcInterface,
-        mover_utils: MoverUtils,
-        config: MoverNodeConfig,
-    ):
-        self.logger = TaggedLogger(logger, LogTags.PMC_MOTION)
-        self.pmc = pmc_interface
-        self.mover_utils = mover_utils
-        self.config = config
-
-        self.logger.info(
-            f"ServiceCallbacks initialized. Using PMCLib: {self.pmc.status['source']}"
-        )
+__all__ = [
+    "InvalidParameterError",
+    "ParameterValidationError",
+    "PositionOutOfBoundsError",
+    "ServiceCallbacksBase",
+    "ServiceRegistration",
+]

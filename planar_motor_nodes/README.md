@@ -43,11 +43,11 @@ Common services:
 
 | Goal | Start Here | Then Check |
 |---|---|---|
-| Change motion service behavior | `planar_motor_nodes/planar_motor_nodes/services/motion.py` | `planar_motor_nodes/planar_motor_nodes/helpers/mover_utils.py` |
-| Change control service behavior | `planar_motor_nodes/planar_motor_nodes/services/control.py` | `planar_motor_nodes/planar_motor_nodes/mover_node.py` |
-| Change service/topic namespace wiring | `planar_motor_nodes/planar_motor_nodes/mover_node.py` | `planar_motor_nodes/planar_motor_nodes/services/__init__.py`, `planar_motor_nodes/planar_motor_nodes/services/base.py` |
+| Change motion service behavior | `planar_motor_nodes/planar_motor_nodes/services/handlers/motion.py` | `planar_motor_nodes/planar_motor_nodes/domain/logic.py` |
+| Change control service behavior | `planar_motor_nodes/planar_motor_nodes/services/handlers/control.py` | `planar_motor_nodes/planar_motor_nodes/node.py` |
+| Change service/topic namespace wiring | `planar_motor_nodes/planar_motor_nodes/node.py` | `planar_motor_nodes/planar_motor_nodes/services/registry.py`, `planar_motor_nodes/planar_motor_nodes/services/handlers/base.py` |
 | Change parameter defaults and bounds | `planar_motor_nodes/planar_motor_nodes/config.py` | `promoc_bringup/config/mover_node_params.yaml` |
-| Change PMC backend integration | `planar_motor_nodes/planar_motor_nodes/helpers/pmc_interface.py` | `planar_motor_nodes/planar_motor_nodes/drivers/mock_pmclib.py` |
+| Change PMC backend integration | `planar_motor_nodes/planar_motor_nodes/drivers/hardware.py` | `planar_motor_nodes/planar_motor_nodes/drivers/mock.py` |
 
 ## Verify Changes
 

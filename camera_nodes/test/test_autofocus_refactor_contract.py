@@ -21,16 +21,26 @@ def test_autofocus_algorithm_exposes_public_hooks():
 
 def test_autofocus_handler_is_split_into_runner_and_axis_modules():
     handler_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus_handler.py"
+        ROOT
+        / "camera_nodes"
+        / "camera_nodes"
+        / "services"
+        / "handlers"
+        / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "from .autofocus_axis_clients import AxisClientManager" in handler_content
+    assert "from ..clients.autofocus_axis import AxisClientManager" in handler_content
     assert "from .autofocus_runner import AutofocusRunner" in handler_content
 
 
 def test_autofocus_runner_avoids_private_algorithm_field_access():
     runner_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus_runner.py"
+        ROOT
+        / "camera_nodes"
+        / "camera_nodes"
+        / "services"
+        / "handlers"
+        / "autofocus_runner.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "._measurements" not in runner_content

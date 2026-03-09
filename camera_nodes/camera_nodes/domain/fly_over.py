@@ -14,8 +14,8 @@ from promoc_assembly_interfaces.srv import (
 )
 from promoc_core.promoc_exceptions import ServiceError
 
-from .axis_helpers import temporary_velocity
-from .parameter_access import ParameterAccessor
+from ..services.clients.axis_velocity import temporary_velocity
+from ..services.clients.parameter_access import ParameterAccessor
 
 
 @dataclass(frozen=True)

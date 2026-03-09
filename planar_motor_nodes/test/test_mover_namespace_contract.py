@@ -10,19 +10,19 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_mover_node_registers_only_canonical_services():
     content = (
-        ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "mover_node.py"
+        ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "/promoc/mover/" in content
     assert "register_service_alias_pair" not in content
-    assert "from .helpers.pmc_interface import PmcInterface" in content
-    assert "from .helpers.mover_utils import MoverUtils" in content
+    assert "from .drivers.hardware import PmcInterface" in content
+    assert "from .domain.logic import MoverUtils" in content
     assert "from .services import ServiceHandlers" in content
 
 
 def test_mover_node_publishes_only_canonical_xbot_info_topic():
     content = (
-        ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "mover_node.py"
+        ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert 'XBotInfo, "/promoc/mover/xbot_info", 10' in content
@@ -38,10 +38,10 @@ def test_mover_services_use_composition_registry_instead_of_mro_mixins():
         / "planar_motor_nodes"
         / "planar_motor_nodes"
         / "services"
-        / "service_handlers.py"
+        / "registry.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "from .service_handlers import (" in services_init
+    assert "from .registry import (" in services_init
     assert "SERVICE_REGISTRY" in handlers_module
     assert "class ServiceHandlers:" in handlers_module
     assert (
