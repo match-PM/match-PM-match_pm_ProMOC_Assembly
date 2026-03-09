@@ -4,6 +4,8 @@ ROS2 Node for Thorlabs LTS300 Linear Axis Control.
 This module implements the LTS300Node, which is the central orchestrator
 for controlling a Thorlabs LTS300 linear stage (300mm travel).
 
+Canonical entry point for the `linear_axis_nodes` runtime package.
+
 Architecture Overview:
 ======================
 The node follows a dependency injection pattern similar to the mover_node:

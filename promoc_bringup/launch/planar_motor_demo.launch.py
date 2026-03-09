@@ -1,3 +1,9 @@
+"""Example launch for the optional planar-motor demo flow.
+
+This is not a canonical system startup path.
+Use ``system.launch.py`` for normal startup.
+"""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration

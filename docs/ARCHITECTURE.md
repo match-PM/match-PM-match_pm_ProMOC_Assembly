@@ -85,6 +85,18 @@ Avoid these patterns:
 - runtime packages importing each other directly for shared helpers
 - mixing contract changes with unrelated runtime behavior changes without updating both sides
 
+## Workflow Orchestration Stance
+
+There is currently no need for a dedicated `promoc_orchestration` or `promoc_workflows` package.
+
+Reason:
+
+- the repo has optional demo flows, but not at least three production cross-node workflows with distinct coordination logic
+- the existing `promoc_bringup.unified_demo` node is a demo helper, not a canonical runtime manager
+- adding a new orchestration package now would introduce another concept for beginners without clearly reducing complexity
+
+If real cross-node workflows grow beyond demo sequences, revisit this decision with a small optional package instead of expanding `promoc_core` or moving logic into launch files.
+
 ## Read Next
 
 - onboarding: [`../START_HERE.md`](../START_HERE.md)

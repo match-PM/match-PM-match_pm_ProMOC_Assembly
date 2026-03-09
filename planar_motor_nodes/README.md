@@ -37,6 +37,13 @@ ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
 | Change mock behavior | `planar_motor_nodes/planar_motor_nodes/drivers/mock.py` |
 | Change typed config and limits | `planar_motor_nodes/planar_motor_nodes/config.py`, `promoc_bringup/config/mover_node_params.yaml` |
 
+## Legacy Wrappers You May Still See
+
+- `planar_motor_nodes/planar_motor_nodes/mover_node.py`: compatibility wrapper, do not extend
+- `planar_motor_nodes/planar_motor_nodes/services/control.py`: compatibility wrapper, do not extend
+- `planar_motor_nodes/planar_motor_nodes/services/motion.py`: compatibility wrapper, do not extend
+- `planar_motor_nodes/planar_motor_nodes/services/service_handlers.py`: compatibility wrapper, do not extend
+
 ## Verify Changes
 
 ```bash

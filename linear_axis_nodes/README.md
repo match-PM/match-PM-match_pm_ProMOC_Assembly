@@ -47,6 +47,14 @@ Common examples:
 | Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/sim.py` |
 | Change typed config and defaults | `linear_axis_nodes/linear_axis_nodes/config.py`, `promoc_bringup/config/linear_axes_params.yaml` |
 
+## Legacy Wrappers You May Still See
+
+- `linear_axis_nodes/linear_axis_nodes/lts300_node.py`: compatibility wrapper, do not extend
+- `linear_axis_nodes/linear_axis_nodes/services/admin_callbacks.py`: compatibility wrapper, do not extend
+- `linear_axis_nodes/linear_axis_nodes/services/motion_callbacks.py`: compatibility wrapper, do not extend
+- `linear_axis_nodes/linear_axis_nodes/services/service_handlers.py`: compatibility wrapper, do not extend
+- `linear_axis_nodes/linear_axis_nodes/drivers/thorlabs_lts300_driver.py`: compatibility wrapper, do not extend
+
 ## Verify Changes
 
 ```bash

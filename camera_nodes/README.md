@@ -35,6 +35,15 @@ make sim
 
 Use the canonical module paths above. Compatibility wrappers may still exist for migration, but they are not the preferred edit points.
 
+## Legacy Wrappers You May Still See
+
+- `camera_nodes/camera_nodes/camera_node.py`: compatibility wrapper, do not extend
+- `camera_nodes/camera_nodes/services/autofocus_handler.py`: compatibility wrapper, do not extend
+- `camera_nodes/camera_nodes/services/mtf_handler.py`: compatibility wrapper, do not extend
+- `camera_nodes/camera_nodes/services/exposure_handler.py`: compatibility wrapper, do not extend
+- `camera_nodes/camera_nodes/drivers/aravis_camera_driver.py`: compatibility wrapper, do not extend
+- `camera_nodes/camera_nodes/drivers/simulated_camera_driver.py`: compatibility wrapper, do not extend
+
 ## Verify Changes
 
 ```bash

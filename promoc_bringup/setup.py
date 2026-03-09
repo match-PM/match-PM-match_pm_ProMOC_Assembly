@@ -32,7 +32,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # New unified demo controller (recommended)
+            # Optional demo controller. Not a canonical startup path.
             'unified_demo = promoc_bringup.unified_demo:main',
         ],
     },

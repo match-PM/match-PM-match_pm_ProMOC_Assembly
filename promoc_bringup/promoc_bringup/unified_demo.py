@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """\
-Unified Demo Controller for ProMOC Assembly
+Optional unified demo controller for ProMOC Assembly.
+
+This node is a demo helper, not the canonical system startup path.
 
 Supports three demo modes:
 - planar_motor: XBot motion only

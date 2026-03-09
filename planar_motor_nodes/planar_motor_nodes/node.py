@@ -4,6 +4,8 @@ ROS2 Node for XBot Mover Control (Planar Motor).
 This module implements the MoverServiceNode - the central orchestrator
 for controlling XBot planar motors via the PMC controller.
 
+Canonical entry point for the `planar_motor_nodes` runtime package.
+
 Architecture Overview:
 ======================
 The node follows a dependency injection pattern for better testability:

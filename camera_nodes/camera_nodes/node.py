@@ -5,6 +5,8 @@ ROS2 Node for Camera Image Processing and Autofocus.
 This module implements the CameraNode, which orchestrates camera operations
 like autofocus and MTF measurement.
 
+Canonical entry point for the `camera_nodes` runtime package.
+
 Architecture Overview:
 ======================
 The node follows a dependency injection pattern for flexibility:

@@ -1,3 +1,9 @@
+"""Example launch for the optional unified demo runner.
+
+This is not a canonical system startup path.
+Use ``system.launch.py`` for normal startup.
+"""
+
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
