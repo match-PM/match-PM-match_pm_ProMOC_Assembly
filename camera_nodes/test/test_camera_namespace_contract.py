@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_camera_node_registers_only_canonical_services():
-    content = (ROOT / "camera_nodes" / "camera_nodes" / "camera_node.py").read_text(
+    content = (ROOT / "camera_nodes" / "camera_nodes" / "node.py").read_text(
         encoding="utf-8", errors="ignore"
     )
 
@@ -23,7 +23,7 @@ def test_camera_node_registers_only_canonical_services():
 
 def test_camera_axis_topic_uses_canonical_paths_only():
     node_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "camera_node.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
     simulator_content = (
         ROOT / "camera_nodes" / "camera_nodes" / "nodes" / "camera_simulator.py"

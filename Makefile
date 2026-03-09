@@ -81,7 +81,7 @@ format:
 	$(DEV_PYTHON) -m ruff format $(LINT_DIRS)
 
 test-unit:
-	PYTHONPATH=promoc_core:camera_nodes $(DEV_PYTHON) -m pytest \
+	PYTHONPATH=promoc_core:camera_nodes:linear_axis_nodes:planar_motor_nodes:promoc_bringup $(DEV_PYTHON) -m pytest \
 		promoc_core/test/test_validation.py \
 		promoc_core/test/test_conversions.py \
 		camera_nodes/test/test_config.py \
