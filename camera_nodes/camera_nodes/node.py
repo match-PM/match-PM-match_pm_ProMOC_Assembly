@@ -87,7 +87,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import Trigger
 
 # Local imports
-from .domain.logic import CameraImageProcessing
+from .services.image_processing import CameraImageProcessing
 from .config import (
     declare_camera_parameters,
     load_camera_runtime_config,
@@ -345,3 +345,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+

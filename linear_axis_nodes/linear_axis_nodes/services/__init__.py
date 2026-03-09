@@ -1,16 +1,13 @@
-"""Service layer for linear-axis callbacks."""
+"""Service-first exports for the linear-axis package."""
 
-from .handlers.admin import LinearAdminCallbacks
+from .admin import LinearAdminCallbacks
+from .motion import LinearMotionCallbacks
 from .registry import ServiceHandlers
-from .handlers.motion import LinearMotionCallbacks
-from ..domain.models import OperationStateStore, OperationStatus
 from .validation import LinearAxisValidator
 
 __all__ = [
     "LinearAdminCallbacks",
     "LinearMotionCallbacks",
     "LinearAxisValidator",
-    "OperationStateStore",
-    "OperationStatus",
     "ServiceHandlers",
 ]

@@ -43,7 +43,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.services.handlers.autofocus import AutofocusHandler  # noqa: E402
+from camera_nodes.services.autofocus import AutofocusHandler  # noqa: E402
 
 
 class _Param:
@@ -89,3 +89,4 @@ def test_autofocus_handler_builds_focus_profile():
     assert isinstance(profile, dict)
     assert "scan_speed_mm_s" in profile
     assert profile["scan_speed_mm_s"] > 0.0
+

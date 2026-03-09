@@ -8,7 +8,8 @@ Read these in order:
 
 1. [`START_HERE.md`](START_HERE.md)
 2. [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+3. [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
+4. package README`r`n5. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## Package Guides
 
@@ -29,7 +30,9 @@ Read these in order:
 
 ## Learning And Background
 
+- [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
 - [`learning_path_en.md`](learning_path_en.md)
 - [`learning_path_de.md`](learning_path_de.md)
 - [`camera_parameter_reference.md`](camera_parameter_reference.md)
 - [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md)
+

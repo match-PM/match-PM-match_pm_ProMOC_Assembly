@@ -1,4 +1,4 @@
-"""Service layer for camera node callbacks."""
+"""Service-first exports for the camera package."""
 
 __all__ = [
     "CameraServiceHandlers",
@@ -9,21 +9,20 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Lazy-import service handlers to keep import side effects minimal."""
     if name == "CameraServiceHandlers":
         from .registry import CameraServiceHandlers
 
         return CameraServiceHandlers
     if name == "AutofocusHandler":
-        from .handlers.autofocus import AutofocusHandler
+        from .autofocus import AutofocusHandler
 
         return AutofocusHandler
     if name == "MTFHandler":
-        from .handlers.mtf import MTFHandler
+        from .mtf import MTFHandler
 
         return MTFHandler
     if name == "ExposureHandler":
-        from .handlers.exposure import ExposureHandler
+        from .exposure import ExposureHandler
 
         return ExposureHandler
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

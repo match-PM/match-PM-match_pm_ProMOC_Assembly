@@ -15,8 +15,8 @@ for rel in ("linear_axis_nodes", "promoc_core"):
         sys.path.insert(0, str(package_root))
 
 from linear_axis_nodes.config import LTS300NodeConfig
+from linear_axis_nodes.models import OperationStatus
 from linear_axis_nodes.services import ServiceHandlers
-from linear_axis_nodes.services.status import OperationStatus
 
 
 class _DummyLogger:
@@ -41,6 +41,7 @@ class _FakeDriver:
         self._position = 0.0
         self._moving = False
         self._velocity = (0.0, 1.0, 5.0)
+        self.disconnected = False
 
     def move_absolute(self, position):
         self._moving = True
@@ -89,12 +90,6 @@ class _FakeDriver:
         self._velocity = tuple(current)
         return self._velocity
 
-
-class _FakeInterface:
-    def __init__(self):
-        self.driver = _FakeDriver()
-        self.disconnected = False
-
     def disconnect(self):
         self.disconnected = True
 
@@ -125,8 +120,8 @@ def _wait_until_idle(callbacks: ServiceHandlers, timeout_s: float = 1.0):
 
 
 def test_linear_service_callbacks_motion_and_admin_paths():
-    interface = _FakeInterface()
-    callbacks = ServiceHandlers(_DummyLogger(), interface, _config())
+    driver = _FakeDriver()
+    callbacks = ServiceHandlers(_DummyLogger(), driver, _config())
 
     abs_req = SimpleNamespace(axis_position=10.0)
     abs_res = SimpleNamespace(success=False, status_message="")
@@ -205,4 +200,4 @@ def test_linear_service_callbacks_motion_and_admin_paths():
     shutdown_res = SimpleNamespace(success=False, status_message="")
     shutdown_result = callbacks.callback_shutdown(shutdown_req, shutdown_res)
     assert shutdown_result.success is True
-    assert interface.disconnected is True
+    assert driver.disconnected is True

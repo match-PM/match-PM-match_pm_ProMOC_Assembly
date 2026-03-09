@@ -1,4 +1,4 @@
-"""Static contract checks for Wave 2 autofocus refactor boundaries."""
+"""Static contract checks for autofocus service and algorithm boundaries."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_autofocus_algorithm_exposes_public_hooks():
     content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "domain" / "algorithms" / "autofocus.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "algorithms" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "def score_image(" in content
@@ -19,28 +19,19 @@ def test_autofocus_algorithm_exposes_public_hooks():
     assert "def get_scan_step_mm(" in content
 
 
-def test_autofocus_handler_is_split_into_runner_and_axis_modules():
+def test_autofocus_service_uses_flat_support_modules():
     handler_content = (
-        ROOT
-        / "camera_nodes"
-        / "camera_nodes"
-        / "services"
-        / "handlers"
-        / "autofocus.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "from ..clients.autofocus_axis import AxisClientManager" in handler_content
+    assert "from .autofocus_axis import AxisClientManager" in handler_content
     assert "from .autofocus_runner import AutofocusRunner" in handler_content
+    assert "from .fly_over import FlyOverDetector" in handler_content
 
 
 def test_autofocus_runner_avoids_private_algorithm_field_access():
     runner_content = (
-        ROOT
-        / "camera_nodes"
-        / "camera_nodes"
-        / "services"
-        / "handlers"
-        / "autofocus_runner.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus_runner.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "._measurements" not in runner_content

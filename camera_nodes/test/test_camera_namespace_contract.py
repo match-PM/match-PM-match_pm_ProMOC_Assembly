@@ -26,7 +26,7 @@ def test_camera_axis_topic_uses_canonical_paths_only():
         ROOT / "camera_nodes" / "camera_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
     simulator_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "nodes" / "camera_simulator.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "sim_node.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "/promoc/linear_axis/" in node_content
@@ -37,3 +37,5 @@ def test_camera_axis_topic_uses_canonical_paths_only():
     assert "/promoc/linear_axis/lts300_x_axis/position" in simulator_content
     assert "/promoc_assembly/lts300_x_axis/position" not in simulator_content
     assert "position_callback_legacy" not in simulator_content
+
+

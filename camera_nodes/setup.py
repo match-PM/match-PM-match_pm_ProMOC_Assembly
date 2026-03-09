@@ -20,7 +20,8 @@ setup(
     entry_points={
         "console_scripts": [
             "camera_node = camera_nodes.node:main",
-            "camera_simulator = camera_nodes.nodes.camera_simulator:main",
+            "camera_simulator = camera_nodes.sim_node:main",
         ],
     },
 )
+

@@ -16,7 +16,7 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from camera_nodes.services.handlers.exposure import ExposureHandler  # noqa: E402
+from camera_nodes.services.exposure import ExposureHandler  # noqa: E402
 
 
 class _Param:
@@ -90,3 +90,4 @@ def test_exposure_handler_marks_error_for_invalid_request():
 
     assert response.success is False
     assert "positive" in response.status_message.lower()
+

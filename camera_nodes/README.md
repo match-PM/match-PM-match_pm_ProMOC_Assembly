@@ -1,59 +1,50 @@
-# Camera Nodes
+# camera_nodes
 
-## Purpose
+ROS2 camera runtime package for autofocus, MTF measurement, exposure control, and the camera simulator.
 
-`camera_nodes` owns the camera runtime node and the camera-facing ROS services for autofocus, MTF measurement, ROI detection, and exposure control.
+## Start Here
 
-## How To Run
+Open these files in this order:
 
-```bash
-make hw
-make camera-hw
-make sim
-```
+1. `camera_nodes/camera_nodes/node.py`
+2. `camera_nodes/camera_nodes/services/autofocus.py` or `services/mtf.py`
+3. `camera_nodes/camera_nodes/algorithms/`
+4. `camera_nodes/camera_nodes/drivers/`
+
+## What To Edit
+
+| Change | Start here |
+| --- | --- |
+| Node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
+| Autofocus behavior | `camera_nodes/camera_nodes/services/autofocus.py` |
+| MTF behavior | `camera_nodes/camera_nodes/services/mtf.py` |
+| Exposure behavior | `camera_nodes/camera_nodes/services/exposure.py` |
+| Camera algorithms | `camera_nodes/camera_nodes/algorithms/` |
+| Camera hardware or sim backend | `camera_nodes/camera_nodes/drivers/` |
+| Shared camera models | `camera_nodes/camera_nodes/models.py` |
+
+## Canonical Runtime Files
+
+- `camera_nodes/camera_nodes/node.py`
+- `camera_nodes/camera_nodes/config.py`
+- `camera_nodes/camera_nodes/models.py`
+- `camera_nodes/camera_nodes/services/`
+- `camera_nodes/camera_nodes/drivers/`
+- `camera_nodes/camera_nodes/algorithms/`
+- `camera_nodes/camera_nodes/sim_node.py`
 
 ## Stable Public ROS APIs
 
 - `/promoc/camera/autofocus`
+- `/promoc/camera/autofocus_comparison`
 - `/promoc/camera/measure_mtf`
 - `/promoc/camera/detect_rois`
+- `/promoc/camera/select_roi`
 - `/promoc/camera/set_exposure`
-
-## Where To Edit Common Changes
-
-| Goal | Open this first |
-|---|---|
-| Change node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
-| Change service registration details | `camera_nodes/camera_nodes/services/registry.py` |
-| Change autofocus behavior | `camera_nodes/camera_nodes/services/handlers/autofocus.py` |
-| Change MTF behavior | `camera_nodes/camera_nodes/services/handlers/mtf.py` |
-| Change camera algorithms | `camera_nodes/camera_nodes/domain/algorithms/` |
-| Change camera-facing service clients | `camera_nodes/camera_nodes/services/clients/` |
-| Change camera drivers | `camera_nodes/camera_nodes/drivers/hardware.py` or `camera_nodes/camera_nodes/drivers/sim.py` |
-| Change package-level business logic or models | `camera_nodes/camera_nodes/domain/` |
-| Change conversions or response mapping | `camera_nodes/camera_nodes/adapters/` |
-| Change typed config and defaults | `camera_nodes/camera_nodes/config.py`, `promoc_bringup/config/cameras/` |
-
-Use the canonical module paths above. `camera_nodes` no longer uses parallel legacy module names for handlers, drivers, or algorithms.
-
-## Verify Changes
-
-```bash
-make lint
-make test-unit
-make release-n1-check
-```
-
-Package-only check:
-
-```bash
-colcon test --packages-select camera_nodes
-colcon test-result --verbose
-```
 
 ## Related Docs
 
-- onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
-- architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
-- camera-specific notes: [`docs/`](docs/)
+- `docs/START_HERE.md`
+- `docs/PROJECT_STRUCTURE.md`
+- `docs/PACKAGE_INFO.md`
+- `docs/ARCHITECTURE.md`

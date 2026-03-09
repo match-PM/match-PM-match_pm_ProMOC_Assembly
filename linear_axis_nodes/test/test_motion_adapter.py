@@ -15,9 +15,8 @@ for rel in ("linear_axis_nodes", "promoc_core"):
         sys.path.insert(0, str(package_root))
 
 from linear_axis_nodes.config import LTS300NodeConfig
-from linear_axis_nodes.services.motion_callbacks import LinearMotionCallbacks
-from linear_axis_nodes.services.state_store import OperationStateStore
-from linear_axis_nodes.services.status import OperationStatus
+from linear_axis_nodes.models import OperationStateStore, OperationStatus
+from linear_axis_nodes.services.motion import LinearMotionCallbacks
 from linear_axis_nodes.services.validation import LinearAxisValidator
 
 
@@ -68,11 +67,6 @@ class _FakeDriver:
         return False
 
 
-class _FakeInterface:
-    def __init__(self):
-        self.driver = _FakeDriver()
-
-
 def _config() -> LTS300NodeConfig:
     return LTS300NodeConfig(
         use_sim_time=True,
@@ -100,13 +94,13 @@ def _wait_until_idle(store: OperationStateStore, timeout_s: float = 1.0) -> bool
 
 def test_linear_motion_callbacks_absolute_relative_and_stop():
     logger = _DummyLogger()
-    interface = _FakeInterface()
+    driver = _FakeDriver()
     config = _config()
     store = OperationStateStore()
     validator = LinearAxisValidator(config, logger)
     callbacks = LinearMotionCallbacks(
         logger,
-        interface=interface,
+        driver=driver,
         validator=validator,
         state_store=store,
         config=config,
@@ -136,19 +130,18 @@ def test_linear_motion_callbacks_absolute_relative_and_stop():
 
 def test_linear_motion_callbacks_home_and_jog():
     logger = _DummyLogger()
-    interface = _FakeInterface()
+    driver = _FakeDriver()
     config = _config()
     store = OperationStateStore()
     validator = LinearAxisValidator(config, logger)
     callbacks = LinearMotionCallbacks(
         logger,
-        interface=interface,
+        driver=driver,
         validator=validator,
         state_store=store,
         config=config,
     )
 
-    # simulate recoverable pre-state
     store.set(OperationStatus.ERROR, "previous failure")
 
     home_req = SimpleNamespace()

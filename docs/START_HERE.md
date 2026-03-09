@@ -93,6 +93,7 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 ## Read Next
 
 - Contributor file map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+- Runtime package cheat sheet: [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
 - Architecture and dependency boundaries: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Learning path (EN): [`learning_path_en.md`](learning_path_en.md)
 - Learning path (DE): [`learning_path_de.md`](learning_path_de.md)

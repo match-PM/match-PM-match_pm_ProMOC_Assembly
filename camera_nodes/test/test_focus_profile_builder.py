@@ -13,7 +13,7 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-from camera_nodes.domain.models import FocusProfileBuilder  # noqa: E402
+from camera_nodes.models import FocusProfileBuilder  # noqa: E402
 
 
 class _Param:
@@ -116,3 +116,4 @@ def test_focus_profile_builder_json_override_precedence_combo_wins():
     assert profile.profile_source == "6x_bs1"
     assert profile.scan_speed_mm_s == 2.5
     assert profile.coarse_step_mm == 0.02
+

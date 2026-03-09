@@ -1,28 +1,27 @@
-"""Service handlers for LTS300 callbacks composed from focused modules."""
+"""Service registry for the linear-axis package."""
 
 from __future__ import annotations
 
 from promoc_core.logging import LogTags, TaggedLogger
 
 from ..config import LTS300NodeConfig
-from .clients.lts300_interface import Lts300Interface
-from .handlers.admin import LinearAdminCallbacks
-from .handlers.motion import LinearMotionCallbacks
-from ..domain.models import OperationStateStore, OperationStatus
+from ..models import OperationStateStore, OperationStatus
+from .admin import LinearAdminCallbacks
+from .motion import LinearMotionCallbacks
 from .validation import LinearAxisValidator
 
 
 class ServiceHandlers:
-    """Stable service handler entrypoint used by the LTS300 node orchestrator."""
+    """Compose motion and admin callbacks behind one stable service entrypoint."""
 
     def __init__(
         self,
         logger,
-        interface: Lts300Interface,
+        driver,
         config: LTS300NodeConfig,
     ):
         self.logger = TaggedLogger(logger, LogTags.LTS_MOVE)
-        self.interface = interface
+        self.driver = driver
         self.config = config
 
         state_store = OperationStateStore()
@@ -30,31 +29,26 @@ class ServiceHandlers:
 
         self._motion = LinearMotionCallbacks(
             self.logger,
-            interface=self.interface,
+            driver=self.driver,
             validator=validator,
             state_store=state_store,
             config=self.config,
         )
         self._admin = LinearAdminCallbacks(
             self.logger,
-            interface=self.interface,
+            driver=self.driver,
             config=self.config,
             state_store=state_store,
         )
 
     def get_operation_status(self) -> tuple[OperationStatus, str]:
-        """Return operation status for periodic publishers and status services."""
         return self._admin.get_operation_status()
 
     def callback_move_absolute(self, request, response, other_axis_position: float):
-        return self._motion.callback_move_absolute(
-            request, response, other_axis_position
-        )
+        return self._motion.callback_move_absolute(request, response, other_axis_position)
 
     def callback_move_relative(self, request, response, other_axis_position: float):
-        return self._motion.callback_move_relative(
-            request, response, other_axis_position
-        )
+        return self._motion.callback_move_relative(request, response, other_axis_position)
 
     def callback_home(self, request, response):
         return self._motion.callback_home(request, response)

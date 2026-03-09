@@ -16,8 +16,7 @@ def test_mover_node_registers_only_canonical_services():
     assert "/promoc/mover/" in content
     assert "register_service_alias_pair" not in content
     assert "from .drivers.hardware import PmcInterface" in content
-    assert "from .domain.logic import MoverUtils" in content
-    assert "from .services import ServiceHandlers" in content
+    assert "from .services import MoverUtils, ServiceHandlers" in content
 
 
 def test_mover_node_publishes_only_canonical_xbot_info_topic():
@@ -29,7 +28,7 @@ def test_mover_node_publishes_only_canonical_xbot_info_topic():
     assert 'XBotInfo, "xbot_info", 10' not in content
 
 
-def test_mover_services_use_composition_registry_instead_of_mro_mixins():
+def test_mover_services_use_flat_service_modules():
     services_init = (
         ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "services" / "__init__.py"
     ).read_text(encoding="utf-8", errors="ignore")
@@ -41,12 +40,9 @@ def test_mover_services_use_composition_registry_instead_of_mro_mixins():
         / "registry.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "from .registry import (" in services_init
+    assert "from .motion import MotionCallbacks" in services_init
+    assert "from .control import ControlCallbacks" in services_init
     assert "SERVICE_REGISTRY" in handlers_module
     assert "class ServiceHandlers:" in handlers_module
-    assert (
-        "class ServiceCallbacks(MotionCallbacks, ControlCallbacks)"
-        not in handlers_module
-    )
     assert "self._motion = MotionCallbacks" in handlers_module
     assert "self._control = ControlCallbacks" in handlers_module

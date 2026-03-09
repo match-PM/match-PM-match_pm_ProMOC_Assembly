@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from .handlers.autofocus import AutofocusHandler
-from .handlers.exposure import ExposureHandler
-from .handlers.mtf import MTFHandler
+from .autofocus import AutofocusHandler
+from .exposure import ExposureHandler
+from .mtf import MTFHandler
 
 
 class CameraServiceHandlers:
@@ -17,3 +17,4 @@ class CameraServiceHandlers:
         self.autofocus = AutofocusHandler(node, camera_driver)
         self.mtf = MTFHandler(node, camera_driver)
         self.exposure = ExposureHandler(node, camera_driver)
+

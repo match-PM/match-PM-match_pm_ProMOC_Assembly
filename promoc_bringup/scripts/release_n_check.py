@@ -185,7 +185,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_not_contains(
             root,
-            "camera_nodes/camera_nodes/nodes/camera_simulator.py",
+            "camera_nodes/camera_nodes/sim_node.py",
             ["/promoc_assembly/lts300_x_axis/position", "position_callback_legacy"],
             "camera simulator removed legacy axis topic",
         )
@@ -299,7 +299,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_file_exists(
             root,
-            "camera_nodes/camera_nodes/adapters/mapping.py",
+            "camera_nodes/camera_nodes/services/mtf_params.py",
             "camera adapters package contains centralized mtf parameter mapping",
         )
     )
@@ -356,3 +356,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

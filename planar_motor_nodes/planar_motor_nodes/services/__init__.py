@@ -1,21 +1,22 @@
-"""Service layer for planar motor node callbacks."""
+"""Service-first exports for planar motor callbacks."""
 
-from __future__ import annotations
-
-from .handlers.base import ServiceCallbacksBase, ServiceRegistration
-from .handlers.control import ControlCallbacks
-from .handlers.motion import MotionCallbacks
-from ..adapters.mapping import (
+from .base import (
+    InvalidParameterError,
+    ParameterValidationError,
+    PositionOutOfBoundsError,
+    ServiceCallbacksBase,
+    ServiceRegistration,
+)
+from .control import ControlCallbacks
+from .motion import MotionCallbacks
+from .motion_input import (
     MotionInputConverters,
     MotionInputOptions,
     ProcessedMotionInput,
+    process_motion_input,
 )
-from .registry import (
-    SERVICE_REGISTRY,
-    ServiceCallbacks,
-    ServiceHandlers,
-)
-
+from .registry import SERVICE_REGISTRY, ServiceCallbacks, ServiceHandlers
+from .status import MoverUtils
 
 __all__ = [
     "ServiceHandlers",
@@ -25,7 +26,12 @@ __all__ = [
     "MotionInputConverters",
     "MotionInputOptions",
     "ProcessedMotionInput",
+    "process_motion_input",
     "MotionCallbacks",
     "ControlCallbacks",
+    "MoverUtils",
     "SERVICE_REGISTRY",
+    "InvalidParameterError",
+    "ParameterValidationError",
+    "PositionOutOfBoundsError",
 ]

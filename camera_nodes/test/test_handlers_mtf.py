@@ -58,7 +58,7 @@ if "rcl_interfaces" not in sys.modules:
     rcl_pkg.srv = sys.modules["rcl_interfaces.srv"]
     sys.modules["rcl_interfaces"] = rcl_pkg
 
-from camera_nodes.services.handlers.mtf import MTFHandler  # noqa: E402
+from camera_nodes.services.mtf import MTFHandler  # noqa: E402
 
 
 class _Param:
@@ -99,3 +99,4 @@ def test_mtf_handler_builds_default_config():
     assert cfg.pixel_size_um == 2.4
     assert cfg.min_edge_angle == 2.0
     assert cfg.max_edge_angle == 10.0
+
