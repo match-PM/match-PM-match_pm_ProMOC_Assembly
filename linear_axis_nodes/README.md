@@ -2,25 +2,17 @@
 
 ## Purpose
 
-`linear_axis_nodes` controls Thorlabs LTS300 axes and exposes canonical ROS APIs
-for axis motion and status in ProMOC.
+`linear_axis_nodes` owns the LTS300 runtime node, axis services, and axis-specific motion behavior.
 
-## How To Run / Build
-
-Hardware-first system run:
+## How To Run
 
 ```bash
 make doctor-hw
 make hw
-```
-
-Optional simulation path:
-
-```bash
 make sim
 ```
 
-Direct node run example:
+Direct node example:
 
 ```bash
 ros2 run linear_axis_nodes lts300_node --ros-args \
@@ -29,28 +21,31 @@ ros2 run linear_axis_nodes lts300_node --ros-args \
   -p serial_number:=45874027
 ```
 
-## Key APIs
+## Stable Public ROS APIs
 
-Canonical namespace:
+Namespace pattern:
 
 - `/promoc/linear_axis/<axis_name>/*`
 
-Example services for `lts300_x_axis`:
+Common examples:
 
 - `/promoc/linear_axis/lts300_x_axis/move_absolute`
 - `/promoc/linear_axis/lts300_x_axis/move_relative`
 - `/promoc/linear_axis/lts300_x_axis/home`
-- topic: `/promoc/linear_axis/lts300_x_axis/position`
+- `/promoc/linear_axis/lts300_x_axis/position`
 
-## Where To Edit
+## Where To Edit Common Changes
 
-| Goal | Start Here | Then Check |
-|---|---|---|
-| Change service behavior and motion rules | `linear_axis_nodes/linear_axis_nodes/services/registry.py` | `linear_axis_nodes/linear_axis_nodes/services/handlers/motion.py`, `linear_axis_nodes/linear_axis_nodes/services/handlers/admin.py`, `linear_axis_nodes/linear_axis_nodes/domain/status.py`, `linear_axis_nodes/linear_axis_nodes/services/validation.py` |
-| Change service/topic namespace wiring | `linear_axis_nodes/linear_axis_nodes/node.py` | `linear_axis_nodes/README.md` |
-| Change parameter defaults and typed config | `linear_axis_nodes/linear_axis_nodes/config.py` | `promoc_bringup/config/linear_axes_params.yaml` |
-| Change driver connection flow | `linear_axis_nodes/linear_axis_nodes/services/clients/lts300_interface.py` | `linear_axis_nodes/linear_axis_nodes/drivers/hardware.py` |
-| Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/sim.py` | `linear_axis_nodes/linear_axis_nodes/services/clients/lts300_interface.py` |
+| Goal | Open this first |
+|---|---|
+| Change node wiring or namespace registration | `linear_axis_nodes/linear_axis_nodes/node.py` |
+| Change service registration | `linear_axis_nodes/linear_axis_nodes/services/registry.py` |
+| Change motion rules or request handling | `linear_axis_nodes/linear_axis_nodes/services/handlers/motion.py` |
+| Change admin or status handlers | `linear_axis_nodes/linear_axis_nodes/services/handlers/admin.py` |
+| Change service validation | `linear_axis_nodes/linear_axis_nodes/services/validation.py` |
+| Change hardware backend behavior | `linear_axis_nodes/linear_axis_nodes/drivers/hardware.py` |
+| Change simulation behavior | `linear_axis_nodes/linear_axis_nodes/drivers/sim.py` |
+| Change typed config and defaults | `linear_axis_nodes/linear_axis_nodes/config.py`, `promoc_bringup/config/linear_axes_params.yaml` |
 
 ## Verify Changes
 
@@ -60,7 +55,7 @@ make test-unit
 make release-n1-check
 ```
 
-Package-level tests:
+Package-only check:
 
 ```bash
 colcon test --packages-select linear_axis_nodes
@@ -69,7 +64,7 @@ colcon test-result --verbose
 
 ## Related Docs
 
-- Root onboarding: [`START_HERE.md`](../START_HERE.md)
-- Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
-- Interfaces: [`promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md)
-
+- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
+- interfaces: [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md)

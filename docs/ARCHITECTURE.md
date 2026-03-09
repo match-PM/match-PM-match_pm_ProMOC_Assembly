@@ -1,83 +1,96 @@
-# ProMOC Repository Architecture (2026)
+# ProMOC Repository Architecture
 
-This document explains how the repository is structured and where to add or change functionality.
+This document explains why the repository is split the way it is and which boundaries must stay stable.
 
 ## Design Principles
 
-- Hardware-first runtime; simulation is optional and useful for learning/debug.
-- Canonical service namespaces:
-  - `/promoc/camera/*`
-  - `/promoc/linear_axis/*`
-  - `/promoc/mover/*`
-- Typed config models for node parameters (instead of loose dict access).
-- Clear module boundaries: launch/wiring separated from business logic.
-- Legacy aliases are kept only for migration windows and log deprecation hints.
+- hardware-first runtime, simulation second
+- stable documented namespaces under `/promoc/...`
+- clear separation between launch wiring, service orchestration, drivers, and domain logic
+- contract definitions live separately from runtime implementations
+- shared reusable Python code stays independent from runtime packages
 
-## Package Map
+## Package Boundaries
 
-| Package | Responsibility | Main Entrypoints | Depends On |
-|---|---|---|---|
-| `promoc_bringup` | Launch files, runtime-mode resolution, user config mapping | `launch/system.launch.py`, `launch/camera.launch.py`, `promoc_bringup/launch_utils.py` | all runtime node packages |
-| `camera_nodes` | Camera control, autofocus, exposure, MTF measurement | `camera_nodes/camera_nodes/node.py`, `camera_nodes/camera_nodes/services/*`, `camera_nodes/camera_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
-| `linear_axis_nodes` | LTS300 axis control and services | `linear_axis_nodes/linear_axis_nodes/node.py`, `linear_axis_nodes/linear_axis_nodes/services/*`, `linear_axis_nodes/linear_axis_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
-| `planar_motor_nodes` | Planar motor mover services via PMC | `planar_motor_nodes/planar_motor_nodes/node.py`, `planar_motor_nodes/planar_motor_nodes/services/*`, `planar_motor_nodes/planar_motor_nodes/domain/*` | `promoc_assembly_interfaces`, `promoc_core` |
-| `promoc_assembly_interfaces` | ROS2 `srv`/`msg` contracts | `srv/*`, `msg/*` | none |
-| `promoc_core` | Shared validation, conversions, logging, motion helpers | `promoc_core/*` | none |
-| `setup` | Environment bootstrap and install scripts | `setup/install_all.sh`, `setup/check_installation.sh` | system tools |
+| Package | Responsibility | Must stay true |
+|---|---|---|
+| `promoc_bringup` | launch files, runtime selection, config wiring | no business logic in launch files |
+| `camera_nodes` | camera-facing node, services, drivers, camera domain logic | public camera namespaces remain stable |
+| `linear_axis_nodes` | axis node, axis services, LTS300 integration | axis namespaces remain stable |
+| `planar_motor_nodes` | mover node, mover services, planar motor integration | mover namespaces remain stable |
+| `promoc_assembly_interfaces` | ROS `srv` and `msg` contracts | contract-only, no runtime logic |
+| `promoc_core` | shared Python utilities and reusable logic | independent from runtime packages |
 
 ## Runtime Layers
 
-1. Launch/Config Layer (`promoc_bringup`)
-2. Node Orchestration Layer (`*_node.py`)
-3. Service/Handler Layer (`services/*`)
-4. Driver/Hardware Layer (`drivers/*`, `*_interface.py`)
-5. Shared Core Utilities (`promoc_core`)
+Runtime packages use the same internal layers:
 
-## Typical Flows
+1. `node.py`
+   Owns node construction, service registration, parameter loading, and ROS-level orchestration.
+2. `services/`
+   Owns handlers, clients, validation, and service registry wiring.
+3. `drivers/`
+   Owns hardware, simulation, or mock backends.
+4. `domain/`
+   Owns package-specific business logic and models.
+5. `adapters/`
+   Owns conversions, mapping, and boundary validation.
 
-### Hardware (official)
+The intended flow is:
 
-1. `make doctor-hw`
-2. `make hw`
-3. Call canonical services, for example:
-   - `/promoc/camera/autofocus`
-   - `/promoc/mover/activate_xbots`
-   - `/promoc/linear_axis/lts300_x_axis/move_absolute`
+`launch -> node.py -> services -> domain/drivers -> adapters when crossing boundaries`
 
-### Simulation (learning/debug)
+## Stable Invariants
 
-1. `make sim`
-2. Use the same canonical service endpoints as in hardware mode.
+These are the repository rules that should not drift during cleanup or feature work:
 
-## Where To Change What
+- launch uses `runtime_mode:=hardware|sim`
+- documented service namespaces stay under:
+  - `/promoc/camera/*`
+  - `/promoc/linear_axis/<axis_name>/*`
+  - `/promoc/mover/*`
+- `promoc_assembly_interfaces` remains contract-only
+- `promoc_core` remains independent from runtime packages
+- launch files compose and configure nodes; they do not own business logic
 
-- New launch argument or config mapping:
-  - `promoc_bringup/promoc_bringup/launch_utils.py`
-  - related `promoc_bringup/launch/*.launch.py`
-- New service contract:
-  - add/modify `promoc_assembly_interfaces/srv/*.srv`
-  - then wire node callbacks in package-specific node files
-- New camera behavior:
-  - `camera_nodes/camera_nodes/services/*`
-  - use `camera_nodes/camera_nodes/domain/*` and `camera_nodes/camera_nodes/adapters/*`
-- New linear-axis behavior:
-  - `linear_axis_nodes/linear_axis_nodes/services/handlers/*`
-- New mover behavior:
-  - `planar_motor_nodes/planar_motor_nodes/services/*`
-  - use `planar_motor_nodes/planar_motor_nodes/domain/*`, `drivers/*`, and `adapters/*`
+## Typical Request Flows
 
-## Beginner Reading Order
+Camera service flow:
 
-1. `START_HERE.md`
-2. `docs/learning_path_en.md` or `docs/learning_path_de.md`
-3. this file (`docs/ARCHITECTURE.md`)
-4. package READMEs (`camera_nodes`, `linear_axis_nodes`, `planar_motor_nodes`, `promoc_bringup`)
+1. launch starts camera node
+2. `camera_nodes/camera_nodes/node.py` builds the node and registers services
+3. `camera_nodes/camera_nodes/services/handlers/` processes the request
+4. `domain/`, `drivers/`, and `adapters/` do the actual work
 
-## Quality Gate Commands
+Linear-axis flow:
 
-- `make format`
-- `make lint`
-- `make test-unit`
-- `make release-n1-check`
-- `make check`
+1. launch starts an axis node
+2. `linear_axis_nodes/linear_axis_nodes/node.py` registers canonical axis services
+3. motion handlers validate and route commands
+4. hardware or sim drivers execute the motion
 
+Planar-motor flow:
+
+1. launch starts the mover node
+2. `planar_motor_nodes/planar_motor_nodes/node.py` registers mover services
+3. service handlers apply motion and control rules
+4. driver backends talk to PMC hardware or the mock implementation
+
+## Non-Goals
+
+Avoid these patterns:
+
+- new generic `helpers/` or `utils/` dumping grounds
+- launch files with embedded business logic
+- runtime packages importing each other directly for shared helpers
+- mixing contract changes with unrelated runtime behavior changes without updating both sides
+
+## Read Next
+
+- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- file ownership map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+- package-level guides:
+  - [`../promoc_bringup/README.md`](../promoc_bringup/README.md)
+  - [`../camera_nodes/README.md`](../camera_nodes/README.md)
+  - [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md)
+  - [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md)

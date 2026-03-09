@@ -1,19 +1,18 @@
 # ProMOC Assembly ROS2 System
 
-Hardware-first ROS2 system for precision assembly with:
-- Linear axes (Thorlabs LTS300)
-- Planar motor control
-- Camera autofocus and MTF measurement services
+Hardware-first ROS2 repository for precision assembly with camera services, linear axes, planar motor control, and shared bringup wiring.
 
-## Official Runtime Path
+## Start Here
 
-Hardware is the official release path.
-Simulation is available for learning and debugging.
+If you are new to the repository, read [`START_HERE.md`](START_HERE.md) first, then use [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) to find the right package and first file.
 
-Primary onboarding:
-- [`START_HERE.md`](START_HERE.md)
+## Official Runtime Stance
 
-## Quick Start (Official Hardware)
+- hardware is the official release path
+- simulation exists for learning, debugging, and isolated development
+- canonical launch argument: `runtime_mode:=hardware|sim`
+
+## Quick Start
 
 ```bash
 cd ~/ros2_ws/src
@@ -26,30 +25,28 @@ make doctor-hw
 make hw
 ```
 
-## Core Commands (Unified)
+## Core Commands
 
 ```bash
-make doctor-hw   # hardware readiness checks
-make hw          # full system, hardware mode
-make camera-hw   # camera stack, hardware mode
-make sim         # optional/experimental simulation
+make doctor-hw
+make hw
+make camera-hw
+make sim
 ```
 
-Canonical launch argument:
-- `runtime_mode:=hardware|sim`
+## Package Overview
 
-## Documentation
+- `promoc_bringup`: launch files and runtime wiring
+- `camera_nodes`: autofocus, MTF, exposure, ROI services
+- `linear_axis_nodes`: LTS300 axis motion and status
+- `planar_motor_nodes`: mover motion and control services
+- `promoc_assembly_interfaces`: ROS contracts only
+- `promoc_core`: shared reusable Python logic
 
-- Architecture map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Project structure guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-- Root onboarding flow: [`START_HERE.md`](START_HERE.md)
-- Learning path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
-- Learning path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
+## Key Docs
+
+- Onboarding: [`START_HERE.md`](START_HERE.md)
+- Structure map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Setup: [`setup/README.md`](setup/README.md)
 - Migration notes: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
-- Setup scripts: [`setup/README.md`](setup/README.md)
-- Bringup/launch: [`promoc_bringup/README.md`](promoc_bringup/README.md)
-- Camera package: [`camera_nodes/README.md`](camera_nodes/README.md)
-- Linear-axis package: [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md)
-- Planar-motor package: [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md)
-- Interfaces: [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md)
-- Shared core package: [`promoc_core/README.md`](promoc_core/README.md)

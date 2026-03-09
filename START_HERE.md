@@ -1,24 +1,28 @@
 # START_HERE
 
-Primary onboarding entry for Python beginners and ROS2 newcomers.
+Primary onboarding entry for new contributors and ROS2 beginners.
 
-## ROS2 Support
+## What This Repository Is
 
-| Topic | Jazzy | Humble |
-|---|---|---|
-| Officially supported | yes | yes |
-| Launch API | `runtime_mode:=hardware|sim` | `runtime_mode:=hardware|sim` |
+ProMOC Assembly is a hardware-first ROS2 repository for:
 
-## 1. Build
+- camera autofocus and MTF measurement
+- Thorlabs LTS300 linear axes
+- planar motor mover control
+- shared launch/config wiring for the full assembly stack
+
+If you are new to the repo, read this file once from top to bottom, then open the package guide for the first change you want to make.
+
+## Build Once
 
 ```bash
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-## 2. Choose Runtime Path
+## Start The System
 
-### Hardware-first (official)
+Official release path:
 
 ```bash
 make doctor-hw
@@ -31,64 +35,75 @@ Camera-only hardware start:
 make camera-hw
 ```
 
-### Simulation-first (learning/debug)
+Simulation or learning path:
 
 ```bash
 make sim
 ```
 
-## 3. Canonical Service Calls
+Canonical launch argument:
+
+- `runtime_mode:=hardware|sim`
+
+## First Things To Try
+
+Camera autofocus:
 
 ```bash
 ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus \
 "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"
 ```
 
+MTF measurement:
+
 ```bash
 ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF \
 "{auto_roi: true, target_edge: 'any'}"
 ```
+
+Exposure update:
 
 ```bash
 ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure \
 "{exposure_time: 12000.0}"
 ```
 
-## 4. Repository Map
+## Choose Your Goal
 
-- Launch and runtime config: `promoc_bringup`
-- Camera services and handlers: `camera_nodes` (`camera_nodes/camera_nodes/node.py`)
-- Linear axis node: `linear_axis_nodes` (`linear_axis_nodes/linear_axis_nodes/node.py`)
-- Planar motor mover node: `planar_motor_nodes` (`planar_motor_nodes/planar_motor_nodes/node.py`)
-- Shared ROS interfaces (`srv`, `msg`): `promoc_assembly_interfaces`
-- Shared Python utilities: `promoc_core`
+| If you want to... | Open this first |
+|---|---|
+| change launch behavior or startup composition | [`promoc_bringup/README.md`](promoc_bringup/README.md) |
+| change camera behavior, autofocus, MTF, or camera service wiring | [`camera_nodes/README.md`](camera_nodes/README.md) |
+| change linear-axis motion behavior or axis services | [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md) |
+| change planar-motor mover behavior or motion services | [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md) |
+| add or change ROS messages or services | [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md) |
+| add shared validation, conversions, or reusable Python logic | [`promoc_core/README.md`](promoc_core/README.md) |
 
-Detailed module boundaries:
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Beginner-first file map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
+## Repository Map
 
-## 5. Where To Change What
+- `promoc_bringup`: launch files, runtime mode, config wiring
+- `camera_nodes`: camera node and camera-facing services
+- `linear_axis_nodes`: LTS300 axis node and axis services
+- `planar_motor_nodes`: planar motor mover node and motion services
+- `promoc_assembly_interfaces`: contract-only ROS `srv` and `msg`
+- `promoc_core`: shared Python helpers that must stay independent from runtime packages
+- `docs`: onboarding, structure, architecture, migration references
+- `setup`: installation and environment checks
 
-If you want to implement a feature quickly, start with these package-level change guides:
+## Read Next
 
-- Bringup and launch wiring: [`promoc_bringup/README.md`](promoc_bringup/README.md)
-- Camera behavior and services: [`camera_nodes/README.md`](camera_nodes/README.md)
-- Linear-axis behavior and safety rules: [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md)
-- Planar-motor behavior and motion callbacks: [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md)
-- ROS interface contracts (`srv`, `msg`): [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md)
-- Shared core helpers (validation/logging/errors): [`promoc_core/README.md`](promoc_core/README.md)
+- Contributor file map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
+- Architecture and dependency boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Learning path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
+- Learning path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
+- Migration reference: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 
-## 6. Next Docs
+## Ground Rules
 
-- Beginner path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
-- Beginner path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
-- Project structure guide: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-- Migration details: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
+Keep these stable while working in the repo:
 
-## 7. Contract
-
-Release N+1 is canonical-only. Use only:
-- `runtime_mode:=hardware|sim`
-- `/promoc/camera/*`
-- `/promoc/linear_axis/<axis_name>/*`
-- `/promoc/mover/*`
+- documented service namespaces stay under `/promoc/...`
+- runtime node packages use the canonical `node.py` entry module
+- `promoc_assembly_interfaces` stays contract-only
+- `promoc_core` stays independent from runtime packages
+- business logic belongs in nodes, services, drivers, domain, or adapters, not in launch files

@@ -1,94 +1,80 @@
-# Project Structure Guide (Beginner-First, 2026)
+# Project Structure Guide
 
-This guide explains where things live in the repo and which files you should open first for a specific task.
+This guide answers two questions:
 
-## Read Order (Fastest Onboarding)
+1. which package owns a change
+2. which file should you open first
+
+## Read Order
 
 1. `START_HERE.md`
-2. `docs/learning_path_en.md` or `docs/learning_path_de.md`
-3. this file (`docs/PROJECT_STRUCTURE.md`)
-4. `docs/ARCHITECTURE.md` for deeper boundaries
+2. the README of the package you will edit
+3. this file
+4. `docs/ARCHITECTURE.md`
 
-## Top-Level Map
+## Top-Level Package Map
 
 | Path | What it owns | Open this first |
 |---|---|---|
-| `promoc_bringup/` | Launch files, runtime mode, config wiring | `promoc_bringup/launch/system.launch.py` |
-| `camera_nodes/` | Camera node, autofocus/MTF/exposure services | `camera_nodes/camera_nodes/node.py` |
-| `linear_axis_nodes/` | LTS300 axis node and axis services | `linear_axis_nodes/linear_axis_nodes/node.py` |
-| `planar_motor_nodes/` | Planar motor mover node and motion services | `planar_motor_nodes/planar_motor_nodes/node.py` |
-| `promoc_assembly_interfaces/` | ROS message/service contracts (`msg`, `srv`) | `promoc_assembly_interfaces/README.md` |
-| `promoc_core/` | Shared utilities (validation, logging, conversions, helpers) | `promoc_core/promoc_core/` |
-| `setup/` | Installation and system checks | `setup/README.md` |
-| `docs/` | Onboarding and architecture docs | `docs/ARCHITECTURE.md` |
+| `promoc_bringup/` | launch files, runtime mode, config wiring | `promoc_bringup/launch/system.launch.py` |
+| `camera_nodes/` | camera node, autofocus, MTF, ROI, exposure services | `camera_nodes/camera_nodes/node.py` |
+| `linear_axis_nodes/` | LTS300 axis node, motion services, axis status | `linear_axis_nodes/linear_axis_nodes/node.py` |
+| `planar_motor_nodes/` | mover node, motion services, planar motor integration | `planar_motor_nodes/planar_motor_nodes/node.py` |
+| `promoc_assembly_interfaces/` | ROS `srv` and `msg` contracts only | `promoc_assembly_interfaces/README.md` |
+| `promoc_core/` | reusable Python logic shared by packages | `promoc_core/README.md` |
+| `docs/` | onboarding, structure, architecture, migration references | `START_HERE.md` |
+| `setup/` | installation scripts and environment checks | `setup/README.md` |
 
-## Task-Oriented Entry Points
+## Common Tasks
 
-If you want to add or change something, start here:
-
-| Goal | First files to open |
+| Task | Start here |
 |---|---|
-| Start/stop different node sets | `promoc_bringup/launch/system.launch.py`, `promoc_bringup/launch/camera.launch.py` |
-| Add launch argument or config mapping | `promoc_bringup/promoc_bringup/launch_utils.py` |
-| Add camera service behavior | `camera_nodes/camera_nodes/services/handlers/` |
-| Add camera service client/wiring logic | `camera_nodes/camera_nodes/services/clients/` |
-| Add camera domain logic/models | `camera_nodes/camera_nodes/domain/` |
-| Add autofocus/MTF algorithm logic | `camera_nodes/camera_nodes/domain/algorithms/` (bridge) or `camera_nodes/camera_nodes/algorithms/` (implementation) |
-| Add synthetic MTF validation fixtures | `camera_nodes/test/fixtures/` |
-| Add linear-axis service behavior | `linear_axis_nodes/linear_axis_nodes/services/handlers/` |
-| Add mover service behavior | `planar_motor_nodes/planar_motor_nodes/services/handlers/` |
-| Add shared conversion/validation/helper | `promoc_core/promoc_core/` |
-| Add a new ROS service contract | `promoc_assembly_interfaces/srv/` then wire in node packages |
+| Change which nodes start | `promoc_bringup/launch/system.launch.py` |
+| Add launch argument or runtime mapping | `promoc_bringup/promoc_bringup/launch_utils.py` |
+| Change camera service wiring | `camera_nodes/camera_nodes/node.py`, `camera_nodes/camera_nodes/services/registry.py` |
+| Change autofocus behavior | `camera_nodes/camera_nodes/services/handlers/autofocus.py` |
+| Change MTF behavior | `camera_nodes/camera_nodes/services/handlers/mtf.py` |
+| Change camera driver behavior | `camera_nodes/camera_nodes/drivers/hardware.py` or `camera_nodes/camera_nodes/drivers/sim.py` |
+| Change linear-axis motion behavior | `linear_axis_nodes/linear_axis_nodes/services/handlers/motion.py` |
+| Change linear-axis parameter or namespace wiring | `linear_axis_nodes/linear_axis_nodes/node.py`, `linear_axis_nodes/linear_axis_nodes/config.py` |
+| Change mover motion behavior | `planar_motor_nodes/planar_motor_nodes/services/handlers/motion.py` |
+| Change mover backend integration | `planar_motor_nodes/planar_motor_nodes/drivers/hardware.py` or `planar_motor_nodes/planar_motor_nodes/drivers/mock.py` |
+| Add shared validation or conversion logic | `promoc_core/promoc_core/validation.py` or `promoc_core/promoc_core/conversions.py` |
+| Add a new ROS contract | `promoc_assembly_interfaces/srv/` or `promoc_assembly_interfaces/msg/` |
 
 ## Standard Runtime Layout
 
-Runtime packages (`camera_nodes`, `linear_axis_nodes`, `planar_motor_nodes`) now share a common internal shape:
+All runtime node packages use the same internal shape:
 
 - `node.py`
 - `config.py`
 - `services/`
-  - `registry.py`
-  - `handlers/`
-  - `clients/`
-  - `validation.py`
 - `drivers/`
-  - `base.py`
-  - `hardware.py`
-  - `sim.py` or `mock.py`
 - `domain/`
-  - `logic.py`
-  - `models.py`
-  - `algorithms/` (when needed)
 - `adapters/`
-  - `conversions.py`
-  - `mapping.py`
-  - `validation.py`
 
-Legacy module paths (`camera_node.py`, `lts300_node.py`, `mover_node.py`, old service module names) remain as thin compatibility wrappers where needed.
+Use these folders consistently:
 
-## Dependency Direction (Keep It Simple)
+- `services/`: service registration, handlers, clients, request validation
+- `drivers/`: hardware and sim or mock backends
+- `domain/`: business logic, models, package-specific algorithms
+- `adapters/`: conversions, mapping, boundary validation
 
-Use this direction to avoid spaghetti:
+Compatibility wrappers may still exist for legacy import paths, but beginner-facing edits should start from the canonical paths above.
 
-1. `promoc_bringup` can depend on all runtime packages.
-2. Runtime node packages (`camera_nodes`, `linear_axis_nodes`, `planar_motor_nodes`) depend on:
-   `promoc_assembly_interfaces` + `promoc_core`.
-3. `promoc_core` should stay independent from node packages.
-4. `promoc_assembly_interfaces` is contract-only (`msg`/`srv`), no runtime logic.
+## Dependency Direction
 
-## Quality Gate (Before Commit)
+Keep dependencies moving in this direction:
 
-```bash
-make format
-make lint
-make test-unit
-make release-n1-check
-```
+1. `promoc_bringup` may depend on runtime packages
+2. runtime packages may depend on `promoc_assembly_interfaces` and `promoc_core`
+3. `promoc_core` must not depend on runtime packages
+4. `promoc_assembly_interfaces` stays contract-only
 
 ## Common Beginner Mistakes
 
-- Adding business logic into launch files instead of node/handler modules.
-- Creating new legacy paths instead of canonical `/promoc/...` paths.
-- Skipping interface contract updates (`srv`/`msg`) when adding new services.
-- Reintroducing generic `helpers/` folders instead of placing code into `services`, `domain`, `adapters`, or `drivers`.
-
+- putting business logic into launch files
+- editing a compatibility wrapper instead of the canonical module
+- adding a generic `helpers/` folder instead of placing code into `services`, `drivers`, `domain`, or `adapters`
+- changing ROS namespaces without checking documented `/promoc/...` contracts
+- adding shared logic to a runtime package when it belongs in `promoc_core`

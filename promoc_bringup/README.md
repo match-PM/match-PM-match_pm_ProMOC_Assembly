@@ -2,53 +2,42 @@
 
 ## Purpose
 
-`promoc_bringup` owns launch wiring and runtime configuration mapping for the full system.
-It is the package where node composition and startup behavior are defined.
+`promoc_bringup` owns launch files, runtime selection, and parameter wiring for the whole system.
 
-## How To Run / Build
+## What Starts Here
 
-Official hardware flow:
+Primary launches:
 
-```bash
-make doctor-hw
-make hw
-```
-
-Camera-only hardware flow:
-
-```bash
-make camera-hw
-```
-
-Optional simulation flow:
-
-```bash
-make sim
-```
-
-## Key APIs
-
-Primary launch files:
-
-- `launch/system.launch.py` (full stack)
-- `launch/camera.launch.py` (camera stack only)
-- `launch/optical_measurement_system.launch.py` (camera + focused optical flow)
-- `launch/promoc_assembly_demo.launch.py` (demo flow)
-- `launch/planar_motor_demo.launch.py` (planar motor demo)
+- `launch/system.launch.py`
+- `launch/camera.launch.py`
+- `launch/optical_measurement_system.launch.py`
+- `launch/promoc_assembly_demo.launch.py`
+- `launch/planar_motor_demo.launch.py`
 
 Canonical launch argument:
 
 - `runtime_mode:=hardware|sim`
 
-## Where To Edit
+## How To Run
 
-| Goal | Start Here | Then Check |
-|---|---|---|
-| Change which nodes start in full-system launch | `promoc_bringup/launch/system.launch.py` | other launch files in `promoc_bringup/launch/` |
-| Change runtime argument handling | `promoc_bringup/promoc_bringup/launch_utils.py` (`resolve_runtime_mode`) | launch files that declare runtime args |
-| Change camera launch parameter mapping | `promoc_bringup/promoc_bringup/camera_launch_builder.py` | `promoc_bringup/launch/camera.launch.py` |
-| Change user config loading/defaults | `promoc_bringup/promoc_bringup/launch_utils.py` (`load_user_config`) | `promoc_bringup/config/README.md`, `promoc_bringup/config/user_config.v2.example.yaml` |
-| Change default node parameters | `promoc_bringup/config/*.yaml` | package config dataclasses in runtime node packages |
+```bash
+make doctor-hw
+make hw
+make camera-hw
+make sim
+```
+
+## Where To Edit Common Changes
+
+| Goal | Open this first |
+|---|---|
+| Change which nodes start | `promoc_bringup/launch/system.launch.py` |
+| Change camera-only startup | `promoc_bringup/launch/camera.launch.py` |
+| Change runtime-mode handling | `promoc_bringup/promoc_bringup/launch_utils.py` |
+| Change camera parameter mapping | `promoc_bringup/promoc_bringup/camera_launch_builder.py` |
+| Change user config loading or defaults | `promoc_bringup/promoc_bringup/launch_utils.py`, `promoc_bringup/config/` |
+
+Keep business logic out of launch files. Launch code should compose nodes and map configuration, not implement runtime behavior.
 
 ## Verify Changes
 
@@ -60,8 +49,7 @@ make release-n1-check
 
 ## Related Docs
 
-- Root onboarding: [`START_HERE.md`](../START_HERE.md)
-- Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
-- Architecture boundaries: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
-- Bringup config docs: [`promoc_bringup/config/README.md`](config/README.md)
-
+- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
+- bringup config docs: [`config/README.md`](config/README.md)

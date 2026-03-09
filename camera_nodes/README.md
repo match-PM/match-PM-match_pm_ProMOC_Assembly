@@ -2,55 +2,38 @@
 
 ## Purpose
 
-`camera_nodes` provides camera-facing ROS services for autofocus, MTF measurement,
-ROI detection, and exposure control.
+`camera_nodes` owns the camera runtime node and the camera-facing ROS services for autofocus, MTF measurement, ROI detection, and exposure control.
 
-## How To Run / Build
-
-Run via system launch (hardware-first):
+## How To Run
 
 ```bash
 make hw
-```
-
-Camera-only hardware launch:
-
-```bash
 make camera-hw
-```
-
-Optional simulation path:
-
-```bash
 make sim
 ```
 
-## Key APIs
-
-Canonical services:
+## Stable Public ROS APIs
 
 - `/promoc/camera/autofocus`
 - `/promoc/camera/measure_mtf`
 - `/promoc/camera/detect_rois`
-- `/promoc/camera/set_exposure` (hardware path only)
+- `/promoc/camera/set_exposure`
 
-Internal package layout (simplified):
+## Where To Edit Common Changes
 
-- `camera_nodes/camera_nodes/node.py` (main node)
-- `camera_nodes/camera_nodes/nodes/camera_simulator.py` (sim-only node)
-- `camera_nodes/camera_nodes/services/` (registry, handlers, clients, validation)
-- `camera_nodes/camera_nodes/domain/` (logic + models)
-- `camera_nodes/camera_nodes/adapters/` (conversions + mapping + validation)
+| Goal | Open this first |
+|---|---|
+| Change node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
+| Change service registration details | `camera_nodes/camera_nodes/services/registry.py` |
+| Change autofocus behavior | `camera_nodes/camera_nodes/services/handlers/autofocus.py` |
+| Change MTF behavior | `camera_nodes/camera_nodes/services/handlers/mtf.py` |
+| Change camera-facing service clients | `camera_nodes/camera_nodes/services/clients/` |
+| Change camera drivers | `camera_nodes/camera_nodes/drivers/hardware.py` or `camera_nodes/camera_nodes/drivers/sim.py` |
+| Change package-level business logic or models | `camera_nodes/camera_nodes/domain/` |
+| Change conversions or response mapping | `camera_nodes/camera_nodes/adapters/` |
+| Change typed config and defaults | `camera_nodes/camera_nodes/config.py`, `promoc_bringup/config/cameras/` |
 
-## Where To Edit
-
-| Goal | Start Here | Then Check |
-|---|---|---|
-| Change service wiring and registration | `camera_nodes/camera_nodes/node.py` | `camera_nodes/camera_nodes/services/registry.py` |
-| Change autofocus behavior | `camera_nodes/camera_nodes/services/handlers/autofocus.py` | `camera_nodes/camera_nodes/services/handlers/autofocus_runner.py`, `camera_nodes/camera_nodes/services/clients/autofocus_axis.py`, `camera_nodes/camera_nodes/algorithms/autofocus.py` |
-| Change MTF behavior and export mapping | `camera_nodes/camera_nodes/services/handlers/mtf.py` | `camera_nodes/camera_nodes/algorithms/mtf/`, `camera_nodes/camera_nodes/adapters/mapping.py` |
-| Change camera parameter model/defaults | `camera_nodes/camera_nodes/config.py` | `promoc_bringup/config/cameras/*.yaml` |
-| Change hardware/sim driver behavior | `camera_nodes/camera_nodes/drivers/hardware.py` | `camera_nodes/camera_nodes/drivers/sim.py` |
+Use the canonical module paths above. Compatibility wrappers may still exist for migration, but they are not the preferred edit points.
 
 ## Verify Changes
 
@@ -60,7 +43,7 @@ make test-unit
 make release-n1-check
 ```
 
-Package-level tests:
+Package-only check:
 
 ```bash
 colcon test --packages-select camera_nodes
@@ -69,7 +52,7 @@ colcon test-result --verbose
 
 ## Related Docs
 
-- Root onboarding: [`START_HERE.md`](../START_HERE.md)
-- Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
-- Callback guides (EN/DE): [`camera_nodes/docs/`](docs/)
-
+- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
+- camera-specific notes: [`docs/`](docs/)
