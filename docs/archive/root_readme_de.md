@@ -1,10 +1,12 @@
-# ProMOC Assembly ROS2 System
+# Archivierte Root-README (DE)
+
+Diese Datei war frueher eine Root-README. Die kanonische Root-Dokumentation ist jetzt [`../../README.md`](../../README.md).
 
 Hardware-first ROS2-Repository fuer praezise Montage mit Kamera-Services, Linearachsen, Planarmotor-Steuerung und gemeinsamer Bringup-Verkabelung.
 
 ## Einstieg
 
-Wenn du neu im Repository bist, lies zuerst [`START_HERE.md`](START_HERE.md) und nutze danach [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md), um das richtige Package und die erste Datei zu finden.
+Wenn du neu im Repository bist, lies zuerst [`../START_HERE.md`](../START_HERE.md) und nutze danach [`../PROJECT_STRUCTURE.md`](../PROJECT_STRUCTURE.md), um das richtige Package und die erste Datei zu finden.
 
 ## Offizieller Runtime-Pfad
 
@@ -45,8 +47,8 @@ make sim
 
 ## Wichtige Doku
 
-- Einstieg: [`START_HERE.md`](START_HERE.md)
-- Strukturkarte: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-- Architektur: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Setup: [`setup/README.md`](setup/README.md)
-- Migrationshinweise: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
+- Einstieg: [`../START_HERE.md`](../START_HERE.md)
+- Strukturkarte: [`../PROJECT_STRUCTURE.md`](../PROJECT_STRUCTURE.md)
+- Architektur: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+- Setup: [`../../setup/README.md`](../../setup/README.md)
+- Migrationshinweise: [`../MIGRATION_NOTES.md`](../MIGRATION_NOTES.md)

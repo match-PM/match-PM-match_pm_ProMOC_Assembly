@@ -4,7 +4,13 @@ Hardware-first ROS2 repository for precision assembly with camera services, line
 
 ## Start Here
 
-If you are new to the repository, read [`START_HERE.md`](START_HERE.md) first, then use [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) to find the right package and first file.
+If you are new to the repository, use this order:
+
+1. [`docs/START_HERE.md`](docs/START_HERE.md)
+2. [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
+3. the README of the package you want to change
+
+If you want the full docs map first, open [`docs/README.md`](docs/README.md).
 
 ## Official Runtime Stance
 
@@ -45,8 +51,9 @@ make sim
 
 ## Key Docs
 
-- Onboarding: [`START_HERE.md`](START_HERE.md)
+- Docs index: [`docs/README.md`](docs/README.md)
+- Onboarding: [`docs/START_HERE.md`](docs/START_HERE.md)
 - Structure map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Setup: [`setup/README.md`](setup/README.md)
-- Migration notes: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
+- Migration notes: [`docs/MIGRATION_NOTES.md`](docs/MIGRATION_NOTES.md)

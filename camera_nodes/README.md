@@ -61,7 +61,7 @@ colcon test-result --verbose
 
 ## Related Docs
 
-- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
 - structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
 - architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
 - camera-specific notes: [`docs/`](docs/)

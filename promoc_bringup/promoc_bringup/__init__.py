@@ -1,7 +1,7 @@
 """Bringup package helpers for launch and runtime wiring.
 
 This package contains Python helpers consumed by launch files and demos.
-For beginner onboarding and command flows, start at ``START_HERE.md``.
+For beginner onboarding and command flows, start at ``docs/START_HERE.md``.
 
 Key modules:
     - ``launch_utils``: Runtime-mode resolution and user config mapping

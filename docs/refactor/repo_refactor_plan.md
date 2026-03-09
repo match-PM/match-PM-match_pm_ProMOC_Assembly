@@ -152,9 +152,9 @@ Compatibility wrappers are added only where needed to keep existing CLI/executab
 
 ### Phase 7: Final docs and cleanup
 
-- Update `START_HERE.md`
+- Update `docs/START_HERE.md`
 - Update `docs/PROJECT_STRUCTURE.md`
-- Update `MIGRATION_NOTES.md` with old->new module paths and compatibility notes
+- Update `docs/MIGRATION_NOTES.md` with old->new module paths and compatibility notes
 - Run available checks and fix regressions
 
 ## Verification Strategy Per Phase

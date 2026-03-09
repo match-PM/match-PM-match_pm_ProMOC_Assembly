@@ -72,12 +72,12 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 
 | If you want to... | Open this first |
 |---|---|
-| change launch behavior or startup composition | [`promoc_bringup/README.md`](promoc_bringup/README.md) |
-| change camera behavior, autofocus, MTF, or camera service wiring | [`camera_nodes/README.md`](camera_nodes/README.md) |
-| change linear-axis motion behavior or axis services | [`linear_axis_nodes/README.md`](linear_axis_nodes/README.md) |
-| change planar-motor mover behavior or motion services | [`planar_motor_nodes/README.md`](planar_motor_nodes/README.md) |
-| add or change ROS messages or services | [`promoc_assembly_interfaces/README.md`](promoc_assembly_interfaces/README.md) |
-| add shared validation, conversions, or reusable Python logic | [`promoc_core/README.md`](promoc_core/README.md) |
+| change launch behavior or startup composition | [`../promoc_bringup/README.md`](../promoc_bringup/README.md) |
+| change camera behavior, autofocus, MTF, or camera service wiring | [`../camera_nodes/README.md`](../camera_nodes/README.md) |
+| change linear-axis motion behavior or axis services | [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md) |
+| change planar-motor mover behavior or motion services | [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md) |
+| add or change ROS messages or services | [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md) |
+| add shared validation, conversions, or reusable Python logic | [`../promoc_core/README.md`](../promoc_core/README.md) |
 
 ## Repository Map
 
@@ -92,10 +92,10 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 
 ## Read Next
 
-- Contributor file map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-- Architecture and dependency boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Learning path (EN): [`docs/learning_path_en.md`](docs/learning_path_en.md)
-- Learning path (DE): [`docs/learning_path_de.md`](docs/learning_path_de.md)
+- Contributor file map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+- Architecture and dependency boundaries: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Learning path (EN): [`learning_path_en.md`](learning_path_en.md)
+- Learning path (DE): [`learning_path_de.md`](learning_path_de.md)
 - Migration reference: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 
 ## Ground Rules

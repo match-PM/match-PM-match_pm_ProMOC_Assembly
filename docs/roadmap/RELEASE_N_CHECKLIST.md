@@ -42,8 +42,8 @@ make smoke-hw
 - [ ] CI runs matrix for `ROS_DISTRO=humble` and `ROS_DISTRO=jazzy`
 
 ## Documentation
-- [ ] `START_HERE.md` has hardware and simulation flows
+- [ ] `docs/START_HERE.md` has hardware and simulation flows
 - [ ] DE and EN learning-path docs exist and are current
 - [ ] Camera callback guides use canonical service names
-- [ ] `MIGRATION_NOTES.md` is complete and accurate
+- [ ] `docs/MIGRATION_NOTES.md` is complete and accurate
 

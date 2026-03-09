@@ -49,6 +49,6 @@ make release-n1-check
 
 ## Related Docs
 
-- Root onboarding: [`START_HERE.md`](../START_HERE.md)
+- Root onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
 - Project map: [`docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
 - Architecture boundaries: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)

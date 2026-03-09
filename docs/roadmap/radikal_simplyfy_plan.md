@@ -53,8 +53,8 @@ Wir kombinieren beide Stärken:
 
 ### Act 3: Doku & Abschluss
 - `CHEATSHEET.md` mit den wichtigsten 5-10 Befehlen.
-- `README_GER.md` und `README_ENG.md` auf reale Dateien/Befehle korrigieren.
-- Kurze `MIGRATION_NOTES.md`:
+- `README.md` und die Einstiegspfad-Doku unter `docs/` auf reale Dateien/Befehle korrigieren.
+- Kurze `docs/MIGRATION_NOTES.md`:
   - „Verification entfernt“
   - „Welche Services bleiben“
   - „Wie starte ich das System jetzt“
@@ -88,3 +88,4 @@ Wir kombinieren beide Stärken:
 - Verification-Breaking-Changes sind akzeptiert.
 - Kamera-Kernsanierung erfolgt mit mittlerer Tiefe: starke Vereinfachung intern, stabile externe Kameraservices.
 - Zielpriorität ist: weniger Komplexität + klare Wartbarkeit + schneller Einstieg.
+

@@ -7,10 +7,11 @@ This guide answers two questions:
 
 ## Read Order
 
-1. `START_HERE.md`
-2. the README of the package you will edit
-3. this file
-4. `docs/ARCHITECTURE.md`
+1. `../README.md`
+2. `START_HERE.md`
+3. the README of the package you will edit
+4. this file
+5. `ARCHITECTURE.md`
 
 ## Top-Level Package Map
 
@@ -22,7 +23,7 @@ This guide answers two questions:
 | `planar_motor_nodes/` | mover node, motion services, planar motor integration | `planar_motor_nodes/planar_motor_nodes/node.py` |
 | `promoc_assembly_interfaces/` | ROS `srv` and `msg` contracts only | `promoc_assembly_interfaces/README.md` |
 | `promoc_core/` | reusable Python logic shared by packages | `promoc_core/README.md` |
-| `docs/` | onboarding, structure, architecture, migration references | `START_HERE.md` |
+| `docs/` | onboarding, structure, architecture, migration references | `README.md` |
 | `setup/` | installation scripts and environment checks | `setup/README.md` |
 
 ## Common Tasks

@@ -37,7 +37,7 @@ def test_interface_cmake_has_no_verification_services():
 
 
 def test_start_here_is_hardware_first():
-    start_here = ROOT / "START_HERE.md"
+    start_here = ROOT / "docs" / "START_HERE.md"
     content = start_here.read_text(encoding="utf-8", errors="ignore")
     assert "make doctor-hw" in content
     assert "make hw" in content
@@ -46,8 +46,9 @@ def test_start_here_is_hardware_first():
 
 def test_docs_no_legacy_launch_names():
     docs = [
-        ROOT / "README_ENG.md",
-        ROOT / "README_GER.md",
+        ROOT / "README.md",
+        ROOT / "docs" / "START_HERE.md",
+        ROOT / "docs" / "README.md",
         ROOT / "setup" / "README.md",
         ROOT / "setup" / "QUICKSTART.md",
         ROOT / "promoc_bringup" / "README.md",

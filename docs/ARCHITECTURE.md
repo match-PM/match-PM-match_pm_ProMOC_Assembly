@@ -99,7 +99,8 @@ If real cross-node workflows grow beyond demo sequences, revisit this decision w
 
 ## Read Next
 
-- onboarding: [`../START_HERE.md`](../START_HERE.md)
+- docs index: [`README.md`](README.md)
+- onboarding: [`START_HERE.md`](START_HERE.md)
 - file ownership map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
 - package-level guides:
   - [`../promoc_bringup/README.md`](../promoc_bringup/README.md)

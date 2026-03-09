@@ -34,7 +34,7 @@ ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/Meas
 
 - Project structure map: [`docs/PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
 - Architecture map: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
-- Entry flow: [`START_HERE.md`](../START_HERE.md)
+- Entry flow: [`START_HERE.md`](START_HERE.md)
 
 ## Next Step
 

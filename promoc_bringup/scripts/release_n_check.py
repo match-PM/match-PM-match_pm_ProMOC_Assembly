@@ -266,7 +266,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "START_HERE.md",
+            "docs/START_HERE.md",
             ["runtime_mode:=hardware|sim"],
             "START_HERE documents canonical launch API",
         )
@@ -274,7 +274,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_not_contains(
             root,
-            "START_HERE.md",
+            "docs/START_HERE.md",
             ["sim_mode", "use_simulator", "/promoc/camera_node/"],
             "START_HERE no longer documents legacy launch/service paths",
         )
@@ -282,7 +282,7 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "MIGRATION_NOTES.md",
+            "docs/MIGRATION_NOTES.md",
             ["Release N+1"],
             "migration notes describe Release N+1 canonical-only contract",
         )
