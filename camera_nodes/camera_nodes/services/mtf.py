@@ -523,7 +523,7 @@ class MTFHandler(CallbackBase):
             cv2.imwrite(filename_edges, vis_edges)
 
         response.success = True
-        response.message = (
+        response.status_message = (
             f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
         )
         response.debug_image_path = filename_edges if filename_edges else filename_main

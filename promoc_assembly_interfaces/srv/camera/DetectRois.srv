@@ -3,7 +3,7 @@
 ---
 # Response
 bool success
-string message
+string status_message
 
 # Debug image path
 string debug_image_path

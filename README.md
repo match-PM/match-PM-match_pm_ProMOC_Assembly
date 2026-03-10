@@ -8,7 +8,9 @@ If you are new to the repository, use this order:
 
 1. [`docs/START_HERE.md`](docs/START_HERE.md)
 2. [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-3. the README of the package you want to change
+3. [`docs/PACKAGE_INFO.md`](docs/PACKAGE_INFO.md)
+4. the README of the package you want to change
+5. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 If you want the full docs map first, open [`docs/README.md`](docs/README.md).
 
@@ -26,9 +28,16 @@ git clone <repository-url> promoc_assembly
 cd promoc_assembly/setup
 ./install_all.sh
 cd ..
-source install/setup.bash
+source ../install/setup.bash
 make doctor-hw
 make hw
+```
+
+Daily repo-local workflow from the repository root:
+
+```bash
+make build
+source install/setup.bash
 ```
 
 ## Core Commands
@@ -54,6 +63,7 @@ make sim
 - Docs index: [`docs/README.md`](docs/README.md)
 - Onboarding: [`docs/START_HERE.md`](docs/START_HERE.md)
 - Structure map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
+- Package cheat sheet: [`docs/PACKAGE_INFO.md`](docs/PACKAGE_INFO.md)
 - Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Setup: [`setup/README.md`](setup/README.md)
 - Migration notes: [`docs/MIGRATION_NOTES.md`](docs/MIGRATION_NOTES.md)

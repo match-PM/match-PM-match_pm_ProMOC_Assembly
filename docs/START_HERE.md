@@ -15,9 +15,17 @@ If you are new to the repo, read this file once from top to bottom, then open th
 
 ## Build Once
 
+From the repository root:
+
 ```bash
-colcon build --symlink-install
+make build
 source install/setup.bash
+```
+
+If you ran [`../setup/install_all.sh`](../setup/install_all.sh) from a workspace checkout like `<ws>/src/promoc_assembly`, source the parent workspace instead:
+
+```bash
+source ../install/setup.bash
 ```
 
 ## Start The System
@@ -92,6 +100,7 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 
 ## Read Next
 
+- docs map: [`README.md`](README.md)
 - Contributor file map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
 - Runtime package cheat sheet: [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
 - Architecture and dependency boundaries: [`ARCHITECTURE.md`](ARCHITECTURE.md)

@@ -1,15 +1,15 @@
 # Project Structure
 
-Read this after `docs/START_HERE.md`.
+Read this after [`START_HERE.md`](START_HERE.md).
 
-## Official Read Order
+## Recommended Read Order
 
-1. `README.md`
-2. `docs/START_HERE.md`
-3. `docs/PROJECT_STRUCTURE.md`
-4. package README for the package you want to change
-5. `docs/PACKAGE_INFO.md`
-6. `docs/ARCHITECTURE.md`
+1. [`../README.md`](../README.md)
+2. [`START_HERE.md`](START_HERE.md)
+3. [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
+4. [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
+5. package README for the package you want to change
+6. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## Top-Level Packages
 

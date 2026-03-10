@@ -6,9 +6,11 @@ In 30 Minuten einen kompletten Simulationslauf ausfuehren und die wichtigsten Ka
 ## Schritt 1: Build (5 min)
 
 ```bash
-colcon build --symlink-install
+make build
 source install/setup.bash
 ```
+
+Wenn du vorher `setup/install_all.sh` aus einem Workspace-Checkout unter `src/` benutzt hast, nutze stattdessen `source ../install/setup.bash`.
 
 ## Schritt 2: Simulation starten (5 min)
 

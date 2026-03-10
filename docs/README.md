@@ -1,15 +1,16 @@
 # Docs Index
 
-Use this page if you want a quick map of the documentation tree.
+Use this page as the top-level map of the documentation tree.
 
-## Start Here
+## Recommended Read Order
 
 Read these in order:
 
 1. [`START_HERE.md`](START_HERE.md)
 2. [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
 3. [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
-4. package README`r`n5. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+4. the README of the package you want to change
+5. [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## Package Guides
 
@@ -23,16 +24,16 @@ Read these in order:
 ## Setup And Operations
 
 - [`../setup/README.md`](../setup/README.md)
+- [`../promoc_bringup/config/README.md`](../promoc_bringup/config/README.md)
 
-## Migration And Refactor Reference
+## Reference And Background
 
-- [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
-
-## Learning And Background
-
-- [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
 - [`learning_path_en.md`](learning_path_en.md)
 - [`learning_path_de.md`](learning_path_de.md)
 - [`camera_parameter_reference.md`](camera_parameter_reference.md)
 - [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md)
+
+## Migration And Refactor Reference
+
+- [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 

@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
@@ -58,6 +60,7 @@ if "rcl_interfaces" not in sys.modules:
     rcl_pkg.srv = sys.modules["rcl_interfaces.srv"]
     sys.modules["rcl_interfaces"] = rcl_pkg
 
+from camera_nodes.services import mtf as mtf_module  # noqa: E402
 from camera_nodes.services.mtf import MTFHandler  # noqa: E402
 
 
@@ -99,4 +102,49 @@ def test_mtf_handler_builds_default_config():
     assert cfg.pixel_size_um == 2.4
     assert cfg.min_edge_angle == 2.0
     assert cfg.max_edge_angle == 10.0
+
+
+def test_detect_rois_uses_status_message(monkeypatch: pytest.MonkeyPatch):
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    handler._get_latest_cv_image = lambda: ("fake-image", 123)
+    handler._get_output_dir = lambda *_args, **_kwargs: Path(".")
+    handler._get_timestamp = lambda: "20260310_120000"
+
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_targets",
+        lambda _image: (
+            "viz",
+            [((0, 0), (10, 5), 0.0)],
+            [((0, 0), (12, 12), 0.0)],
+        ),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "split_square_into_edges",
+        lambda *_args, **_kwargs: ["edge"],
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "create_debug_visualization",
+        lambda _edges: ("edges-viz", 42),
+    )
+    monkeypatch.setattr(
+        mtf_module.cv2, "imwrite", lambda *_args, **_kwargs: True, raising=False
+    )
+
+    response = types.SimpleNamespace(
+        success=False,
+        status_message="",
+        debug_image_path="",
+        bars_detected=0,
+        squares_detected=0,
+    )
+
+    result = handler.detect_rois_callback(object(), response)
+
+    assert result.success is True
+    assert "Detected 1 bars and 1 squares" in result.status_message
+    assert result.bars_detected == 1
+    assert result.squares_detected == 1
 

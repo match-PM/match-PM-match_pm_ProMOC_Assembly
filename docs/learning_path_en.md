@@ -6,9 +6,11 @@ Run a full simulation workflow in 30 minutes and understand the core camera serv
 ## Step 1: Build (5 min)
 
 ```bash
-colcon build --symlink-install
+make build
 source install/setup.bash
 ```
+
+If you previously used `setup/install_all.sh` from a workspace `src/` checkout, use `source ../install/setup.bash` instead.
 
 ## Step 2: Start simulation (5 min)
 

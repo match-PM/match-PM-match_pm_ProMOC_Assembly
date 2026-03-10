@@ -44,7 +44,7 @@ Open these files in this order:
 
 ## Related Docs
 
-- `docs/START_HERE.md`
-- `docs/PROJECT_STRUCTURE.md`
-- `docs/PACKAGE_INFO.md`
-- `docs/ARCHITECTURE.md`
+- [`../docs/START_HERE.md`](../docs/START_HERE.md)
+- [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
+- [`../docs/PACKAGE_INFO.md`](../docs/PACKAGE_INFO.md)
+- [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)

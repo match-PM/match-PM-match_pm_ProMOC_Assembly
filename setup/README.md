@@ -2,6 +2,18 @@
 
 Single canonical installation guide for this repository.
 
+## Expected Checkout Layout
+
+The installer assumes the repository lives inside a ROS2 workspace, for example:
+
+```text
+<workspace>/
+  src/
+    promoc_assembly/
+```
+
+`install_all.sh` installs dependencies from the repository, then builds the parent workspace.
+
 ## What This Folder Contains
 
 Main scripts:
@@ -48,10 +60,10 @@ What this does:
 
 ## After Installation
 
-Source the workspace:
+If you are back in the repository root after running `./install_all.sh`, source the parent workspace:
 
 ```bash
-source install/setup.bash
+source ../install/setup.bash
 ```
 
 Recommended first checks:
@@ -67,6 +79,13 @@ Optional simulation path:
 make sim
 ```
 
+For day-to-day development directly from the repository root, you can also use the repo-local workflow:
+
+```bash
+make build
+source install/setup.bash
+```
+
 ## Manual Install Path
 
 Use this only if you need step-by-step control:
@@ -78,9 +97,10 @@ cd setup
 ./install_camera_aravis2.sh   # optional, IDS camera only
 cd ..
 rosdep install --from-paths . --ignore-src -y
+cd ..
 colcon build --symlink-install
 source install/setup.bash
-cd setup
+cd src/promoc_assembly/setup
 ./validate_setup_enhanced.sh
 ```
 
