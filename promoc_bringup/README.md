@@ -62,6 +62,6 @@ make release-n1-check
 ## Related Docs
 
 - onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- structure map: [`../docs/PROJECT_STRUCTURE.md`](../docs/PROJECT_STRUCTURE.md)
-- architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)
+- package guide: [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
+- system overview: [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)
 - bringup config docs: [`config/README.md`](config/README.md)

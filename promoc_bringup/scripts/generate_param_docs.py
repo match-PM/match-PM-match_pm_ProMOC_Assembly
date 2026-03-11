@@ -65,7 +65,7 @@ def main() -> int:
         "",
     ]
 
-    output_path = ROOT / "docs" / "camera_parameter_reference.md"
+    output_path = ROOT / "promoc_bringup" / "config" / "cameras" / "CAMERA_PARAMETERS.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(doc), encoding="utf-8")
     print(f"Wrote {output_path}")

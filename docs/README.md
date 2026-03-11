@@ -1,16 +1,29 @@
 # Docs Index
 
-Use this page as the top-level map of the documentation tree.
+This folder intentionally stays small.
 
-## Recommended Read Order
+The central docs should answer three questions quickly:
+
+- how do I get the repo running
+- which package should I open
+- what architectural rules should I not accidentally break
+
+If a topic needs package-specific depth, the detailed README should live in the package itself, not as another top-level doc here.
+
+## Read Order
 
 Read these in order:
 
 1. [`START_HERE.md`](START_HERE.md)
-2. [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
-3. [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
-4. the README of the package you want to change
-5. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+2. [`PACKAGES.md`](PACKAGES.md)
+3. the README of the package you want to change
+4. [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
+
+## Central Docs
+
+- [`START_HERE.md`](START_HERE.md): first build, first launch, first service calls
+- [`PACKAGES.md`](PACKAGES.md): what each package does and where to edit first
+- [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md): architecture, boundaries, conventions, and common mistakes
 
 ## Package Guides
 
@@ -25,15 +38,4 @@ Read these in order:
 
 - [`../setup/README.md`](../setup/README.md)
 - [`../promoc_bringup/config/README.md`](../promoc_bringup/config/README.md)
-
-## Reference And Background
-
-- [`learning_path_en.md`](learning_path_en.md)
-- [`learning_path_de.md`](learning_path_de.md)
-- [`camera_parameter_reference.md`](camera_parameter_reference.md)
-- [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md)
-
-## Migration And Refactor Reference
-
-- [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
 

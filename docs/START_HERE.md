@@ -87,7 +87,7 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 | add or change ROS messages or services | [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md) |
 | add shared validation, conversions, or reusable Python logic | [`../promoc_core/README.md`](../promoc_core/README.md) |
 
-## Repository Map
+## What You Need To Know
 
 - `promoc_bringup`: launch files, runtime mode, config wiring
 - `camera_nodes`: camera node and camera-facing services
@@ -95,18 +95,15 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 - `planar_motor_nodes`: planar motor mover node and motion services
 - `promoc_assembly_interfaces`: contract-only ROS `srv` and `msg`
 - `promoc_core`: shared Python helpers that must stay independent from runtime packages
-- `docs`: onboarding, structure, architecture, migration references
+- `docs`: central onboarding and architecture only
 - `setup`: installation and environment checks
 
 ## Read Next
 
 - docs map: [`README.md`](README.md)
-- Contributor file map: [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md)
-- Runtime package cheat sheet: [`PACKAGE_INFO.md`](PACKAGE_INFO.md)
-- Architecture and dependency boundaries: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Learning path (EN): [`learning_path_en.md`](learning_path_en.md)
-- Learning path (DE): [`learning_path_de.md`](learning_path_de.md)
-- Migration reference: [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)
+- Package guide: [`PACKAGES.md`](PACKAGES.md)
+- System overview: [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
+- package README for the area you want to change
 
 ## Ground Rules
 

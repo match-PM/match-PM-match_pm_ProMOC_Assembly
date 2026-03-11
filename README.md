@@ -7,10 +7,9 @@ Hardware-first ROS2 repository for precision assembly with camera services, line
 If you are new to the repository, use this order:
 
 1. [`docs/START_HERE.md`](docs/START_HERE.md)
-2. [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-3. [`docs/PACKAGE_INFO.md`](docs/PACKAGE_INFO.md)
-4. the README of the package you want to change
-5. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
+3. the README of the package you want to change
+4. [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md)
 
 If you want the full docs map first, open [`docs/README.md`](docs/README.md).
 
@@ -62,8 +61,6 @@ make sim
 
 - Docs index: [`docs/README.md`](docs/README.md)
 - Onboarding: [`docs/START_HERE.md`](docs/START_HERE.md)
-- Structure map: [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md)
-- Package cheat sheet: [`docs/PACKAGE_INFO.md`](docs/PACKAGE_INFO.md)
-- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Package guide: [`docs/PACKAGES.md`](docs/PACKAGES.md)
+- System overview: [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md)
 - Setup: [`setup/README.md`](setup/README.md)
-- Migration notes: [`docs/MIGRATION_NOTES.md`](docs/MIGRATION_NOTES.md)

@@ -282,9 +282,9 @@ def _evaluate(root: Path) -> list[CheckResult]:
     results.append(
         _check_contains(
             root,
-            "docs/MIGRATION_NOTES.md",
-            ["Release N+1"],
-            "migration notes describe Release N+1 canonical-only contract",
+            "docs/SYSTEM_OVERVIEW.md",
+            ["runtime_mode:=hardware|sim", "promoc_assembly_interfaces", "services/"],
+            "system overview documents the canonical runtime structure",
         )
     )
 
