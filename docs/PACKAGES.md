@@ -8,14 +8,14 @@ Use this page when you already know the system roughly and want to answer:
 
 ## Package Overview
 
-| Package | Owns | Start here |
+| Package | Owns | Typical ROS API | Start here |
 | --- | --- | --- |
-| `promoc_bringup` | launch files, runtime selection, config wiring | `promoc_bringup/launch/` and [`../promoc_bringup/README.md`](../promoc_bringup/README.md) |
-| `camera_nodes` | autofocus, MTF, ROI detection, exposure, camera simulator | `camera_nodes/camera_nodes/node.py` and [`../camera_nodes/README.md`](../camera_nodes/README.md) |
-| `linear_axis_nodes` | LTS300 axis motion, admin, status | `linear_axis_nodes/linear_axis_nodes/node.py` and [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md) |
-| `planar_motor_nodes` | mover motion and control services | `planar_motor_nodes/planar_motor_nodes/node.py` and [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md) |
-| `promoc_assembly_interfaces` | ROS `srv` and `msg` contracts only | `promoc_assembly_interfaces/srv/`, `promoc_assembly_interfaces/msg/`, and [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md) |
-| `promoc_core` | shared validation, conversions, logging, errors, reusable helpers | `promoc_core/promoc_core/` and [`../promoc_core/README.md`](../promoc_core/README.md) |
+| `promoc_bringup` | launch files, runtime selection, config wiring | `ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware` | `promoc_bringup/launch/` and [`../promoc_bringup/README.md`](../promoc_bringup/README.md) |
+| `camera_nodes` | autofocus, MTF, ROI detection, exposure, camera simulator | `/promoc/camera/autofocus` | `camera_nodes/camera_nodes/node.py` and [`../camera_nodes/README.md`](../camera_nodes/README.md) |
+| `linear_axis_nodes` | LTS300 axis motion, admin, status | `/promoc/linear_axis/<axis_name>/move_absolute` | `linear_axis_nodes/linear_axis_nodes/node.py` and [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md) |
+| `planar_motor_nodes` | mover motion and control services | `/promoc/mover/activate_xbots` | `planar_motor_nodes/planar_motor_nodes/node.py` and [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md) |
+| `promoc_assembly_interfaces` | ROS `srv` and `msg` contracts only | `promoc_assembly_interfaces/srv/AutoFocus` | `promoc_assembly_interfaces/srv/`, `promoc_assembly_interfaces/msg/`, and [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md) |
+| `promoc_core` | shared validation, conversions, logging, errors, reusable helpers | no public ROS API of its own | `promoc_core/promoc_core/` and [`../promoc_core/README.md`](../promoc_core/README.md) |
 
 ## Where To Edit First
 

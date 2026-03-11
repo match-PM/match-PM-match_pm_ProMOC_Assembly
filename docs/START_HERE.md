@@ -13,6 +13,16 @@ ProMOC Assembly is a hardware-first ROS2 repository for:
 
 If you are new to the repo, read this file once from top to bottom, then open the package guide for the first change you want to make.
 
+## How To Think About This Repo
+
+Use this simple mental model:
+
+- `promoc_bringup` starts the system
+- runtime packages expose ROS services and topics
+- `promoc_assembly_interfaces` defines the ROS contracts
+- `promoc_core` contains shared helper code
+- package READMEs explain the area you actually want to change
+
 ## Build Once
 
 From the repository root:

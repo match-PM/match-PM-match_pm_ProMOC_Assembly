@@ -4,7 +4,14 @@ Hardware-first ROS2 repository for precision assembly with camera services, line
 
 ## Start Here
 
-If you are new to the repository, use this order:
+If you are completely new to the repository, read only these two pages first:
+
+1. [`docs/START_HERE.md`](docs/START_HERE.md)
+2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
+
+That is enough for initial orientation.
+
+If you want the fuller order after that, use this:
 
 1. [`docs/START_HERE.md`](docs/START_HERE.md)
 2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
