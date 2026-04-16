@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer="ProMOC Team",
     maintainer_email="promoc@match.uni-hannover.de",
-    description="Core functionality for ProMOC Assembly",
+    description="Shared logging, error handling, and validation helpers for ProMOC Messstand",
     license="MIT",
     tests_require=["pytest"],
     entry_points={

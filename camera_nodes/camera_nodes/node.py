@@ -15,9 +15,12 @@ from sensor_msgs.msg import CameraInfo, Image
 from std_srvs.srv import Trigger
 
 from .config import declare_camera_parameters, get_camera_param
-from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
+from .drivers import AravisCameraDriver, CameraDriver
 from .services import AutofocusHandler, ExposureHandler, MTFHandler
 from .services.image_processing import CameraImageProcessing
+
+
+X_AXIS_TOPIC = "/promoc/linear_axis/lts300_x_axis/position"
 
 
 class CameraNode(Node):
@@ -30,13 +33,10 @@ class CameraNode(Node):
         declare_camera_parameters(self)
 
         self.bridge = CvBridge()
-        self.use_simulator = self._param_bool("use_simulator", False)
         self.pixel_size_um = self._param_float("pixel_size_um", 2.40)
-        self.x_axis_name = self._param_str("x_axis_node_name", "lts300_x_axis")
         self.enable_debug_overlay = self._param_bool("enable_debug_overlay", False)
 
-        mode = "SIMULATOR" if self.use_simulator else "REAL"
-        self.log.info(f"Camera node starting in {mode} mode")
+        self.log.info("Camera node starting in hardware mode")
 
         self.camera_driver: CameraDriver = self._create_driver()
         self.camera_driver.connect()
@@ -76,10 +76,6 @@ class CameraNode(Node):
         return str(get_camera_param(self, name, default))
 
     def _create_driver(self) -> CameraDriver:
-        if self.use_simulator:
-            self.log.info("Using simulated camera driver")
-            return SimulatedCameraDriver(TaggedLogger(self.get_logger(), LogTags.MOCK))
-
         self.log.info("Using Aravis camera driver")
         return AravisCameraDriver(self, self.log)
 
@@ -92,7 +88,7 @@ class CameraNode(Node):
         )
         self.axis_pos_sub = self.create_subscription(
             LinearAxisInfo,
-            f"/promoc/linear_axis/{self.x_axis_name}/position",
+            X_AXIS_TOPIC,
             self.axis_position_callback,
             10,
         )
@@ -142,14 +138,12 @@ class CameraNode(Node):
             self.mtf_handler.detect_rois_callback,
             callback_group=self.cb_group,
         )
-
-        if not self.use_simulator and self.camera_driver.is_connected:
-            self.set_exposure_service = self.create_service(
-                SetExposure,
-                "/promoc/camera/set_exposure",
-                self.exposure_handler.manual_set_exposure_callback,
-                callback_group=self.cb_group,
-            )
+        self.set_exposure_service = self.create_service(
+            SetExposure,
+            "/promoc/camera/set_exposure",
+            self.exposure_handler.manual_set_exposure_callback,
+            callback_group=self.cb_group,
+        )
 
     def _log_stream_health(self, msg: Image):
         self._image_count += 1

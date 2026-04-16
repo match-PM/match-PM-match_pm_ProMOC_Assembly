@@ -1,8 +1,0 @@
-int32   xbot_id
-float64 target_rz          # Target RZ rotation in degrees
-float64 max_rz_speed       # Maximum RZ speed in degrees/s
-float64 max_accel_rz       # Maximum RZ acceleration in degrees/s²
-int32   rot_mode           # rotation mode: 0=NO_ANGLE_WRAP (direct), 1=WRAP_TO_2PI_CCW, 2=WRAP_TO_2PI_CW
----
-bool success
-string status_message

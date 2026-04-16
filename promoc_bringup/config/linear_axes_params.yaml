@@ -1,20 +1,3 @@
-lts300_z_axis:
-  ros__parameters:
-    serial_number: '45407924'
-    collision_threshold: 200.0
-    device_units_per_mm: 409600.0
-    max_position: 300.0 
-    min_position: 0.0 
-    max_single_move: 300.0
-    homing_timeout: 180.0  # 3 minutes for long homing operations
-    velocity_unit_factor: 0.018  # mm/s per device velocity unit (experimentally determined)
-
-    # Calibration Data for Measurement Uncertainty
-    calibration:
-      repeatability_mm: 0.002  # < 2 µm bidirectional repeatability (Datasheet)
-      accuracy_mm: 0.005       # < 5 µm on-axis accuracy (Datasheet)
-      backlash_mm: 0.002       # 2 µm datasheet spec
-# LTS300 X-Axis Parameters
 lts300_x_axis:
   ros__parameters:
     serial_number: '45456044'

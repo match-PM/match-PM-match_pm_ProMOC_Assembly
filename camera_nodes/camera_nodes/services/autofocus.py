@@ -31,6 +31,7 @@ from .base import CallbackBase
 from .fly_over import FlyOverDetector
 
 _ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
+AXIS_PREFIX = "/promoc/linear_axis/lts300_x_axis"
 
 COARSE_STEP_MM = 0.5
 FOURSTEP_APPROACH_OFFSET_MM = 0.5
@@ -74,23 +75,21 @@ class AxisClientManager:
         if self._cached_axis_clients:
             return self._cached_axis_clients
 
-        axis_name = self._handler._param_str("x_axis_node_name", "lts300_x_axis")
-        axis_prefix = f"/promoc/linear_axis/{axis_name}"
         node = self._handler._node
 
         clients = {
-            "move": node.create_client(MoveAbsolute, f"{axis_prefix}/move_absolute"),
-            "jog": node.create_client(JogAxis, f"{axis_prefix}/jog_axis"),
+            "move": node.create_client(MoveAbsolute, f"{AXIS_PREFIX}/move_absolute"),
+            "jog": node.create_client(JogAxis, f"{AXIS_PREFIX}/jog_axis"),
             "status": node.create_client(
-                GetOperationStatus, f"{axis_prefix}/get_operation_status"
+                GetOperationStatus, f"{AXIS_PREFIX}/get_operation_status"
             ),
-            "position": node.create_client(GetPosition, f"{axis_prefix}/get_position"),
-            "stop": node.create_client(Stop, f"{axis_prefix}/stop"),
+            "position": node.create_client(GetPosition, f"{AXIS_PREFIX}/get_position"),
+            "stop": node.create_client(Stop, f"{AXIS_PREFIX}/stop"),
             "get_vel": node.create_client(
-                GetVelocityParameters, f"{axis_prefix}/get_velocity_parameters"
+                GetVelocityParameters, f"{AXIS_PREFIX}/get_velocity_parameters"
             ),
             "set_vel": node.create_client(
-                SetVelocityParameters, f"{axis_prefix}/set_velocity_parameters"
+                SetVelocityParameters, f"{AXIS_PREFIX}/set_velocity_parameters"
             ),
         }
 

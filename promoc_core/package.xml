@@ -3,7 +3,7 @@
 <package format="3">
   <name>promoc_core</name>
   <version>0.0.0</version>
-  <description>Core functionality for ProMOC Assembly</description>
+  <description>Shared logging, error handling, and validation helpers for ProMOC Messstand</description>
   <maintainer email="promoc@match.uni-hannover.de">ProMOC Team</maintainer>
   <license>MIT</license>
 

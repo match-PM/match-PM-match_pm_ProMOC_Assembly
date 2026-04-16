@@ -13,11 +13,14 @@ def test_system_launch_file_exists():
     assert launch_path.exists()
 
 
-def test_system_launch_includes_camera_and_mover():
+def test_system_launch_includes_camera_and_axes_only():
     content = (ROOT / "promoc_bringup" / "launch" / "system.launch.py").read_text(
         encoding="utf-8", errors="ignore"
     )
     assert "camera.launch.py" in content
-    assert "planar_motor_nodes" in content
-    assert "mover_node" in content
+    assert "linear_axis_nodes" in content
+    assert "lts300_x_axis" in content
+    assert "lts300_z_axis" not in content
+    assert "planar_motor_nodes" not in content
+    assert "mover_node" not in content
     assert "runtime_mode" in content

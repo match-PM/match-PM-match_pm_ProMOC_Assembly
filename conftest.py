@@ -11,7 +11,6 @@ PACKAGE_ROOTS = (
     ROOT / "promoc_core",
     ROOT / "camera_nodes",
     ROOT / "linear_axis_nodes",
-    ROOT / "planar_motor_nodes",
     ROOT / "promoc_bringup",
 )
 

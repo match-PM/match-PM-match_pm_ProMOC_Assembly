@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print or execute reproducible Release N smoke paths."""
+"""Print or execute reproducible measurement-stand smoke paths."""
 
 from __future__ import annotations
 
@@ -9,16 +9,10 @@ import sys
 
 
 SMOKE_PATHS = {
-    "sim": [
-        "ros2 launch promoc_bringup system.launch.py runtime_mode:=sim",
-        'ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"',
-        "ros2 service call /promoc/camera/measure_mtf promoc_assembly_interfaces/srv/MeasureMTF \"{auto_roi: true, target_edge: 'any'}\"",
-    ],
     "hardware": [
-        "make doctor-hw",
         "ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware",
-        'ros2 service call /promoc/mover/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"',
         'ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"',
+        "ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition '{}'",
     ],
 }
 
@@ -37,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Release N smoke path helper.")
     parser.add_argument(
         "--mode",
-        choices=["sim", "hardware", "all"],
+        choices=["hardware", "all"],
         default="all",
         help="Which smoke path to print or execute.",
     )
@@ -48,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    modes = [args.mode] if args.mode in SMOKE_PATHS else ["sim", "hardware"]
+    modes = [args.mode] if args.mode in SMOKE_PATHS else ["hardware"]
 
     for mode in modes:
         commands = SMOKE_PATHS[mode]

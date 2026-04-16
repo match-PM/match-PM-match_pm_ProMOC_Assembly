@@ -12,9 +12,6 @@ exclude = [
   "camera_nodes/camera_nodes/drivers",
   "camera_nodes/test/test_autofocus_benchmark.py",
   "linear_axis_nodes/linear_axis_nodes/drivers",
-  "planar_motor_nodes/planar_motor_nodes/drivers",
-  "promoc_bringup/launch/planar_motor_demo.launch.py",
-  "promoc_bringup/launch/promoc_assembly_demo.launch.py",
 ]
 
 [tool.pytest.ini_options]

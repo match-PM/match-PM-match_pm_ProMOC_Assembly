@@ -1,4 +1,4 @@
-"""Unit tests for callback parameter helper methods."""
+"""Unit tests for service parameter helper methods."""
 
 from __future__ import annotations
 
@@ -103,4 +103,3 @@ def test_wait_for_new_image_requires_strictly_new_timestamp():
     img, ts = base._wait_for_new_image(last_timestamp=5, timeout=0.05)
     assert img == "img_new"
     assert ts == 6
-

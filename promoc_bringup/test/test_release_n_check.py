@@ -23,7 +23,7 @@ def test_release_n_check_script_passes():
     assert "failed" in result.stdout.lower()
 
 
-def test_release_n_smoke_script_lists_sim_and_hardware_paths():
+def test_release_n_smoke_script_lists_hardware_path_only():
     script = ROOT / "promoc_bringup" / "scripts" / "release_n_smoke.py"
     result = subprocess.run(
         [sys.executable, str(script), "--mode", "all"],
@@ -33,5 +33,4 @@ def test_release_n_smoke_script_lists_sim_and_hardware_paths():
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Release N smoke path: sim" in result.stdout
     assert "Release N smoke path: hardware" in result.stdout

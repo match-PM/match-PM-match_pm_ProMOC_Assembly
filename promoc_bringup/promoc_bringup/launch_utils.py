@@ -15,15 +15,24 @@ def resolve_runtime_mode(context, logger) -> str:
     """
     Resolve canonical runtime mode.
 
-    Accepted values:
+    Supported value:
     - runtime_mode:=hardware
-    - runtime_mode:=sim
+
+    Compatibility:
+    - runtime_mode:=sim falls back to hardware with a warning
     """
     from launch.substitutions import LaunchConfiguration
 
     runtime_mode = LaunchConfiguration("runtime_mode").perform(context).strip().lower()
-    if runtime_mode in ("hardware", "sim"):
+    if runtime_mode == "hardware":
         return runtime_mode
+
+    if runtime_mode == "sim":
+        logger.warn(
+            "runtime_mode='sim' is no longer supported on the messstand branch; "
+            "falling back to 'hardware'."
+        )
+        return "hardware"
 
     if runtime_mode:
         logger.warn(
@@ -144,18 +153,6 @@ def load_user_config(bringup_share_dir: str) -> dict:
     except Exception as exc:
         print(f"Warning: failed to process user config: {exc}")
         return defaults
-
-
-def load_camera_config(bringup_share_dir: str) -> dict:
-    """Load camera configuration from ids_camera_params.yaml."""
-    config_path = get_config_path(bringup_share_dir, "ids_camera_params.yaml")
-    config, error = load_yaml_config(config_path)
-    if error:
-        print(f"Warning: camera config error: {error}")
-        return {}
-    return config.get("camera_params", {})
-
-
 def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
     """Load linear axis configuration for a specific axis."""
     config_path = get_config_path(bringup_share_dir, "linear_axes_params.yaml")

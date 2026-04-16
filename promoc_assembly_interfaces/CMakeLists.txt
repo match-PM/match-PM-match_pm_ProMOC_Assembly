@@ -23,15 +23,6 @@ if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
 endif()
 
 set(INTERFACE_FILES
-  "msg/planar_motor/XBotInfo.msg"
-  "srv/planar_motor/ActivateXbots.srv"
-  "srv/planar_motor/ArcMotionSi.srv"
-  "srv/planar_motor/LevitationXbots.srv"
-  "srv/planar_motor/LinearMotionSi.srv"
-  "srv/planar_motor/RotaryMotion.srv"
-  "srv/planar_motor/SixDofMotion.srv"
-  "srv/planar_motor/StopMotion.srv"
-  "srv/planar_motor/SetVelocityAcceleration.srv"
   "msg/linear_axis/LinearAxisInfo.msg"
   "srv/linear_axis/MoveAbsolute.srv"
   "srv/linear_axis/MoveRelative.srv"

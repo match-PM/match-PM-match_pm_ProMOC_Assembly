@@ -1,7 +1,7 @@
 # ProMOC User Configuration v2
 #
 # Release N+1 canonical keys:
-# - runtime.mode: hardware|sim
+# - runtime.mode: hardware
 # - measurement.operator
 # - measurement.base_path
 

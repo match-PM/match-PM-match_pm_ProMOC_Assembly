@@ -1,5 +1,0 @@
-bool    activation_status
----
-bool    success
-bool    activation_status
-string  status_message

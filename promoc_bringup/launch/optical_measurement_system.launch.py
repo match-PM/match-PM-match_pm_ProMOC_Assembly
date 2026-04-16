@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
-"""Optical measurement system launch with canonical runtime mode support."""
+"""Optical measurement launch for the hardware-only messstand."""
 
 from __future__ import annotations
 
 import json
 import os
+
 from ament_index_python import get_package_share_directory
+import launch
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, TimerAction
 from launch.substitutions import LaunchConfiguration
-from launch.conditions import UnlessCondition
 from launch_ros.actions import Node
-import launch
 
 from promoc_bringup.launch_utils import (
-    load_camera_config,
+    discover_thorlabs_devices,
+    get_config_path,
     load_linear_axis_config,
     load_user_config,
+    load_yaml_config,
     resolve_runtime_mode,
 )
 
 os.environ["RCUTILS_CONSOLE_OUTPUT_FORMAT"] = "{time}: [{name}] [{severity}]\t{message}"
+
+X_AXIS_NAME = "lts300_x_axis"
 
 
 def generate_launch_description():
@@ -29,10 +33,13 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "runtime_mode",
                 default_value="hardware",
-                description="Canonical runtime mode: hardware|sim",
+                description="Canonical runtime mode. Only 'hardware' is supported.",
             ),
-            DeclareLaunchArgument("x_axis_port", default_value="/dev/ttyUSB0"),
-            DeclareLaunchArgument("x_axis_name", default_value="lts300_x_axis"),
+            DeclareLaunchArgument(
+                "camera_type",
+                default_value="ids_u3_3800cp_hq",
+                description="IDS camera config filename in config/cameras without extension.",
+            ),
             OpaqueFunction(function=launch_setup),
         ]
     )
@@ -40,46 +47,72 @@ def generate_launch_description():
 
 def launch_setup(context, *args, **kwargs):
     runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
-    use_simulator = runtime_mode == "sim"
+    camera_type = LaunchConfiguration("camera_type").perform(context).strip()
     bringup_share = get_package_share_directory("promoc_bringup")
+    logger = launch.logging.get_logger()
 
     user_config = load_user_config(bringup_share)
-    camera_config = load_camera_config(bringup_share)
-    axis_config = load_linear_axis_config(bringup_share, "lts300_x_axis")
+    axis_config = load_linear_axis_config(bringup_share, X_AXIS_NAME)
+    camera_profile = _load_camera_profile(bringup_share, camera_type, logger)
+    if not camera_profile:
+        return [LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}")]
 
-    actions = [
+    camera_params = camera_profile.get("camera_params", {})
+    camera_info = camera_profile.get("camera_info", {})
+    serial_port = _resolve_axis_port(axis_config)
+
+    return [
         LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}"),
         _create_startup_info(),
-        _create_camera_driver_node(camera_config, use_simulator),
-        _create_x_axis_node(axis_config),
+        _create_camera_driver_node(camera_params, camera_info),
+        _create_x_axis_node(axis_config, serial_port),
         TimerAction(
             period=2.0,
-            actions=[_create_camera_node(user_config, camera_config, use_simulator)],
+            actions=[_create_camera_node(user_config, camera_params, camera_info)],
         ),
     ]
-    return actions
+
+
+def _load_camera_profile(bringup_share: str, camera_type: str, logger) -> dict:
+    config_path = get_config_path(bringup_share, os.path.join("cameras", f"{camera_type}.yaml"))
+    config, error = load_yaml_config(config_path)
+    if error:
+        logger.error(f"Failed to load camera profile '{camera_type}': {error}")
+        return {}
+    return config or {}
+
+
+def _resolve_axis_port(axis_config: dict) -> str | None:
+    serial = str(axis_config.get("serial_number", "")).strip()
+    if not serial:
+        return None
+    connected = discover_thorlabs_devices()
+    return connected.get(serial)
 
 
 def _create_startup_info():
     return LogInfo(
         msg="\n"
-        "=== ProMOC Optical Measurement System ===\n"
+        "=== ProMOC Measurement Stand ===\n"
         "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf\n"
     )
 
 
-def _create_camera_driver_node(camera_config: dict, use_simulator: bool):
+def _create_camera_driver_node(camera_params: dict, camera_info: dict):
+    driver_type = camera_params.get("driver", "usb3vision")
+    executable = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}[
+        driver_type
+    ]
     return Node(
-        name=camera_config.get("cameraname", "assembly_camera"),
+        name=camera_params.get("cameraname", "assembly_camera"),
         namespace="promoc",
         package="camera_aravis2",
-        executable="camera_driver_uv",
+        executable=executable,
         output="screen",
         emulate_tty=True,
-        condition=UnlessCondition(str(use_simulator).lower()),
         parameters=[
             {
-                "guid": camera_config.get("guid", ""),
+                "guid": camera_params.get("guid", ""),
                 "frame_id": "camera_frame",
                 "stream_names": ["stream0"],
                 "camera_info_urls": [
@@ -90,9 +123,9 @@ def _create_camera_driver_node(camera_config: dict, use_simulator: bool):
                 ],
                 "verbose": False,
                 "ImageFormatControl": {
-                    "PixelFormat": [camera_config.get("pixel_format", "RGB8")],
-                    "Width": 2448,
-                    "Height": 2048,
+                    "PixelFormat": [camera_params.get("pixel_format", "RGB8")],
+                    "Width": camera_info.get("image_width", 5536),
+                    "Height": camera_info.get("image_height", 3692),
                 },
                 "AcquisitionControl": {
                     "AcquisitionFrameRateEnable": True,
@@ -103,23 +136,22 @@ def _create_camera_driver_node(camera_config: dict, use_simulator: bool):
     )
 
 
-def _create_x_axis_node(axis_config: dict):
+def _create_x_axis_node(axis_config: dict, serial_port: str | None):
+    parameters = [{"serial_number": axis_config.get("serial_number", "45456044")}]
+    if serial_port:
+        parameters.append({"serial_port": serial_port})
+
     return Node(
         package="linear_axis_nodes",
         executable="lts300_node",
-        name=LaunchConfiguration("x_axis_name"),
+        name=X_AXIS_NAME,
         output="screen",
         emulate_tty=True,
-        parameters=[
-            {
-                "serial_port": LaunchConfiguration("x_axis_port"),
-                "serial_number": axis_config.get("serial_number", "45456044"),
-            }
-        ],
+        parameters=parameters,
     )
 
 
-def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
+def _create_camera_node(config: dict, camera_params: dict, camera_info: dict):
     base_dir = config.get("measurement", {}).get("base_path") or os.path.join(
         os.path.expanduser("~"), "Dokumente", "Messungen"
     )
@@ -141,12 +173,16 @@ def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
             {
                 "measurement.username": config["measurement"]["operator"],
                 "measurement.base_path": base_dir,
-                "use_simulator": bool(use_simulator),
-                "x_axis_node_name": LaunchConfiguration("x_axis_name"),
                 "pixel_size_um": config["camera"]["pixel_size_um"],
                 "mtf.use_full_frame": True,
-                "mtf.full_frame_width": camera_config.get("sensor_resolution_h", 5536),
-                "mtf.full_frame_height": camera_config.get("sensor_resolution_v", 3692),
+                "mtf.full_frame_width": camera_params.get(
+                    "sensor_resolution_h",
+                    camera_info.get("image_width", 5536),
+                ),
+                "mtf.full_frame_height": camera_params.get(
+                    "sensor_resolution_v",
+                    camera_info.get("image_height", 3692),
+                ),
                 "mtf.full_frame_offset_x": 0,
                 "mtf.full_frame_offset_y": 0,
                 "mtf.full_frame_binning": 1,

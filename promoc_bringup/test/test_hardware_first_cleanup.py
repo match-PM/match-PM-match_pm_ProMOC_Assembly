@@ -36,20 +36,57 @@ def test_interface_cmake_has_no_verification_services():
     assert "RunVerification.srv" not in content
 
 
-def test_start_here_is_hardware_first():
-    start_here = ROOT / "docs" / "START_HERE.md"
-    content = start_here.read_text(encoding="utf-8", errors="ignore")
-    assert "make doctor-hw" in content
-    assert "make hw" in content
-    assert "make camera-hw" in content
+def test_root_readme_is_canonical_hardware_doc():
+    content = (ROOT / "README.md").read_text(encoding="utf-8", errors="ignore")
+    assert "colcon build --symlink-install" in content
+    assert "ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware" in content
+    assert "ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware" in content
+    assert "/promoc/camera/set_exposure" in content
+    assert "lts300_x_axis" in content
+    assert "make doctor-hw" not in content
+    assert "make build" not in content
+    assert "make hw" not in content
+    assert "make camera-hw" not in content
+    assert "install_all.sh" not in content
+    assert "docs/START_HERE.md" not in content
+
+
+def test_split_docs_and_setup_are_removed():
+    removed = [
+        ROOT / "setup",
+        ROOT / "docs",
+        ROOT / "camera_nodes" / "docs",
+        ROOT / "promoc_core" / "docs",
+        ROOT / "promoc_core" / "ERROR_HANDLING.md",
+        ROOT / "promoc_core" / "QUICK_REFERENCE.md",
+    ]
+    for path in removed:
+        assert not path.exists()
+
+
+def test_promoc_core_is_trimmed_to_supported_modules():
+    removed = [
+        ROOT / "promoc_core" / "promoc_core" / "conversions.py",
+        ROOT / "promoc_core" / "promoc_core" / "motion.py",
+        ROOT / "promoc_core" / "promoc_core" / "motion_interface.py",
+        ROOT / "promoc_core" / "test" / "test_conversions.py",
+        ROOT / "promoc_core" / "test" / "test_motion_interface.py",
+    ]
+    for path in removed:
+        assert not path.exists()
+
+    init_content = (
+        ROOT / "promoc_core" / "promoc_core" / "__init__.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+    assert "motion_interface" not in init_content
+    assert "conversions" not in init_content
 
 
 def test_docs_no_legacy_launch_names():
     docs = [
         ROOT / "README.md",
-        ROOT / "docs" / "START_HERE.md",
-        ROOT / "docs" / "README.md",
-        ROOT / "setup" / "README.md",
+        ROOT / "camera_nodes" / "README.md",
+        ROOT / "linear_axis_nodes" / "README.md",
         ROOT / "promoc_bringup" / "README.md",
     ]
     legacy = ("promoc_assembly_launch.py", "promoc_assembly_demo_launch.py")

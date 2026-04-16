@@ -205,9 +205,7 @@ class MTFHandler(CallbackBase):
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
         self._node.get_logger().info("MTF measurement service called.")
-        if self._param_bool("mtf.use_full_frame", True) and not getattr(
-            self._node, "use_simulator", False
-        ):
+        if self._param_bool("mtf.use_full_frame", True):
             self._node.get_logger().info(
                 "MTF capture: switching camera format from cropped ROI to FULL resolution "
                 "(crop OFF, fullres ON)."

@@ -6,11 +6,9 @@ from types import SimpleNamespace
 
 
 ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
-    ("use_simulator", False),
     ("pixel_size_um", 2.40),
     ("default_roi_width", 200),
     ("default_roi_height", 200),
-    ("x_axis_node_name", "lts300_x_axis"),
     ("measurement.username", ""),
     ("measurement.base_path", ""),
     ("enable_debug_overlay", False),
@@ -99,11 +97,9 @@ ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = ALL_PARAM_VALUES
 
 _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
     "core": (
-        ("use_simulator", "use_simulator", bool, False),
         ("pixel_size_um", "pixel_size_um", float, 2.40),
         ("default_roi_width", "default_roi_width", int, 200),
         ("default_roi_height", "default_roi_height", int, 200),
-        ("x_axis_node_name", "x_axis_node_name", str, "lts300_x_axis"),
         ("enable_debug_overlay", "enable_debug_overlay", bool, False),
     ),
     "measurement": (

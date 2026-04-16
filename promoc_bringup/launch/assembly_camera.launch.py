@@ -21,7 +21,7 @@ def generate_launch_description() -> LaunchDescription:
             LogInfo(
                 msg=(
                     "[Deprecated] Use "
-                    "'ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware|sim'"
+                    "'ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware'"
                 )
             ),
             IncludeLaunchDescription(PythonLaunchDescriptionSource(camera_launch)),

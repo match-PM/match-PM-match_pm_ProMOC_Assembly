@@ -39,14 +39,14 @@ from .field_curvature import (
 
 
 # Centralized algorithm definitions for autofocus.
-# Used by autofocus callbacks and tooling.
+# Used by service handlers and tooling.
 AUTOFOCUS_ALGORITHMS = [
-    (0, "goldensection", GoldenSectionAutofocus),
+    (0, "fourstep", FourStepAutofocus),
     (1, "hillclimbing", HillClimbingAutofocus),
     (2, "parabolic", IterativeParabolicAutofocus),
     (3, "fibonacci", FibonacciAutofocus),
     (4, "exhaustive", ExhaustiveAutofocus),  # Reference algorithm
-    (5, "fourstep", FourStepAutofocus),
+    (5, "goldensection", GoldenSectionAutofocus),
     (6, "mspr_autofocus", MSPRAutofocus),
 ]
 
@@ -83,4 +83,3 @@ __all__ = [
     "calculate_field_metrics",
     "FIELD_POSITIONS",
 ]
-

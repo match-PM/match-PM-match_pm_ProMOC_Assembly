@@ -2,11 +2,10 @@
 Abstract base class for camera drivers.
 
 Defines the interface that all camera drivers must implement, providing
-a consistent API for camera control independent of hardware type.
+a consistent API for camera control.
 
 Implementations:
 - AravisCameraDriver: Real camera via camera_aravis2 ROS2 wrapper
-- SimulatedCameraDriver: Simulator for testing without hardware
 
 Interface:
 - Connection: connect(), disconnect(), is_connected property
@@ -65,7 +64,6 @@ class CameraDriver(ABC):
 
         Args:
             camera_name: Camera identifier (e.g., IP address, serial number).
-                         Can be None for the simulator.
 
         Returns:
             bool: True if the connection is successful.
@@ -163,18 +161,3 @@ class CameraDriver(ABC):
             bool: True if successful.
         """
         pass
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # SIMULATOR-SPECIFIC
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def set_focus_position(self, position: float):
-        """
-        Sets the simulated focus position (for simulator only).
-
-        This method has no effect on real camera drivers.
-
-        Args:
-            position: Simulated Z-position for focus calculation.
-        """
-        pass  # Default implementation does nothing.

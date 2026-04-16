@@ -29,6 +29,8 @@ def test_camera_launch_is_runtime_mode_only():
     assert "runtime_mode" in content
     assert not _declares_launch_argument(content, "sim_mode")
     assert not _declares_launch_argument(content, "use_simulator")
+    assert 'runtime_mode == "sim"' not in content
+    assert "camera_simulator" not in content
 
 
 def test_optical_launch_is_runtime_mode_only():
@@ -38,6 +40,8 @@ def test_optical_launch_is_runtime_mode_only():
     assert "runtime_mode" in content
     assert not _declares_launch_argument(content, "sim_mode")
     assert not _declares_launch_argument(content, "use_simulator")
+    assert "x_axis_name" not in content
+    assert "x_axis_port" not in content
 
 
 def test_camera_launch_uses_dedicated_parameter_builder():
@@ -47,3 +51,10 @@ def test_camera_launch_uses_dedicated_parameter_builder():
     assert "from promoc_bringup.camera_launch_builder import" in content
     assert "build_camera_node_parameters" in content
     assert "build_driver_node_parameters" in content
+
+
+def test_runtime_mode_compatibility_is_hardware_only():
+    content = (
+        ROOT / "promoc_bringup" / "promoc_bringup" / "launch_utils.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+    assert "runtime_mode='sim' is no longer supported" in content

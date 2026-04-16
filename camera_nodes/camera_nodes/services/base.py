@@ -1,4 +1,4 @@
-"""Base class with common helper methods for camera callbacks."""
+"""Base class with common helper methods for camera service handlers."""
 
 import asyncio
 from datetime import datetime
@@ -61,7 +61,7 @@ class ParameterAccessor:
 
 
 class CallbackBase:
-    """Common functionality for all camera service callbacks.
+    """Common functionality for camera service handlers.
 
     Attributes:
         _node: Parent ROS2 node

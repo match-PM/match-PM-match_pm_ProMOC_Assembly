@@ -175,12 +175,36 @@ def test_runner_build_plan_uses_peak_window_for_refinement_mode():
         focus_profile={"coarse_step_mm": 0.2, "settle_s": 0.15},
     )
 
-    assert plan.mode_name == "goldensection"
+    assert plan.mode_name == "fourstep"
     assert plan.algorithm.config.start_mm == 3.0
     assert plan.algorithm.config.end_mm == 5.0
     assert plan.algorithm.config.step_mm == 0.2
     assert plan.settle_s == 0.15
     assert plan.save_best_image is False
+
+
+def test_handler_algorithm_lookup_matches_public_focus_mode_ids():
+    assert autofocus_module._ALGO_LOOKUP[0][0] == "fourstep"
+    assert autofocus_module._ALGO_LOOKUP[5][0] == "goldensection"
+
+
+def test_runner_unknown_mode_falls_back_to_fourstep():
+    runner = AutofocusRunner(_RunnerHandler())
+    request = types.SimpleNamespace(
+        start_position=1.0,
+        end_position=9.0,
+        save_best_image=False,
+    )
+
+    plan = runner._build_single_mode_run_plan(
+        mode=999,
+        peak_start=3.0,
+        peak_end=5.0,
+        request=request,
+        focus_profile={"coarse_step_mm": 0.2, "settle_s": 0.15},
+    )
+
+    assert plan.mode_name == "fourstep"
 
 
 def test_runner_moves_fourstep_via_pre_approach_position():

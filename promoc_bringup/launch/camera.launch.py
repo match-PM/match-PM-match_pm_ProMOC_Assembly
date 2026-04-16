@@ -27,7 +27,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "runtime_mode",
                 default_value="hardware",
-                description="Canonical runtime mode: hardware|sim",
+                description="Canonical runtime mode. Only 'hardware' is supported.",
             ),
             DeclareLaunchArgument(
                 "camera_type",
@@ -46,7 +46,6 @@ def generate_launch_description():
 
 def launch_setup(context, *args, **kwargs):
     runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
-    is_sim = runtime_mode == "sim"
     camera_type = LaunchConfiguration("camera_type").perform(context).strip()
     binning_override = LaunchConfiguration("binning_factor").perform(context).strip()
     logger = launch.logging.get_logger()
@@ -60,49 +59,10 @@ def launch_setup(context, *args, **kwargs):
     )
 
     if not os.path.exists(camera_config_file):
-        legacy_config = os.path.join(
-            bringup_pkg_share, "config", "ids_camera_params.yaml"
-        )
-        if os.path.exists(legacy_config):
-            logger.warn(
-                f"Camera config not found at {camera_config_file}. Using legacy config {legacy_config}."
-            )
-            camera_config_file = legacy_config
-        else:
-            logger.error(f"Camera configuration file not found: {camera_config_file}")
-            return []
+        logger.error(f"Camera configuration file not found: {camera_config_file}")
+        return []
 
-    if not is_sim:
-        _run_prelaunch_reset(bringup_pkg_share)
-
-    if is_sim:
-        actions.append(
-            Node(
-                package="camera_nodes",
-                executable="camera_simulator",
-                name="camera_simulator",
-                output="screen",
-                arguments=["--ros-args", "--log-level", "INFO"],
-            )
-        )
-        actions.append(
-            Node(
-                package="camera_nodes",
-                executable="camera_node",
-                name="camera_node",
-                namespace="promoc",
-                output="screen",
-                parameters=[
-                    build_camera_node_parameters(
-                        None,
-                        None,
-                        use_simulator=True,
-                    )
-                ],
-                arguments=["--ros-args", "--log-level", "INFO"],
-            )
-        )
-        return actions
+    _run_prelaunch_reset(bringup_pkg_share)
 
     try:
         with open(camera_config_file, "r", encoding="utf-8") as file_handle:
@@ -175,7 +135,6 @@ def launch_setup(context, *args, **kwargs):
                     build_camera_node_parameters(
                         camera_params,
                         camera_config,
-                        use_simulator=False,
                     )
                 ],
             )

@@ -5,8 +5,8 @@
 # 
 # INSTRUCTIONS FOR ADDING A NEW CAMERA:
 # ============================================================================
-# 1. Copy this file to: cameras/<your_camera_model>.yaml
-#    Example: cameras/basler_ace_a2500.yaml
+# 1. Copy this file to: cameras/<your_ids_camera_model>.yaml
+#    Example: cameras/ids_u3_3800cp_hq.yaml
 #
 # 2. Fill in all sections below with your camera's specifications
 #

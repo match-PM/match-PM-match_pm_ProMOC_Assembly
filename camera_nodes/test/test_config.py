@@ -48,15 +48,13 @@ def test_declare_and_load_runtime_config():
     declare_camera_parameters(node)
 
     # Override a couple of values to verify typed parsing.
-    node._params["use_simulator"] = True
-    node._params["x_axis_node_name"] = "lts300_z_axis"
     node._params["pixel_size_um"] = 3.45
     node._params["mtf.profile"] = "debug"
 
     cfg = load_camera_runtime_config(node)
-    assert cfg.core.use_simulator is True
-    assert cfg.core.x_axis_node_name == "lts300_z_axis"
     assert cfg.core.pixel_size_um == 3.45
+    assert not hasattr(cfg.core, "use_simulator")
+    assert not hasattr(cfg.core, "x_axis_node_name")
     assert cfg.mtf.profile == "debug"
 
 

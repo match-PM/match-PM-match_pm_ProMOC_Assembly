@@ -51,19 +51,13 @@ def build_driver_node_parameters(
 def build_camera_node_parameters(
     camera_params: dict | None,
     camera_config: dict | None,
-    *,
-    use_simulator: bool,
 ) -> dict:
-    """Build camera_node parameter mapping from launch/runtime context."""
-    if use_simulator:
-        return {"use_simulator": True}
-
+    """Build camera_node parameter mapping from the selected IDS profile."""
     camera_params = camera_params or {}
     camera_config = camera_config or {}
     camera_info = camera_config.get("camera_info", {})
 
     return {
-        "use_simulator": False,
         "mtf.use_full_frame": True,
         "mtf.full_frame_width": camera_params.get(
             "sensor_resolution_h",

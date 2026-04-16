@@ -337,8 +337,6 @@ class CameraFormatController:
         wait_for_new_image_fn: Callable[..., tuple],
     ):
         """Switch to full frame before MTF and return (restore_state, new_image)."""
-        if getattr(self._node, "use_simulator", False):
-            return None, None
         if not self._get_bool_param("mtf.use_full_frame", False):
             return None, None
 
@@ -472,7 +470,7 @@ class CameraFormatController:
 
     def restore_after_mtf(self, restore_state: dict):
         """Restore camera ROI/Binning after MTF measurement."""
-        if not restore_state or getattr(self._node, "use_simulator", False):
+        if not restore_state:
             return
         if not self._get_bool_param("mtf.restore_after_measurement", True):
             return

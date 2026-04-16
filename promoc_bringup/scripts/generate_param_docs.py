@@ -18,9 +18,7 @@ from camera_nodes.config import (  # noqa: E402
 
 
 ESSENTIAL_PREFIXES = (
-    "use_simulator",
     "pixel_size_um",
-    "x_axis_node_name",
     "measurement.",
     "autofocus.refinement_",
     "autofocus.min_step_mm",

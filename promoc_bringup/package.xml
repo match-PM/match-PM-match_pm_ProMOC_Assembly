@@ -13,13 +13,8 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>promoc_assembly_interfaces</depend>
-  <depend>planar_motor_nodes</depend>
+  <depend>camera_nodes</depend>
   <depend>linear_axis_nodes</depend>
-  <depend>gazebo_ros</depend>
-  <depend>ros2_control</depend>
-  <depend>controller_manager</depend>
-  <depend>joint_state_broadcaster</depend>
-  <depend>position_controllers</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

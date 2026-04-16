@@ -8,7 +8,7 @@ installed in minimal environments. Using lazy imports via __getattr__ prevents
 import-time failures.
 
 Usage:
-    from camera_nodes.drivers import CameraDriver, SimulatedCameraDriver
+    from camera_nodes.drivers import CameraDriver
     from camera_nodes.drivers import AravisCameraDriver  # Loaded on demand
 """
 
@@ -25,10 +25,6 @@ def __getattr__(name: str) -> Any:
     This avoids import-time failures during test collection when optional
     dependencies for hardware drivers are not installed.
     """
-    if name == 'SimulatedCameraDriver':
-        from .sim import SimulatedCameraDriver
-
-        return SimulatedCameraDriver
     if name == 'AravisCameraDriver':
         from .hardware import AravisCameraDriver
 
@@ -38,4 +34,4 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
-__all__ = ['CameraDriver', 'AravisCameraDriver', 'SimulatedCameraDriver']
+__all__ = ['CameraDriver', 'AravisCameraDriver']

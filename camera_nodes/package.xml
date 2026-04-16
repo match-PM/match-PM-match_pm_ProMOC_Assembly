@@ -18,6 +18,7 @@
   <depend>image_transport</depend>
   <depend>camera_info_manager</depend>
   <depend>promoc_core</depend>
+  <depend>promoc_assembly_interfaces</depend>
   
   <!-- External camera driver -->
   <depend>camera_aravis2</depend>
