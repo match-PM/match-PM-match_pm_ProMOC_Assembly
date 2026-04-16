@@ -56,18 +56,43 @@ def build_camera_node_parameters(
     camera_params = camera_params or {}
     camera_config = camera_config or {}
     camera_info = camera_config.get("camera_info", {})
+    mtf_params = camera_config.get("mtf_params", {})
 
     return {
         "mtf.use_full_frame": True,
-        "mtf.full_frame_width": camera_params.get(
+        "mtf.use_raw_capture": True,
+        "mtf.capture_required_raw": True,
+        "mtf.capture_pixel_format": camera_params.get(
+            "mtf_capture_pixel_format",
+            "BayerRG12",
+        ),
+        "mtf.capture_bayer_pattern": camera_params.get(
+            "mtf_capture_bayer_pattern",
+            "RGGB",
+        ),
+        "mtf.capture_width": camera_params.get(
             "sensor_resolution_h",
             camera_info.get("image_width", 5536),
         ),
-        "mtf.full_frame_height": camera_params.get(
+        "mtf.capture_height": camera_params.get(
             "sensor_resolution_v",
             camera_info.get("image_height", 3692),
         ),
-        "mtf.full_frame_offset_x": 0,
-        "mtf.full_frame_offset_y": 0,
-        "mtf.full_frame_binning": 1,
+        "mtf.capture_offset_x": 0,
+        "mtf.capture_offset_y": 0,
+        "mtf.capture_binning": 1,
+        "mtf.capture_exposure_us": float(
+            mtf_params.get("recommended_exposure_ms", 0.0)
+        )
+        * 1000.0,
+        "mtf.capture_gain": mtf_params.get("recommended_gain", 0.0),
+        "mtf.capture_settle_s": 0.35,
+        "mtf.capture_image_timeout_s": 2.0,
+        "mtf.capture_disable_exposure_auto": True,
+        "mtf.capture_disable_gain_auto": True,
+        "mtf.capture_disable_white_balance_auto": True,
+        "mtf.capture_disable_gamma": True,
+        "mtf.capture_disable_color_transform": True,
+        "mtf.raw_green_pair_warn_pct": 10.0,
+        "mtf.green_wavelength_um": mtf_params.get("wavelength_um", 0.555),
     }

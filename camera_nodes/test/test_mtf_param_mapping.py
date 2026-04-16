@@ -27,6 +27,8 @@ if "rcl_interfaces.msg" not in sys.modules:
         PARAMETER_NOT_SET = 0
         PARAMETER_INTEGER = 2
         PARAMETER_DOUBLE = 3
+        PARAMETER_STRING = 4
+        PARAMETER_BOOL = 5
 
     class ParameterValue:
         def __init__(self, **kwargs):
@@ -141,6 +143,10 @@ def test_build_mtf_config_mapping_applies_and_respects_auto_roi_override():
     assert config.edge_validation_mode == "off"
     assert config.mtf_clip_max == 0.9
     assert config.mtf_warn_threshold == 1.15
+    assert config.input_mode == "raw_bayer_rggb"
+    assert config.capture_pixel_format == "BayerRG12"
+    assert config.capture_binning_h == 1
+    assert config.capture_binning_v == 1
 
 
 def test_build_mtf_config_mapping_ignores_invalid_casts_and_applies_profile():
@@ -164,3 +170,29 @@ def test_build_mtf_config_mapping_ignores_invalid_casts_and_applies_profile():
     assert config.derivative_mode == "iso"
     assert config.apply_derivative_correction is True
 
+
+def test_build_mtf_config_uses_raw_capture_metadata_params():
+    callbacks = _callbacks(
+        {
+            "mtf.use_raw_capture": True,
+            "mtf.capture_pixel_format": "BayerRG12",
+            "mtf.capture_bayer_pattern": "RGGB",
+            "mtf.capture_binning": 1,
+            "mtf.capture_exposure_us": 125000.0,
+            "mtf.capture_gain": 0.0,
+            "mtf.raw_green_pair_warn_pct": 7.5,
+            "mtf.green_wavelength_um": 0.53,
+        }
+    )
+
+    config = callbacks._build_mtf_config(2.4, 2.0, 10.0, auto_roi=True)
+
+    assert config.input_mode == "raw_bayer_rggb"
+    assert config.capture_pixel_format == "BayerRG12"
+    assert config.raw_bayer_pattern == "RGGB"
+    assert config.capture_binning_h == 1
+    assert config.capture_binning_v == 1
+    assert config.capture_exposure_us == 125000.0
+    assert config.capture_gain == 0.0
+    assert config.raw_green_pair_warn_pct == 7.5
+    assert config.wavelength_um == 0.53

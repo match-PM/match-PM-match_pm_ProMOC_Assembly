@@ -30,6 +30,8 @@ if "rcl_interfaces.msg" not in sys.modules:
         PARAMETER_NOT_SET = 0
         PARAMETER_INTEGER = 2
         PARAMETER_DOUBLE = 3
+        PARAMETER_STRING = 4
+        PARAMETER_BOOL = 5
 
     class ParameterValue:
         def __init__(self, **kwargs):
@@ -102,6 +104,11 @@ def test_mtf_handler_builds_default_config():
     assert cfg.pixel_size_um == 2.4
     assert cfg.min_edge_angle == 2.0
     assert cfg.max_edge_angle == 10.0
+    assert cfg.input_mode == "raw_bayer_rggb"
+    assert cfg.capture_pixel_format == "BayerRG12"
+    assert cfg.capture_binning_h == 1
+    assert cfg.capture_binning_v == 1
+    assert cfg.raw_bayer_pattern == "RGGB"
 
 
 def test_detect_rois_uses_status_message(monkeypatch: pytest.MonkeyPatch):
@@ -147,4 +154,3 @@ def test_detect_rois_uses_status_message(monkeypatch: pytest.MonkeyPatch):
     assert "Detected 1 bars and 1 squares" in result.status_message
     assert result.bars_detected == 1
     assert result.squares_detected == 1
-

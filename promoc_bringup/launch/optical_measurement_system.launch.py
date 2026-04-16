@@ -59,6 +59,7 @@ def launch_setup(context, *args, **kwargs):
 
     camera_params = camera_profile.get("camera_params", {})
     camera_info = camera_profile.get("camera_info", {})
+    camera_mtf_params = camera_profile.get("mtf_params", {})
     serial_port = _resolve_axis_port(axis_config)
 
     return [
@@ -68,7 +69,14 @@ def launch_setup(context, *args, **kwargs):
         _create_x_axis_node(axis_config, serial_port),
         TimerAction(
             period=2.0,
-            actions=[_create_camera_node(user_config, camera_params, camera_info)],
+            actions=[
+                _create_camera_node(
+                    user_config,
+                    camera_params,
+                    camera_info,
+                    camera_mtf_params,
+                )
+            ],
         ),
     ]
 
@@ -151,7 +159,12 @@ def _create_x_axis_node(axis_config: dict, serial_port: str | None):
     )
 
 
-def _create_camera_node(config: dict, camera_params: dict, camera_info: dict):
+def _create_camera_node(
+    config: dict,
+    camera_params: dict,
+    camera_info: dict,
+    camera_mtf_params: dict,
+):
     base_dir = config.get("measurement", {}).get("base_path") or os.path.join(
         os.path.expanduser("~"), "Dokumente", "Messungen"
     )
@@ -175,17 +188,44 @@ def _create_camera_node(config: dict, camera_params: dict, camera_info: dict):
                 "measurement.base_path": base_dir,
                 "pixel_size_um": config["camera"]["pixel_size_um"],
                 "mtf.use_full_frame": True,
-                "mtf.full_frame_width": camera_params.get(
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+                "mtf.capture_pixel_format": camera_params.get(
+                    "mtf_capture_pixel_format",
+                    "BayerRG12",
+                ),
+                "mtf.capture_bayer_pattern": camera_params.get(
+                    "mtf_capture_bayer_pattern",
+                    "RGGB",
+                ),
+                "mtf.capture_width": camera_params.get(
                     "sensor_resolution_h",
                     camera_info.get("image_width", 5536),
                 ),
-                "mtf.full_frame_height": camera_params.get(
+                "mtf.capture_height": camera_params.get(
                     "sensor_resolution_v",
                     camera_info.get("image_height", 3692),
                 ),
-                "mtf.full_frame_offset_x": 0,
-                "mtf.full_frame_offset_y": 0,
-                "mtf.full_frame_binning": 1,
+                "mtf.capture_offset_x": 0,
+                "mtf.capture_offset_y": 0,
+                "mtf.capture_binning": 1,
+                "mtf.capture_exposure_us": float(
+                    camera_mtf_params.get("recommended_exposure_ms", 0.0)
+                )
+                * 1000.0,
+                "mtf.capture_gain": camera_mtf_params.get("recommended_gain", 0.0),
+                "mtf.capture_settle_s": 0.35,
+                "mtf.capture_image_timeout_s": 2.0,
+                "mtf.capture_disable_exposure_auto": True,
+                "mtf.capture_disable_gain_auto": True,
+                "mtf.capture_disable_white_balance_auto": True,
+                "mtf.capture_disable_gamma": True,
+                "mtf.capture_disable_color_transform": True,
+                "mtf.raw_green_pair_warn_pct": 10.0,
+                "mtf.green_wavelength_um": camera_mtf_params.get(
+                    "wavelength_um",
+                    0.555,
+                ),
                 "mtf.profile": mtf_profile,
                 "mtf.debug_export_dir": mtf_debug_dir,
                 "enable_debug_overlay": False,

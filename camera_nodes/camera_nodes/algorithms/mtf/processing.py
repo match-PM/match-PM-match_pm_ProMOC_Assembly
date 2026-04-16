@@ -37,6 +37,78 @@ def compute_esf(roi: np.ndarray, edge_angle: float, oversample_factor: int) -> n
     return np.array(esf)
 
 
+def extract_rggb_green_samples(roi: np.ndarray) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Extract G1/G2 samples and their coordinates from an RGGB Bayer ROI."""
+    if roi.ndim != 2:
+        raise ValueError("RGGB raw ROI must be a 2D array")
+
+    roi_f = roi.astype(np.float64)
+
+    g1_values = roi_f[0::2, 1::2]
+    g2_values = roi_f[1::2, 0::2]
+
+    g1_rows, g1_cols = np.indices(g1_values.shape, dtype=np.float64)
+    g2_rows, g2_cols = np.indices(g2_values.shape, dtype=np.float64)
+
+    g1_x = (2.0 * g1_cols + 1.0).ravel()
+    g1_y = (2.0 * g1_rows).ravel()
+    g2_x = (2.0 * g2_cols).ravel()
+    g2_y = (2.0 * g2_rows + 1.0).ravel()
+
+    return {
+        "g1": (g1_x, g1_y, g1_values.ravel()),
+        "g2": (g2_x, g2_y, g2_values.ravel()),
+    }
+
+
+def rotate_sample_coordinates_90_cw(
+    sample_x: np.ndarray,
+    sample_y: np.ndarray,
+    width: int,
+    height: int,
+) -> tuple[np.ndarray, np.ndarray, int, int]:
+    """Rotate sparse sample coordinates like cv2.ROTATE_90_CLOCKWISE would."""
+    rotated_x = sample_y.astype(np.float64)
+    rotated_y = (float(width) - 1.0) - sample_x.astype(np.float64)
+    return rotated_x, rotated_y, int(height), int(width)
+
+
+def compute_esf_from_samples(
+    sample_x: np.ndarray,
+    sample_y: np.ndarray,
+    sample_values: np.ndarray,
+    edge_angle: float,
+    oversample_factor: int,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    """Compute an ESF from sparse sample coordinates instead of a dense image grid."""
+    if sample_x.size == 0 or sample_y.size == 0 or sample_values.size == 0:
+        return np.array([])
+
+    angle_rad = np.radians(edge_angle)
+    positions = (sample_x - (width / 2.0) - sample_y * np.tan(angle_rad)) * oversample_factor
+    sort_idx = np.argsort(positions)
+    positions = positions[sort_idx]
+    values = sample_values[sort_idx]
+
+    if positions.size == 0:
+        return np.array([])
+
+    bin_edges = np.arange(positions.min(), positions.max(), 1)
+    if bin_edges.size < 2:
+        return np.array([])
+    bin_indices = np.digitize(positions, bin_edges)
+
+    esf = []
+    for i in range(1, len(bin_edges)):
+        mask = bin_indices == i
+        if np.any(mask):
+            esf.append(np.mean(values[mask]))
+
+    return np.array(esf, dtype=np.float64)
+
+
 def smooth_esf(esf: np.ndarray, config: MTFConfig) -> Tuple[np.ndarray, str]:
     """Optional ESF smoothing. Returns (esf_used, warning)."""
     if esf.size == 0:

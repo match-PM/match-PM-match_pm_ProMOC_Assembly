@@ -28,6 +28,21 @@ class MTFResult:
     mtf_peak_raw: float = 0.0
     mtf_clipped: bool = False
     warning_msg: str = ""
+    capture_mode: str = ""
+    capture_pixel_format: str = ""
+    capture_binning_h: int = 0
+    capture_binning_v: int = 0
+    capture_exposure_us: float = 0.0
+    capture_gain: float = 0.0
+    illumination_wavelength_um: float = 0.0
+    source_encoding: str = ""
+    g1_mtf50: float = 0.0
+    g2_mtf50: float = 0.0
+    g1_mtf20: float = 0.0
+    g2_mtf20: float = 0.0
+    g1_mtf10: float = 0.0
+    g2_mtf10: float = 0.0
+    g1_g2_delta_pct: float = 0.0
 
     @property
     def nyquist_frequency(self) -> float:

@@ -36,11 +36,48 @@ class CameraFormatController:
             "bin_v": "ImageFormatControl.BinningVertical",
         },
     )
+    CAPTURE_PARAM_NAME_VARIANTS = (
+        {
+            "width": "Width",
+            "height": "Height",
+            "offset_x": "OffsetX",
+            "offset_y": "OffsetY",
+            "bin_h": "BinningHorizontal",
+            "bin_v": "BinningVertical",
+            "pixel_format": "PixelFormat",
+            "exposure_time": "ExposureTime",
+            "gain": "Gain",
+            "exposure_auto": "ExposureAuto",
+            "gain_auto": "GainAuto",
+            "white_balance_auto": "BalanceWhiteAuto",
+            "gamma": "Gamma",
+            "gamma_enable": "GammaEnable",
+            "color_transform_enable": "ColorTransformationEnable",
+        },
+        {
+            "width": "ImageFormatControl.Width",
+            "height": "ImageFormatControl.Height",
+            "offset_x": "ImageFormatControl.OffsetX",
+            "offset_y": "ImageFormatControl.OffsetY",
+            "bin_h": "ImageFormatControl.BinningHorizontal",
+            "bin_v": "ImageFormatControl.BinningVertical",
+            "pixel_format": "ImageFormatControl.PixelFormat",
+            "exposure_time": "AcquisitionControl.ExposureTime",
+            "gain": "AnalogControl.Gain",
+            "exposure_auto": "AcquisitionControl.ExposureAuto",
+            "gain_auto": "AnalogControl.GainAuto",
+            "white_balance_auto": "ColorControl.BalanceWhiteAuto",
+            "gamma": "AnalogControl.Gamma",
+            "gamma_enable": "AnalogControl.GammaEnable",
+            "color_transform_enable": "ColorTransformationControl.ColorTransformationEnable",
+        },
+    )
 
     def __init__(self, node):
         self._node = node
         self._service_clients = {}
         self.params = ParameterAccessor(node)
+        self._last_capture_state = None
 
     def _get_service_clients(self, set_service: str):
         """Get cached set/get parameter clients for a service name."""
@@ -69,7 +106,21 @@ class CameraFormatController:
         offset_y = values.get("offset_y", "?")
         bin_h = values.get("bin_h", "?")
         bin_v = values.get("bin_v", "?")
-        return f"{width}x{height}, offset=({offset_x},{offset_y}), bin={bin_h}x{bin_v}"
+        pixel_format = values.get("pixel_format")
+        gain = values.get("gain")
+        exposure_time = values.get("exposure_time")
+        extra = []
+        if pixel_format not in (None, ""):
+            extra.append(f"pixfmt={pixel_format}")
+        if exposure_time is not None:
+            extra.append(f"exp_us={exposure_time}")
+        if gain is not None:
+            extra.append(f"gain={gain}")
+        extra_text = f", {' '.join(extra)}" if extra else ""
+        return (
+            f"{width}x{height}, offset=({offset_x},{offset_y}), "
+            f"bin={bin_h}x{bin_v}{extra_text}"
+        )
 
     def _call_get_parameters(self, client, names, timeout_s: float = 2.0):
         req = GetParameters.Request()
@@ -82,16 +133,28 @@ class CameraFormatController:
             return None
         return future.result()
 
-    def _call_set_integer_parameter(
-        self, client, name: str, value: int, timeout_s: float = 3.0
+    def _call_set_parameter(
+        self, client, name: str, value, timeout_s: float = 3.0
     ):
+        if isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_BOOL
+            kwargs = {"bool_value": bool(value)}
+        elif isinstance(value, int) and not isinstance(value, bool):
+            param_type = ParameterType.PARAMETER_INTEGER
+            kwargs = {"integer_value": int(value)}
+        elif isinstance(value, float):
+            param_type = ParameterType.PARAMETER_DOUBLE
+            kwargs = {"double_value": float(value)}
+        else:
+            param_type = ParameterType.PARAMETER_STRING
+            kwargs = {"string_value": str(value)}
         req = SetParameters.Request()
         req.parameters = [
             Parameter(
                 name=name,
                 value=ParameterValue(
-                    type=ParameterType.PARAMETER_INTEGER,
-                    integer_value=int(value),
+                    type=param_type,
+                    **kwargs,
                 ),
             )
         ]
@@ -107,11 +170,15 @@ class CameraFormatController:
         first = res.results[0]
         return bool(first.successful), str(first.reason)
 
-    def _to_int(self, param_value):
+    def _to_python_value(self, param_value):
         if param_value.type == ParameterType.PARAMETER_INTEGER:
             return int(param_value.integer_value)
         if param_value.type == ParameterType.PARAMETER_DOUBLE:
-            return int(round(float(param_value.double_value)))
+            return float(param_value.double_value)
+        if param_value.type == ParameterType.PARAMETER_BOOL:
+            return bool(param_value.bool_value)
+        if param_value.type == ParameterType.PARAMETER_STRING:
+            return str(param_value.string_value)
         return None
 
     def _get_float_param(self, name: str, default: float) -> float:
@@ -127,18 +194,44 @@ class CameraFormatController:
         return self._get_bool_param("mtf.log_format_switch", True)
 
     @staticmethod
+    def _unpack_image_result(result):
+        """Normalize fetch results to (image, timestamp)."""
+        if not result:
+            return None, None
+        image = result[0]
+        timestamp = result[1] if len(result) > 1 else None
+        return image, timestamp
+
+    @staticmethod
     def _collect_mismatches(actual: dict, target: dict, keys: list[str]) -> list[str]:
         """Return list of key mismatch diagnostics in the form key=actual!=target."""
         mismatches = []
         for key in keys:
             if key not in actual or key not in target:
                 continue
-            if int(actual[key]) != int(target[key]):
+            actual_value = actual[key]
+            target_value = target[key]
+            if isinstance(actual_value, float) or isinstance(target_value, float):
+                matched = abs(float(actual_value) - float(target_value)) <= 1e-6
+            elif isinstance(actual_value, bool) or isinstance(target_value, bool):
+                matched = bool(actual_value) == bool(target_value)
+            elif isinstance(actual_value, str) or isinstance(target_value, str):
+                matched = str(actual_value) == str(target_value)
+            else:
+                matched = int(actual_value) == int(target_value)
+            if not matched:
                 mismatches.append(f"{key}={actual[key]}!={target[key]}")
         return mismatches
 
-    def read_state(self):
-        """Read current ROI/Binning state from camera parameter services."""
+    @staticmethod
+    def _resolve_auto_off_target(current_value):
+        """Return a best-effort 'disabled' value for auto-style camera controls."""
+        if isinstance(current_value, bool):
+            return False
+        return "Off"
+
+    def _read_state_from_variants(self, variants):
+        """Read current camera parameter state for a list of semantic name variants."""
         last_failure_reason = ""
         for set_service in self.PARAM_SET_SERVICES:
             clients = self._get_service_clients(set_service)
@@ -153,7 +246,7 @@ class CameraFormatController:
                 )
                 continue
 
-            for names in self.FORMAT_PARAM_NAME_VARIANTS:
+            for names in variants:
                 keys = list(names.keys())
                 query_names = [names[k] for k in keys]
                 res = self._call_get_parameters(get_client, query_names)
@@ -172,10 +265,12 @@ class CameraFormatController:
 
                 values = {}
                 available_keys = set()
+                types = {}
                 for key, value_msg in zip(keys, res.values):
-                    parsed = self._to_int(value_msg)
+                    parsed = self._to_python_value(value_msg)
                     if parsed is not None:
                         values[key] = parsed
+                        types[key] = value_msg.type
                         available_keys.add(key)
 
                 if "width" not in values or "height" not in values:
@@ -189,6 +284,7 @@ class CameraFormatController:
                     "set_service": set_service,
                     "names": names,
                     "values": values,
+                    "types": types,
                     "available_keys": sorted(available_keys),
                 }
 
@@ -198,15 +294,27 @@ class CameraFormatController:
             )
         return None
 
-    def _try_set_full_frame_without_state(self, target: dict) -> bool:
-        """Fallback: try switching to full-frame even when current state is unreadable."""
+    def read_state(self):
+        """Read current ROI/Binning state from camera parameter services."""
+        return self._read_state_from_variants(self.FORMAT_PARAM_NAME_VARIANTS)
+
+    def read_capture_state(self):
+        """Read current MTF capture state including pixel format and gain if available."""
+        return self._read_state_from_variants(self.CAPTURE_PARAM_NAME_VARIANTS)
+
+    def get_last_capture_state(self):
+        """Return last readback state from MTF capture switch/restore."""
+        return self._last_capture_state
+
+    def _try_set_capture_without_state(self, target: dict) -> bool:
+        """Fallback: try switching capture state even when current state is unreadable."""
         for set_service in self.PARAM_SET_SERVICES:
             clients = self._get_service_clients(set_service)
             set_client = clients["set"]
             if not set_client.wait_for_service(timeout_sec=1.0):
                 continue
 
-            for names in self.FORMAT_PARAM_NAME_VARIANTS:
+            for names in self.CAPTURE_PARAM_NAME_VARIANTS:
                 state_full = {
                     "set_service": set_service,
                     "names": names,
@@ -219,14 +327,23 @@ class CameraFormatController:
                             "offset_y",
                             "bin_h",
                             "bin_v",
+                            "pixel_format",
+                            "exposure_time",
+                            "gain",
+                            "exposure_auto",
+                            "gain_auto",
+                            "white_balance_auto",
+                            "gamma",
+                            "gamma_enable",
+                            "color_transform_enable",
                         )
                         if k in names
                     ],
                 }
-                if self.set_format(state_full, target):
+                if self.set_capture_state(state_full, target):
                     if self._is_switch_logging_enabled():
                         self._node.get_logger().info(
-                            f"Camera format fallback switch succeeded via {set_service} with names={list(names.values())}"
+                            f"Camera capture fallback switch succeeded via {set_service} with names={list(names.values())}"
                         )
                     return True
 
@@ -242,13 +359,22 @@ class CameraFormatController:
                 if self.set_format(state_min, minimal_target):
                     if self._is_switch_logging_enabled():
                         self._node.get_logger().info(
-                            f"Camera format fallback switch (minimal) succeeded via {set_service} with names={list(names.values())}"
+                            f"Camera capture fallback switch (minimal) succeeded via {set_service} with names={list(names.values())}"
                         )
                     return True
         return False
 
     def set_format(self, state: dict, target_values: dict) -> bool:
         """Apply target ROI/Binning values via parameter service."""
+        filtered = {
+            key: target_values[key]
+            for key in ("width", "height", "offset_x", "offset_y", "bin_h", "bin_v")
+            if key in target_values
+        }
+        return self.set_capture_state(state, filtered)
+
+    def set_capture_state(self, state: dict, target_values: dict) -> bool:
+        """Apply generic capture state updates via parameter service."""
         set_service = state.get("set_service")
         names = state.get("names", {})
         available_keys = set(state.get("available_keys", []))
@@ -262,7 +388,7 @@ class CameraFormatController:
         set_client = clients["set"]
         if not set_client.wait_for_service(timeout_sec=1.0):
             self._node.get_logger().warn(
-                f"Parameter service not available for camera format switch: {set_service}"
+                f"Parameter service not available for camera capture switch: {set_service}"
             )
             return False
 
@@ -274,11 +400,57 @@ class CameraFormatController:
         )
         target_binning = target_values.get("bin_h") if has_bin_controls else None
         if target_binning is not None and int(target_binning) <= 1:
-            write_order = ["bin_h", "bin_v", "offset_x", "offset_y", "width", "height"]
+            write_order = [
+                "pixel_format",
+                "exposure_auto",
+                "gain_auto",
+                "white_balance_auto",
+                "gamma_enable",
+                "color_transform_enable",
+                "bin_h",
+                "bin_v",
+                "offset_x",
+                "offset_y",
+                "width",
+                "height",
+                "exposure_time",
+                "gain",
+                "gamma",
+            ]
         elif target_binning is not None:
-            write_order = ["offset_x", "offset_y", "width", "height", "bin_h", "bin_v"]
+            write_order = [
+                "pixel_format",
+                "exposure_auto",
+                "gain_auto",
+                "white_balance_auto",
+                "gamma_enable",
+                "color_transform_enable",
+                "offset_x",
+                "offset_y",
+                "width",
+                "height",
+                "bin_h",
+                "bin_v",
+                "exposure_time",
+                "gain",
+                "gamma",
+            ]
         else:
-            write_order = ["offset_x", "offset_y", "width", "height"]
+            write_order = [
+                "pixel_format",
+                "exposure_auto",
+                "gain_auto",
+                "white_balance_auto",
+                "gamma_enable",
+                "color_transform_enable",
+                "offset_x",
+                "offset_y",
+                "width",
+                "height",
+                "exposure_time",
+                "gain",
+                "gamma",
+            ]
 
         write_keys = []
         for key in write_order:
@@ -291,7 +463,20 @@ class CameraFormatController:
             write_keys.append(key)
 
         if self._is_switch_logging_enabled():
-            optional_keys = {"offset_x", "offset_y", "bin_h", "bin_v"}
+            optional_keys = {
+                "offset_x",
+                "offset_y",
+                "bin_h",
+                "bin_v",
+                "pixel_format",
+                "gain",
+                "exposure_auto",
+                "gain_auto",
+                "white_balance_auto",
+                "gamma",
+                "gamma_enable",
+                "color_transform_enable",
+            }
             skipped_optional = [
                 key
                 for key in optional_keys
@@ -305,22 +490,22 @@ class CameraFormatController:
         for required in ("width", "height"):
             if required in target_values and required not in write_keys:
                 self._node.get_logger().error(
-                    f"Required camera format key '{required}' is not available on parameter service."
+                    f"Required camera capture key '{required}' is not available on parameter service."
                 )
                 return False
 
         if not write_keys:
             self._node.get_logger().warn(
-                "No applicable camera format keys available for update; keeping current format."
+                "No applicable camera capture keys available for update; keeping current format."
             )
             return True
 
         for key in write_keys:
             param_name = names[key]
-            ok, reason = self._call_set_integer_parameter(
+            ok, reason = self._call_set_parameter(
                 set_client,
                 param_name,
-                int(target_values[key]),
+                target_values[key],
             )
             if not ok:
                 self._node.get_logger().error(
@@ -337,45 +522,69 @@ class CameraFormatController:
         wait_for_new_image_fn: Callable[..., tuple],
     ):
         """Switch to full frame before MTF and return (restore_state, new_image)."""
+        self._last_capture_state = None
         if not self._get_bool_param("mtf.use_full_frame", False):
             return None, None
 
-        state = self.read_state()
+        use_raw_capture = self._get_bool_param("mtf.use_raw_capture", True)
+        state = self.read_capture_state()
         if state is None:
-            full_w_default = self._get_int_param("mtf.full_frame_width", 5536)
-            full_h_default = self._get_int_param("mtf.full_frame_height", 3692)
+            full_w_default = self._get_int_param("mtf.capture_width", 5536)
+            full_h_default = self._get_int_param("mtf.capture_height", 3692)
             target = {
                 "width": int(full_w_default),
                 "height": int(full_h_default),
-                "offset_x": self._get_int_param("mtf.full_frame_offset_x", 0),
-                "offset_y": self._get_int_param("mtf.full_frame_offset_y", 0),
-                "bin_h": self._get_int_param("mtf.full_frame_binning", 1),
-                "bin_v": self._get_int_param("mtf.full_frame_binning", 1),
+                "offset_x": self._get_int_param("mtf.capture_offset_x", 0),
+                "offset_y": self._get_int_param("mtf.capture_offset_y", 0),
+                "bin_h": self._get_int_param("mtf.capture_binning", 1),
+                "bin_v": self._get_int_param("mtf.capture_binning", 1),
             }
+            if use_raw_capture:
+                target["pixel_format"] = self.params.as_str(
+                    "mtf.capture_pixel_format",
+                    "BayerRG12",
+                )
+                target["gain"] = self._get_float_param("mtf.capture_gain", 0.0)
+                exposure_us = self._get_float_param("mtf.capture_exposure_us", 0.0)
+                if exposure_us > 0:
+                    target["exposure_time"] = exposure_us
+                if self._get_bool_param("mtf.capture_disable_exposure_auto", True):
+                    target["exposure_auto"] = self._resolve_auto_off_target("Off")
+                if self._get_bool_param("mtf.capture_disable_gain_auto", True):
+                    target["gain_auto"] = self._resolve_auto_off_target("Off")
+                if self._get_bool_param("mtf.capture_disable_white_balance_auto", True):
+                    target["white_balance_auto"] = self._resolve_auto_off_target("Off")
+                if self._get_bool_param("mtf.capture_disable_gamma", True):
+                    target["gamma_enable"] = False
+                if self._get_bool_param("mtf.capture_disable_color_transform", True):
+                    target["color_transform_enable"] = False
             if self._is_switch_logging_enabled():
                 self._node.get_logger().warn(
                     "Could not read current camera ROI/Binning state. "
                     "Trying fallback full-frame switch without restore-state."
                 )
-            if not self._try_set_full_frame_without_state(target):
+            if not self._try_set_capture_without_state(target):
                 self._node.get_logger().warn(
-                    "Fallback full-frame switch failed. Proceeding with current image for MTF."
+                    "Fallback capture switch failed. Proceeding with current image for MTF."
                 )
                 return None, None
 
-            settle_s = self._get_float_param("mtf.full_frame_settle_s", 0.25)
+            settle_s = self._get_float_param("mtf.capture_settle_s", 0.35)
             if settle_s > 0:
                 time.sleep(settle_s)
 
-            timeout_s = self._get_float_param("mtf.full_frame_image_timeout_s", 2.0)
-            new_image, _ = wait_for_new_image_fn(last_ts_ns, timeout=timeout_s)
+            timeout_s = self._get_float_param("mtf.capture_image_timeout_s", 2.0)
+            new_image, _ = self._unpack_image_result(
+                wait_for_new_image_fn(last_ts_ns, timeout=timeout_s)
+            )
             if new_image is None:
-                new_image, _ = get_latest_image_fn()
+                new_image, _ = self._unpack_image_result(get_latest_image_fn())
 
+            self._last_capture_state = self.read_capture_state()
             if self._is_switch_logging_enabled() and new_image is not None:
                 img_h, img_w = new_image.shape[:2]
                 self._node.get_logger().info(
-                    f"MTF fallback switch image: {img_w}x{img_h}"
+                    f"MTF fallback capture image: {img_w}x{img_h}"
                 )
             return None, new_image
 
@@ -384,43 +593,78 @@ class CameraFormatController:
             "set_service": state.get("set_service"),
             "names": dict(state.get("names", {})),
             "values": current,
+            "types": dict(state.get("types", {})),
             "available_keys": list(state.get("available_keys", [])),
         }
 
         full_w_default = int(current.get("width", 5536))
         full_h_default = int(current.get("height", 3692))
         target = {
-            "width": self._get_int_param("mtf.full_frame_width", full_w_default),
-            "height": self._get_int_param("mtf.full_frame_height", full_h_default),
-            "offset_x": self._get_int_param("mtf.full_frame_offset_x", 0),
-            "offset_y": self._get_int_param("mtf.full_frame_offset_y", 0),
-            "bin_h": self._get_int_param("mtf.full_frame_binning", 1),
-            "bin_v": self._get_int_param("mtf.full_frame_binning", 1),
+            "width": self._get_int_param("mtf.capture_width", full_w_default),
+            "height": self._get_int_param("mtf.capture_height", full_h_default),
+            "offset_x": self._get_int_param("mtf.capture_offset_x", 0),
+            "offset_y": self._get_int_param("mtf.capture_offset_y", 0),
+            "bin_h": self._get_int_param("mtf.capture_binning", 1),
+            "bin_v": self._get_int_param("mtf.capture_binning", 1),
         }
+        if use_raw_capture:
+            target["pixel_format"] = self.params.as_str(
+                "mtf.capture_pixel_format",
+                str(current.get("pixel_format", "BayerRG12")),
+            )
+            target_exposure = self._get_float_param(
+                "mtf.capture_exposure_us",
+                float(current.get("exposure_time", 0.0)),
+            )
+            if target_exposure > 0:
+                target["exposure_time"] = target_exposure
+            target["gain"] = self._get_float_param(
+                "mtf.capture_gain",
+                float(current.get("gain", 0.0)),
+            )
+            if self._get_bool_param("mtf.capture_disable_exposure_auto", True):
+                target["exposure_auto"] = self._resolve_auto_off_target(
+                    current.get("exposure_auto", "Off")
+                )
+            if self._get_bool_param("mtf.capture_disable_gain_auto", True):
+                target["gain_auto"] = self._resolve_auto_off_target(
+                    current.get("gain_auto", "Off")
+                )
+            if self._get_bool_param("mtf.capture_disable_white_balance_auto", True):
+                target["white_balance_auto"] = self._resolve_auto_off_target(
+                    current.get("white_balance_auto", "Off")
+                )
+            if self._get_bool_param("mtf.capture_disable_gamma", True):
+                target["gamma_enable"] = False
+            if self._get_bool_param("mtf.capture_disable_color_transform", True):
+                target["color_transform_enable"] = False
         if self._is_switch_logging_enabled():
             self._node.get_logger().info(
                 f"MTF format switch start: current={self._format_values(current)} "
                 f"target={self._format_values(target)}"
             )
 
-        if not self.set_format(state, target):
+        if not self.set_capture_state(state, target):
             self._node.get_logger().warn(
-                "Failed to switch camera to full frame. "
+                "Failed to switch camera to MTF capture state. "
                 "Proceeding with current image for MTF."
             )
             return None, None
 
-        settle_s = self._get_float_param("mtf.full_frame_settle_s", 0.25)
+        settle_s = self._get_float_param("mtf.capture_settle_s", 0.35)
         if settle_s > 0:
             time.sleep(settle_s)
 
-        timeout_s = self._get_float_param("mtf.full_frame_image_timeout_s", 2.0)
-        new_image, _ = wait_for_new_image_fn(last_ts_ns, timeout=timeout_s)
+        timeout_s = self._get_float_param("mtf.capture_image_timeout_s", 2.0)
+        new_image, _ = self._unpack_image_result(
+            wait_for_new_image_fn(last_ts_ns, timeout=timeout_s)
+        )
         if new_image is None:
-            new_image, _ = get_latest_image_fn()
+            new_image, _ = self._unpack_image_result(get_latest_image_fn())
 
         if self._is_switch_logging_enabled():
-            applied_state = self.read_state()
+            applied_state = self.read_capture_state()
+            self._last_capture_state = applied_state
             if applied_state:
                 applied_values = applied_state.get("values", {})
                 verify_keys = [
@@ -432,6 +676,9 @@ class CameraFormatController:
                         "offset_y",
                         "bin_h",
                         "bin_v",
+                        "pixel_format",
+                        "exposure_time",
+                        "gain",
                     )
                     if key in applied_values and key in target
                 ]
@@ -446,11 +693,11 @@ class CameraFormatController:
                     self._node.get_logger().warn(
                         "MTF format switch readback mismatch: "
                         + ", ".join(mismatches)
-                        + " (crop might still be active)."
+                        + " (MTF scientific mode may not be fully active)."
                     )
                 else:
                     self._node.get_logger().info(
-                        "MTF format switch readback OK: crop OFF, FULL resolution active."
+                        "MTF format switch readback OK: requested capture state active."
                     )
             else:
                 self._node.get_logger().warn(
@@ -475,6 +722,7 @@ class CameraFormatController:
         if not self._get_bool_param("mtf.restore_after_measurement", True):
             return
 
+        self._last_capture_state = None
         target = dict(restore_state.get("values", {}))
         if not target:
             return
@@ -483,9 +731,9 @@ class CameraFormatController:
                 f"MTF format restore start: target={self._format_values(target)}"
             )
 
-        if not self.set_format(restore_state, target):
+        if not self.set_capture_state(restore_state, target):
             self._node.get_logger().warn(
-                "Failed to restore camera ROI/Binning after MTF."
+                "Failed to restore camera capture state after MTF."
             )
             return
 
@@ -493,7 +741,8 @@ class CameraFormatController:
         if settle_s > 0:
             time.sleep(settle_s)
         if self._is_switch_logging_enabled():
-            restored_state = self.read_state()
+            restored_state = self.read_capture_state()
+            self._last_capture_state = restored_state
             if restored_state:
                 self._node.get_logger().info(
                     f"MTF format restore applied: actual={self._format_values(restored_state.get('values', {}))} "

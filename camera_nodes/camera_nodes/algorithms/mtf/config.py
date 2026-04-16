@@ -8,6 +8,8 @@ from typing import Optional, Tuple
 class MTFConfig:
     """Configuration for MTF analysis."""
     pixel_size_um: float = 2.40  # IDS U3-3800CP (Sony IMX183)
+    input_mode: str = "dense_gray"  # dense_gray | raw_bayer_rggb
+    raw_bayer_pattern: str = "RGGB"
     roi_width: int = 200
     roi_height: int = 200
     roi_center: Optional[Tuple[int, int]] = None
@@ -45,6 +47,15 @@ class MTFConfig:
     # MTF output handling
     mtf_clip_max: float = 0.0  # 0 disables clipping
     mtf_warn_threshold: float = 1.05  # warn if MTF peak exceeds this
+    raw_green_pair_warn_pct: float = 10.0
+
+    # Capture metadata
+    capture_pixel_format: str = ""
+    capture_binning_h: int = 0
+    capture_binning_v: int = 0
+    capture_exposure_us: float = 0.0
+    capture_gain: float = 0.0
+    source_encoding: str = ""
 
     # Debug export
     debug_export_dir: Optional[str] = None
@@ -57,6 +68,14 @@ class MTFConfig:
         if self.pixel_size_um <= 0:
             raise ValueError(
                 f"pixel_size_um must be positive, got {self.pixel_size_um}")
+        if self.input_mode not in {"dense_gray", "raw_bayer_rggb"}:
+            raise ValueError(
+                f"input_mode must be one of ['dense_gray','raw_bayer_rggb'], got {self.input_mode}"
+            )
+        if self.raw_bayer_pattern not in {"RGGB"}:
+            raise ValueError(
+                f"raw_bayer_pattern must currently be 'RGGB', got {self.raw_bayer_pattern}"
+            )
         if self.roi_width <= 0 or self.roi_height <= 0:
             raise ValueError("ROI dimensions must be positive")
         if self.min_edge_angle < 0 or self.max_edge_angle <= self.min_edge_angle:
@@ -93,3 +112,7 @@ class MTFConfig:
             raise ValueError("mtf_clip_max must be >= 0")
         if self.mtf_warn_threshold < 0:
             raise ValueError("mtf_warn_threshold must be >= 0")
+        if self.raw_green_pair_warn_pct < 0:
+            raise ValueError("raw_green_pair_warn_pct must be >= 0")
+        if self.capture_exposure_us < 0:
+            raise ValueError("capture_exposure_us must be >= 0")

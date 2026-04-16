@@ -137,6 +137,28 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
 
+## Wissenschaftliche MTF
+
+Die wissenschaftliche MTF-Messung laeuft bewusst nicht ueber den normalen
+Livebildpfad. Fuer `/promoc/camera/measure_mtf` schaltet `camera_nodes`
+waehrend der Messung in einen eigenen Raw-Capture-Modus:
+
+- `PixelFormat=BayerRG12`
+- `1x1`-Binning
+- Auto-Exposure, Auto-Gain und Auto-Whitebalance aus
+- Gamma und Farbtransformation aus
+- Auswertung nur aus den echten Gruen-Senseln des `RGGB`-Musters
+
+Die ESF wird dabei direkt aus den realen Gruen-Sample-Koordinaten aufgebaut.
+Es gibt kein Debayering und kein 2D-Auffuellen fehlender Bayer-Pixel fuer die
+wissenschaftliche MTF-Auswertung.
+
+Die Messung gibt intern und im Statustext die aktiven Capture-Bedingungen mit
+aus, insbesondere Pixelformat, Binning, Exposure, Gain und die
+Gruen-Wellenlaenge. Fuer Raw-Messungen werden `G1` und `G2` getrennt bewertet;
+die gemittelte Kurve ist das Standardergebnis, die Differenz dient als
+Qualitaetsindikator.
+
 ## `promoc_core`
 
 `promoc_core` bleibt absichtlich klein. In diesem Branch gelten nur diese

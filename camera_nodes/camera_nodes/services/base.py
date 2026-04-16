@@ -111,23 +111,88 @@ class CallbackBase:
             return None, None
         try:
             cv_img = self._node.bridge.imgmsg_to_cv2(msg, "bgr8")
-            # msg.header.stamp is a Time object in rclpy, but here it might be a msg object.
-            # In ROS2 python msg, stamp has sec and nanosec.
-            ts = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+            ts = self._msg_timestamp_ns(msg)
             return cv_img, ts
         except Exception as e:
             self.logger.warn(f"Failed to convert image: {e}")
             return None, None
 
-    def _wait_for_new_image(self, last_timestamp: int, timeout: float = 1.0):
-        """Waits for an image with a newer timestamp."""
+    def _msg_timestamp_ns(self, msg) -> int:
+        """Return ROS header timestamp in nanoseconds for an image-like message."""
+        if msg is None or not hasattr(msg, "header"):
+            return 0
+        stamp = getattr(msg.header, "stamp", None)
+        if stamp is None:
+            return 0
+        return int(getattr(stamp, "sec", 0)) * 1_000_000_000 + int(
+            getattr(stamp, "nanosec", 0)
+        )
+
+    def _get_latest_image_timestamp_ns(self) -> int:
+        """Return timestamp of the latest cached image message."""
+        return self._msg_timestamp_ns(self._node.latest_image_msg)
+
+    def _convert_image_msg(self, msg, desired_encoding: str):
+        """Convert an image message through cv_bridge with one desired encoding."""
+        if msg is None:
+            return None
+        return self._node.bridge.imgmsg_to_cv2(msg, desired_encoding=desired_encoding)
+
+    def _get_latest_passthrough_image(self):
+        """Return latest image without forcing debayer/color conversion.
+
+        Returns:
+            tuple: (image, timestamp_ns, encoding) or (None, None, "")
+        """
+        msg = self._node.latest_image_msg
+        if msg is None:
+            return None, None, ""
+        try:
+            image = self._convert_image_msg(msg, "passthrough")
+            return image, self._msg_timestamp_ns(msg), str(getattr(msg, "encoding", ""))
+        except Exception as exc:
+            self.logger.warn(f"Failed to convert passthrough image: {exc}")
+            return None, None, str(getattr(msg, "encoding", ""))
+
+    def _wait_for_new_image_from(
+        self,
+        fetch_image_fn,
+        last_timestamp: int,
+        timeout: float = 1.0,
+        empty_result=(None, None),
+    ):
+        """Wait for a newer image using a caller-provided fetch function."""
         start = time.time()
         while time.time() - start < timeout:
-            _, ts = self._get_latest_cv_image()
+            fetched = fetch_image_fn()
+            if not fetched:
+                time.sleep(0.01)
+                continue
+            ts = fetched[1] if len(fetched) > 1 else None
             if ts is not None and ts > last_timestamp:
-                return self._get_latest_cv_image()
+                return fetch_image_fn()
             time.sleep(0.01)
-        return None, None
+        return empty_result
+
+    def _wait_for_new_image(self, last_timestamp: int, timeout: float = 1.0):
+        """Waits for an image with a newer timestamp."""
+        image, ts = self._wait_for_new_image_from(
+            self._get_latest_cv_image,
+            last_timestamp,
+            timeout=timeout,
+            empty_result=(None, None),
+        )
+        return image, ts
+
+    def _wait_for_new_passthrough_image(self, last_timestamp: int, timeout: float = 1.0):
+        """Wait for a newer image without forcing bgr8 conversion."""
+        image, ts, encoding = self._wait_for_new_image_from(
+            self._get_latest_passthrough_image,
+            last_timestamp,
+            timeout=timeout,
+            empty_result=(None, None, ""),
+        )
+        return image, ts, encoding
 
     def _wait_for_new_frames(self, frame_count: int, timeout_per_frame: float = 1.0):
         """Wait for `frame_count` strictly newer frames and return the latest."""

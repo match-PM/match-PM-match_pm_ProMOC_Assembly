@@ -64,6 +64,14 @@ class MTFHandler(CallbackBase):
     def _select_roi_interactive(self, cv_image):
         """Opens window for ROI selection."""
         display_image = cv_image.copy()
+        if len(display_image.shape) == 2 and display_image.dtype != np.uint8:
+            display_image = cv2.normalize(
+                display_image,
+                None,
+                0,
+                255,
+                cv2.NORM_MINMAX,
+            ).astype(np.uint8)
         height, width = display_image.shape[:2]
         max_height = 800
         scale_factor = 1.0
@@ -140,6 +148,32 @@ class MTFHandler(CallbackBase):
         if self._param_bool("mtf.edge_validation_only_auto", False) and not auto_roi:
             config.edge_validation_mode = "off"
 
+        config.input_mode = (
+            "raw_bayer_rggb"
+            if self._param_bool("mtf.use_raw_capture", True)
+            else "dense_gray"
+        )
+        config.raw_bayer_pattern = self._param_str(
+            "mtf.capture_bayer_pattern",
+            "RGGB",
+        ).strip().upper()
+        config.capture_pixel_format = self._param_str(
+            "mtf.capture_pixel_format",
+            "BayerRG12",
+        ).strip()
+        config.capture_binning_h = self._param_int("mtf.capture_binning", 1)
+        config.capture_binning_v = self._param_int("mtf.capture_binning", 1)
+        config.capture_exposure_us = self._param_float("mtf.capture_exposure_us", 0.0)
+        config.capture_gain = self._param_float("mtf.capture_gain", 0.0)
+        config.source_encoding = self._param_str("mtf.capture_pixel_format", "").strip()
+        config.raw_green_pair_warn_pct = self._param_float(
+            "mtf.raw_green_pair_warn_pct",
+            config.raw_green_pair_warn_pct,
+        )
+        green_wavelength = self._param_float("mtf.green_wavelength_um", config.wavelength_um)
+        if green_wavelength > 0:
+            config.wavelength_um = green_wavelength
+
         # Apply profile last (overrides for ease-of-use)
         profile = self._param_str("mtf.profile", "default").strip().lower()
         if profile in ("scientific", "debug"):
@@ -167,6 +201,44 @@ class MTFHandler(CallbackBase):
             )
 
         return config
+
+    def _is_raw_bayer_encoding(self, encoding: str) -> bool:
+        """Return whether a ROS image encoding looks like a Bayer/raw stream."""
+        normalized = str(encoding or "").strip().lower()
+        return "bayer" in normalized
+
+    def _get_mtf_capture_image(self):
+        """Get the latest image in the format required for scientific MTF."""
+        if self._param_bool("mtf.use_raw_capture", True):
+            return self._get_latest_passthrough_image()
+        image, ts = self._get_latest_cv_image()
+        return image, ts, "bgr8"
+
+    def _wait_for_new_mtf_capture_image(self, last_timestamp: int, timeout: float = 1.0):
+        """Wait for the next image in the format required for scientific MTF."""
+        if self._param_bool("mtf.use_raw_capture", True):
+            return self._wait_for_new_passthrough_image(last_timestamp, timeout=timeout)
+        image, ts = self._wait_for_new_image(last_timestamp, timeout=timeout)
+        return image, ts, "bgr8"
+
+    def _build_capture_summary(self, result) -> str:
+        """Format compact capture metadata for logs and service status."""
+        parts = [
+            f"mode={result.capture_mode or 'dense_gray'}",
+            f"pixfmt={result.capture_pixel_format or 'n/a'}",
+        ]
+        if result.capture_binning_h > 0 and result.capture_binning_v > 0:
+            parts.append(f"bin={result.capture_binning_h}x{result.capture_binning_v}")
+        if result.capture_exposure_us > 0:
+            parts.append(f"exp_us={result.capture_exposure_us:.1f}")
+        parts.append(f"gain={result.capture_gain:.2f}")
+        if result.illumination_wavelength_um > 0:
+            parts.append(f"lambda_um={result.illumination_wavelength_um:.3f}")
+        if result.capture_mode == "raw_green":
+            parts.append(f"G1={result.g1_mtf50:.2f}")
+            parts.append(f"G2={result.g2_mtf50:.2f}")
+            parts.append(f"delta={result.g1_g2_delta_pct:.1f}%")
+        return ", ".join(parts)
 
     @handle_service_errors()
     def select_roi_callback(self, request, response):
@@ -213,22 +285,47 @@ class MTFHandler(CallbackBase):
         restore_state = None
 
         try:
-            # 1. Get latest image and optionally switch camera to full frame for MTF
+            # 1. Get latest image and optionally switch camera to scientific raw MTF mode
             cv_image = None
             image_ts_ns = None
-            cv_image, image_ts_ns = self._get_latest_cv_image()
+            image_encoding = ""
+            cv_image, image_ts_ns, image_encoding = self._get_mtf_capture_image()
             if cv_image is None:
                 raise ImageProcessingError("No image available")
 
             restore_state, switched_image = (
                 self._camera_format_controller.switch_to_full_frame_for_mtf(
                     image_ts_ns if image_ts_ns is not None else 0,
-                    get_latest_image_fn=self._get_latest_cv_image,
-                    wait_for_new_image_fn=self._wait_for_new_image,
+                    get_latest_image_fn=self._get_mtf_capture_image,
+                    wait_for_new_image_fn=self._wait_for_new_mtf_capture_image,
                 )
             )
             if switched_image is not None:
                 cv_image = switched_image
+
+            capture_image, capture_ts_ns, capture_encoding = self._get_mtf_capture_image()
+            if capture_image is not None:
+                cv_image = capture_image
+                image_ts_ns = capture_ts_ns
+                image_encoding = capture_encoding
+
+            capture_state = self._camera_format_controller.get_last_capture_state() or {}
+            capture_values = capture_state.get("values", {})
+            actual_pixel_format = str(
+                capture_values.get(
+                    "pixel_format",
+                    self._param_str("mtf.capture_pixel_format", ""),
+                )
+            )
+            if self._param_bool("mtf.capture_required_raw", True):
+                if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
+                    raise ImageProcessingError(
+                        f"Scientific MTF requires Bayer raw, readback is '{actual_pixel_format}'"
+                    )
+                if not self._is_raw_bayer_encoding(image_encoding):
+                    raise ImageProcessingError(
+                        f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'"
+                    )
 
             pixel_size_um = self._param_float(
                 "pixel_size_um", MTF_DEFAULT_PIXEL_SIZE_UM
@@ -359,6 +456,29 @@ class MTFHandler(CallbackBase):
                     max_edge_angle=max_edge_angle,
                     auto_roi=getattr(request, "auto_roi", False),
                 )
+                config.capture_pixel_format = actual_pixel_format or config.capture_pixel_format
+                config.capture_binning_h = int(
+                    capture_values.get("bin_h", config.capture_binning_h)
+                )
+                config.capture_binning_v = int(
+                    capture_values.get("bin_v", config.capture_binning_v)
+                )
+                try:
+                    config.capture_exposure_us = float(
+                        capture_values.get(
+                            "exposure_time",
+                            config.capture_exposure_us,
+                        )
+                    )
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    config.capture_gain = float(
+                        capture_values.get("gain", config.capture_gain)
+                    )
+                except (TypeError, ValueError):
+                    pass
+                config.source_encoding = image_encoding or config.source_encoding
 
                 # Get calibration from valid CameraInfo if available
                 camera_matrix = None
@@ -398,18 +518,27 @@ class MTFHandler(CallbackBase):
                             f"Edge valid. Measuring {num_samples-1} more frames for averaging..."
                         )
                         roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
-                        _, last_ts = self._get_latest_cv_image()
+                        last_ts = self._get_latest_image_timestamp_ns()
                         if last_ts is None:
                             last_ts = 0
 
                         for _ in range(num_samples - 1):
-                            next_img, next_ts = self._wait_for_new_image(
+                            next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
                                 int(last_ts),
                                 timeout=MTF_SAMPLE_TIMEOUT_S,
                             )
                             if next_img is not None:
                                 if next_ts is not None:
                                     last_ts = next_ts
+                                if (
+                                    self._param_bool("mtf.capture_required_raw", True)
+                                    and config.input_mode == "raw_bayer_rggb"
+                                    and not self._is_raw_bayer_encoding(next_encoding)
+                                ):
+                                    self._node.get_logger().warn(
+                                        f"Skipping averaging frame with non-raw encoding '{next_encoding}'"
+                                    )
+                                    continue
                                 # Ensure ROI is within bounds (in case image size changed?? unlikely but safe)
                                 if (
                                     roi_y + roi_h <= next_img.shape[0]
@@ -431,6 +560,11 @@ class MTFHandler(CallbackBase):
                     avg_mtf20 = float(np.mean([r.mtf20 for r in valid_samples]))
                     avg_mtf10 = float(np.mean([r.mtf10 for r in valid_samples]))
                     avg_angle = float(np.mean([r.edge_angle for r in valid_samples]))
+                    avg_g1_mtf50 = float(np.mean([r.g1_mtf50 for r in valid_samples]))
+                    avg_g2_mtf50 = float(np.mean([r.g2_mtf50 for r in valid_samples]))
+                    avg_delta_pct = float(
+                        np.mean([r.g1_g2_delta_pct for r in valid_samples])
+                    )
 
                     # Attach edge metadata to result (using first result for metadata)
                     result.edge_name = edge_roi.edge_name
@@ -448,10 +582,20 @@ class MTFHandler(CallbackBase):
 
                     # Format detailed status message with edge coordinates
                     edge_info = edge_roi.format_coords()
+                    capture_summary = self._build_capture_summary(result)
+                    if result.capture_mode == "raw_green":
+                        capture_summary = (
+                            f"{capture_summary}, "
+                            f"G1avg={avg_g1_mtf50:.2f}, G2avg={avg_g2_mtf50:.2f}, "
+                            f"DeltaAvg={avg_delta_pct:.1f}%"
+                        )
                     response.status_message = (
                         f"MTF50={response.mtf50:.2f} lp/mm (Avg {len(valid_samples)}) "
-                        f"({edge_info}, {response.edge_angle:.1f}°, C:{edge_roi.contrast:.2f})"
+                        f"({edge_info}, {response.edge_angle:.1f}°, C:{edge_roi.contrast:.2f}, "
+                        f"{capture_summary})"
                     )
+                    if result.warning_msg:
+                        response.status_message += f" WARN: {result.warning_msg}"
 
                     self._node.get_logger().info(
                         f"MTF measurement successful: {response.status_message}"

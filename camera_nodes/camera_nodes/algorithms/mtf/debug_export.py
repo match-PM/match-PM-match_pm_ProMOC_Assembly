@@ -30,6 +30,8 @@ def export_debug(
     frequencies_alt: Optional[np.ndarray] = None,
     edge_hits: Optional[str] = None,
     edge_validation_ok: Optional[bool] = None,
+    metadata: Optional[dict[str, object]] = None,
+    group_curves: Optional[dict[str, dict]] = None,
 ) -> None:
     """Export ESF/LSF/MTF debug data to CSV/PNG (best-effort)."""
     try:
@@ -182,6 +184,58 @@ def export_debug(
                 header=",".join(headers),
                 comments=""
             )
+
+            if group_curves:
+                max_len = max(
+                    int(curve["frequencies"].size)
+                    for curve in group_curves.values()
+                    if curve.get("frequencies") is not None
+                )
+                cols = [np.arange(max_len, dtype=int)]
+                headers = ["index"]
+
+                def _pad(arr):
+                    out = np.full(max_len, np.nan)
+                    out[: min(max_len, arr.size)] = arr[: min(max_len, arr.size)]
+                    return out
+
+                for group_name, curve in sorted(group_curves.items()):
+                    cols.extend(
+                        [
+                            _pad(curve["frequencies"]),
+                            _pad(curve["mtf_raw"]),
+                            _pad(curve["mtf_used"]),
+                            _pad(curve["esf"]),
+                        ]
+                    )
+                    headers.extend(
+                        [
+                            f"{group_name}_frequency_lpmm",
+                            f"{group_name}_mtf_raw",
+                            f"{group_name}_mtf_used",
+                            f"{group_name}_esf",
+                        ]
+                    )
+
+                np.savetxt(
+                    out_dir / f"{stem}_groups.csv",
+                    np.column_stack(cols),
+                    delimiter=",",
+                    header=",".join(headers),
+                    comments="",
+                )
+
+            if metadata:
+                with open(
+                    out_dir / f"{stem}_metadata.csv",
+                    "w",
+                    newline="",
+                    encoding="utf-8",
+                ) as meta_file:
+                    writer = csv.writer(meta_file)
+                    writer.writerow(["key", "value"])
+                    for key, value in metadata.items():
+                        writer.writerow([key, value])
 
         if config.debug_export_png:
             try:
