@@ -19,19 +19,19 @@ def test_autofocus_algorithm_exposes_public_hooks():
     assert "def get_scan_step_mm(" in content
 
 
-def test_autofocus_service_uses_flat_support_modules():
+def test_autofocus_service_is_self_contained():
     handler_content = (
         ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "from .autofocus_axis import AxisClientManager" in handler_content
-    assert "from .autofocus_runner import AutofocusRunner" in handler_content
+    assert "class AxisClientManager" in handler_content
+    assert "class AutofocusRunner" in handler_content
     assert "from .fly_over import FlyOverDetector" in handler_content
 
 
 def test_autofocus_runner_avoids_private_algorithm_field_access():
     runner_content = (
-        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus_runner.py"
+        ROOT / "camera_nodes" / "camera_nodes" / "services" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     assert "._measurements" not in runner_content

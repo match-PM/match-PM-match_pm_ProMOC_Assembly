@@ -74,12 +74,14 @@ class MTFAnalyzer:
                     roi: Optional[Tuple[int, int, int, int]] = None,
                     debug_label: Optional[str] = None) -> MTFResult:
         """Compute MTF from image containing a slanted edge."""
+        # --- Step 1: Normalize input image and extract the requested ROI. ---
         gray = self._prepare_gray_image(image)
 
         roi_img, roi_bounds = self._extract_roi(gray, roi)
         if roi_img is None:
             return MTFResult(valid=False, error_msg="Failed to extract ROI")
 
+        # --- Step 2: Reject unusable ROIs before doing any signal processing. ---
         quality_res = self.check_image_quality(roi_img)
         if not quality_res['valid']:
             return MTFResult(
@@ -89,6 +91,7 @@ class MTFAnalyzer:
                 contrast=quality_res.get('contrast', 0.0)
             )
 
+        # --- Step 3: Estimate the edge orientation from the ROI gradients. ---
         normal_angle = self._detect_gradient_normal_angle(roi_img)
         if normal_angle is None:
             return MTFResult(
@@ -97,6 +100,7 @@ class MTFAnalyzer:
                 roi_bounds=roi_bounds
             )
 
+        # --- Step 4: Verify that one dominant edge actually crosses the ROI. ---
         edge_warning = ""
         edge_line = None
         edge_hits = None
@@ -113,6 +117,7 @@ class MTFAnalyzer:
                 edge_warning = f"Edge validation warning: {msg}"
             edge_validation_ok = ok
 
+        # --- Step 5: Rotate the ROI if needed so downstream code sees a consistent edge layout. ---
         norm_angle_deg = normal_angle
         angle_mod = norm_angle_deg % 180
         if 45 <= angle_mod <= 135:
@@ -148,6 +153,7 @@ class MTFAnalyzer:
                 edge_direction=edge_direction
             )
 
+        # --- Step 6: Convert ROI pixels into ESF, then into LSF and MTF. ---
         esf = compute_esf(roi_to_process.astype(np.float64), -measure_angle, self.config.oversample_factor)
         if len(esf) < 10:
             return MTFResult(
@@ -187,6 +193,7 @@ class MTFAnalyzer:
                 edge_direction=edge_direction
             )
 
+        # --- Step 7: Optionally compute an unsmoothed comparison curve for debugging. ---
         mtf_raw_alt = None
         mtf_used_alt = None
         frequencies_alt = None
@@ -201,6 +208,7 @@ class MTFAnalyzer:
                     mtf_raw_alt = None
                     mtf_used_alt = None
 
+        # --- Step 8: Extract the headline MTF metrics and collect warnings. ---
         mtf_clipped = bool(self.config.mtf_clip_max > 0)
         mtf50 = find_mtf_frequency(frequencies, mtf_raw, 0.5)
         mtf20 = find_mtf_frequency(frequencies, mtf_raw, 0.2)
@@ -221,6 +229,7 @@ class MTFAnalyzer:
 
         sensor_nyquist = 1000.0 / (2.0 * self.config.pixel_size_um)
 
+        # --- Step 9: Persist optional debug artifacts before returning the result. ---
         if self.config.debug_export_dir:
             esf_raw_dbg = esf_raw if self.config.esf_smooth_mode != "none" else None
             export_debug(
@@ -243,6 +252,7 @@ class MTFAnalyzer:
                 edge_validation_ok=edge_validation_ok
             )
 
+        # --- Step 10: Return one structured result object with all derived values. ---
         return MTFResult(
             mtf50=mtf50,
             mtf20=mtf20,

@@ -1,11 +1,10 @@
-"""Central camera node parameter declaration and typed config loading."""
+"""Camera-node parameter defaults and lightweight grouped loading."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from types import SimpleNamespace
 
 
-# Keep all camera-node defaults in one place so the node wiring stays compact.
 ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("use_simulator", False),
     ("pixel_size_um", 2.40),
@@ -98,60 +97,64 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
 
 ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = ALL_PARAM_VALUES
 
-
-@dataclass(frozen=True)
-class CameraNodeCoreConfig:
-    use_simulator: bool
-    pixel_size_um: float
-    default_roi_width: int
-    default_roi_height: int
-    x_axis_node_name: str
-    enable_debug_overlay: bool
-
-
-@dataclass(frozen=True)
-class MeasurementConfig:
-    username: str
-    base_path: str
-    coaxial_light_voltage: float
-    coaxial_light_current: float
-    camera_objective: str
-    notes: str
-
-
-@dataclass(frozen=True)
-class AutofocusConfigGroup:
-    refinement_samples: int
-    min_step_mm: float
-    refinement_shrink_factor: float
-    profile_table_json: str
-    refinement_mode: int
-    fly_over_refinement_strategy: str
-    fly_over_refinement_mode: int
-
-
-@dataclass(frozen=True)
-class MtfConfigGroup:
-    profile: str
-    use_full_frame: bool
-    full_frame_width: int
-    full_frame_height: int
-    debug_export_dir: str
-
-
-@dataclass(frozen=True)
-class ExposureConfigGroup:
-    settle_frames_after_set: int
-    frame_timeout_s: float
-
-
-@dataclass(frozen=True)
-class CameraRuntimeConfig:
-    core: CameraNodeCoreConfig
-    measurement: MeasurementConfig
-    autofocus: AutofocusConfigGroup
-    mtf: MtfConfigGroup
-    exposure: ExposureConfigGroup
+_GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
+    "core": (
+        ("use_simulator", "use_simulator", bool, False),
+        ("pixel_size_um", "pixel_size_um", float, 2.40),
+        ("default_roi_width", "default_roi_width", int, 200),
+        ("default_roi_height", "default_roi_height", int, 200),
+        ("x_axis_node_name", "x_axis_node_name", str, "lts300_x_axis"),
+        ("enable_debug_overlay", "enable_debug_overlay", bool, False),
+    ),
+    "measurement": (
+        ("measurement.username", "username", str, ""),
+        ("measurement.base_path", "base_path", str, ""),
+        (
+            "measurement_conditions.coaxial_light_voltage",
+            "coaxial_light_voltage",
+            float,
+            0.0,
+        ),
+        (
+            "measurement_conditions.coaxial_light_current",
+            "coaxial_light_current",
+            float,
+            0.0,
+        ),
+        ("measurement_conditions.camera_objective", "camera_objective", str, "unknown"),
+        ("measurement_conditions.notes", "notes", str, ""),
+    ),
+    "autofocus": (
+        ("autofocus.refinement_samples", "refinement_samples", int, 51),
+        ("autofocus.min_step_mm", "min_step_mm", float, 0.01),
+        (
+            "autofocus.refinement_shrink_factor",
+            "refinement_shrink_factor",
+            float,
+            0.35,
+        ),
+        ("autofocus.profile_table_json", "profile_table_json", str, ""),
+        ("autofocus.refinement_mode", "refinement_mode", int, 0),
+        (
+            "autofocus.fly_over.refinement_strategy",
+            "fly_over_refinement_strategy",
+            str,
+            "linear",
+        ),
+        ("autofocus.fly_over.refinement_mode", "fly_over_refinement_mode", int, 0),
+    ),
+    "mtf": (
+        ("mtf.profile", "profile", str, "default"),
+        ("mtf.use_full_frame", "use_full_frame", bool, False),
+        ("mtf.full_frame_width", "full_frame_width", int, 5536),
+        ("mtf.full_frame_height", "full_frame_height", int, 3692),
+        ("mtf.debug_export_dir", "debug_export_dir", str, ""),
+    ),
+    "exposure": (
+        ("exposure.settle_frames_after_set", "settle_frames_after_set", int, 2),
+        ("exposure.frame_timeout_s", "frame_timeout_s", float, 1.0),
+    ),
+}
 
 
 def declare_camera_parameters(node) -> None:
@@ -160,74 +163,30 @@ def declare_camera_parameters(node) -> None:
         node.declare_parameter(name, default)
 
 
-def _read_value(node, name: str, default):
+def get_camera_param(node, name: str, default=None):
+    """Read a ROS parameter value with fallback for missing or null values."""
     if not node.has_parameter(name):
         return default
     value = node.get_parameter(name).value
     return default if value is None else value
 
 
-def load_camera_runtime_config(node) -> CameraRuntimeConfig:
-    """Read declared ROS parameters into typed camera runtime config."""
-    core = CameraNodeCoreConfig(
-        use_simulator=bool(_read_value(node, "use_simulator", False)),
-        pixel_size_um=float(_read_value(node, "pixel_size_um", 2.40)),
-        default_roi_width=int(_read_value(node, "default_roi_width", 200)),
-        default_roi_height=int(_read_value(node, "default_roi_height", 200)),
-        x_axis_node_name=str(_read_value(node, "x_axis_node_name", "lts300_x_axis")),
-        enable_debug_overlay=bool(_read_value(node, "enable_debug_overlay", False)),
-    )
+def _load_group(node, group_name: str) -> SimpleNamespace:
+    values = {}
+    for param_name, attr_name, cast, default in _GROUP_SPECS[group_name]:
+        try:
+            values[attr_name] = cast(get_camera_param(node, param_name, default))
+        except (TypeError, ValueError):
+            values[attr_name] = cast(default)
+    return SimpleNamespace(**values)
 
-    measurement = MeasurementConfig(
-        username=str(_read_value(node, "measurement.username", "")),
-        base_path=str(_read_value(node, "measurement.base_path", "")),
-        coaxial_light_voltage=float(
-            _read_value(node, "measurement_conditions.coaxial_light_voltage", 0.0)
-        ),
-        coaxial_light_current=float(
-            _read_value(node, "measurement_conditions.coaxial_light_current", 0.0)
-        ),
-        camera_objective=str(
-            _read_value(node, "measurement_conditions.camera_objective", "unknown")
-        ),
-        notes=str(_read_value(node, "measurement_conditions.notes", "")),
-    )
 
-    autofocus = AutofocusConfigGroup(
-        refinement_samples=int(_read_value(node, "autofocus.refinement_samples", 51)),
-        min_step_mm=float(_read_value(node, "autofocus.min_step_mm", 0.01)),
-        refinement_shrink_factor=float(
-            _read_value(node, "autofocus.refinement_shrink_factor", 0.35)
-        ),
-        profile_table_json=str(_read_value(node, "autofocus.profile_table_json", "")),
-        refinement_mode=int(_read_value(node, "autofocus.refinement_mode", 0)),
-        fly_over_refinement_strategy=str(
-            _read_value(node, "autofocus.fly_over.refinement_strategy", "linear")
-        ),
-        fly_over_refinement_mode=int(
-            _read_value(node, "autofocus.fly_over.refinement_mode", 0)
-        ),
-    )
-
-    mtf = MtfConfigGroup(
-        profile=str(_read_value(node, "mtf.profile", "default")),
-        use_full_frame=bool(_read_value(node, "mtf.use_full_frame", False)),
-        full_frame_width=int(_read_value(node, "mtf.full_frame_width", 5536)),
-        full_frame_height=int(_read_value(node, "mtf.full_frame_height", 3692)),
-        debug_export_dir=str(_read_value(node, "mtf.debug_export_dir", "")),
-    )
-
-    exposure = ExposureConfigGroup(
-        settle_frames_after_set=int(
-            _read_value(node, "exposure.settle_frames_after_set", 2)
-        ),
-        frame_timeout_s=float(_read_value(node, "exposure.frame_timeout_s", 1.0)),
-    )
-
-    return CameraRuntimeConfig(
-        core=core,
-        measurement=measurement,
-        autofocus=autofocus,
-        mtf=mtf,
-        exposure=exposure,
+def load_camera_runtime_config(node) -> SimpleNamespace:
+    """Load grouped runtime settings for tests and optional node consumers."""
+    return SimpleNamespace(
+        core=_load_group(node, "core"),
+        measurement=_load_group(node, "measurement"),
+        autofocus=_load_group(node, "autofocus"),
+        mtf=_load_group(node, "mtf"),
+        exposure=_load_group(node, "exposure"),
     )

@@ -100,6 +100,7 @@ class RoiDetector:
             rois_bars: List of rotated rects (minAreaRect) for bar targets
             rois_squares: List of rotated rects (minAreaRect) for square targets
         """
+        # --- Step 1: Convert to grayscale and prepare the debug image. ---
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             vis_img = image.copy()
@@ -107,11 +108,11 @@ class RoiDetector:
             gray = image
             vis_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-        # Normalize and Blur
+        # --- Step 2: Normalize contrast and reduce noise before thresholding. ---
         img_norm = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
         blur = cv2.GaussianBlur(img_norm, (5, 5), 0)
 
-        # Try Otsu thresholding first
+        # --- Step 3: Segment candidate targets from the background. ---
         _, thresh_otsu = cv2.threshold(
             blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
@@ -119,10 +120,9 @@ class RoiDetector:
             thresh_otsu, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
 
-        # Fallback to adaptive thresholding if Otsu finds too few contours
+        # Adaptive thresholding is more tolerant of uneven lighting.
         contours = contours_otsu
         if use_adaptive and len(contours_otsu) < 2:
-            # Adaptive thresholding works better with uneven lighting
             thresh_adaptive = cv2.adaptiveThreshold(
                 blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
             )
@@ -135,16 +135,16 @@ class RoiDetector:
         rois_bars = []
         rois_squares = []
 
+        # --- Step 4: Convert contours into rotated rectangles and classify them. ---
         for cnt in contours:
             area = cv2.contourArea(cnt)
             if area < min_area:
                 continue
 
-            # Rotated Rectangle
             rect = cv2.minAreaRect(cnt)
             (center, (w, h), angle) = rect
 
-            # Normalize width/height (w always smaller)
+            # Normalize dimensions so the aspect-ratio test stays stable.
             if w > h:
                 w, h = h, w
 
@@ -152,13 +152,12 @@ class RoiDetector:
 
             box = np.int32(cv2.boxPoints(rect))
 
-            # Logic Switch
-            # Case A: MTF Bar (Long & Narrow)
+            # Long and narrow shapes are treated as bar targets.
             if 2.5 < aspect_ratio < 20.0:
                 rois_bars.append(rect)
                 cv2.drawContours(vis_img, [box], 0, (0, 255, 0), 2)  # Green for bars
 
-            # Case B: Square (Quadratic & Large enough)
+            # Nearly quadratic shapes are treated as square edge targets.
             elif 0.8 < aspect_ratio < 1.3 and area > square_min_area:
                 rois_squares.append(rect)
                 cv2.drawContours(vis_img, [box], 0, (255, 0, 0), 2)  # Blue for squares
@@ -187,6 +186,7 @@ class RoiDetector:
         Returns:
             List of DetectedTarget objects, sorted by area (largest first)
         """
+        # --- Step 1: Reuse the geometry-only detector to get candidate rectangles. ---
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         else:
@@ -198,7 +198,7 @@ class RoiDetector:
 
         targets = []
 
-        # Process bars
+        # --- Step 2: Turn all bar candidates into structured targets. ---
         for rect in bars:
             (cx, cy), (w, h), angle = rect
             area = w * h
@@ -213,7 +213,7 @@ class RoiDetector:
             )
 
             if compute_contrast:
-                # Extract ROI and compute contrast
+                # Estimate whether the ROI is even worth later MTF analysis.
                 box = cv2.boxPoints(rect)
                 x, y, bw, bh = cv2.boundingRect(np.int32(box))
                 x = max(0, x)
@@ -224,7 +224,7 @@ class RoiDetector:
 
             targets.append(target)
 
-        # Process squares
+        # --- Step 3: Do the same for square candidates. ---
         for rect in squares:
             (cx, cy), (w, h), angle = rect
             area = w * h
@@ -250,7 +250,7 @@ class RoiDetector:
 
             targets.append(target)
 
-        # Sort by area (largest first for priority)
+        # --- Step 4: Sort by area so callers can prefer the strongest target. ---
         targets.sort(key=lambda t: t.area, reverse=True)
 
         return targets

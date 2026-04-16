@@ -8,7 +8,7 @@ from typing import Callable
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import GetParameters, SetParameters
 
-from .parameter_access import ParameterAccessor
+from .base import ParameterAccessor
 
 
 class CameraFormatController:
@@ -505,4 +505,3 @@ class CameraFormatController:
                 self._node.get_logger().warn(
                     "MTF format restore readback unavailable: failed to read camera state."
                 )
-

@@ -27,13 +27,15 @@ class _SrvType:
 
 srv_mod.GetVelocityParameters = _SrvType
 srv_mod.SetVelocityParameters = _SrvType
+srv_mod.GetOperationStatus = _SrvType
+srv_mod.MoveAbsolute = _SrvType
 sys.modules["promoc_assembly_interfaces.srv"] = srv_mod
 if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod = types.ModuleType("promoc_assembly_interfaces")
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.services.axis_velocity import temporary_velocity  # noqa: E402
+from camera_nodes.services.fly_over import temporary_velocity  # noqa: E402
 from promoc_core.promoc_exceptions import ServiceError  # noqa: E402
 
 
@@ -88,4 +90,3 @@ def test_temporary_velocity_raises_when_backup_unavailable():
     with pytest.raises(ServiceError):
         with temporary_velocity(clients, max_velocity=1.0):
             pass
-

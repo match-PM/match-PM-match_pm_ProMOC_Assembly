@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from enum import Enum, auto
+
 import numpy as np
 
 from ..autofocus import AutofocusConfig, AutofocusResult, MSPRAutofocus, Phase
+
+
+class _FourStepStage(Enum):
+    """Named scan stages for the staged coarse-to-fine sweep."""
+
+    COARSE_SWEEP = auto()
+    FINE_SWEEP = auto()
+    ULTRA_FINE_SWEEP = auto()
 
 
 class FourStepAutofocus(MSPRAutofocus):
@@ -34,7 +44,7 @@ class FourStepAutofocus(MSPRAutofocus):
 
         self.scan_points: list[float] = []
         self.scan_index = 0
-        self.stage = "COARSE"
+        self.stage = _FourStepStage.COARSE_SWEEP
         self.drop_counter = 0
         self.parabolic_peak_mm: float | None = None
         self.parabolic_fit_points: list[tuple[float, float]] = []
@@ -45,6 +55,7 @@ class FourStepAutofocus(MSPRAutofocus):
         self._reset_runtime_state()
         self._phase = Phase.COARSE_SCAN
 
+        # Step 1: Create the initial coarse scan across the full range.
         total_range = self.config.end_mm - self.config.start_mm
         n_steps = max(1, int(round(total_range / self.step_coarse)) + 1)
         self.scan_points = list(np.linspace(
@@ -54,13 +65,14 @@ class FourStepAutofocus(MSPRAutofocus):
         ))
         self.scan_points = self._clamp_positions(self.scan_points)
         self.scan_index = 0
-        self.stage = "COARSE"
+        self.stage = _FourStepStage.COARSE_SWEEP
         self.current_stage_best_score = None
         self.ultra_start_index = None
 
         return self.scan_points[0] if self.scan_points else float(self.config.start_mm)
 
     def process_image(self, position_mm: float, image: np.ndarray) -> AutofocusResult:
+        # Step 1: Score the current frame and update the global best measurement.
         score = self._calculate_score(image)
         current_measurement, _ = self._store_measurement(
             position_mm,
@@ -69,7 +81,8 @@ class FourStepAutofocus(MSPRAutofocus):
         )
         current_score = current_measurement.score
 
-        if self.stage == "ULTRA":
+        # Step 2: Track when the ultra-fine stage starts moving away from the peak.
+        if self.stage == _FourStepStage.ULTRA_FINE_SWEEP:
             if self.current_stage_best_score is None or current_score > self.current_stage_best_score:
                 self.current_stage_best_score = current_score
                 self.drop_counter = 0
@@ -79,12 +92,13 @@ class FourStepAutofocus(MSPRAutofocus):
         next_pos = position_mm
         finished = False
 
-        if self.stage == "COARSE":
+        if self.stage == _FourStepStage.COARSE_SWEEP:
+            # Step 3a: Sweep the full range to locate the rough focus hill.
             self.scan_index += 1
             if self.scan_index < len(self.scan_points):
                 next_pos = self.scan_points[self.scan_index]
             else:
-                self.stage = "FINE"
+                self.stage = _FourStepStage.FINE_SWEEP
                 self._phase = Phase.REFINEMENT
                 self._setup_next_scan(self.step_fine, self.range_fine)
                 self.current_stage_best_score = None
@@ -93,12 +107,13 @@ class FourStepAutofocus(MSPRAutofocus):
                 else:
                     finished = True
 
-        elif self.stage == "FINE":
+        elif self.stage == _FourStepStage.FINE_SWEEP:
+            # Step 3b: Rescan a narrower window around the current best point.
             self.scan_index += 1
             if self.scan_index < len(self.scan_points):
                 next_pos = self.scan_points[self.scan_index]
             else:
-                self.stage = "ULTRA"
+                self.stage = _FourStepStage.ULTRA_FINE_SWEEP
                 self._setup_next_scan(self.step_ultra, self.range_ultra)
                 self.current_stage_best_score = None
                 self.ultra_start_index = len(self._measurements)
@@ -107,7 +122,8 @@ class FourStepAutofocus(MSPRAutofocus):
                 else:
                     finished = True
 
-        elif self.stage == "ULTRA":
+        elif self.stage == _FourStepStage.ULTRA_FINE_SWEEP:
+            # Step 3c: Run the ultra-fine pass and stop on repeated score drops.
             if self.drop_counter >= 5:
                 self._apply_parabolic_refinement()
                 finished = True
@@ -135,6 +151,7 @@ class FourStepAutofocus(MSPRAutofocus):
             self.scan_index = 0
             return
 
+        # Step 1: Center the next scan window around the best point so far.
         center = self._best_measurement.position_mm
         start = center - (window_width / 2)
         end = center + (window_width / 2)
@@ -142,6 +159,7 @@ class FourStepAutofocus(MSPRAutofocus):
         start = max(self.config.start_mm, start)
         end = min(self.config.end_mm, end)
 
+        # Step 2: Rebuild the stage-specific forward scan grid.
         total_range = end - start
         n_steps = max(1, int(round(total_range / step_size)) + 1)
         self.scan_points = list(np.linspace(start, end, n_steps))
@@ -150,11 +168,11 @@ class FourStepAutofocus(MSPRAutofocus):
         self.drop_counter = 0
 
     def _get_progress(self) -> float:
-        if self.stage == "COARSE":
+        if self.stage == _FourStepStage.COARSE_SWEEP:
             return 0.3
-        if self.stage == "FINE":
+        if self.stage == _FourStepStage.FINE_SWEEP:
             return 0.6
-        if self.stage == "ULTRA":
+        if self.stage == _FourStepStage.ULTRA_FINE_SWEEP:
             return 0.9
         return 1.0
 
@@ -163,6 +181,7 @@ class FourStepAutofocus(MSPRAutofocus):
         if not self.scan_points or not self._measurements:
             return
 
+        # Step 1: Keep only the measurements from the ultra-fine stage.
         start_idx = self.ultra_start_index or 0
         final_coords = [
             (m.position_mm, m.score)
@@ -172,7 +191,7 @@ class FourStepAutofocus(MSPRAutofocus):
         if len(final_coords) < 3:
             return
 
-        # Use local 3-point neighborhood around the best position
+        # Step 2: Select the local 3-point neighborhood around the best sample.
         final_coords.sort(key=lambda x: x[0])
         self.parabolic_fit_points = final_coords
 
@@ -186,5 +205,6 @@ class FourStepAutofocus(MSPRAutofocus):
         subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
         self.parabolic_peak_mm = subpixel_pos
 
+        # Step 3: Replace the best position with the sub-pixel peak estimate.
         if self._best_measurement and abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
             self._best_measurement.position_mm = subpixel_pos

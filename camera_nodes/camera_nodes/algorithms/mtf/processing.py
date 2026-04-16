@@ -12,6 +12,7 @@ def compute_esf(roi: np.ndarray, edge_angle: float, oversample_factor: int) -> n
     h, w = roi.shape
     angle_rad = np.radians(edge_angle)
 
+    # Step 1: Project every pixel onto the axis perpendicular to the edge.
     esf_points = []
     for row in range(h):
         offset = row * np.tan(angle_rad)
@@ -19,6 +20,7 @@ def compute_esf(roi: np.ndarray, edge_angle: float, oversample_factor: int) -> n
             pos = (col - w / 2 - offset) * oversample_factor
             esf_points.append((pos, roi[row, col]))
 
+    # Step 2: Sort projected samples and average them into ESF bins.
     esf_points.sort(key=lambda x: x[0])
     positions = np.array([p[0] for p in esf_points])
     values = np.array([p[1] for p in esf_points])
@@ -40,10 +42,12 @@ def smooth_esf(esf: np.ndarray, config: MTFConfig) -> Tuple[np.ndarray, str]:
     if esf.size == 0:
         return esf, ""
 
+    # Step 1: Decide whether smoothing is enabled at all.
     mode = config.esf_smooth_mode
     if mode == "none":
         return esf, ""
 
+    # Step 2: Apply the configured smoothing method.
     if mode == "sg":
         try:
             from scipy.signal import savgol_filter
@@ -73,6 +77,8 @@ def compute_lsf(esf: np.ndarray, config: MTFConfig) -> np.ndarray:
     """Compute LSF from ESF using configured derivative mode."""
     if esf.size < 2:
         return np.array([])
+    # The LSF is the discrete derivative of the ESF. The configured derivative
+    # mode controls whether we use a centered ISO-like stencil or a plain diff.
     if config.derivative_mode == "iso":
         if esf.size < 3:
             return np.array([])
@@ -126,6 +132,7 @@ def compute_mtf_from_lsf(
     if lsf.size == 0:
         raise ValueError("LSF computation failed (empty)")
 
+    # Step 1: Window the LSF so the FFT is less sensitive to ROI truncation.
     lsf_windowed = apply_lsf_window(lsf, config)
     fft_lsf = np.fft.fft(lsf_windowed)
     mtf = np.abs(fft_lsf[:len(fft_lsf) // 2])
@@ -135,14 +142,14 @@ def compute_mtf_from_lsf(
 
     mtf_raw = mtf / mtf[0]
 
-    # Frequency axis (lp/mm)
+    # Step 2: Convert FFT bins into physical spatial frequency in lp/mm.
     n = len(lsf_windowed)
     freq_cyc_per_pixel = np.fft.fftfreq(
         n, d=1.0 / config.oversample_factor)[:n // 2]
     pixel_pitch_mm = config.pixel_size_um / 1000.0
     frequencies_raw = freq_cyc_per_pixel / pixel_pitch_mm
 
-    # Optional ISO derivative filter correction
+    # Step 3: Undo attenuation introduced by the discrete derivative filter.
     if config.apply_derivative_correction and config.derivative_mode == "iso":
         sample_spacing_mm = pixel_pitch_mm / config.oversample_factor
         omega = 2.0 * np.pi * frequencies_raw * sample_spacing_mm
@@ -156,18 +163,19 @@ def compute_mtf_from_lsf(
 
     mtf_peak_raw = float(np.max(mtf_raw)) if mtf_raw.size > 0 else 0.0
 
+    # Step 4: Apply optional clipping/post-processing to the raw MTF curve.
     mtf_used = mtf_raw
     if config.mtf_clip_max > 0:
         mtf_used = np.minimum(mtf_raw, config.mtf_clip_max)
 
-    # Optional cos(theta) correction for frequency axis
+    # Step 5: Correct the frequency axis for the slanted edge angle if requested.
     if config.apply_angle_correction:
         cos_theta = float(abs(np.cos(np.radians(measure_angle))))
         frequencies = frequencies_raw * cos_theta
     else:
         frequencies = frequencies_raw
 
-    # Optional Nyquist clipping
+    # Step 6: Clip to sensor Nyquist if the caller wants a physically bounded curve.
     if config.clip_to_nyquist:
         sensor_nyquist = 1000.0 / (2.0 * config.pixel_size_um)
         mask = frequencies <= sensor_nyquist
@@ -223,6 +231,7 @@ def validate_edge_crossing(
     if roi is None or roi.size == 0:
         return False, "empty ROI", None, None
 
+    # Step 1: Convert to grayscale and reject obviously unusable ROIs.
     if len(roi.shape) == 3:
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     else:
@@ -232,6 +241,7 @@ def validate_edge_crossing(
     if h < 4 or w < 4:
         return False, "ROI too small", None, None
 
+    # Step 2: Build a gradient magnitude image and keep only strong edge pixels.
     gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
     gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
     mag = np.sqrt(gx**2 + gy**2)
@@ -245,12 +255,14 @@ def validate_edge_crossing(
     if len(xs) < max(1, config.edge_validation_min_points):
         return False, "insufficient edge points", None, None
 
+    # Step 3: Fit a single line through the dominant edge pixels.
     points = np.column_stack((xs, ys)).astype(np.float32)
     try:
         vx, vy, x0, y0 = cv2.fitLine(points, cv2.DIST_L2, 0, 0.01, 0.01).flatten()
     except Exception:
         return False, "line fit failed", None, None
 
+    # Step 4: Check which ROI borders this fitted edge intersects.
     eps = 1e-6
     hits = set()
 

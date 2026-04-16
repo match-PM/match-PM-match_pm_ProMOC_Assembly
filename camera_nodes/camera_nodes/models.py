@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import json
 import re
 
-from .services.parameter_access import ParameterAccessor
+from .services.base import ParameterAccessor
 
 
 COARSE_STEP_MM = 0.5
@@ -255,4 +255,3 @@ class FocusProfileBuilder:
             max_sample_step_mm=max(0.005, float(max_sample_step_mm)),
             axis_speed_scale=max(1e-3, float(axis_speed_scale)),
         )
-

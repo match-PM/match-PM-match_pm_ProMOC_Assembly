@@ -201,18 +201,17 @@ class MSPRAutofocus:
         Returns:
             Initial position to move to
         """
-        # Reset state for re-entrant use of the same autofocus instance.
+        # --- Step 1: Reset any state from a previous autofocus run. ---
         self._reset_runtime_state()
 
-        # Generate coarse scan positions
+        # --- Step 2: Generate the coarse linear scan grid. ---
         self._coarse_positions = list(np.arange(
             self.config.start_mm,
             self.config.end_mm + self.config.step_mm / 2,
             self.config.step_mm
         ))
-        
-        # Clamp all positions to valid range [start_mm, end_mm]
-        # Clamp and deduplicate using helper
+
+        # --- Step 3: Clamp the grid to valid travel and remove duplicates. ---
         self._coarse_positions = self._clamp_positions(self._coarse_positions)
         
         self._phase = Phase.COARSE_SCAN
@@ -230,11 +229,11 @@ class MSPRAutofocus:
         Returns:
             AutofocusResult with next action
         """
-        # Calculate sharpness
+        # --- Step 1: Score the current image at the current axis position. ---
         score = self._calculate_score(image)
         self._store_measurement(position_mm, score)
-        
-        # State machine
+
+        # --- Step 2: Let the current algorithm phase decide the next move. ---
         if self._phase == Phase.COARSE_SCAN:
             return self._handle_coarse_scan()
         elif self._phase == Phase.REFINEMENT:
@@ -281,6 +280,12 @@ class MSPRAutofocus:
                 self._sift = False
         return self._sift
 
+    def _to_grayscale(self, image: np.ndarray) -> np.ndarray:
+        """Return a grayscale view of the image for texture-based scoring."""
+        if len(image.shape) == 3:
+            return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        return image
+
     def _sift_weight(self, gray: np.ndarray) -> float:
         sift = self._get_sift()
         if sift is False:
@@ -298,14 +303,22 @@ class MSPRAutofocus:
         density = (len(keypoints) / area) if area > 0 else 0.0
         return 1.0 + (density * 1000.0)
 
-    def _calculate_score(self, image: np.ndarray) -> float:
-        base_score = tenengrad(image)
+    def _should_apply_sift_weighting(self) -> bool:
+        """SIFT weighting is only meaningful during local refinement."""
+        return self.config.use_sift_weighting and self._phase == Phase.REFINEMENT
 
-        if self.config.use_sift_weighting and self._phase == Phase.REFINEMENT:
+    def _compute_base_focus_score(self, image: np.ndarray) -> float:
+        """Compute the baseline sharpness metric for a frame."""
+        return float(tenengrad(image))
+
+    def _calculate_score(self, image: np.ndarray) -> float:
+        # --- Step 1: Compute the baseline sharpness score. ---
+        base_score = self._compute_base_focus_score(image)
+
+        # --- Step 2: Optionally emphasize textured regions during refinement. ---
+        if self._should_apply_sift_weighting():
             try:
-                gray = image
-                if len(image.shape) == 3:
-                    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                gray = self._to_grayscale(image)
                 return base_score * self._sift_weight(gray)
             except Exception:
                 return base_score
@@ -424,6 +437,47 @@ class MSPRAutofocus:
             current_range_mm=self._current_range_mm
         )
 
+    def _transition_to_refinement(self, progress: float) -> AutofocusResult:
+        """Prepare the next refinement window and return its first move."""
+        self._prepare_refinement()
+        result = self._make_result(
+            next_position=self._refinement_positions[0],
+            phase=Phase.COARSE_SCAN,
+            progress=progress,
+        )
+        self._phase = Phase.REFINEMENT
+        return result
+
+    def _collect_measurements_for_positions(
+        self, positions: list[float]
+    ) -> list[tuple[float, float]]:
+        """Return measured (position, score) pairs that belong to a probe list."""
+        return [
+            (measurement.position_mm, measurement.score)
+            for measurement in self._measurements
+            if any(abs(measurement.position_mm - pos) < 1e-6 for pos in positions)
+        ]
+
+    def _finalize_subpixel_peak(self) -> None:
+        """Refine the final best position by quadratic interpolation."""
+        if not self._best_measurement or not self._refinement_positions:
+            return
+
+        final_coords = self._collect_measurements_for_positions(self._refinement_positions)
+        final_coords.sort(key=lambda coord: coord[0])
+
+        if len(final_coords) < 3:
+            return
+
+        x_vals = [coord[0] for coord in final_coords]
+        scores = [coord[1] for coord in final_coords]
+        subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
+
+        if abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
+            # Keep the measured peak score, but replace the position with the
+            # interpolated maximum of the fitted parabola.
+            self._best_measurement.position_mm = subpixel_pos
+
     def _clamp_positions(self, positions: list[float]) -> list[float]:
         """
         Clamp positions to valid range and remove duplicates.
@@ -456,9 +510,10 @@ class MSPRAutofocus:
     
     def _handle_coarse_scan(self) -> AutofocusResult:
         """Handle coarse scan phase."""
+        # --- Step 1: Advance the coarse scan cursor. ---
         self._coarse_index += 1
-        
-        # Check for early exit (Peak crossed)
+
+        # --- Step 2: Detect whether the scan already moved past the peak. ---
         current_score = self._measurements[-1].score
         best_score = self._best_measurement.score if self._best_measurement else 0.0
 
@@ -470,16 +525,9 @@ class MSPRAutofocus:
 
             if self._coarse_drop_counter >= self.config.coarse_terminate_count:
                 # Peak crossed - transition to refinement
-                self._prepare_refinement()
-                result = self._make_result(
-                    next_position=self._refinement_positions[0],
-                    phase=Phase.COARSE_SCAN,
-                    progress=0.5
-                )
-                self._phase = Phase.REFINEMENT
-                return result
+                return self._transition_to_refinement(progress=0.5)
 
-        # Continue coarse scan?
+        # --- Step 3: Keep scanning while coarse positions remain. ---
         if self._coarse_index < len(self._coarse_positions):
             progress = self._coarse_index / len(self._coarse_positions)
             return self._make_result(
@@ -488,18 +536,11 @@ class MSPRAutofocus:
                 progress=progress
             )
         
-        # Coarse scan complete -> start refinement
+        # --- Step 4: Coarse scan is complete, so initialize refinement. ---
         if not self._best_measurement:
             return self._make_result(finished=True, phase=Phase.FINISHED)
         
-        self._prepare_refinement()
-        result = self._make_result(
-            next_position=self._refinement_positions[0],
-            phase=Phase.COARSE_SCAN,
-            progress=0.5
-        )
-        self._phase = Phase.REFINEMENT
-        return result
+        return self._transition_to_refinement(progress=0.5)
     
     def _handle_refinement(self) -> AutofocusResult:
         """
@@ -511,7 +552,7 @@ class MSPRAutofocus:
         current_score = self._measurements[-1].score
         best_score = self._best_measurement.score if self._best_measurement else 0.0
         
-        # Check for early termination
+        # --- Step 1: Decide whether the current refinement level should stop early. ---
         if best_score > 0:
             threshold = best_score * self.config.early_termination_threshold
             if current_score < threshold:
@@ -536,9 +577,9 @@ class MSPRAutofocus:
                     progress=progress
                 )
         
+        # --- Step 2: Otherwise continue sampling inside the current refinement window. ---
         self._refinement_index += 1
-        
-        # Continue current refinement level?
+
         if self._refinement_index < len(self._refinement_positions):
             progress = 0.5 + 0.5 * (self._refinement_index / len(self._refinement_positions))
             return self._make_result(
@@ -547,30 +588,14 @@ class MSPRAutofocus:
                 progress=progress
             )
         
-        # Current level complete -> check if we need another level
+        # --- Step 3: Current refinement level is complete. Decide whether to stop. ---
         if self._current_step_mm <= self.config.min_step_mm:
-            # --- MSPR ENHANCEMENT: Quadratic Interpolation ---
-            # Use the measurements from the final refinement level for subpixel accuracy
-            final_coords = [(m.position_mm, m.score) for m in self._measurements 
-                           if any(abs(m.position_mm - p) < 1e-6 for p in self._refinement_positions)]
-            
-            # Sort by position
-            final_coords.sort(key=lambda x: x[0])
-            if len(final_coords) >= 3:
-                x_vals = [c[0] for c in final_coords]
-                scores = [c[1] for c in final_coords]
-                subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
-                
-                if abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
-                    # Update best measurement with interpolated position
-                    # We keep the discrete best score as the "true" measured peak score
-                    # but move the position to the interpolated maximum.
-                    self._best_measurement.position_mm = subpixel_pos
-            
+            # --- Step 3a: Fit a parabola around the final local maximum. ---
+            self._finalize_subpixel_peak()
             self._phase = Phase.FINISHED
             return self._make_result(finished=True, phase=Phase.FINISHED, progress=1.0)
         
-        # Start next refinement level
+        # --- Step 4: Shrink the search window and start the next level. ---
         self._prepare_refinement()
         progress = 0.6 + 0.1 * self._refinement_level
         return self._make_result(
@@ -588,36 +613,33 @@ class MSPRAutofocus:
         if not self._best_measurement:
             return
         
-        # Reset early termination counter for new level
+        # --- Step 1: Reset counters and center the new window on the best sample. ---
         self._low_score_counter = 0
         
         center = self._best_measurement.position_mm
         
-        # Calculate new range and step size
+        # --- Step 2: Shrink the search range for the next refinement pass. ---
         if self._refinement_level == 0:
-            # First refinement: use configured shrink factor OR pre-set range
-            # (ParabolicAutofocus may pre-set _current_range_mm for tight refinement)
+            # The first refinement either uses a caller-provided range or derives one
+            # from the original full scan width.
             if self._current_range_mm == 0.0:
                 total_range = self.config.end_mm - self.config.start_mm
                 self._current_range_mm = total_range * self.config.shrink_factor
         else:
-            # Subsequent levels: shrink further
             self._current_range_mm *= self.config.shrink_factor
         
-        # Calculate step size to get approximately refinement_samples points
+        # --- Step 3: Derive a step size that yields roughly refinement_samples points. ---
         self._current_step_mm = (2 * self._current_range_mm) / (self.config.refinement_samples - 1)
         
         # Clamp to min_step_mm
         if self._current_step_mm < self.config.min_step_mm:
             self._current_step_mm = self.config.min_step_mm
         
-        # Generate refinement positions (symmetric or asymmetric)
+        # --- Step 4: Build the probe positions for the new window. ---
         if self._asymmetric_range == 'lower':
-            # Only search below best (focus peak is on lower side)
             range_start = max(self.config.start_mm, center - 2 * self._current_range_mm)
             range_end = center
         elif self._asymmetric_range == 'upper':
-            # Only search above best (focus peak is on upper side)
             range_start = center
             range_end = min(self.config.end_mm, center + 2 * self._current_range_mm)
         else:
