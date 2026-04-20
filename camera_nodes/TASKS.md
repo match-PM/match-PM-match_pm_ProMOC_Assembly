@@ -1,14 +1,5 @@
-# Camera Nodes Tasks
+# Legacy Note
 
-## Next Session
-
-- Continue with `camera_nodes/services/autofocus.py`.
-- Goal: make runner, axis, and result flow as readable as the algorithm layer.
-- Likely refactor targets:
-  - split long control flow into smaller helper methods
-  - align naming with the updated autofocus algorithms
-  - make step boundaries in the service orchestration easier to follow
-- Context from the last session:
-  - algorithm files in `camera_nodes/camera_nodes/algorithms/` were already simplified
-  - autofocus strategies now use clearer step markers and enum-based internal states
-  - next focus is readability, not behavior changes
+Diese Datei ist auf dem Messstand-Branch nicht mehr die gepflegte Quelle fuer
+offene Aufgaben. Der aktuelle Arbeitsablauf und die relevante Dokumentation
+stehen in `README.md` und `MTF_PROTOCOL.md`.

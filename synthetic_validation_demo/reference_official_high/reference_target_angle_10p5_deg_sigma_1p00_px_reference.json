@@ -1,0 +1,68 @@
+{
+  "target_name": "reference_target_angle_10p5_deg_sigma_1p00_px",
+  "generator": "oversampled_slanted_edge_with_gaussian_psf_and_pixel_integration",
+  "pixel_size_um": 2.4,
+  "image_size_px": 240,
+  "roi_size_px": 200,
+  "edge_angle_deg": 10.5,
+  "blur_sigma_px": 1.0,
+  "roi_bounds": [
+    20,
+    20,
+    220,
+    220
+  ],
+  "reference_mtf": {
+    "mtf50_lpmm": 74.98493025400617,
+    "mtf20_lpmm": 114.194988992944,
+    "mtf10_lpmm": 136.5270061992681
+  },
+  "dense_result": {
+    "valid": false,
+    "mtf50_lpmm": 0.0,
+    "mtf20_lpmm": 0.0,
+    "mtf10_lpmm": 0.0,
+    "edge_angle_deg": 10.507634172614303,
+    "edge_angle_method": "geometric",
+    "edge_angle_geometric": 10.507634172614303,
+    "edge_angle_phase": 9.866492683440754,
+    "edge_angle_consistency_deg": 0.641141489173549,
+    "edge_fit_residual_px": 0.27830033364863466,
+    "edge_support_points": 195,
+    "analysis_roi_bounds": [
+      71,
+      20,
+      170,
+      220
+    ],
+    "g1_mtf50_lpmm": 0.0,
+    "g2_mtf50_lpmm": 0.0,
+    "g1_g2_delta_pct": 0.0,
+    "warning": "",
+    "error": "Edge angle too large: 10.5\u00b0 (max: 10.0\u00b0)"
+  },
+  "raw_result": {
+    "valid": false,
+    "mtf50_lpmm": 0.0,
+    "mtf20_lpmm": 0.0,
+    "mtf10_lpmm": 0.0,
+    "edge_angle_deg": 10.507634172614303,
+    "edge_angle_method": "geometric",
+    "edge_angle_geometric": 10.507634172614303,
+    "edge_angle_phase": 9.866492683440754,
+    "edge_angle_consistency_deg": 0.641141489173549,
+    "edge_fit_residual_px": 0.27830033364863466,
+    "edge_support_points": 195,
+    "analysis_roi_bounds": [
+      71,
+      20,
+      170,
+      220
+    ],
+    "g1_mtf50_lpmm": 0.0,
+    "g2_mtf50_lpmm": 0.0,
+    "g1_g2_delta_pct": 0.0,
+    "warning": "",
+    "error": "Edge angle too large: 10.5\u00b0 (max: 10.0\u00b0)"
+  }
+}

@@ -1,0 +1,259 @@
+"""Small helpers for stable MTF run exports."""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+
+SUMMARY_FIELDNAMES = [
+    "run_id",
+    "selected_for_response",
+    "edge_label",
+    "edge_name",
+    "edge_direction",
+    "valid",
+    "sample_count",
+    "contrast",
+    "roi_bbox_x",
+    "roi_bbox_y",
+    "roi_bbox_w",
+    "roi_bbox_h",
+    "analysis_roi_x",
+    "analysis_roi_y",
+    "analysis_roi_w",
+    "analysis_roi_h",
+    "mtf50_lpmm",
+    "mtf20_lpmm",
+    "mtf10_lpmm",
+    "nyquist_lpmm",
+    "edge_angle_deg",
+    "edge_angle_method",
+    "edge_angle_geometric_deg",
+    "edge_angle_phase_deg",
+    "edge_angle_consistency_deg",
+    "edge_fit_residual_px",
+    "edge_support_points",
+    "g1_mtf50_lpmm",
+    "g2_mtf50_lpmm",
+    "g1_g2_delta_pct",
+    "capture_mode",
+    "capture_pixel_format",
+    "capture_binning_h",
+    "capture_binning_v",
+    "capture_exposure_us",
+    "capture_gain",
+    "illumination_wavelength_um",
+    "warning_msg",
+    "error_msg",
+]
+
+CONTEXT_FIELDNAMES = [
+    "run_id",
+    "timestamp",
+    "measurement_success",
+    "measurement_error",
+    "measurement_warning",
+    "operator",
+    "roi_mode",
+    "requested_target_edge",
+    "selected_edge_label",
+    "edge_count",
+    "valid_edge_count",
+    "selected_sample_count",
+    "camera_objective",
+    "objective_magnification_x",
+    "use_beamsplitter",
+    "coaxial_light_voltage",
+    "coaxial_light_current",
+    "effective_pixel_size_um",
+    "pixel_size_source",
+    "focus_position_mm",
+    "capture_readback_ok",
+    "capture_readback_mismatches",
+    "capture_available_keys",
+    "capture_pixel_format",
+    "capture_binning_h",
+    "capture_binning_v",
+    "capture_exposure_us",
+    "capture_gain",
+    "source_encoding",
+    "selected_capture_mode",
+    "selected_edge_angle_method",
+    "notes",
+]
+
+
+def _mean_attr(samples: list[Any], attr_name: str) -> float:
+    """Return a stable float mean for one result attribute."""
+    if not samples:
+        return 0.0
+    return float(np.mean([float(getattr(sample, attr_name, 0.0) or 0.0) for sample in samples]))
+
+
+def _analysis_bounds(result: Any) -> tuple[int, int, int, int]:
+    """Return analysis-strip bounds as x/y/w/h."""
+    bounds = getattr(result, "analysis_roi_bounds", None)
+    if not bounds or len(bounds) != 4:
+        return 0, 0, 0, 0
+    x1, y1, x2, y2 = [int(value) for value in bounds]
+    return x1, y1, max(0, x2 - x1), max(0, y2 - y1)
+
+
+def build_edge_summary_row(
+    *,
+    run_id: str,
+    edge_label: str,
+    edge_roi: Any,
+    result: Any,
+    valid_samples: list[Any],
+    selected_for_response: bool,
+) -> dict[str, object]:
+    """Build one normalized summary row for a measured edge."""
+    x, y, w, h = [int(value) for value in edge_roi.bbox]
+    analysis_x, analysis_y, analysis_w, analysis_h = _analysis_bounds(result)
+
+    return {
+        "run_id": run_id,
+        "selected_for_response": int(bool(selected_for_response)),
+        "edge_label": edge_label,
+        "edge_name": str(edge_roi.edge_name),
+        "edge_direction": str(edge_roi.edge_direction),
+        "valid": int(bool(getattr(result, "valid", False))),
+        "sample_count": int(len(valid_samples)),
+        "contrast": float(edge_roi.contrast),
+        "roi_bbox_x": x,
+        "roi_bbox_y": y,
+        "roi_bbox_w": w,
+        "roi_bbox_h": h,
+        "analysis_roi_x": analysis_x,
+        "analysis_roi_y": analysis_y,
+        "analysis_roi_w": analysis_w,
+        "analysis_roi_h": analysis_h,
+        "mtf50_lpmm": _mean_attr(valid_samples, "mtf50"),
+        "mtf20_lpmm": _mean_attr(valid_samples, "mtf20"),
+        "mtf10_lpmm": _mean_attr(valid_samples, "mtf10"),
+        "nyquist_lpmm": float(getattr(result, "nyquist_frequency", 0.0) or 0.0),
+        "edge_angle_deg": _mean_attr(valid_samples, "edge_angle"),
+        "edge_angle_method": str(getattr(result, "edge_angle_method", "") or ""),
+        "edge_angle_geometric_deg": float(getattr(result, "edge_angle_geometric", 0.0) or 0.0),
+        "edge_angle_phase_deg": float(getattr(result, "edge_angle_phase", 0.0) or 0.0),
+        "edge_angle_consistency_deg": float(
+            getattr(result, "edge_angle_consistency_deg", 0.0) or 0.0
+        ),
+        "edge_fit_residual_px": float(getattr(result, "edge_fit_residual_px", 0.0) or 0.0),
+        "edge_support_points": int(getattr(result, "edge_support_points", 0) or 0),
+        "g1_mtf50_lpmm": _mean_attr(valid_samples, "g1_mtf50"),
+        "g2_mtf50_lpmm": _mean_attr(valid_samples, "g2_mtf50"),
+        "g1_g2_delta_pct": _mean_attr(valid_samples, "g1_g2_delta_pct"),
+        "capture_mode": str(getattr(result, "capture_mode", "") or ""),
+        "capture_pixel_format": str(getattr(result, "capture_pixel_format", "") or ""),
+        "capture_binning_h": int(getattr(result, "capture_binning_h", 0) or 0),
+        "capture_binning_v": int(getattr(result, "capture_binning_v", 0) or 0),
+        "capture_exposure_us": float(getattr(result, "capture_exposure_us", 0.0) or 0.0),
+        "capture_gain": float(getattr(result, "capture_gain", 0.0) or 0.0),
+        "illumination_wavelength_um": float(
+            getattr(result, "illumination_wavelength_um", 0.0) or 0.0
+        ),
+        "warning_msg": str(getattr(result, "warning_msg", "") or ""),
+        "error_msg": str(getattr(result, "error_msg", "") or ""),
+    }
+
+
+def build_context_row(
+    *,
+    run_id: str,
+    timestamp: str,
+    measurement_metadata: dict[str, object],
+    roi_mode: str,
+    focus_position_mm: float | None,
+    capture_values: dict[str, object],
+    capture_available_keys: list[str],
+    capture_readback_mismatches: list[str],
+    capture_readback_ok: bool,
+    image_encoding: str,
+    edge_count: int,
+    valid_edge_count: int,
+    selected_edge_label: str,
+    selected_result: Any | None,
+    selected_sample_count: int,
+    measurement_success: bool,
+    measurement_error: str,
+) -> dict[str, object]:
+    """Build the one-row context CSV used for later comparisons."""
+    warning_msg = str(getattr(selected_result, "warning_msg", "") or "")
+    return {
+        "run_id": run_id,
+        "timestamp": timestamp,
+        "measurement_success": int(bool(measurement_success)),
+        "measurement_error": measurement_error,
+        "measurement_warning": warning_msg,
+        "operator": str(measurement_metadata.get("measurement_operator", "default_user")),
+        "roi_mode": roi_mode,
+        "requested_target_edge": str(measurement_metadata.get("target_edge", "") or ""),
+        "selected_edge_label": selected_edge_label,
+        "edge_count": int(edge_count),
+        "valid_edge_count": int(valid_edge_count),
+        "selected_sample_count": int(selected_sample_count),
+        "camera_objective": str(measurement_metadata.get("camera_objective", "") or ""),
+        "objective_magnification_x": float(
+            measurement_metadata.get("objective_magnification_x", 0.0) or 0.0
+        ),
+        "use_beamsplitter": int(bool(measurement_metadata.get("use_beamsplitter", False))),
+        "coaxial_light_voltage": float(
+            measurement_metadata.get("coaxial_light_voltage", 0.0) or 0.0
+        ),
+        "coaxial_light_current": float(
+            measurement_metadata.get("coaxial_light_current", 0.0) or 0.0
+        ),
+        "effective_pixel_size_um": float(
+            measurement_metadata.get("effective_pixel_size_um", 0.0) or 0.0
+        ),
+        "pixel_size_source": str(measurement_metadata.get("pixel_size_source", "") or ""),
+        "focus_position_mm": float(focus_position_mm) if focus_position_mm is not None else "",
+        "capture_readback_ok": int(bool(capture_readback_ok)),
+        "capture_readback_mismatches": "; ".join(str(item) for item in capture_readback_mismatches),
+        "capture_available_keys": "; ".join(str(item) for item in capture_available_keys),
+        "capture_pixel_format": str(capture_values.get("pixel_format", "") or ""),
+        "capture_binning_h": int(capture_values.get("bin_h", 0) or 0),
+        "capture_binning_v": int(capture_values.get("bin_v", 0) or 0),
+        "capture_exposure_us": float(capture_values.get("exposure_time", 0.0) or 0.0),
+        "capture_gain": float(capture_values.get("gain", 0.0) or 0.0),
+        "source_encoding": str(image_encoding or ""),
+        "selected_capture_mode": str(getattr(selected_result, "capture_mode", "") or ""),
+        "selected_edge_angle_method": str(
+            getattr(selected_result, "edge_angle_method", "") or ""
+        ),
+        "notes": str(measurement_metadata.get("notes", "") or ""),
+    }
+
+
+def write_summary_csv(run_dir: Path, rows: list[dict[str, object]]) -> Path:
+    """Write one stable per-run summary table."""
+    summary_path = run_dir / "summary.csv"
+    with open(summary_path, "w", newline="", encoding="utf-8") as summary_file:
+        writer = csv.DictWriter(summary_file, fieldnames=SUMMARY_FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({name: row.get(name, "") for name in SUMMARY_FIELDNAMES})
+    return summary_path
+
+
+def write_context_csv(run_dir: Path, row: dict[str, object]) -> Path:
+    """Write the canonical one-line run context CSV."""
+    context_path = run_dir / "context.csv"
+    with open(context_path, "w", newline="", encoding="utf-8") as context_file:
+        writer = csv.DictWriter(context_file, fieldnames=CONTEXT_FIELDNAMES)
+        writer.writeheader()
+        writer.writerow({name: row.get(name, "") for name in CONTEXT_FIELDNAMES})
+    return context_path
+
+
+def write_selected_edge_marker(run_dir: Path, edge_label: str) -> Path:
+    """Write the edge label that was returned through the service response."""
+    selected_path = run_dir / "selected_edge.txt"
+    selected_path.write_text(f"{edge_label}\n", encoding="utf-8")
+    return selected_path

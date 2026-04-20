@@ -84,8 +84,9 @@ class _Client:
 
 
 class _Node:
-    def __init__(self):
+    def __init__(self, params: dict | None = None):
         self._logger = _Logger()
+        self._params = dict(params or {})
 
     def create_client(self, *_args, **_kwargs):
         return _Client()
@@ -93,11 +94,11 @@ class _Node:
     def get_logger(self):
         return self._logger
 
-    def has_parameter(self, _name: str) -> bool:
-        return False
+    def has_parameter(self, name: str) -> bool:
+        return name in self._params
 
-    def get_parameter(self, _name: str):
-        raise KeyError(_name)
+    def get_parameter(self, name: str):
+        return types.SimpleNamespace(value=self._params[name])
 
 
 def _param_value(value):
@@ -174,3 +175,76 @@ def test_collect_mismatches_handles_float_string_and_bool_values():
     )
 
     assert mismatches == ["gain=0.0!=1.0"]
+
+
+def test_build_mtf_capture_target_enforces_scientific_raw_defaults():
+    controller = CameraFormatController(
+        _Node(
+            {
+                "mtf.capture_width": 5536,
+                "mtf.capture_height": 3692,
+                "mtf.capture_binning": 1,
+                "mtf.capture_pixel_format": "BayerRG12",
+                "mtf.capture_exposure_us": 100000.0,
+                "mtf.capture_gain": 0.0,
+                "mtf.capture_disable_exposure_auto": True,
+                "mtf.capture_disable_gain_auto": True,
+                "mtf.capture_disable_white_balance_auto": True,
+                "mtf.capture_disable_gamma": True,
+                "mtf.capture_disable_color_transform": True,
+            }
+        )
+    )
+
+    target = controller.build_mtf_capture_target(
+        {
+            "pixel_format": "Mono8",
+            "exposure_time": 5000.0,
+            "gain": 2.0,
+            "exposure_auto": "Continuous",
+            "gain_auto": "Continuous",
+            "white_balance_auto": "Continuous",
+            "gamma_enable": True,
+            "color_transform_enable": True,
+        }
+    )
+
+    assert target["pixel_format"] == "BayerRG12"
+    assert target["bin_h"] == 1
+    assert target["bin_v"] == 1
+    assert target["exposure_time"] == 100000.0
+    assert target["gain"] == 0.0
+    assert target["exposure_auto"] == "Off"
+    assert target["gain_auto"] == "Off"
+    assert target["white_balance_auto"] == "Off"
+    assert target["gamma_enable"] is False
+    assert target["color_transform_enable"] is False
+
+
+def test_collect_scientific_capture_mismatches_only_checks_available_keys():
+    controller = CameraFormatController(_Node())
+
+    mismatches = controller.collect_scientific_capture_mismatches(
+        {
+            "values": {
+                "pixel_format": "BayerRG8",
+                "bin_h": 2,
+                "bin_v": 1,
+                "gamma_enable": True,
+            },
+            "available_keys": ["pixel_format", "bin_h", "bin_v", "gamma_enable"],
+        },
+        {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+    )
+
+    assert mismatches == [
+        "pixel_format=BayerRG8!=BayerRG12",
+        "bin_h=2!=1",
+        "gamma_enable=True!=False",
+    ]

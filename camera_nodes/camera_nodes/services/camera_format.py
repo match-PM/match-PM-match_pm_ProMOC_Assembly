@@ -72,6 +72,18 @@ class CameraFormatController:
             "color_transform_enable": "ColorTransformationControl.ColorTransformationEnable",
         },
     )
+    SCIENTIFIC_CAPTURE_VERIFY_KEYS = (
+        "pixel_format",
+        "bin_h",
+        "bin_v",
+        "exposure_time",
+        "gain",
+        "exposure_auto",
+        "gain_auto",
+        "white_balance_auto",
+        "gamma_enable",
+        "color_transform_enable",
+    )
 
     def __init__(self, node):
         self._node = node
@@ -194,6 +206,14 @@ class CameraFormatController:
         return self._get_bool_param("mtf.log_format_switch", True)
 
     @staticmethod
+    def _float_or_default(value, default: float = 0.0) -> float:
+        """Best-effort float conversion with a stable fallback."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    @staticmethod
     def _unpack_image_result(result):
         """Normalize fetch results to (image, timestamp)."""
         if not result:
@@ -305,6 +325,78 @@ class CameraFormatController:
     def get_last_capture_state(self):
         """Return last readback state from MTF capture switch/restore."""
         return self._last_capture_state
+
+    def build_mtf_capture_target(self, current_values: dict | None = None) -> dict:
+        """Build the desired scientific MTF capture state from params/current readback."""
+        current = dict(current_values or {})
+        target = {
+            "width": self._get_int_param(
+                "mtf.capture_width",
+                int(current.get("width", 5536)),
+            ),
+            "height": self._get_int_param(
+                "mtf.capture_height",
+                int(current.get("height", 3692)),
+            ),
+            "offset_x": self._get_int_param("mtf.capture_offset_x", 0),
+            "offset_y": self._get_int_param("mtf.capture_offset_y", 0),
+            "bin_h": self._get_int_param("mtf.capture_binning", 1),
+            "bin_v": self._get_int_param("mtf.capture_binning", 1),
+        }
+
+        if not self._get_bool_param("mtf.use_raw_capture", True):
+            return target
+
+        target["pixel_format"] = self.params.as_str(
+            "mtf.capture_pixel_format",
+            str(current.get("pixel_format", "BayerRG12")),
+        )
+        target_exposure = self._get_float_param(
+            "mtf.capture_exposure_us",
+            self._float_or_default(current.get("exposure_time"), 0.0),
+        )
+        if target_exposure > 0:
+            target["exposure_time"] = target_exposure
+        target["gain"] = self._get_float_param(
+            "mtf.capture_gain",
+            self._float_or_default(current.get("gain"), 0.0),
+        )
+        if self._get_bool_param("mtf.capture_disable_exposure_auto", True):
+            target["exposure_auto"] = self._resolve_auto_off_target(
+                current.get("exposure_auto", "Off")
+            )
+        if self._get_bool_param("mtf.capture_disable_gain_auto", True):
+            target["gain_auto"] = self._resolve_auto_off_target(
+                current.get("gain_auto", "Off")
+            )
+        if self._get_bool_param("mtf.capture_disable_white_balance_auto", True):
+            target["white_balance_auto"] = self._resolve_auto_off_target(
+                current.get("white_balance_auto", "Off")
+            )
+        if self._get_bool_param("mtf.capture_disable_gamma", True):
+            target["gamma_enable"] = False
+        if self._get_bool_param("mtf.capture_disable_color_transform", True):
+            target["color_transform_enable"] = False
+        return target
+
+    def collect_scientific_capture_mismatches(
+        self,
+        state: dict | None,
+        target_values: dict | None = None,
+    ) -> list[str]:
+        """Compare available scientific readbacks against the desired raw-MTF state."""
+        if not state:
+            return []
+
+        actual_values = dict(state.get("values", state))
+        available_keys = set(state.get("available_keys", actual_values.keys()))
+        target = target_values or self.build_mtf_capture_target(actual_values)
+        verify_keys = [
+            key
+            for key in self.SCIENTIFIC_CAPTURE_VERIFY_KEYS
+            if key in actual_values and key in target and key in available_keys
+        ]
+        return self._collect_mismatches(actual_values, target, verify_keys)
 
     def _try_set_capture_without_state(self, target: dict) -> bool:
         """Fallback: try switching capture state even when current state is unreadable."""
@@ -526,38 +618,9 @@ class CameraFormatController:
         if not self._get_bool_param("mtf.use_full_frame", False):
             return None, None
 
-        use_raw_capture = self._get_bool_param("mtf.use_raw_capture", True)
         state = self.read_capture_state()
         if state is None:
-            full_w_default = self._get_int_param("mtf.capture_width", 5536)
-            full_h_default = self._get_int_param("mtf.capture_height", 3692)
-            target = {
-                "width": int(full_w_default),
-                "height": int(full_h_default),
-                "offset_x": self._get_int_param("mtf.capture_offset_x", 0),
-                "offset_y": self._get_int_param("mtf.capture_offset_y", 0),
-                "bin_h": self._get_int_param("mtf.capture_binning", 1),
-                "bin_v": self._get_int_param("mtf.capture_binning", 1),
-            }
-            if use_raw_capture:
-                target["pixel_format"] = self.params.as_str(
-                    "mtf.capture_pixel_format",
-                    "BayerRG12",
-                )
-                target["gain"] = self._get_float_param("mtf.capture_gain", 0.0)
-                exposure_us = self._get_float_param("mtf.capture_exposure_us", 0.0)
-                if exposure_us > 0:
-                    target["exposure_time"] = exposure_us
-                if self._get_bool_param("mtf.capture_disable_exposure_auto", True):
-                    target["exposure_auto"] = self._resolve_auto_off_target("Off")
-                if self._get_bool_param("mtf.capture_disable_gain_auto", True):
-                    target["gain_auto"] = self._resolve_auto_off_target("Off")
-                if self._get_bool_param("mtf.capture_disable_white_balance_auto", True):
-                    target["white_balance_auto"] = self._resolve_auto_off_target("Off")
-                if self._get_bool_param("mtf.capture_disable_gamma", True):
-                    target["gamma_enable"] = False
-                if self._get_bool_param("mtf.capture_disable_color_transform", True):
-                    target["color_transform_enable"] = False
+            target = self.build_mtf_capture_target()
             if self._is_switch_logging_enabled():
                 self._node.get_logger().warn(
                     "Could not read current camera ROI/Binning state. "
@@ -597,47 +660,7 @@ class CameraFormatController:
             "available_keys": list(state.get("available_keys", [])),
         }
 
-        full_w_default = int(current.get("width", 5536))
-        full_h_default = int(current.get("height", 3692))
-        target = {
-            "width": self._get_int_param("mtf.capture_width", full_w_default),
-            "height": self._get_int_param("mtf.capture_height", full_h_default),
-            "offset_x": self._get_int_param("mtf.capture_offset_x", 0),
-            "offset_y": self._get_int_param("mtf.capture_offset_y", 0),
-            "bin_h": self._get_int_param("mtf.capture_binning", 1),
-            "bin_v": self._get_int_param("mtf.capture_binning", 1),
-        }
-        if use_raw_capture:
-            target["pixel_format"] = self.params.as_str(
-                "mtf.capture_pixel_format",
-                str(current.get("pixel_format", "BayerRG12")),
-            )
-            target_exposure = self._get_float_param(
-                "mtf.capture_exposure_us",
-                float(current.get("exposure_time", 0.0)),
-            )
-            if target_exposure > 0:
-                target["exposure_time"] = target_exposure
-            target["gain"] = self._get_float_param(
-                "mtf.capture_gain",
-                float(current.get("gain", 0.0)),
-            )
-            if self._get_bool_param("mtf.capture_disable_exposure_auto", True):
-                target["exposure_auto"] = self._resolve_auto_off_target(
-                    current.get("exposure_auto", "Off")
-                )
-            if self._get_bool_param("mtf.capture_disable_gain_auto", True):
-                target["gain_auto"] = self._resolve_auto_off_target(
-                    current.get("gain_auto", "Off")
-                )
-            if self._get_bool_param("mtf.capture_disable_white_balance_auto", True):
-                target["white_balance_auto"] = self._resolve_auto_off_target(
-                    current.get("white_balance_auto", "Off")
-                )
-            if self._get_bool_param("mtf.capture_disable_gamma", True):
-                target["gamma_enable"] = False
-            if self._get_bool_param("mtf.capture_disable_color_transform", True):
-                target["color_transform_enable"] = False
+        target = self.build_mtf_capture_target(current)
         if self._is_switch_logging_enabled():
             self._node.get_logger().info(
                 f"MTF format switch start: current={self._format_values(current)} "
@@ -669,22 +692,17 @@ class CameraFormatController:
                 applied_values = applied_state.get("values", {})
                 verify_keys = [
                     key
-                    for key in (
-                        "width",
-                        "height",
-                        "offset_x",
-                        "offset_y",
-                        "bin_h",
-                        "bin_v",
-                        "pixel_format",
-                        "exposure_time",
-                        "gain",
-                    )
+                    for key in ("width", "height", "offset_x", "offset_y")
                     if key in applied_values and key in target
                 ]
-                mismatches = self._collect_mismatches(
+                geometry_mismatches = self._collect_mismatches(
                     applied_values, target, verify_keys
                 )
+                scientific_mismatches = self.collect_scientific_capture_mismatches(
+                    applied_state,
+                    target,
+                )
+                mismatches = geometry_mismatches + scientific_mismatches
                 self._node.get_logger().info(
                     f"MTF format switch applied: actual={self._format_values(applied_values)} "
                     f"service={applied_state.get('set_service', '?')}"

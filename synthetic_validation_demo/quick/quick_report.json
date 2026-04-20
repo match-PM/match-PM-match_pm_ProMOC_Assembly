@@ -1,0 +1,141 @@
+{
+  "profile": "quick",
+  "checks": [
+    {
+      "name": "Dense Scene",
+      "passed": true,
+      "summary": "Dense slanted-edge path returned valid ESF/LSF/MTF data.",
+      "metrics": {
+        "valid": true,
+        "mtf50_lpmm": 74.67880890175186,
+        "edge_angle_deg": 4.999720988906859,
+        "edge_angle_method": "geometric",
+        "nyquist_lpmm": 208.33333333333334,
+        "analysis_roi_bounds": [
+          80,
+          20,
+          160,
+          220
+        ],
+        "warning": "Angle estimator disagreement 4.12deg exceeds 1.50deg"
+      }
+    },
+    {
+      "name": "Raw Scene",
+      "passed": true,
+      "summary": "Raw green path returned valid G1/G2 MTF metrics.",
+      "metrics": {
+        "valid": true,
+        "mtf50_lpmm": 74.6641412103523,
+        "g1_mtf50_lpmm": 74.68662058458993,
+        "g2_mtf50_lpmm": 74.64171479580823,
+        "g1_g2_delta_pct": 0.060143694319382934,
+        "edge_angle_deg": 4.999720988906859,
+        "edge_angle_method": "geometric",
+        "analysis_roi_bounds": [
+          80,
+          20,
+          160,
+          220
+        ],
+        "warning": "Angle estimator disagreement 4.12deg exceeds 1.50deg"
+      }
+    },
+    {
+      "name": "Raw vs Dense",
+      "passed": true,
+      "summary": "Raw Bayer green sampling should stay close to the dense reference and outperform simple green infill.",
+      "metrics": {
+        "dense_mtf50_lpmm": 74.67880890175186,
+        "raw_mtf50_lpmm": 74.6641412103523,
+        "infill_mtf50_lpmm": 63.50785706558506,
+        "raw_error_lpmm": 0.014667691399566252,
+        "infill_error_lpmm": 11.170951836166807,
+        "allowed_error_lpmm": 3.7339404450875935
+      }
+    },
+    {
+      "name": "ROI Parity",
+      "passed": true,
+      "summary": "Absolute Bayer parity stays tied to the physical sensor pattern for even and odd ROI origins.",
+      "metrics": {
+        "even_g1_mean": 101.0,
+        "even_g2_mean": 202.0,
+        "odd_g1_mean": 101.0,
+        "odd_g2_mean": 202.0
+      }
+    }
+  ],
+  "dense_result": {
+    "valid": true,
+    "mtf50_lpmm": 74.67880890175186,
+    "mtf20_lpmm": 113.16351682947926,
+    "mtf10_lpmm": 135.21930321674245,
+    "edge_angle_deg": 4.999720988906859,
+    "edge_angle_method": "geometric",
+    "edge_angle_geometric": 4.999720988906859,
+    "edge_angle_phase": 9.124677855307567,
+    "edge_angle_consistency_deg": 4.124956866400709,
+    "edge_fit_residual_px": 0.26271120208520327,
+    "edge_support_points": 186,
+    "analysis_roi_bounds": [
+      80,
+      20,
+      160,
+      220
+    ],
+    "g1_mtf50_lpmm": 0.0,
+    "g2_mtf50_lpmm": 0.0,
+    "g1_g2_delta_pct": 0.0,
+    "warning": "Angle estimator disagreement 4.12deg exceeds 1.50deg",
+    "error": ""
+  },
+  "raw_result": {
+    "valid": true,
+    "mtf50_lpmm": 74.6641412103523,
+    "mtf20_lpmm": 113.0917557518972,
+    "mtf10_lpmm": 134.94852450505448,
+    "edge_angle_deg": 4.999720988906859,
+    "edge_angle_method": "geometric",
+    "edge_angle_geometric": 4.999720988906859,
+    "edge_angle_phase": 9.124677855307567,
+    "edge_angle_consistency_deg": 4.124956866400709,
+    "edge_fit_residual_px": 0.26271120208520327,
+    "edge_support_points": 186,
+    "analysis_roi_bounds": [
+      80,
+      20,
+      160,
+      220
+    ],
+    "g1_mtf50_lpmm": 74.68662058458993,
+    "g2_mtf50_lpmm": 74.64171479580823,
+    "g1_g2_delta_pct": 0.060143694319382934,
+    "warning": "Angle estimator disagreement 4.12deg exceeds 1.50deg",
+    "error": ""
+  },
+  "infill_result": {
+    "valid": true,
+    "mtf50_lpmm": 63.50785706558506,
+    "mtf20_lpmm": 99.09140324121964,
+    "mtf10_lpmm": 120.4094806230243,
+    "edge_angle_deg": 4.995907299264587,
+    "edge_angle_method": "geometric",
+    "edge_angle_geometric": 4.995907299264587,
+    "edge_angle_phase": 6.273356772769233,
+    "edge_angle_consistency_deg": 1.277449473504646,
+    "edge_fit_residual_px": 0.19940344610655314,
+    "edge_support_points": 200,
+    "analysis_roi_bounds": [
+      80,
+      20,
+      160,
+      220
+    ],
+    "g1_mtf50_lpmm": 0.0,
+    "g2_mtf50_lpmm": 0.0,
+    "g1_g2_delta_pct": 0.0,
+    "warning": "",
+    "error": ""
+  }
+}

@@ -8,6 +8,12 @@ verschlankte Bringup und ein kleines `promoc_core`.
 Der Branch ist bewusst auf den bekannten Labor-PC zugeschnitten. Es gibt keine
 gepflegte Simulationsschicht und kein Repo-internes Setup mehr.
 
+## Leitdokumente
+
+- `README.md`: Start, Bedienung und die alltaeglichen Standardbefehle
+- [`MTF_PROTOCOL.md`](MTF_PROTOCOL.md): wissenschaftliches Messprotokoll,
+  Datenfluss und CSV-Vertrag fuer Vergleichsmessungen
+
 ## Ziel des Branches
 
 - Kamera und Messachse fuer den Messstand betreiben
@@ -37,157 +43,73 @@ Nicht mehr Teil dieses Branches:
 Voraussetzung ist ein bereits eingerichteter Labor-PC mit den benoetigten
 Systemabhaengigkeiten und verfuegbarer Hardware.
 
-Build aus dem Repo-Root:
+## Messstand Starten
+
+In jedem neuen Terminal zuerst:
 
 ```bash
-colcon build --symlink-install
-source install/setup.bash
+source ~/.bashrc
 ```
 
-Kamera-Stack starten:
+Standardablauf am Messstand:
 
 ```bash
-ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware
+# Terminal 1: kompletter optischer Messstand
+ros2 launch promoc_bringup optical_measurement_system.launch.py
+
+# Terminal 2: ROS-Werkzeuge / Service-Aufrufe
+rqt
+
+# Terminal 3: Live-Kamerabild
+rqt_image_view
 ```
 
-Live-Bild in einem zweiten Terminal mit `rqt_image_view` oeffnen:
+Im `rqt_image_view` den Topic `/promoc/assembly_camera/stream0/image_raw`
+waehlen.
+
+## MTF Quick Start
+
+- `Auto-ROI`: Quadrat-Target ins Bild bringen, `measure_mtf` ausloesen, die 4
+  Kanten werden automatisch bewertet.
+- `Manuelle ROI`: ROI direkt im Bild waehlen. Der Analyzer nutzt intern einen
+  schmaleren Analyse-Streifen, damit die Winkeldetektion robuster bleibt.
+- `Ergebnisse`: Fuer jede Messung entsteht ein Run-Ordner mit `summary.csv`,
+  `context.csv`, `selected_edge.txt` und pro Kante benannten
+  `*_esf.csv`/`*_lsf.csv`/`*_mtf.csv`/`*_plot.png`/`*_roi.png`.
+- Fuer den schnellen Vergleich immer zuerst `summary.csv` oeffnen.
+- Fuer wissenschaftliche Vergleichsmessungen ist `context.csv` die kanonische
+  Ein-Zeilen-Beschreibung der Messbedingung.
+
+## Benutzerkonfiguration
+
+Die persoenliche Messstand-Konfiguration kommt aus:
 
 ```bash
-source install/setup.bash
-ros2 run rqt_image_view rqt_image_view
+cp promoc_bringup/config/user_config.v2.example.yaml promoc_bringup/config/user_config.yaml
 ```
 
-Im `rqt_image_view` dann den Topic
-`/promoc/assembly_camera/stream0/image_raw` auswaehlen.
+Wichtige Felder in `promoc_bringup/config/user_config.yaml`:
 
-Gesamten Messstand starten:
+- `measurement.operator`: Name fuer Exportordner und Messprotokolle
+- `measurement.base_path`: Basisordner fuer alle Messungen
 
-```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+Beispiel:
+
+```yaml
+measurement:
+  operator: MaxMustermann
+  base_path: ~/Dokumente/Messungen
 ```
 
-Der Launch-Parameter `runtime_mode` bleibt aus Kompatibilitaetsgruenden sichtbar,
-unterstuetzt aber nur noch `hardware`. Andere Werte werden intern auf
-`hardware` zurueckgefuehrt.
+MTF-Exporte landen dann unter einem Pfad wie:
 
-## Architektur
-
-Der Messstand besteht zur Laufzeit aus genau zwei aktiven Runtime-Bausteinen:
-
-1. `camera_nodes` fuer die reale IDS-Kamera
-2. `linear_axis_nodes` fuer die feste X-Achse `lts300_x_axis`
-
-`promoc_bringup/launch/system.launch.py` ist der kanonische Startpfad fuer
-beide Komponenten zusammen. `promoc_bringup/launch/camera.launch.py` startet
-nur den Kamera-Stack. `promoc_bringup/launch/optical_measurement_system.launch.py`
-ist ein auf denselben Hardware-Only-Zuschnitt reduzierter Spezial-Wrapper.
-
-In `camera_nodes` gibt es keine Simulation mehr:
-
-- kein `use_simulator`
-- kein `camera_simulator`
-- keine variable Achsenverdrahtung
-
-Die Kamera ist fest mit dem Achsenpfad
-`/promoc/linear_axis/lts300_x_axis/...` verdrahtet.
-
-## Konfiguration
-
-Variabel bleibt nur noch die konkrete IDS-Kamerakonfiguration. Diese wird ueber
-`camera_type` ausgewaehlt und aus `promoc_bringup/config/cameras/` geladen.
-
-Wichtige Konfigurationsdateien:
-
-- `promoc_bringup/config/user_config.v2.example.yaml`
-- `promoc_bringup/config/cameras/ids_u3_3800cp_hq.yaml`
-- `promoc_bringup/config/linear_axes_params.yaml`
-
-Typischer Kamera-Start mit explizitem Profil:
-
-```bash
-ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware camera_type:=ids_u3_3800cp_hq
+```text
+~/Dokumente/Messungen/MaxMustermann/mtf_messungen/<run_id>/
 ```
 
-## ROS-Namespaces und Services
+## Build
 
-Stabil gehaltene Kamera-Services:
-
-- `/promoc/camera/autofocus`
-- `/promoc/camera/autofocus_comparison`
-- `/promoc/camera/measure_mtf`
-- `/promoc/camera/detect_rois`
-- `/promoc/camera/select_roi`
-- `/promoc/camera/set_exposure`
-
-Wichtige Punkte dazu:
-
-- `focus_mode=0` bedeutet im Messstand-Branch standardmaessig `FourStep`
-- `/promoc/camera/set_exposure` ist der einzige gepflegte manuelle
-  Exposure-Endpunkt
-- die Kamera-Namespace-Struktur unter `/promoc/camera/*` bleibt stabil
-
-Stabil gehaltener Achsen-Namespace:
-
-- `/promoc/linear_axis/lts300_x_axis/*`
-
-Beispiele:
-
-```bash
-ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"
-ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
-```
-
-## Wissenschaftliche MTF
-
-Die wissenschaftliche MTF-Messung laeuft bewusst nicht ueber den normalen
-Livebildpfad. Fuer `/promoc/camera/measure_mtf` schaltet `camera_nodes`
-waehrend der Messung in einen eigenen Raw-Capture-Modus:
-
-- `PixelFormat=BayerRG12`
-- `1x1`-Binning
-- Auto-Exposure, Auto-Gain und Auto-Whitebalance aus
-- Gamma und Farbtransformation aus
-- Auswertung nur aus den echten Gruen-Senseln des `RGGB`-Musters
-
-Die ESF wird dabei direkt aus den realen Gruen-Sample-Koordinaten aufgebaut.
-Es gibt kein Debayering und kein 2D-Auffuellen fehlender Bayer-Pixel fuer die
-wissenschaftliche MTF-Auswertung.
-
-Die Messung gibt intern und im Statustext die aktiven Capture-Bedingungen mit
-aus, insbesondere Pixelformat, Binning, Exposure, Gain und die
-Gruen-Wellenlaenge. Fuer Raw-Messungen werden `G1` und `G2` getrennt bewertet;
-die gemittelte Kurve ist das Standardergebnis, die Differenz dient als
-Qualitaetsindikator.
-
-## `promoc_core`
-
-`promoc_core` bleibt absichtlich klein. In diesem Branch gelten nur diese
-Module als unterstuetzte gemeinsame Python-Oberflaeche:
-
-- `promoc_core.logging`
-- `promoc_core.promoc_exceptions`
-- `promoc_core.error_handling`
-- `promoc_core.validation`
-
-Nicht mehr gepflegt und nicht mehr Bestandteil des Branch-Vertrags:
-
-- `promoc_core.motion`
-- `promoc_core.motion_interface`
-- `promoc_core.conversions`
-
-## Entwicklung und Checks
-
-Nuetzliche Kommandos aus dem Repo-Root:
-
-```bash
-colcon build --symlink-install
-colcon test --packages-select camera_nodes linear_axis_nodes promoc_core promoc_assembly_interfaces promoc_bringup
-colcon test-result --all
-python3 promoc_bringup/scripts/release_n_check.py
-python3 promoc_bringup/scripts/release_n_smoke.py --mode hardware
-```
-
-Paket-Build fuer den Messstand-Zuschnitt:
+Aus dem Repo-Root:
 
 ```bash
 colcon build --symlink-install --packages-select \
@@ -196,17 +118,66 @@ colcon build --symlink-install --packages-select \
   promoc_core \
   promoc_assembly_interfaces \
   promoc_bringup
+source install/setup.bash
 ```
 
-Launch-Sanity-Checks:
+## Laufzeitbild
+
+Der Messstand hat genau zwei aktive Runtime-Bausteine:
+
+1. `camera_nodes` fuer Kamera, Autofokus, MTF und Export
+2. `linear_axis_nodes` fuer die feste Thorlabs-X-Achse `lts300_x_axis`
+
+Es gibt genau einen gepflegten Hauptstart:
 
 ```bash
-ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware --show-args
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware --show-args
+ros2 launch promoc_bringup optical_measurement_system.launch.py
 ```
 
-## Dokumentationsregel
+## Services
 
-Diese Datei ist die einzige gepflegte inhaltliche Gesamtdokumentation des
-Messstand-Branches. Paket-READMEs duerfen als kurze Wegweiser bestehen bleiben,
-tragen aber keine eigene inhaltliche Hauptdokumentation mehr.
+Die oeffentliche Kamera-API des Messstand-Branches besteht nur aus:
+
+- `/promoc/camera/autofocus`
+- `/promoc/camera/measure_mtf`
+- `/promoc/camera/set_exposure`
+
+Der Achsenpfad bleibt unter:
+
+- `/promoc/linear_axis/lts300_x_axis/*`
+
+Beispiel:
+
+```bash
+ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"
+ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
+```
+
+## Wissenschaftliche MTF
+
+`/promoc/camera/measure_mtf` schaltet fuer die Messung in einen eigenen
+wissenschaftlichen Raw-Capture-Modus:
+
+- `PixelFormat=BayerRG12`
+- `1x1`-Binning
+- Auto-Exposure, Auto-Gain und Auto-Whitebalance aus
+- Gamma und Farbtransformation aus
+- Auswertung nur aus den echten Gruen-Senseln des `RGGB`-Musters
+
+Die ESF wird direkt aus den realen Gruen-Sample-Koordinaten aufgebaut. Es gibt
+kein Debayering und kein 2D-Auffuellen fehlender Bayer-Pixel.
+
+Vergleich mehrerer Bedingungen passiert bewusst **ausserhalb von ROS** ueber
+`context.csv` und `summary.csv`. Das offizielle Messprotokoll, die SOP fuer
+Beam-Splitter-Vergleiche und die Bedeutung der CSV-Spalten stehen in
+[`MTF_PROTOCOL.md`](MTF_PROTOCOL.md).
+
+Fuer offizielle Slanted-Edge-Vergleiche gilt dabei die empfohlene Arbeitszone
+`3° bis 10°`. Der Node bleibt aus Kompatibilitaetsgruenden technisch bei
+`2° bis 10°`, der Standalone-Validator bewertet aber nur `3° bis 10°` als
+offiziell akzeptiert.
+
+## Entwicklung
+
+Dieser Branch ist bewusst klein gehalten. Gepflegt werden nur die Pfade, die
+fuer Messstand, Autofokus, MTF und Export wirklich gebraucht werden.

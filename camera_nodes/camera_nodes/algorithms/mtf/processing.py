@@ -37,23 +37,40 @@ def compute_esf(roi: np.ndarray, edge_angle: float, oversample_factor: int) -> n
     return np.array(esf)
 
 
-def extract_rggb_green_samples(roi: np.ndarray) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """Extract G1/G2 samples and their coordinates from an RGGB Bayer ROI."""
+def extract_rggb_green_samples(
+    roi: np.ndarray,
+    *,
+    origin_x: int = 0,
+    origin_y: int = 0,
+    pattern: str = "RGGB",
+) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Extract G1/G2 samples and their local coordinates from an RGGB Bayer ROI."""
     if roi.ndim != 2:
         raise ValueError("RGGB raw ROI must be a 2D array")
+    if str(pattern or "").upper() != "RGGB":
+        raise ValueError(f"Unsupported Bayer pattern '{pattern}' for raw green extraction")
 
     roi_f = roi.astype(np.float64)
+    origin_x = int(origin_x)
+    origin_y = int(origin_y)
 
-    g1_values = roi_f[0::2, 1::2]
-    g2_values = roi_f[1::2, 0::2]
+    # Map the crop-local parity back onto the absolute sensor parity so G1/G2 stay
+    # tied to the real Bayer phase even when the ROI starts on odd coordinates.
+    local_row_even = origin_y % 2
+    local_row_odd = 1 - local_row_even
+    local_col_even = origin_x % 2
+    local_col_odd = 1 - local_col_even
+
+    g1_values = roi_f[local_row_even::2, local_col_odd::2]
+    g2_values = roi_f[local_row_odd::2, local_col_even::2]
 
     g1_rows, g1_cols = np.indices(g1_values.shape, dtype=np.float64)
     g2_rows, g2_cols = np.indices(g2_values.shape, dtype=np.float64)
 
-    g1_x = (2.0 * g1_cols + 1.0).ravel()
-    g1_y = (2.0 * g1_rows).ravel()
-    g2_x = (2.0 * g2_cols).ravel()
-    g2_y = (2.0 * g2_rows + 1.0).ravel()
+    g1_x = (2.0 * g1_cols + float(local_col_odd)).ravel()
+    g1_y = (2.0 * g1_rows + float(local_row_even)).ravel()
+    g2_x = (2.0 * g2_cols + float(local_col_even)).ravel()
+    g2_y = (2.0 * g2_rows + float(local_row_odd)).ravel()
 
     return {
         "g1": (g1_x, g1_y, g1_values.ravel()),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from datetime import datetime
 import time
@@ -594,95 +593,6 @@ class AutofocusRunner:
         time.sleep(max(0.0, float(settle_s)))
         return next_pos
 
-    def run_comparison(
-        self,
-        peak_start: float,
-        peak_end: float,
-        request,
-        response,
-        clients,
-        start_time: float,
-        focus_profile: dict | None = None,
-    ):
-        """Run all autofocus algorithms and persist comparison CSV."""
-        self._handler._node.get_logger().info('Comparison Test: Running all 5 modes...')
-        results: dict[str, dict[str, float | int]] = {}
-
-        settle_s = self._resolve_settle_time(focus_profile)
-
-        for mode, name, algo_class in AUTOFOCUS_ALGORITHMS:
-            self._handler._node.get_logger().info(
-                f'--- Running {name.upper()} (mode {mode}) ---'
-            )
-            config = self._build_algorithm_config(
-                range_start=float(peak_start),
-                range_end=float(peak_end),
-                focus_profile=focus_profile,
-            )
-            algorithm = algo_class(config)
-            mode_start = time.time()
-            best_pos, best_score, measurements = self.run_autofocus_loop(
-                algorithm, clients, settle_s=settle_s
-            )
-            mode_duration = time.time() - mode_start
-            results[name] = {
-                'position': float(best_pos or 0.0),
-                'score': float(best_score),
-                'duration': float(mode_duration),
-                'measurements': int(measurements),
-            }
-            self._handler._node.get_logger().info(
-                f'{name}: pos={float(best_pos or 0.0):.3f}mm, '
-                f'score={float(best_score):.0f}, time={mode_duration:.1f}s'
-            )
-
-        output_dir = self._handler._get_output_dir('autofocus_comparison')
-        csv_path = output_dir / f'comparison_{self._handler._get_timestamp()}.csv'
-        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(['# Autofocus Comparison Test'])
-            writer.writerow(
-                [f'# Range: {peak_start:.1f}-{peak_end:.1f}mm (after fly-over)']
-            )
-            writer.writerow([])
-            writer.writerow(
-                ['algorithm', 'position_mm', 'score', 'duration_s', 'measurements']
-            )
-            for algo_name, data in results.items():
-                writer.writerow(
-                    [
-                        algo_name,
-                        f"{float(data['position']):.4f}",
-                        f"{float(data['score']):.0f}",
-                        f"{float(data['duration']):.2f}",
-                        int(data['measurements']),
-                    ]
-                )
-
-        best_algo = max(results.keys(), key=lambda key: float(results[key]['score']))
-        best = results[best_algo]
-        if float(best['position']) > 0:
-            clients['move'].call(
-                MoveAbsolute.Request(axis_position=float(best['position']))
-            )
-            self._handler._wait_for_axis_idle(clients)
-
-        response.success = True
-        response.status_message = (
-            f"Comparison: Best={best_algo} at {float(best['position']):.3f}mm "
-            f"(score={float(best['score']):.0f}). CSV: {csv_path}"
-        )
-        response.best_focus_position = float(best['position'])
-        response.best_focus_value = float(best['score'])
-        response.total_measurements_taken = int(
-            sum(int(item['measurements']) for item in results.values())
-        )
-        response.duration_seconds = time.time() - start_time
-
-        self._handler._node.get_logger().info(f'Comparison results saved to {csv_path}')
-        return response
-
-
 class AutofocusHandler(CallbackBase):
     """Handler for autofocus with fly-over detection."""
 
@@ -821,61 +731,3 @@ class AutofocusHandler(CallbackBase):
             settle_s=settle_s,
         )
 
-    def _run_comparison(
-        self,
-        peak_start: float,
-        peak_end: float,
-        request,
-        response,
-        clients,
-        start_time: float,
-        focus_profile: dict | None = None,
-    ):
-        return self._runner.run_comparison(
-            peak_start,
-            peak_end,
-            request,
-            response,
-            clients,
-            start_time,
-            focus_profile,
-        )
-
-    @handle_service_errors()
-    def autofocus_comparison_callback(self, request, response):
-        """Run all autofocus modes sequentially and export a comparison CSV."""
-        start_time = time.time()
-
-        self._node.get_logger().info(
-            f"Comparison Test: range {request.start_position}-{request.end_position}mm"
-        )
-
-        if request.start_position >= request.end_position:
-            raise ConfigurationError("start_position must be < end_position")
-
-        clients = self._get_all_axis_clients()
-        focus_profile = self._build_focus_profile(request)
-
-        self._node.get_logger().info("Phase 1: Fly-Over Detection...")
-        peak_start, peak_end, max_stddev = self._fly_over_detection(
-            request.start_position,
-            request.end_position,
-            clients,
-            focus_profile,
-        )
-        if peak_start is None or peak_end is None:
-            raise ImageProcessingError("No target detected during fly-over")
-
-        self._node.get_logger().info(
-            f"Peak: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})"
-        )
-
-        return self._run_comparison(
-            peak_start,
-            peak_end,
-            request,
-            response,
-            clients,
-            start_time,
-            focus_profile,
-        )

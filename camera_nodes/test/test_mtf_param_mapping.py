@@ -121,6 +121,11 @@ def test_build_mtf_config_mapping_applies_and_respects_auto_roi_override():
             "mtf.edge_validation_percentile": 85.0,
             "mtf.edge_validation_min_points": 25,
             "mtf.edge_validation_only_auto": True,
+            "mtf.angle_estimation_mode": "geometric",
+            "mtf.angle_allow_phase_fallback": False,
+            "mtf.angle_consistency_warn_deg": 2.25,
+            "mtf.angle_min_support_points": 14,
+            "mtf.analysis_strip_width_px": 48,
             "mtf.clip_to_nyquist": True,
             "mtf.export_dual_curves": False,
             "mtf.clip_max": 0.9,
@@ -141,6 +146,11 @@ def test_build_mtf_config_mapping_applies_and_respects_auto_roi_override():
     assert config.edge_validation_min_points == 25
     # mtf.edge_validation_only_auto forces off for non-auto mode.
     assert config.edge_validation_mode == "off"
+    assert config.angle_estimation_mode == "geometric"
+    assert config.angle_allow_phase_fallback is False
+    assert config.angle_consistency_warn_deg == 2.25
+    assert config.angle_min_support_points == 14
+    assert config.analysis_strip_width_px == 48
     assert config.mtf_clip_max == 0.9
     assert config.mtf_warn_threshold == 1.15
     assert config.input_mode == "raw_bayer_rggb"

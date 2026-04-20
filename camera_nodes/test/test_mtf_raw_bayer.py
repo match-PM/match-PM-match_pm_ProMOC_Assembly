@@ -90,6 +90,44 @@ def test_extract_rggb_green_samples_coordinates_and_values():
     assert np.array_equal(g2_values, np.array([4.0, 6.0, 12.0, 14.0]))
 
 
+def test_extract_rggb_green_samples_respects_absolute_roi_origin():
+    sensor = np.zeros((6, 6), dtype=np.uint16)
+    sensor[0::2, 0::2] = 11
+    sensor[0::2, 1::2] = 101
+    sensor[1::2, 0::2] = 202
+    sensor[1::2, 1::2] = 22
+
+    even_groups = extract_rggb_green_samples(
+        sensor[0:4, 0:4],
+        origin_x=0,
+        origin_y=0,
+    )
+    odd_groups = extract_rggb_green_samples(
+        sensor[1:5, 1:5],
+        origin_x=1,
+        origin_y=1,
+    )
+
+    even_g1_x, even_g1_y, even_g1_values = even_groups["g1"]
+    even_g2_x, even_g2_y, even_g2_values = even_groups["g2"]
+    odd_g1_x, odd_g1_y, odd_g1_values = odd_groups["g1"]
+    odd_g2_x, odd_g2_y, odd_g2_values = odd_groups["g2"]
+
+    assert np.all(even_g1_values == 101.0)
+    assert np.all(even_g2_values == 202.0)
+    assert np.array_equal(even_g1_x, np.array([1.0, 3.0, 1.0, 3.0]))
+    assert np.array_equal(even_g1_y, np.array([0.0, 0.0, 2.0, 2.0]))
+    assert np.array_equal(even_g2_x, np.array([0.0, 2.0, 0.0, 2.0]))
+    assert np.array_equal(even_g2_y, np.array([1.0, 1.0, 3.0, 3.0]))
+
+    assert np.all(odd_g1_values == 101.0)
+    assert np.all(odd_g2_values == 202.0)
+    assert np.array_equal(odd_g1_x, np.array([0.0, 2.0, 0.0, 2.0]))
+    assert np.array_equal(odd_g1_y, np.array([1.0, 1.0, 3.0, 3.0]))
+    assert np.array_equal(odd_g2_x, np.array([1.0, 3.0, 1.0, 3.0]))
+    assert np.array_equal(odd_g2_y, np.array([0.0, 0.0, 2.0, 2.0]))
+
+
 def test_raw_green_analyzer_reports_group_metrics_and_capture_metadata():
     raw_bayer = _generate_dense_edge()
     config = MTFConfig(
@@ -156,3 +194,73 @@ def test_raw_green_path_is_closer_to_ground_truth_than_green_infill():
     infill_error = abs(infill_result.mtf50 - dense_result.mtf50)
 
     assert raw_error < infill_error
+
+
+@pytest.mark.parametrize("angle_deg", [3.0, 5.0, 7.0, 9.0])
+def test_hybrid_angle_estimator_tracks_nominal_synthetic_angle(angle_deg):
+    scene = _generate_dense_edge(angle_deg=angle_deg, blur_sigma=1.0)
+    config = MTFConfig(
+        pixel_size_um=2.4,
+        min_edge_angle=2.0,
+        max_edge_angle=10.0,
+        input_mode="dense_gray",
+    )
+
+    result = MTFAnalyzer(config).compute_mtf(scene)
+
+    assert result.valid is True
+    assert result.edge_angle_method == "geometric"
+    assert abs(abs(result.edge_angle) - angle_deg) <= 1.0
+    assert result.edge_angle_consistency_deg < config.angle_consistency_warn_deg
+    assert result.edge_support_points >= config.angle_min_support_points
+    assert result.analysis_roi_bounds is not None
+
+
+def test_analysis_strip_stabilizes_manual_roi_variations():
+    scene = _generate_dense_edge(angle_deg=5.0, blur_sigma=1.0)
+    analyzer = MTFAnalyzer(
+        MTFConfig(
+            pixel_size_um=2.4,
+            min_edge_angle=2.0,
+            max_edge_angle=10.0,
+            input_mode="dense_gray",
+        )
+    )
+    rois = [
+        (20, 20, 220, 220),
+        (40, 40, 200, 200),
+        (60, 60, 180, 180),
+        (80, 80, 160, 160),
+    ]
+
+    results = [analyzer.compute_mtf(scene, roi=roi) for roi in rois]
+
+    assert all(result.valid for result in results)
+    assert all(result.edge_angle_method == "geometric" for result in results)
+
+    measured_angles = np.array([abs(result.edge_angle) for result in results], dtype=np.float64)
+    measured_mtf50 = np.array([result.mtf50 for result in results], dtype=np.float64)
+
+    assert np.max(measured_angles) - np.min(measured_angles) <= 0.25
+    assert np.max(measured_mtf50) - np.min(measured_mtf50) <= 1.0
+
+
+def test_angle_estimator_reports_phase_fallback_when_support_is_forced_low():
+    scene = _generate_dense_edge(angle_deg=5.0, blur_sigma=1.0)
+    config = MTFConfig(
+        pixel_size_um=2.4,
+        min_edge_angle=2.0,
+        max_edge_angle=10.0,
+        input_mode="dense_gray",
+        angle_estimation_mode="hybrid",
+        angle_allow_phase_fallback=True,
+        angle_min_support_points=1000,
+    )
+
+    result = MTFAnalyzer(config).compute_mtf(scene)
+
+    assert result.valid is True
+    assert result.edge_angle_method == "phase_fallback"
+    assert result.edge_angle_phase != 0.0
+    assert result.edge_angle_geometric != 0.0
+    assert result.edge_angle_consistency_deg > 0.0

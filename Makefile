@@ -11,12 +11,11 @@ LINT_DIRS := \
 	linear_axis_nodes/test \
 	promoc_bringup/promoc_bringup \
 	promoc_bringup/launch \
-	promoc_bringup/scripts \
 	promoc_bringup/test \
 	promoc_core/promoc_core \
 	promoc_core/test
 
-.PHONY: all build clean hardware hw camera-hw test lint format test-unit release-n1-check release-n-check smoke-hw check install-dev help
+.PHONY: all build clean hardware hw test lint format test-unit check install-dev help
 
 all: build
 
@@ -25,16 +24,12 @@ help:
 	@echo "  make build     - Build the workspace (colcon build --symlink-install)"
 	@echo "  make clean     - Remove build, install, and log directories"
 	@echo "  make hw        - Run measurement stand in hardware mode"
-	@echo "  make camera-hw - Run camera stack in hardware mode"
 	@echo "  make install-dev - Install development dependencies"
 	@echo "  make format    - Auto-format Python source with ruff format"
 	@echo "  make test      - Run tests"
 	@echo "  make lint      - Lint/type/syntax checks for Python"
 	@echo "  make test-unit - Run hardware-independent unit tests"
-	@echo "  make release-n1-check - Run branch acceptance checks"
-	@echo "  make release-n-check  - Alias for release-n1-check"
-	@echo "  make smoke-hw  - Print hardware smoke commands"
-	@echo "  make check     - Run lint + test-unit + release-n1-check"
+	@echo "  make check     - Run lint + test-unit"
 
 build:
 	colcon build --symlink-install
@@ -43,12 +38,9 @@ clean:
 	rm -rf build install log
 
 hardware:
-	source install/setup.bash && ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+	source install/setup.bash && ros2 launch promoc_bringup optical_measurement_system.launch.py
 
 hw: hardware
-
-camera-hw:
-	source install/setup.bash && ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware
 
 install-dev:
 	$(DEV_PYTHON) -m pip install -r requirements-dev.txt
@@ -80,24 +72,14 @@ test-unit:
 		camera_nodes/test/test_handlers_exposure.py \
 		camera_nodes/test/test_handlers_mtf.py \
 		camera_nodes/test/test_handlers_autofocus.py \
-		camera_nodes/test/test_autofocus_refactor_contract.py \
-		camera_nodes/test/test_camera_namespace_contract.py \
+		camera_nodes/test/test_mtf_raw_bayer.py \
+		camera_nodes/test/test_mtf_param_mapping.py \
+		camera_nodes/test/test_mtf_debug_export.py \
+		camera_nodes/test/test_mtf_validator_entrypoint.py \
 		linear_axis_nodes/test/test_motion_adapter.py \
 		linear_axis_nodes/test/test_service_callbacks_regression.py \
 		linear_axis_nodes/test/test_linear_axis_namespace_contract.py \
-		promoc_bringup/test/test_system_launch.py \
-		promoc_bringup/test/test_launch_runtime_mode.py \
 		promoc_bringup/test/test_hardware_launch_smoke.py \
-		promoc_bringup/test/test_hardware_first_cleanup.py \
-		promoc_bringup/test/test_release_n_check.py \
-		camera_nodes/test/test_autofocus_benchmark.py -q
+		promoc_bringup/test/test_launch_user_config.py -q
 
-release-n1-check:
-	$(DEV_PYTHON) promoc_bringup/scripts/release_n_check.py
-
-release-n-check: release-n1-check
-
-smoke-hw:
-	$(DEV_PYTHON) promoc_bringup/scripts/release_n_smoke.py --mode hardware
-
-check: lint test-unit release-n1-check
+check: lint test-unit

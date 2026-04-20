@@ -5,14 +5,13 @@ import time
 
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.msg import LinearAxisInfo
-from promoc_assembly_interfaces.srv import AutoFocus, DetectRois, MeasureMTF, SetExposure
+from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure
 from promoc_core.logging import LogTags, TaggedLogger
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
-from std_srvs.srv import Trigger
 
 from .config import declare_camera_parameters, get_camera_param
 from .drivers import AravisCameraDriver, CameraDriver
@@ -108,34 +107,16 @@ class CameraNode(Node):
         self.debug_image_pub = self.create_publisher(Image, "/camera/image_debug", 10)
 
     def _create_services(self):
-        self.select_roi_service = self.create_service(
-            Trigger,
-            "/promoc/camera/select_roi",
-            self.mtf_handler.select_roi_callback,
-            callback_group=self.cb_group,
-        )
         self.autofocus_service = self.create_service(
             AutoFocus,
             "/promoc/camera/autofocus",
             self.autofocus_handler.autofocus_callback,
             callback_group=self.cb_group,
         )
-        self.autofocus_comparison_service = self.create_service(
-            AutoFocus,
-            "/promoc/camera/autofocus_comparison",
-            self.autofocus_handler.autofocus_comparison_callback,
-            callback_group=self.cb_group,
-        )
         self.mtf_service = self.create_service(
             MeasureMTF,
             "/promoc/camera/measure_mtf",
             self.mtf_handler.measure_mtf_callback,
-            callback_group=self.cb_group,
-        )
-        self.detect_rois_service = self.create_service(
-            DetectRois,
-            "/promoc/camera/detect_rois",
-            self.mtf_handler.detect_rois_callback,
             callback_group=self.cb_group,
         )
         self.set_exposure_service = self.create_service(

@@ -1,11 +1,16 @@
 """
-Synthetic MTF Target Generation for Algorithm Validation.
+Synthetic MTF target generation for algorithm validation.
 
-This module generates synthetic test targets with known MTF characteristics
-to validate the correctness of the MTF measurement algorithms.
+This module generates synthetic test targets with heuristic expected MTF
+characteristics for smoke tests and debugging.
 
 This is test/verification-only helper code and intentionally lives outside the
 runtime package under `camera_nodes/camera_nodes/`.
+
+Important:
+    The expected-MTF helpers in this file are approximate and should not be
+    treated as scientific ground truth. The standalone benchmark validator uses
+    an analytical Gaussian-PSF * pixel-aperture reference instead.
 
 Usage:
     from synthetic_targets import generate_slanted_edge
@@ -15,8 +20,6 @@ Usage:
 
     # Measure MTF
     result = analyzer.compute_mtf(test_img)
-
-    # Expected: MTF50 close to theoretical Nyquist/2
 """
 
 import numpy as np
@@ -121,7 +124,7 @@ def generate_slanted_edge_with_spec(
     """
     image = generate_slanted_edge(angle=angle, size=size, blur_sigma=blur_sigma)
 
-    # Calculate expected MTF50
+    # Calculate one coarse expected MTF50 estimate for smoke testing only.
     if blur_sigma == 0:
         # Perfect edge: MTF50 ≈ 0.45 cycles/pixel
         expected_cycpx = 0.45

@@ -41,7 +41,6 @@ set(INTERFACE_FILES
   "srv/camera/SetExposure.srv"
   "srv/camera/AutoFocus.srv"
   "srv/camera/MeasureMTF.srv"
-  "srv/camera/DetectRois.srv"
 
 )
 

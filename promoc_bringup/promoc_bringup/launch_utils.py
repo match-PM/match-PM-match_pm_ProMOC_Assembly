@@ -143,6 +143,17 @@ def load_user_config(bringup_share_dir: str) -> dict:
             return defaults
 
         normalized = config or {}
+        legacy_user = normalized.get("user", {}) if isinstance(normalized.get("user"), dict) else {}
+        measurement_cfg = normalized.setdefault("measurement", {})
+        if not measurement_cfg.get("operator"):
+            legacy_name = str(legacy_user.get("name", "")).strip()
+            if legacy_name:
+                measurement_cfg["operator"] = legacy_name
+        if not measurement_cfg.get("base_path"):
+            legacy_base_path = str(legacy_user.get("measurement_base_path", "")).strip()
+            if legacy_base_path:
+                measurement_cfg["base_path"] = legacy_base_path
+
         merged = deepcopy(defaults)
         for section in merged:
             if isinstance(normalized.get(section), dict):
@@ -153,6 +164,8 @@ def load_user_config(bringup_share_dir: str) -> dict:
     except Exception as exc:
         print(f"Warning: failed to process user config: {exc}")
         return defaults
+
+
 def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
     """Load linear axis configuration for a specific axis."""
     config_path = get_config_path(bringup_share_dir, "linear_axes_params.yaml")

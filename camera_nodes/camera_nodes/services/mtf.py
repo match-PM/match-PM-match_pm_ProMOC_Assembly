@@ -1,15 +1,23 @@
 """MTF handler for Modulation Transfer Function measurements."""
 
+from dataclasses import dataclass
+from pathlib import Path
+import re
+
 import cv2
 import numpy as np
 
-from promoc_core.promoc_exceptions import (
-    ConfigurationError,
-    ImageProcessingError,
-)
+from promoc_core.promoc_exceptions import ImageProcessingError
 from .base import CallbackBase
 from .camera_format import CameraFormatController
-from ..algorithms.mtf import MTFAnalyzer, MTFConfig
+from .mtf_export import (
+    build_context_row,
+    build_edge_summary_row,
+    write_context_csv,
+    write_selected_edge_marker,
+    write_summary_csv,
+)
+from ..algorithms.mtf import MTFAnalyzer, MTFConfig, MTFResult
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
 from promoc_core.error_handling import handle_service_errors
 
@@ -32,11 +40,33 @@ MTF_PARAM_MAP = (
     ("mtf.edge_validation_mode", "edge_validation_mode", str, True),
     ("mtf.edge_validation_percentile", "edge_validation_percentile", float, False),
     ("mtf.edge_validation_min_points", "edge_validation_min_points", int, False),
+    ("mtf.angle_estimation_mode", "angle_estimation_mode", str, True),
+    ("mtf.angle_allow_phase_fallback", "angle_allow_phase_fallback", bool, False),
+    ("mtf.angle_consistency_warn_deg", "angle_consistency_warn_deg", float, False),
+    ("mtf.angle_min_support_points", "angle_min_support_points", int, False),
+    ("mtf.analysis_strip_width_px", "analysis_strip_width_px", int, False),
     ("mtf.clip_to_nyquist", "clip_to_nyquist", bool, False),
     ("mtf.export_dual_curves", "export_dual_curves", bool, False),
     ("mtf.clip_max", "mtf_clip_max", float, False),
     ("mtf.warn_threshold", "mtf_warn_threshold", float, False),
 )
+
+
+@dataclass
+class _MeasuredEdge:
+    """Container for one successfully measured edge and its averaged metrics."""
+
+    edge_label: str
+    edge_roi: EdgeROI
+    result: MTFResult
+    valid_samples: list[MTFResult]
+    avg_mtf50: float
+    avg_mtf20: float
+    avg_mtf10: float
+    avg_angle: float
+    avg_g1_mtf50: float
+    avg_g2_mtf50: float
+    avg_delta_pct: float
 
 
 def apply_mtf_param_mapping(config: MTFConfig, get_param_raw) -> None:
@@ -240,38 +270,674 @@ class MTFHandler(CallbackBase):
             parts.append(f"delta={result.g1_g2_delta_pct:.1f}%")
         return ", ".join(parts)
 
-    @handle_service_errors()
-    def select_roi_callback(self, request, response):
-        """Interactive ROI selection with MTF calculation."""
-        self._node.get_logger().info("ROI selection service called.")
+    def _resolve_pixel_size_um(self, request) -> float:
+        """Use request pixel size when positive, otherwise fall back to the node param."""
+        try:
+            request_pixel_size_um = float(getattr(request, "pixel_size_um", 0.0))
+        except (TypeError, ValueError):
+            request_pixel_size_um = 0.0
+        if request_pixel_size_um > 0:
+            return request_pixel_size_um
 
-        if self._node.latest_image_msg is None:
-            raise ImageProcessingError("No image received yet")
+        pixel_size_um = self._param_float("pixel_size_um", MTF_DEFAULT_PIXEL_SIZE_UM)
+        if pixel_size_um <= 0:
+            return MTF_DEFAULT_PIXEL_SIZE_UM
+        return pixel_size_um
 
-        cv_image = self._node.bridge.imgmsg_to_cv2(self._node.latest_image_msg, "bgr8")
+    @staticmethod
+    def _parse_objective_magnification_x(objective: str) -> float:
+        """Extract a numeric magnification from free-text objective labels."""
+        text = str(objective or "").strip().lower()
+        if not text:
+            return 0.0
+        match = re.search(r"(\d+(?:[.,]\d+)?)\s*x", text)
+        if not match:
+            match = re.search(r"(\d+(?:[.,]\d+)?)", text)
+        if not match:
+            return 0.0
+        try:
+            return float(match.group(1).replace(",", "."))
+        except ValueError:
+            return 0.0
 
-        roi, roi_image = self._select_roi_interactive(cv_image)
+    def _collect_measurement_metadata(self, request, pixel_size_um: float) -> dict[str, object]:
+        """Collect request metadata for logs and optional debug export."""
+        try:
+            request_pixel_size_um = float(getattr(request, "pixel_size_um", 0.0))
+        except (TypeError, ValueError):
+            request_pixel_size_um = 0.0
+        camera_objective = str(getattr(request, "camera_objective", "") or "").strip()
+        if not camera_objective:
+            camera_objective = self._param_str(
+                "measurement_conditions.camera_objective",
+                "unknown",
+            ).strip() or "unknown"
+
+        try:
+            objective_magnification_x = float(getattr(request, "objective_magnification_x", 0.0))
+        except (TypeError, ValueError):
+            objective_magnification_x = 0.0
+        if objective_magnification_x <= 0:
+            objective_magnification_x = self._parse_objective_magnification_x(camera_objective)
+
+        try:
+            coaxial_light_voltage = float(getattr(request, "coaxial_light_voltage", 0.0))
+        except (TypeError, ValueError):
+            coaxial_light_voltage = 0.0
+        if coaxial_light_voltage <= 0:
+            coaxial_light_voltage = self._param_float(
+                "measurement_conditions.coaxial_light_voltage",
+                0.0,
+            )
+
+        try:
+            coaxial_light_current = float(getattr(request, "coaxial_light_current", 0.0))
+        except (TypeError, ValueError):
+            coaxial_light_current = 0.0
+        if coaxial_light_current <= 0:
+            coaxial_light_current = self._param_float(
+                "measurement_conditions.coaxial_light_current",
+                0.0,
+            )
+
+        notes = str(getattr(request, "notes", "") or "").strip()
+        if not notes:
+            notes = self._param_str("measurement_conditions.notes", "").strip()
+
+        metadata = {
+            "measurement_operator": self._param_str(
+                "measurement.username",
+                "default_user",
+            ).strip()
+            or "default_user",
+            "effective_pixel_size_um": float(pixel_size_um),
+            "request_pixel_size_um": float(request_pixel_size_um),
+            "pixel_size_source": "request" if request_pixel_size_um > 0 else "node_parameter",
+            "auto_roi": bool(getattr(request, "auto_roi", False)),
+            "target_edge": str(getattr(request, "target_edge", "") or "").strip(),
+            "camera_objective": camera_objective,
+            "objective_magnification_x": objective_magnification_x,
+            "use_beamsplitter": bool(getattr(request, "use_beamsplitter", False)),
+            "coaxial_light_voltage": coaxial_light_voltage,
+            "coaxial_light_current": coaxial_light_current,
+            "notes": notes,
+        }
+        return {
+            key: value
+            for key, value in metadata.items()
+            if value is not None and not (isinstance(value, str) and value == "")
+        }
+
+    def _format_measurement_metadata(self, metadata: dict[str, object]) -> str:
+        """Create a compact log line from request metadata."""
+        if not metadata:
+            return ""
+
+        parts = [f"pixel_um={float(metadata['effective_pixel_size_um']):.4f}"]
+        if metadata.get("pixel_size_source") == "request":
+            parts.append("pixel_source=request")
+        objective = metadata.get("camera_objective")
+        if objective:
+            parts.append(f"objective={objective}")
+        magnification = float(metadata.get("objective_magnification_x", 0.0) or 0.0)
+        if magnification > 0:
+            parts.append(f"mag={magnification:.2f}x")
+        if metadata.get("use_beamsplitter"):
+            parts.append("beamsplitter=yes")
+        coaxial_voltage = float(metadata.get("coaxial_light_voltage", 0.0) or 0.0)
+        if coaxial_voltage > 0:
+            parts.append(f"coaxV={coaxial_voltage:.3f}")
+        coaxial_current = float(metadata.get("coaxial_light_current", 0.0) or 0.0)
+        if coaxial_current > 0:
+            parts.append(f"coaxI={coaxial_current:.3f}")
+        if metadata.get("auto_roi"):
+            parts.append("auto_roi=yes")
+        target_edge = metadata.get("target_edge")
+        if target_edge:
+            parts.append(f"target_edge={target_edge}")
+        notes = str(metadata.get("notes", "") or "").strip()
+        if notes:
+            parts.append(f"notes={notes[:60]}")
+        return ", ".join(parts)
+
+    def _slugify_label(self, value: object, fallback: str = "item") -> str:
+        """Create a filesystem-safe label component."""
+        text = str(value or "").strip()
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
+        return safe or fallback
+
+    def _build_measurement_run_context(
+        self,
+        request,
+        edge_rois: list[EdgeROI],
+        timestamp: str | None = None,
+    ) -> tuple[Path, str]:
+        """Create one predictable run folder for a single service call."""
+        timestamp = timestamp or self._get_timestamp()
+        auto_roi = bool(getattr(request, "auto_roi", False))
+        if auto_roi and len(edge_rois) >= 4:
+            mode_label = "square4"
+        elif auto_roi:
+            mode_label = "auto"
+        else:
+            mode_label = "manual"
+        requested_edge = str(getattr(request, "target_edge", "") or "").strip().lower()
+        requested_label = ""
+        if requested_edge and requested_edge not in {"any", "select", "interactive"}:
+            requested_label = self._slugify_label(requested_edge, fallback="")
+        run_parts = ["mtf", mode_label, timestamp]
+        if requested_label:
+            run_parts.append(requested_label)
+        run_id = "_".join(part for part in run_parts if part)
+        run_dir = self._get_output_dir("mtf_messungen") / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir, run_id
+
+    def _build_edge_export_label(
+        self,
+        edge_roi: EdgeROI,
+        edge_index: int,
+        edge_count: int,
+    ) -> str:
+        """Build a deterministic per-edge label for debug exports."""
+        edge_name = self._slugify_label(
+            edge_roi.edge_name,
+            fallback=f"edge_{edge_index + 1:02d}",
+        )
+        if edge_count <= 1:
+            return edge_name
+        return f"{edge_index + 1:02d}_{edge_name}"
+
+    def _build_edge_measurement_metadata(
+        self,
+        base_metadata: dict[str, object],
+        edge_roi: EdgeROI,
+        edge_label: str,
+        edge_index: int,
+        edge_count: int,
+        run_id: str,
+    ) -> dict[str, object]:
+        """Attach per-edge traceability metadata for exports and logs."""
+        x, y, w, h = edge_roi.bbox
+        metadata = dict(base_metadata)
+        metadata.update(
+            {
+                "run_id": run_id,
+                "edge_label": edge_label,
+                "edge_name": edge_roi.edge_name,
+                "edge_direction": edge_roi.edge_direction,
+                "edge_index": edge_index + 1,
+                "edge_count": edge_count,
+                "edge_contrast": float(edge_roi.contrast),
+                "roi_bbox_x": int(x),
+                "roi_bbox_y": int(y),
+                "roi_bbox_w": int(w),
+                "roi_bbox_h": int(h),
+                "parent_center_x": int(edge_roi.parent_center[0]),
+                "parent_center_y": int(edge_roi.parent_center[1]),
+            }
+        )
+        return metadata
+
+    def _get_camera_calibration(self) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Return camera calibration arrays when CameraInfo is available."""
+        if self._node.latest_camera_info is None:
+            return None, None
+        try:
+            camera_info = self._node.latest_camera_info
+            return np.array(camera_info.k).reshape(3, 3), np.array(camera_info.d)
+        except Exception as exc:
+            self._node.get_logger().warn(f"Failed to process camera info: {exc}")
+            return None, None
+
+    def _detect_auto_edge_rois(self, cv_image: np.ndarray) -> list[EdgeROI]:
+        """Detect square/bar targets and return candidate edge ROIs."""
+        self._node.get_logger().info("Auto-ROI enabled: Detecting targets...")
+        _, bars, squares = RoiDetector.detect_targets(cv_image)
+
+        if squares:
+            largest_square = max(squares, key=lambda rect: rect[1][0] * rect[1][1])
+            edge_rois = RoiDetector.create_edge_rois_from_rect(
+                cv_image,
+                largest_square,
+                roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+            )
+            valid_edges = [edge for edge in edge_rois if edge.is_valid]
+            if valid_edges:
+                self._node.get_logger().info(
+                    f"Found {len(valid_edges)} valid edges from square "
+                    f"(center: {valid_edges[0].parent_center})"
+                )
+                return valid_edges
+            if edge_rois:
+                self._node.get_logger().warn(
+                    f"All {len(edge_rois)} square edges have low contrast, trying anyway..."
+                )
+                return edge_rois
+
+        if bars:
+            largest_bar = max(bars, key=lambda rect: rect[1][0] * rect[1][1])
+            edge_rois = RoiDetector.create_edge_rois_from_rect(
+                cv_image,
+                largest_bar,
+                roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+            )
+            if edge_rois:
+                self._node.get_logger().info(
+                    f"Found {len(edge_rois)} edges from bar target"
+                )
+                return edge_rois
+
+        raise ImageProcessingError("Auto-ROI: No targets detected")
+
+    def _build_manual_edge_roi(self, cv_image: np.ndarray) -> list[EdgeROI]:
+        """Collect one manual ROI and wrap it in the shared EdgeROI structure."""
+        roi, roi_img = self._select_roi_interactive(cv_image)
         if roi is None:
-            response.success = False
-            response.status_message = "ROI selection cancelled."
-            return response
+            raise ImageProcessingError("ROI selection cancelled")
 
         x, y, w, h = roi
-        if w <= 0 or h <= 0:
-            raise ConfigurationError("Invalid ROI dimensions")
+        contrast = RoiDetector.calculate_michelson_contrast(roi_img)
+        return [
+            EdgeROI(
+                image=roi_img,
+                bbox=(x, y, w, h),
+                edge_direction="unknown",
+                edge_name="manual",
+                contrast=contrast,
+                parent_center=(x + w // 2, y + h // 2),
+            )
+        ]
 
-        mtf_results = self._node.image_processor.calculate_mtf_from_roi(roi_image)
-        if not mtf_results:
-            raise ImageProcessingError("MTF calculation failed")
+    def _apply_requested_edge_selection(
+        self,
+        edge_rois: list[EdgeROI],
+        request,
+    ) -> list[EdgeROI]:
+        """Filter or interactively select candidate edges according to the request."""
+        requested = str(getattr(request, "target_edge", "") or "").strip().lower()
+        if requested in {"", "any"}:
+            return edge_rois
 
-        output_dir = self._get_output_dir("mtf_messungen")
-        output_filename = str(output_dir / f"mtf_{self._get_timestamp()}.csv")
-        self._node.image_processor.export_to_csv(mtf_results, output_filename)
+        if requested in {"select", "interactive"}:
+            candidates = [
+                {
+                    "image": edge_roi.image,
+                    "name": f"{edge_roi.edge_name.capitalize()} Edge",
+                    "edge_roi": edge_roi,
+                }
+                for edge_roi in edge_rois
+            ]
+            selected = self._select_candidate_interactive(candidates)
+            if selected and "edge_roi" in selected:
+                self._node.get_logger().info(f"User selected: {selected['name']}")
+                return [selected["edge_roi"]]
+            raise ImageProcessingError("Interactive selection cancelled")
 
+        filtered = [
+            edge_roi for edge_roi in edge_rois if requested in edge_roi.edge_name.lower()
+        ]
+        if filtered:
+            self._node.get_logger().info(
+                f"Filtered to '{requested}' edges: {len(filtered)} candidates"
+            )
+            return filtered
+
+        raise ImageProcessingError(
+            f"Requested edge '{requested}' not found in detected targets"
+        )
+
+    def _resolve_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
+        """Resolve auto/manual ROI selection into one shared candidate list."""
+        edge_rois = (
+            self._detect_auto_edge_rois(cv_image)
+            if bool(getattr(request, "auto_roi", False))
+            else self._build_manual_edge_roi(cv_image)
+        )
+        return self._apply_requested_edge_selection(edge_rois, request)
+
+    def _prepare_edge_config(
+        self,
+        *,
+        pixel_size_um: float,
+        min_edge_angle: float,
+        max_edge_angle: float,
+        auto_roi: bool,
+        run_dir: Path,
+        run_id: str,
+        edge_roi: EdgeROI,
+        edge_label: str,
+        edge_index: int,
+        edge_count: int,
+        measurement_metadata: dict[str, object],
+        capture_values: dict[str, object],
+        actual_pixel_format: str,
+        image_encoding: str,
+    ) -> MTFConfig:
+        """Build one analyzer config for a concrete edge measurement."""
+        config = self._build_mtf_config(
+            pixel_size_um=pixel_size_um,
+            min_edge_angle=min_edge_angle,
+            max_edge_angle=max_edge_angle,
+            auto_roi=auto_roi,
+        )
+        config.debug_export_dir = str(run_dir)
+        config.debug_export_csv = True
+        config.debug_export_png = True
+        config.debug_export_prefix = self._slugify_label(
+            run_id,
+            fallback=config.debug_export_prefix,
+        )
+        config.measurement_metadata = self._build_edge_measurement_metadata(
+            measurement_metadata,
+            edge_roi,
+            edge_label,
+            edge_index,
+            edge_count,
+            run_id,
+        )
+        config.capture_pixel_format = actual_pixel_format or config.capture_pixel_format
+        config.capture_binning_h = int(capture_values.get("bin_h", config.capture_binning_h))
+        config.capture_binning_v = int(capture_values.get("bin_v", config.capture_binning_v))
+        try:
+            config.capture_exposure_us = float(
+                capture_values.get("exposure_time", config.capture_exposure_us)
+            )
+        except (TypeError, ValueError):
+            pass
+        try:
+            config.capture_gain = float(capture_values.get("gain", config.capture_gain))
+        except (TypeError, ValueError):
+            pass
+        config.source_encoding = image_encoding or config.source_encoding
+        return config
+
+    def _measure_average_samples(
+        self,
+        analyzer: MTFAnalyzer,
+        edge_roi: EdgeROI,
+        first_result: MTFResult,
+    ) -> list[MTFResult]:
+        """Keep the first exported result and average later frames numerically."""
+        valid_samples = [first_result]
+        if MTF_AVG_SAMPLES <= 1:
+            return valid_samples
+
+        analyzer.config.debug_export_dir = None
+        analyzer.config.debug_export_csv = False
+        analyzer.config.debug_export_png = False
+        self._node.get_logger().info(
+            f"Edge valid. Measuring {MTF_AVG_SAMPLES - 1} more frames for averaging..."
+        )
+
+        roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
+        last_ts = int(self._get_latest_image_timestamp_ns() or 0)
+        for _ in range(MTF_AVG_SAMPLES - 1):
+            next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
+                last_ts,
+                timeout=MTF_SAMPLE_TIMEOUT_S,
+            )
+            if next_img is None:
+                self._node.get_logger().warn(
+                    "Timeout waiting for next image in averaging loop"
+                )
+                continue
+
+            if next_ts is not None:
+                last_ts = int(next_ts)
+            if (
+                self._param_bool("mtf.capture_required_raw", True)
+                and analyzer.config.input_mode == "raw_bayer_rggb"
+                and not self._is_raw_bayer_encoding(next_encoding)
+            ):
+                self._node.get_logger().warn(
+                    f"Skipping averaging frame with non-raw encoding '{next_encoding}'"
+                )
+                continue
+            if roi_y + roi_h > next_img.shape[0] or roi_x + roi_w > next_img.shape[1]:
+                continue
+
+            crop_img = next_img[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
+            sample_result = analyzer.compute_mtf(
+                crop_img,
+                roi_origin=(roi_x, roi_y),
+            )
+            if sample_result.valid:
+                valid_samples.append(sample_result)
+
+        return valid_samples
+
+    def _measure_edge_candidate(
+        self,
+        *,
+        edge_roi: EdgeROI,
+        edge_index: int,
+        edge_count: int,
+        run_dir: Path,
+        run_id: str,
+        request,
+        measurement_metadata: dict[str, object],
+        pixel_size_um: float,
+        min_edge_angle: float,
+        max_edge_angle: float,
+        capture_values: dict[str, object],
+        actual_pixel_format: str,
+        image_encoding: str,
+    ) -> tuple[dict[str, object], _MeasuredEdge | None, str]:
+        """Measure one edge candidate and return its summary row plus optional result."""
+        if edge_roi.contrast < MTF_MIN_EDGE_CONTRAST:
+            self._node.get_logger().warn(
+                f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
+            )
+
+        edge_label = self._build_edge_export_label(edge_roi, edge_index, edge_count)
+        config = self._prepare_edge_config(
+            pixel_size_um=pixel_size_um,
+            min_edge_angle=min_edge_angle,
+            max_edge_angle=max_edge_angle,
+            auto_roi=bool(getattr(request, "auto_roi", False)),
+            run_dir=run_dir,
+            run_id=run_id,
+            edge_roi=edge_roi,
+            edge_label=edge_label,
+            edge_index=edge_index,
+            edge_count=edge_count,
+            measurement_metadata=measurement_metadata,
+            capture_values=capture_values,
+            actual_pixel_format=actual_pixel_format,
+            image_encoding=image_encoding,
+        )
+        camera_matrix, dist_coeffs = self._get_camera_calibration()
+        analyzer = MTFAnalyzer(config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+        result = analyzer.compute_mtf(
+            edge_roi.image,
+            roi_origin=edge_roi.bbox[:2],
+            debug_label=edge_label,
+        )
+
+        valid_samples: list[MTFResult] = []
+        measured_edge = None
+        last_error = str(result.error_msg or "Unknown error")
+        if result.valid:
+            if result.warning_msg:
+                self._node.get_logger().warn(
+                    f"MTF warning ({edge_roi.edge_name}): {result.warning_msg}"
+                )
+            valid_samples = self._measure_average_samples(analyzer, edge_roi, result)
+            result.edge_name = edge_roi.edge_name
+            result.edge_direction = edge_roi.edge_direction
+            result.contrast = edge_roi.contrast
+            result.roi_bounds = edge_roi.bbox
+            measured_edge = _MeasuredEdge(
+                edge_label=edge_label,
+                edge_roi=edge_roi,
+                result=result,
+                valid_samples=valid_samples,
+                avg_mtf50=float(np.mean([sample.mtf50 for sample in valid_samples])),
+                avg_mtf20=float(np.mean([sample.mtf20 for sample in valid_samples])),
+                avg_mtf10=float(np.mean([sample.mtf10 for sample in valid_samples])),
+                avg_angle=float(np.mean([sample.edge_angle for sample in valid_samples])),
+                avg_g1_mtf50=float(np.mean([sample.g1_mtf50 for sample in valid_samples])),
+                avg_g2_mtf50=float(np.mean([sample.g2_mtf50 for sample in valid_samples])),
+                avg_delta_pct=float(
+                    np.mean([sample.g1_g2_delta_pct for sample in valid_samples])
+                ),
+            )
+            last_error = ""
+
+        row = build_edge_summary_row(
+            run_id=run_id,
+            edge_label=edge_label,
+            edge_roi=edge_roi,
+            result=result,
+            valid_samples=valid_samples,
+            selected_for_response=False,
+        )
+        return row, measured_edge, last_error
+
+    def _roi_mode_label(self, request, edge_count: int) -> str:
+        """Return one stable ROI mode label for exports."""
+        auto_roi = bool(getattr(request, "auto_roi", False))
+        if not auto_roi:
+            return "manual"
+        if edge_count >= 4:
+            return "auto_square4"
+        return "auto"
+
+    def _focus_position_mm(self) -> float | None:
+        """Return the cached axis position if it is known."""
+        try:
+            position = float(getattr(self._node, "current_axis_position", -1.0))
+        except (TypeError, ValueError):
+            return None
+        return None if position < 0 else position
+
+    def _write_failed_measurement_run(
+        self,
+        *,
+        request,
+        measurement_metadata: dict[str, object],
+        capture_values: dict[str, object],
+        capture_available_keys: list[str],
+        capture_mismatches: list[str],
+        image_encoding: str,
+        measurement_error: str,
+    ) -> tuple[Path, Path]:
+        """Write a minimal run folder so invalid scientific captures stay traceable."""
+        run_timestamp = self._get_timestamp()
+        run_dir, run_id = self._build_measurement_run_context(
+            request,
+            [],
+            timestamp=run_timestamp,
+        )
+        summary_csv = write_summary_csv(run_dir, [])
+        context_csv = write_context_csv(
+            run_dir,
+            build_context_row(
+                run_id=run_id,
+                timestamp=run_timestamp,
+                measurement_metadata=measurement_metadata,
+                roi_mode=self._roi_mode_label(request, 0),
+                focus_position_mm=self._focus_position_mm(),
+                capture_values=capture_values,
+                capture_available_keys=capture_available_keys,
+                capture_readback_mismatches=(
+                    capture_mismatches if capture_mismatches else [measurement_error]
+                ),
+                capture_readback_ok=False,
+                image_encoding=image_encoding,
+                edge_count=0,
+                valid_edge_count=0,
+                selected_edge_label="",
+                selected_result=None,
+                selected_sample_count=0,
+                measurement_success=False,
+                measurement_error=measurement_error,
+            ),
+        )
+        return summary_csv, context_csv
+
+    def _populate_success_response(
+        self,
+        response,
+        measured_edge: _MeasuredEdge,
+        edge_rows: list[dict[str, object]],
+        summary_csv: Path,
+    ):
+        """Fill the ROS response once one selected edge has been finalized."""
+        result = measured_edge.result
+        edge_roi = measured_edge.edge_roi
         response.success = True
-        response.status_message = f"MTF saved to {output_filename}"
+        response.mtf50 = measured_edge.avg_mtf50
+        response.mtf20 = measured_edge.avg_mtf20
+        response.mtf10 = measured_edge.avg_mtf10
+        response.edge_angle = measured_edge.avg_angle
+        response.nyquist_frequency = float(result.nyquist_frequency)
 
+        edge_info = edge_roi.format_coords()
+        capture_summary = self._build_capture_summary(result)
+        if result.capture_mode == "raw_green":
+            capture_summary = (
+                f"{capture_summary}, "
+                f"G1avg={measured_edge.avg_g1_mtf50:.2f}, "
+                f"G2avg={measured_edge.avg_g2_mtf50:.2f}, "
+                f"DeltaAvg={measured_edge.avg_delta_pct:.1f}%"
+            )
+        valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
+        response.status_message = (
+            f"MTF50={response.mtf50:.2f} lp/mm "
+            f"(selected={measured_edge.edge_label}, "
+            f"valid_edges={valid_edge_count}/{len(edge_rows)}, "
+            f"avg={len(measured_edge.valid_samples)} samples, "
+            f"{edge_info}, {response.edge_angle:.1f}deg, "
+            f"C:{edge_roi.contrast:.2f}, {capture_summary}, "
+            f"csv={summary_csv})"
+        )
+        if result.warning_msg:
+            response.status_message += f" WARN: {result.warning_msg}"
+
+        self._node.get_logger().info(
+            f"MTF measurement successful: {response.status_message}"
+        )
         return response
+
+    def _validate_scientific_capture_state(
+        self,
+        capture_state: dict,
+        image_encoding: str,
+    ) -> tuple[dict, str, list[str]]:
+        """Fail fast when the scientific raw capture state is not actually active."""
+        capture_values = dict((capture_state or {}).get("values", {}))
+        actual_pixel_format = str(
+            capture_values.get(
+                "pixel_format",
+                self._param_str("mtf.capture_pixel_format", ""),
+            )
+        )
+
+        if not self._param_bool("mtf.use_raw_capture", True):
+            return capture_values, actual_pixel_format, []
+        if not self._param_bool("mtf.capture_required_raw", True):
+            return capture_values, actual_pixel_format, []
+
+        if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
+            raise ImageProcessingError(
+                f"Scientific MTF requires Bayer raw, readback is '{actual_pixel_format}'"
+            )
+        if not self._is_raw_bayer_encoding(image_encoding):
+            raise ImageProcessingError(
+                f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'"
+            )
+
+        mismatches = self._camera_format_controller.collect_scientific_capture_mismatches(
+            capture_state,
+            self._camera_format_controller.build_mtf_capture_target(capture_values),
+        )
+        if mismatches:
+            raise ImageProcessingError(
+                "Scientific MTF capture readback mismatch: " + ", ".join(mismatches)
+            )
+        return capture_values, actual_pixel_format, mismatches
 
     @handle_service_errors()
     def measure_mtf_callback(self, request, response):
@@ -285,10 +951,8 @@ class MTFHandler(CallbackBase):
         restore_state = None
 
         try:
-            # 1. Get latest image and optionally switch camera to scientific raw MTF mode
-            cv_image = None
-            image_ts_ns = None
-            image_encoding = ""
+            # Step 1: fetch the latest frame and, if configured, switch the camera
+            # into the scientific full-frame raw mode before any ROI handling starts.
             cv_image, image_ts_ns, image_encoding = self._get_mtf_capture_image()
             if cv_image is None:
                 raise ImageProcessingError("No image available")
@@ -309,304 +973,140 @@ class MTFHandler(CallbackBase):
                 image_ts_ns = capture_ts_ns
                 image_encoding = capture_encoding
 
-            capture_state = self._camera_format_controller.get_last_capture_state() or {}
-            capture_values = capture_state.get("values", {})
-            actual_pixel_format = str(
-                capture_values.get(
-                    "pixel_format",
-                    self._param_str("mtf.capture_pixel_format", ""),
+            # Step 2: validate that the actual camera readback matches the
+            # scientific raw-MTF contract before running the analyzer.
+            capture_state = (
+                self._camera_format_controller.get_last_capture_state()
+                or self._camera_format_controller.read_capture_state()
+                or {}
+            )
+            capture_values = dict((capture_state or {}).get("values", {}))
+            capture_available_keys = list((capture_state or {}).get("available_keys", []))
+            pixel_size_um = self._resolve_pixel_size_um(request)
+            measurement_metadata = self._collect_measurement_metadata(request, pixel_size_um)
+            measurement_context = self._format_measurement_metadata(measurement_metadata)
+            if measurement_context:
+                self._node.get_logger().info(f"MTF measurement context: {measurement_context}")
+            try:
+                capture_values, actual_pixel_format, capture_mismatches = (
+                    self._validate_scientific_capture_state(
+                        capture_state,
+                        image_encoding,
+                    )
                 )
-            )
-            if self._param_bool("mtf.capture_required_raw", True):
-                if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
-                    raise ImageProcessingError(
-                        f"Scientific MTF requires Bayer raw, readback is '{actual_pixel_format}'"
-                    )
-                if not self._is_raw_bayer_encoding(image_encoding):
-                    raise ImageProcessingError(
-                        f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'"
-                    )
-
-            pixel_size_um = self._param_float(
-                "pixel_size_um", MTF_DEFAULT_PIXEL_SIZE_UM
-            )
-            if not pixel_size_um or pixel_size_um <= 0:
-                pixel_size_um = MTF_DEFAULT_PIXEL_SIZE_UM
+            except ImageProcessingError as exc:
+                capture_error = str(exc)
+                capture_mismatches = []
+                mismatch_prefix = "Scientific MTF capture readback mismatch: "
+                if capture_error.startswith(mismatch_prefix):
+                    capture_mismatches = [
+                        item.strip()
+                        for item in capture_error[len(mismatch_prefix) :].split(",")
+                        if item.strip()
+                    ]
+                summary_csv, context_csv = self._write_failed_measurement_run(
+                    request=request,
+                    measurement_metadata=measurement_metadata,
+                    capture_values=capture_values,
+                    capture_available_keys=capture_available_keys,
+                    capture_mismatches=capture_mismatches,
+                    image_encoding=image_encoding,
+                    measurement_error=capture_error,
+                )
+                self._node.get_logger().error(
+                    f"MTF capture validation failed: {capture_error}. "
+                    f"summary={summary_csv}, context={context_csv}"
+                )
+                raise
 
             min_edge_angle = self._param_float("mtf_min_edge_angle", 2.0)
             max_edge_angle = self._param_float("mtf_max_edge_angle", 10.0)
 
-            # Pass edge angle limits into analyzer (applied per ROI below)
+            # Step 3: auto ROI and manual ROI both resolve into the same EdgeROI list.
+            edge_rois = self._resolve_edge_rois(cv_image, request)
+            edge_count = len(edge_rois)
+            run_timestamp = self._get_timestamp()
+            run_dir, run_id = self._build_measurement_run_context(
+                request,
+                edge_rois,
+                timestamp=run_timestamp,
+            )
 
-            # Auto ROI Detection
-            edge_rois = []  # List of EdgeROI objects
-            roi_list = []  # Legacy list for manual mode
-
-            if getattr(request, "auto_roi", False):
-                self._node.get_logger().info("Auto-ROI enabled: Detecting targets...")
-                _, bars, squares = RoiDetector.detect_targets(cv_image)
-
-                # Priority 1: Squares (use new EdgeROI-based extraction)
-                if squares:
-                    # Take largest square
-                    largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-
-                    # Use improved edge extraction with coordinate tracking
-                    edge_rois = RoiDetector.create_edge_rois_from_rect(
-                        cv_image, largest_square, roi_width=MTF_AUTO_ROI_EDGE_WIDTH
-                    )
-
-                    # Filter by contrast
-                    valid_edges = [e for e in edge_rois if e.is_valid]
-                    if valid_edges:
-                        edge_rois = valid_edges
-                        self._node.get_logger().info(
-                            f"Found {len(edge_rois)} valid edges from square "
-                            f"(center: {edge_rois[0].parent_center})"
-                        )
-                    else:
-                        self._node.get_logger().warn(
-                            f"All {len(edge_rois)} edges have low contrast, trying anyway..."
-                        )
-
-                # Priority 2: Bars
-                elif bars:
-                    # Take largest bar
-                    largest_bar = max(bars, key=lambda r: r[1][0] * r[1][1])
-
-                    # Use new EdgeROI extraction for bars too
-                    edge_rois = RoiDetector.create_edge_rois_from_rect(
-                        cv_image, largest_bar, roi_width=MTF_AUTO_ROI_EDGE_WIDTH
-                    )
-
-                    if edge_rois:
-                        self._node.get_logger().info(
-                            f"Found {len(edge_rois)} edges from bar target"
-                        )
-
-                if not edge_rois:
-                    raise ImageProcessingError("Auto-ROI: No targets detected")
-
-            else:
-                # Manual mode: Interactive selection
-                roi, roi_img = self._select_roi_interactive(cv_image)
-                if roi is None:
-                    raise ImageProcessingError("ROI selection cancelled")
-                x, y, w, h = roi
-                # Create manual EdgeROI for consistency
-                contrast = RoiDetector.calculate_michelson_contrast(roi_img)
-                edge_rois = [
-                    EdgeROI(
-                        image=roi_img,
-                        bbox=(x, y, w, h),
-                        edge_direction="unknown",
-                        edge_name="manual",
-                        contrast=contrast,
-                        parent_center=(x + w // 2, y + h // 2),
-                    )
-                ]
-
-            # Filter by requested edge (if specified)
-            if hasattr(request, "target_edge") and request.target_edge:
-                requested = request.target_edge.lower().strip()
-                if requested == "select" or requested == "interactive":
-                    # Interactive Candidate Selection - convert EdgeROIs to legacy format
-                    roi_list = [
-                        {
-                            "image": e.image,
-                            "name": f"{e.edge_name.capitalize()} Edge",
-                            "edge_roi": e,
-                        }
-                        for e in edge_rois
-                    ]
-                    selected = self._select_candidate_interactive(roi_list)
-                    if selected and "edge_roi" in selected:
-                        edge_rois = [selected["edge_roi"]]
-                        self._node.get_logger().info(
-                            f"User selected: {selected['name']}"
-                        )
-                    else:
-                        raise ImageProcessingError("Interactive selection cancelled")
-                elif requested not in ["", "any"]:
-                    filtered = [
-                        e for e in edge_rois if requested in e.edge_name.lower()
-                    ]
-                    if filtered:
-                        edge_rois = filtered
-                        self._node.get_logger().info(
-                            f"Filtered to '{requested}' edges: {len(edge_rois)} candidates"
-                        )
-                    else:
-                        raise ImageProcessingError(
-                            f"Requested edge '{requested}' not found in detected targets"
-                        )
-
-            # Perform Measurement (Try all edge candidates)
+            # Step 4: every edge goes through the same analyzer, averaging and
+            # export path, so auto and manual runs stay comparable.
+            edge_rows: list[dict[str, object]] = []
+            selected_edge: _MeasuredEdge | None = None
             last_error = "Unknown error"
 
-            for edge_roi in edge_rois:
-                if edge_roi.contrast < MTF_MIN_EDGE_CONTRAST:
-                    self._node.get_logger().warn(
-                        f"Low contrast ({edge_roi.contrast:.2f}) for {edge_roi.edge_name} edge"
-                    )
-
-                config = self._build_mtf_config(
+            for edge_index, edge_roi in enumerate(edge_rois):
+                row, measured_edge, edge_error = self._measure_edge_candidate(
+                    edge_roi=edge_roi,
+                    edge_index=edge_index,
+                    edge_count=edge_count,
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    request=request,
+                    measurement_metadata=measurement_metadata,
                     pixel_size_um=pixel_size_um,
                     min_edge_angle=min_edge_angle,
                     max_edge_angle=max_edge_angle,
-                    auto_roi=getattr(request, "auto_roi", False),
+                    capture_values=capture_values,
+                    actual_pixel_format=actual_pixel_format,
+                    image_encoding=image_encoding,
                 )
-                config.capture_pixel_format = actual_pixel_format or config.capture_pixel_format
-                config.capture_binning_h = int(
-                    capture_values.get("bin_h", config.capture_binning_h)
-                )
-                config.capture_binning_v = int(
-                    capture_values.get("bin_v", config.capture_binning_v)
-                )
-                try:
-                    config.capture_exposure_us = float(
-                        capture_values.get(
-                            "exposure_time",
-                            config.capture_exposure_us,
-                        )
-                    )
-                except (TypeError, ValueError):
-                    pass
-                try:
-                    config.capture_gain = float(
-                        capture_values.get("gain", config.capture_gain)
-                    )
-                except (TypeError, ValueError):
-                    pass
-                config.source_encoding = image_encoding or config.source_encoding
+                edge_rows.append(row)
+                if measured_edge is not None and selected_edge is None:
+                    selected_edge = measured_edge
+                if edge_error:
+                    last_error = edge_error
 
-                # Get calibration from valid CameraInfo if available
-                camera_matrix = None
-                dist_coeffs = None
-
-                if self._node.latest_camera_info is not None:
-                    try:
-                        ci = self._node.latest_camera_info
-                        camera_matrix = np.array(ci.k).reshape(3, 3)
-                        dist_coeffs = np.array(ci.d)
-                        # self._node.get_logger().debug("Using calibration for MTF analysis")
-                    except Exception as e:
-                        self._node.get_logger().warn(
-                            f"Failed to process camera info: {e}"
-                        )
-
-                analyzer = MTFAnalyzer(
-                    config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs
-                )
-
-                debug_label = (
-                    f"{edge_roi.edge_name}_{edge_roi.bbox[0]}_{edge_roi.bbox[1]}"
-                )
-                result = analyzer.compute_mtf(edge_roi.image, debug_label=debug_label)
-
-                if result.valid:
-                    if result.warning_msg:
-                        self._node.get_logger().warn(
-                            f"MTF warning ({edge_roi.edge_name}): {result.warning_msg}"
-                        )
-                    # --- Averaging Logic ---
-                    num_samples = MTF_AVG_SAMPLES
-                    valid_samples = [result]
-
-                    if num_samples > 1:
-                        self._node.get_logger().info(
-                            f"Edge valid. Measuring {num_samples-1} more frames for averaging..."
-                        )
-                        roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
-                        last_ts = self._get_latest_image_timestamp_ns()
-                        if last_ts is None:
-                            last_ts = 0
-
-                        for _ in range(num_samples - 1):
-                            next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
-                                int(last_ts),
-                                timeout=MTF_SAMPLE_TIMEOUT_S,
-                            )
-                            if next_img is not None:
-                                if next_ts is not None:
-                                    last_ts = next_ts
-                                if (
-                                    self._param_bool("mtf.capture_required_raw", True)
-                                    and config.input_mode == "raw_bayer_rggb"
-                                    and not self._is_raw_bayer_encoding(next_encoding)
-                                ):
-                                    self._node.get_logger().warn(
-                                        f"Skipping averaging frame with non-raw encoding '{next_encoding}'"
-                                    )
-                                    continue
-                                # Ensure ROI is within bounds (in case image size changed?? unlikely but safe)
-                                if (
-                                    roi_y + roi_h <= next_img.shape[0]
-                                    and roi_x + roi_w <= next_img.shape[1]
-                                ):
-                                    crop_img = next_img[
-                                        roi_y : roi_y + roi_h, roi_x : roi_x + roi_w
-                                    ]
-                                    sample_res = analyzer.compute_mtf(crop_img)
-                                    if sample_res.valid:
-                                        valid_samples.append(sample_res)
-                            else:
-                                self._node.get_logger().warn(
-                                    "Timeout waiting for next image in averaging loop"
-                                )
-
-                    # Compute Averages
-                    avg_mtf50 = float(np.mean([r.mtf50 for r in valid_samples]))
-                    avg_mtf20 = float(np.mean([r.mtf20 for r in valid_samples]))
-                    avg_mtf10 = float(np.mean([r.mtf10 for r in valid_samples]))
-                    avg_angle = float(np.mean([r.edge_angle for r in valid_samples]))
-                    avg_g1_mtf50 = float(np.mean([r.g1_mtf50 for r in valid_samples]))
-                    avg_g2_mtf50 = float(np.mean([r.g2_mtf50 for r in valid_samples]))
-                    avg_delta_pct = float(
-                        np.mean([r.g1_g2_delta_pct for r in valid_samples])
+            if selected_edge is not None:
+                for row in edge_rows:
+                    row["selected_for_response"] = int(
+                        row["edge_label"] == selected_edge.edge_label
                     )
 
-                    # Attach edge metadata to result (using first result for metadata)
-                    result.edge_name = edge_roi.edge_name
-                    result.edge_direction = edge_roi.edge_direction
-                    result.contrast = edge_roi.contrast
-                    result.roi_bounds = edge_roi.bbox
+            valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
+            summary_csv = write_summary_csv(run_dir, edge_rows)
+            context_csv = write_context_csv(
+                run_dir,
+                build_context_row(
+                    run_id=run_id,
+                    timestamp=run_timestamp,
+                    measurement_metadata=measurement_metadata,
+                    roi_mode=self._roi_mode_label(request, edge_count),
+                    focus_position_mm=self._focus_position_mm(),
+                    capture_values=capture_values,
+                    capture_available_keys=capture_available_keys,
+                    capture_readback_mismatches=capture_mismatches,
+                    capture_readback_ok=not capture_mismatches,
+                    image_encoding=image_encoding,
+                    edge_count=edge_count,
+                    valid_edge_count=valid_edge_count,
+                    selected_edge_label=selected_edge.edge_label if selected_edge else "",
+                    selected_result=selected_edge.result if selected_edge else None,
+                    selected_sample_count=(
+                        len(selected_edge.valid_samples) if selected_edge is not None else 0
+                    ),
+                    measurement_success=selected_edge is not None,
+                    measurement_error="" if selected_edge is not None else last_error,
+                ),
+            )
+            self._node.get_logger().info(
+                f"MTF export written: summary={summary_csv}, context={context_csv}"
+            )
 
-                    # Success! Return this result
-                    response.success = True
-                    response.mtf50 = avg_mtf50
-                    response.mtf20 = avg_mtf20
-                    response.mtf10 = avg_mtf10
-                    response.edge_angle = avg_angle
-                    response.nyquist_frequency = float(result.nyquist_frequency)
+            if selected_edge is None:
+                raise ImageProcessingError(
+                    f"MTF failed on all candidates. Last error: {last_error}. Summary: {summary_csv}"
+                )
 
-                    # Format detailed status message with edge coordinates
-                    edge_info = edge_roi.format_coords()
-                    capture_summary = self._build_capture_summary(result)
-                    if result.capture_mode == "raw_green":
-                        capture_summary = (
-                            f"{capture_summary}, "
-                            f"G1avg={avg_g1_mtf50:.2f}, G2avg={avg_g2_mtf50:.2f}, "
-                            f"DeltaAvg={avg_delta_pct:.1f}%"
-                        )
-                    response.status_message = (
-                        f"MTF50={response.mtf50:.2f} lp/mm (Avg {len(valid_samples)}) "
-                        f"({edge_info}, {response.edge_angle:.1f}°, C:{edge_roi.contrast:.2f}, "
-                        f"{capture_summary})"
-                    )
-                    if result.warning_msg:
-                        response.status_message += f" WARN: {result.warning_msg}"
-
-                    self._node.get_logger().info(
-                        f"MTF measurement successful: {response.status_message}"
-                    )
-                    return response
-
-                last_error = result.error_msg
-
-            # If we get here, no candidate worked
-            raise ImageProcessingError(
-                f"MTF failed on all candidates. Last error: {last_error}"
+            write_selected_edge_marker(run_dir, selected_edge.edge_label)
+            return self._populate_success_response(
+                response,
+                selected_edge,
+                edge_rows,
+                summary_csv,
             )
 
         finally:
@@ -616,92 +1116,41 @@ class MTFHandler(CallbackBase):
 
     def _select_candidate_interactive(self, candidates):
         """Shows candidates side-by-side and lets user click to select."""
-        # Prepare list of images
         images = []
-        for c in candidates:
-            if "image" in c:
-                images.append(c["image"])
-            elif "roi" in c and "source_image" in c:  # If we stored source
-                # Should extract roi here if needed, but for now assume edges have 'image'
-                # Bars might need handling. For now, assume edges.
+        for candidate in candidates:
+            if "image" in candidate:
+                images.append(candidate["image"])
+            elif "roi" in candidate and "source_image" in candidate:
                 pass
-            # Fallback: create placeholder if no image
-            if "image" not in c:
-                # Try to get latest image and crop
-                # This is tricky without passing full image around.
-                # Assuming 'image' key is populated for edge candidates.
+            if "image" not in candidate:
                 images.append(np.zeros((100, 100), dtype=np.uint8))
 
         vis_img, tile_w = RoiDetector.create_debug_visualization(images)
-
         selected_idx = [-1]
         window_name = "Select Target Candidate"
 
         def mouse_callback(event, x, y, flags, param):
-            if event == cv2.EVENT_LBUTTONDOWN:
-                if tile_w > 0:
-                    idx = x // tile_w
-                    if 0 <= idx < len(candidates):
-                        selected_idx[0] = idx
-                        self.logger.info(
-                            f"Selected candidate {idx}: {candidates[idx]['name']}"
-                        )
-                        cv2.destroyWindow(window_name)
+            if event == cv2.EVENT_LBUTTONDOWN and tile_w > 0:
+                idx = x // tile_w
+                if 0 <= idx < len(candidates):
+                    selected_idx[0] = idx
+                    self.logger.info(
+                        f"Selected candidate {idx}: {candidates[idx]['name']}"
+                    )
+                    cv2.destroyWindow(window_name)
 
         cv2.namedWindow(window_name)
         cv2.setMouseCallback(window_name, mouse_callback)
         cv2.imshow(window_name, vis_img)
 
-        # Wait until selection or escape
         while selected_idx[0] == -1:
             key = cv2.waitKey(100)
-            if key == 27:  # ESC
+            if key == 27:
                 break
             if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                 break
 
         cv2.destroyAllWindows()
-
         if selected_idx[0] != -1:
             return candidates[selected_idx[0]]
         return None
-
-    @handle_service_errors()
-    def detect_rois_callback(self, request, response):
-        """Debug callback to visualize detected ROIs."""
-        self._node.get_logger().info("Debugging ROI detection...")
-
-        cv_image, _ = self._get_latest_cv_image()
-        if cv_image is None:
-            raise ImageProcessingError("No image available")
-
-        vis_img, bars, squares = RoiDetector.detect_targets(cv_image)
-
-        output_dir = self._get_output_dir("debug_rois")
-        timestamp = self._get_timestamp()
-
-        # 1. Main visualization (Full Image)
-        filename_main = str(output_dir / f"rois_full_{timestamp}.jpg")
-        cv2.imwrite(filename_main, vis_img)
-
-        # 2. Detailed Edge Visualization (if squares found)
-        filename_edges = ""
-        if squares:
-            largest_square = max(squares, key=lambda r: r[1][0] * r[1][1])
-            edges = RoiDetector.split_square_into_edges(cv_image, largest_square)
-
-            # Unpack tuple (canvas, tile_w)
-            vis_edges, _ = RoiDetector.create_debug_visualization(edges)
-
-            filename_edges = str(output_dir / f"rois_edges_{timestamp}.jpg")
-            cv2.imwrite(filename_edges, vis_edges)
-
-        response.success = True
-        response.status_message = (
-            f"Detected {len(bars)} bars and {len(squares)} squares. Edges saved."
-        )
-        response.debug_image_path = filename_edges if filename_edges else filename_main
-        response.bars_detected = len(bars)
-        response.squares_detected = len(squares)
-
-        return response

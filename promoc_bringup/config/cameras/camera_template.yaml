@@ -10,8 +10,8 @@
 #
 # 2. Fill in all sections below with your camera's specifications
 #
-# 3. Update the launch file camera_type parameter to use your camera:
-#    ros2 launch promoc_bringup camera.launch.py camera_type:=<your_camera_model>
+# 3. Update the active messstand camera config and start the system with:
+#    ros2 launch promoc_bringup optical_measurement_system.launch.py
 #
 # 4. Calibrate your camera and update the camera_info section
 #
@@ -478,8 +478,8 @@ hardware_reference:
 # =============================================================================
 # TIPS FOR SUCCESS
 # =============================================================================
-# 1. ALWAYS test your camera configuration before deploying:
-#    ros2 launch promoc_bringup camera.launch.py camera_type:=<your_camera>
+# 1. ALWAYS test your camera configuration on the messstand before deploying:
+#    ros2 launch promoc_bringup optical_measurement_system.launch.py
 #
 # 2. Verify image topics are publishing:
 #    ros2 topic hz /promoc/<cameraname>/stream0/image_raw

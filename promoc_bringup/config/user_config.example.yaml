@@ -3,6 +3,9 @@
 # ============================================================================
 # Copy this file to 'user_config.yaml' and fill in your personal settings.
 # The user_config.yaml file is ignored by Git and won't be committed.
+# On the messstand branch the canonical format is now
+# `user_config.v2.example.yaml`, but the legacy keys in this file are still
+# accepted and mapped onto `measurement.operator` / `measurement.base_path`.
 #
 # Quick Start:
 #   cp user_config.example.yaml user_config.yaml

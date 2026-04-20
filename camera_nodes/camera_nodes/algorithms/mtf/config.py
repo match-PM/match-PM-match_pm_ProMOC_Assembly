@@ -1,6 +1,6 @@
 """MTF configuration dataclass."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 
@@ -41,6 +41,11 @@ class MTFConfig:
     edge_validation_mode: str = "warn"  # off | warn | fail
     edge_validation_percentile: float = 90.0
     edge_validation_min_points: int = 50
+    angle_estimation_mode: str = "hybrid"  # hybrid | geometric | phase
+    angle_allow_phase_fallback: bool = True
+    angle_consistency_warn_deg: float = 1.5
+    angle_min_support_points: int = 20
+    analysis_strip_width_px: int = 60
     clip_to_nyquist: bool = True
     export_dual_curves: bool = False
 
@@ -56,6 +61,7 @@ class MTFConfig:
     capture_exposure_us: float = 0.0
     capture_gain: float = 0.0
     source_encoding: str = ""
+    measurement_metadata: dict[str, object] = field(default_factory=dict)
 
     # Debug export
     debug_export_dir: Optional[str] = None
@@ -104,10 +110,20 @@ class MTFConfig:
         if self.edge_validation_mode not in {"off", "warn", "fail"}:
             raise ValueError(
                 f"edge_validation_mode must be one of ['off','warn','fail'], got {self.edge_validation_mode}")
+        if self.angle_estimation_mode not in {"hybrid", "geometric", "phase"}:
+            raise ValueError(
+                "angle_estimation_mode must be one of ['hybrid','geometric','phase']"
+            )
         if not (0 < self.edge_validation_percentile <= 100):
             raise ValueError("edge_validation_percentile must be in (0, 100]")
         if self.edge_validation_min_points < 0:
             raise ValueError("edge_validation_min_points must be >= 0")
+        if self.angle_consistency_warn_deg < 0:
+            raise ValueError("angle_consistency_warn_deg must be >= 0")
+        if self.angle_min_support_points < 0:
+            raise ValueError("angle_min_support_points must be >= 0")
+        if self.analysis_strip_width_px < 0:
+            raise ValueError("analysis_strip_width_px must be >= 0")
         if self.mtf_clip_max < 0:
             raise ValueError("mtf_clip_max must be >= 0")
         if self.mtf_warn_threshold < 0:

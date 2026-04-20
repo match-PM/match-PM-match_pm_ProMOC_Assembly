@@ -4,6 +4,10 @@
 # - runtime.mode: hardware
 # - measurement.operator
 # - measurement.base_path
+#
+# Copy this file to `user_config.yaml` and adjust the values for the local user.
+# MTF exports will be written below:
+#   <measurement.base_path>/<measurement.operator>/mtf_messungen/<run_id>/
 
 runtime:
   mode: hardware

@@ -12,10 +12,16 @@ class MTFResult:
     mtf20: float = 0.0
     mtf10: float = 0.0
     frequencies: np.ndarray = field(default_factory=lambda: np.array([]))
+    frequencies_alt: np.ndarray = field(default_factory=lambda: np.array([]))
     mtf_values: np.ndarray = field(default_factory=lambda: np.array([]))
+    mtf_raw: np.ndarray = field(default_factory=lambda: np.array([]))
+    mtf_raw_alt: np.ndarray = field(default_factory=lambda: np.array([]))
+    mtf_used_alt: np.ndarray = field(default_factory=lambda: np.array([]))
     mtf_ideal: np.ndarray = field(default_factory=lambda: np.array([]))
+    esf_raw: np.ndarray = field(default_factory=lambda: np.array([]))
     esf: np.ndarray = field(default_factory=lambda: np.array([]))
     lsf: np.ndarray = field(default_factory=lambda: np.array([]))
+    lsf_windowed: np.ndarray = field(default_factory=lambda: np.array([]))
     edge_angle: float = 0.0
     valid: bool = False
     error_msg: str = ""
@@ -36,6 +42,13 @@ class MTFResult:
     capture_gain: float = 0.0
     illumination_wavelength_um: float = 0.0
     source_encoding: str = ""
+    edge_angle_method: str = ""
+    edge_angle_geometric: float = 0.0
+    edge_angle_phase: float = 0.0
+    edge_angle_consistency_deg: float = 0.0
+    edge_fit_residual_px: float = 0.0
+    edge_support_points: int = 0
+    analysis_roi_bounds: Optional[Tuple[int, int, int, int]] = None
     g1_mtf50: float = 0.0
     g2_mtf50: float = 0.0
     g1_mtf20: float = 0.0
