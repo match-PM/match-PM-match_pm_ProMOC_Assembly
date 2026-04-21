@@ -135,6 +135,8 @@ def fill_single_mode_response(
 ):
     """Populate AutoFocus response fields for a single autofocus run."""
     response.success = best_position is not None
+    # Keep the response compact so students see only the final focus result,
+    # while the detailed scan trace still remains available in the arrays below.
     status_parts = [
         "Autofocus complete",
         f"best_pos={float(best_position or 0.0):.3f}mm",
@@ -176,6 +178,8 @@ class AutofocusRunner:
             f"Phase 2: Coarse + Fine in {peak_start:.1f}-{peak_end:.1f}mm, mode={mode}"
         )
 
+        # The run plan freezes the selected algorithm, scan window, and timing
+        # before any motion starts so the later execution path stays simple.
         run_plan = self._build_single_mode_run_plan(
             mode=mode,
             peak_start=peak_start,
@@ -191,6 +195,8 @@ class AutofocusRunner:
         )
 
         if best_position is not None:
+            # Some modes refine the best point numerically but still need one
+            # final physical move so the axis ends on the usable measurement position.
             target_pos = self._move_to_measurement_position(
                 run_plan.mode_name,
                 best_position,
@@ -269,6 +275,8 @@ class AutofocusRunner:
         request,
     ) -> tuple[float, float]:
         """Choose full-range or fly-over peak window based on the algorithm."""
+        # Exhaustive-style modes intentionally ignore the fly-over peak and use
+        # the complete requested range as their deterministic search window.
         if mode_name in {'exhaustive', 'twostage'}:
             return float(request.start_position), float(request.end_position)
         return float(peak_start), float(peak_end)
@@ -456,6 +464,8 @@ class AutofocusRunner:
         max_steps = self._calculate_max_steps(algorithm)
 
         for _ in range(max_steps):
+            # The algorithm always reacts to a freshly captured frame at the
+            # current axis position; motion decisions are made one step later.
             cv_image, state.last_timestamp = self._wait_for_next_autofocus_frame(
                 state.last_timestamp
             )

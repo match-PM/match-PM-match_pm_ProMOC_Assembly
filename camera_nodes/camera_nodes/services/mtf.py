@@ -278,6 +278,8 @@ class MTFHandler(CallbackBase):
                 )
             )
 
+        # The handler always works on the post-switch frame so ROI selection,
+        # analyzer input, and capture validation all refer to the same mode.
         restore_state, switched_image = self._camera_format_controller.switch_to_full_frame_for_mtf(
             image_ts_ns if image_ts_ns is not None else 0,
             get_latest_image_fn=self._get_mtf_capture_image,
@@ -309,6 +311,8 @@ class MTFHandler(CallbackBase):
         request,
     ) -> tuple[float, dict[str, object]]:
         """Resolve request metadata once before ROI selection and export writing."""
+        # We resolve request metadata exactly once so the analyzer config, logs,
+        # and exported CSV context all describe the same measurement conditions.
         pixel_size_um = self._resolve_pixel_size_um(request)
         measurement_metadata = self._collect_measurement_metadata(request, pixel_size_um)
         measurement_context = self._format_measurement_metadata(measurement_metadata)
@@ -342,6 +346,8 @@ class MTFHandler(CallbackBase):
                     for item in capture_error[len(mismatch_prefix) :].split(",")
                     if item.strip()
                 ]
+            # Even a failed scientific capture should leave a traceable run
+            # folder so later comparisons can exclude misconfigured attempts.
             summary_csv, context_csv = self._write_failed_measurement_run(
                 request=request,
                 measurement_metadata=measurement_metadata,
@@ -363,6 +369,8 @@ class MTFHandler(CallbackBase):
         request,
     ) -> _MeasurementRun:
         """Resolve ROI candidates and create the run folder used for all exports."""
+        # Auto-ROI and manual ROI intentionally converge here so everything
+        # after this point uses the same edge-measurement and export pipeline.
         edge_rois = self._resolve_edge_rois(cv_image, request)
         edge_count = len(edge_rois)
         run_timestamp = self._get_timestamp()
@@ -398,6 +406,8 @@ class MTFHandler(CallbackBase):
         last_error = "Unknown error"
 
         for edge_index, edge_roi in enumerate(measurement_run.edge_rois):
+            # The first valid edge wins the ROS response, but we still measure
+            # every candidate so the run folder stays complete for later review.
             row, measured_edge, edge_error = self._measure_edge_candidate(
                 edge_roi=edge_roi,
                 edge_index=edge_index,
@@ -441,6 +451,8 @@ class MTFHandler(CallbackBase):
         last_error: str,
     ) -> tuple[Path, Path]:
         """Write per-edge and per-run artifacts after edge measurement finishes."""
+        # The export step happens before we decide success/failure so even
+        # failed runs keep their summary/context for later debugging.
         valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
         summary_csv = write_summary_csv(measurement_run.run_dir, edge_rows)
         context_csv = write_context_csv(
@@ -1000,6 +1012,8 @@ class MTFHandler(CallbackBase):
             )
 
         edge_label = self._build_edge_export_label(edge_roi, edge_index, edge_count)
+        # Each edge gets its own analyzer config so debug exports, ROI origin,
+        # and per-edge metadata stay tied to the physical edge on the target.
         config = self._prepare_edge_config(
             pixel_size_um=pixel_size_um,
             min_edge_angle=min_edge_angle,
@@ -1032,6 +1046,8 @@ class MTFHandler(CallbackBase):
                 self._node.get_logger().warn(
                     f"MTF warning ({edge_roi.edge_name}): {result.warning_msg}"
                 )
+            # The first frame produces the exported debug artifacts. Additional
+            # frames only improve the numeric average and do not rewrite files.
             valid_samples = self._measure_average_samples(analyzer, edge_roi, result)
             result.edge_name = edge_roi.edge_name
             result.edge_direction = edge_roi.edge_direction
