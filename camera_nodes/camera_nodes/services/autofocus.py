@@ -135,10 +135,15 @@ def fill_single_mode_response(
 ):
     """Populate AutoFocus response fields for a single autofocus run."""
     response.success = best_position is not None
-    response.status_message = (
-        f"{mode_name}: pos={float(best_position or 0.0):.3f}mm, "
-        f"score={float(best_score):.0f}"
-    )
+    status_parts = [
+        "Autofocus complete",
+        f"best_pos={float(best_position or 0.0):.3f}mm",
+        f"score={float(best_score):.0f}",
+        f"measurements={int(measurements)}",
+    ]
+    if best_image_path:
+        status_parts.append(f"image={best_image_path}")
+    response.status_message = ", ".join(status_parts)
     response.best_focus_position = float(best_position or 0.0)
     response.best_focus_value = float(best_score)
     response.total_measurements_taken = int(measurements)
@@ -535,7 +540,9 @@ class AutofocusRunner:
                 'Timeout waiting for new image in AF loop - Stream stalled?'
             )
             raise ImageProcessingError(
-                'Autofocus failed: Camera stream stalled (no new images)'
+                'Autofocus failed: camera stream stalled (no new images). '
+                'Next step: check /promoc/assembly_camera/stream0/image_raw in '
+                'rqt_image_view and retry.'
             )
         next_timestamp = last_timestamp if ts is None else int(ts)
         return cv_image, next_timestamp
@@ -650,7 +657,10 @@ class AutofocusHandler(CallbackBase):
                 focus_profile,
             )
             if peak_start is None or peak_end is None:
-                raise ImageProcessingError("No target detected during fly-over")
+                raise ImageProcessingError(
+                    "Autofocus fly-over found no target. Next step: center the "
+                    "target, check exposure/contrast, and retry autofocus."
+                )
             self._node.get_logger().info(
                 f"Peak detected: {peak_start:.1f}-{peak_end:.1f}mm "
                 f"(max_stddev={max_stddev:.1f})"

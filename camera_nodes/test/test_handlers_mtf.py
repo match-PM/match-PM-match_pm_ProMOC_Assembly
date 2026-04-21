@@ -279,6 +279,7 @@ def test_measure_mtf_uses_request_pixel_size_and_tracks_roi_origin(
     assert _FakeAnalyzer.init_config.measurement_metadata["camera_objective"] == "Plan Apo 10x"
     assert _FakeAnalyzer.init_config.measurement_metadata["pixel_size_source"] == pixel_size_source
     assert _FakeAnalyzer.compute_calls[0]["roi_origin"] == (11, 13)
+    assert "MTF complete:" in result.status_message
 
 
 def test_measure_mtf_returns_failure_on_scientific_capture_mismatch(
@@ -348,6 +349,7 @@ def test_measure_mtf_returns_failure_on_scientific_capture_mismatch(
     assert result.success is False
     assert "Scientific MTF capture readback mismatch" in result.status_message
     assert "gamma_enable=True!=False" in result.status_message
+    assert "restore the scientific raw capture settings" in result.status_message
 
     run_dir = (
         tmp_dir
@@ -368,6 +370,9 @@ def test_measure_mtf_returns_failure_on_scientific_capture_mismatch(
     assert context_rows[0]["capture_readback_ok"] == "0"
     assert "gamma_enable=True!=False" in context_rows[0]["capture_readback_mismatches"]
     assert "Scientific MTF capture readback mismatch" in context_rows[0]["measurement_error"]
+    assert context_rows[0]["selected_official_sop_angle_window_ok"] == "0"
+    assert context_rows[0]["selected_official_sop_reason"] == "no valid selected edge"
+    assert context_rows[0]["selected_measured_edge_angle_deg"] == ""
 
 
 def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPatch):
@@ -518,10 +523,13 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert result.mtf50 == 120.0
     assert len(_FakeAnalyzer.compute_calls) == 2
     assert [call["debug_label"] for call in _FakeAnalyzer.compute_calls] == ["01_top", "02_right"]
-    assert "valid_edges=2/2" in result.status_message
+    assert "MTF complete:" in result.status_message
+    assert "mode=auto" in result.status_message
     assert "selected=01_top" in result.status_message
+    assert "valid_edges=2/2" in result.status_message
+    assert "summary=" in result.status_message
 
-    csv_path = Path(result.status_message.split("csv=", 1)[1].split(")", 1)[0])
+    csv_path = Path(result.status_message.split("summary=", 1)[1].split(",", 1)[0])
     assert csv_path.exists()
     assert csv_path.name == "summary.csv"
     assert csv_path.parent.parent.name == "mtf_messungen"
@@ -538,8 +546,14 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert len(rows) == 2
     assert rows[0]["edge_label"] == "01_top"
     assert rows[0]["selected_for_response"] == "1"
+    assert rows[0]["official_sop_angle_window_ok"] == "1"
+    assert rows[0]["official_sop_min_angle_deg"] == "3.0"
+    assert rows[0]["official_sop_max_angle_deg"] == "10.0"
+    assert rows[0]["official_sop_angle_basis"] == "measured_final_edge_angle_deg"
+    assert rows[0]["official_sop_reason"] == ""
     assert rows[1]["edge_label"] == "02_right"
     assert rows[1]["selected_for_response"] == "0"
+    assert rows[1]["official_sop_angle_window_ok"] == "1"
     assert len(context_rows) == 1
     assert context_rows[0]["operator"] == "student1"
     assert context_rows[0]["roi_mode"] == "auto"
@@ -549,6 +563,10 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert context_rows[0]["capture_readback_ok"] == "1"
     assert context_rows[0]["selected_edge_label"] == "01_top"
     assert context_rows[0]["valid_edge_count"] == "2"
+    assert context_rows[0]["selected_measured_edge_angle_deg"] == "5.0"
+    assert context_rows[0]["selected_official_sop_angle_window_ok"] == "1"
+    assert context_rows[0]["selected_official_sop_angle_basis"] == "measured_final_edge_angle_deg"
+    assert context_rows[0]["selected_official_sop_reason"] == ""
 
 
 def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
@@ -675,10 +693,11 @@ def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
     assert len(_FakeAnalyzer.compute_calls) == 1
     assert _FakeAnalyzer.compute_calls[0]["roi_origin"] == (12, 14)
     assert _FakeAnalyzer.compute_calls[0]["debug_label"] == "manual"
+    assert "mode=manual" in result.status_message
     assert "selected=manual" in result.status_message
     assert "valid_edges=1/1" in result.status_message
 
-    csv_path = Path(result.status_message.split("csv=", 1)[1].split(")", 1)[0])
+    csv_path = Path(result.status_message.split("summary=", 1)[1].split(",", 1)[0])
     assert csv_path.exists()
     assert csv_path.name == "summary.csv"
     assert csv_path.parent.parent.parent.name == "manual_user"
@@ -700,3 +719,455 @@ def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
     assert context_rows[0]["roi_mode"] == "manual"
     assert context_rows[0]["selected_edge_label"] == "manual"
     assert context_rows[0]["valid_edge_count"] == "1"
+    assert context_rows[0]["selected_measured_edge_angle_deg"] == "4.8"
+    assert context_rows[0]["selected_official_sop_angle_window_ok"] == "1"
+    assert context_rows[0]["selected_official_sop_reason"] == ""
+
+
+@pytest.mark.parametrize(
+    ("measured_angle_deg", "expected_ok", "expected_reason_fragment"),
+    [
+        (2.99, "0", "below official SOP minimum 3.0deg"),
+        (3.0, "1", ""),
+        (10.0, "1", ""),
+    ],
+)
+def test_measure_mtf_marks_selected_edge_with_official_sop_window(
+    monkeypatch: pytest.MonkeyPatch,
+    measured_angle_deg: float,
+    expected_ok: str,
+    expected_reason_fragment: str,
+):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    tmp_root.mkdir(exist_ok=True)
+    tmp_dir = tmp_root / "mtf_handler_sop_boundary"
+    tmp_dir.mkdir(exist_ok=True)
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(tmp_dir),
+                "measurement.username": "boundary_user",
+                "mtf.use_full_frame": False,
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._get_mtf_capture_image = lambda: (
+        np.full((64, 64), 2048, dtype=np.uint16),
+        123,
+        "bayer_rggb16",
+    )
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    handler._get_timestamp = lambda: "20260420_120000"
+
+    edge_roi = mtf_module.EdgeROI(
+        image=np.full((16, 40), 2048, dtype=np.uint16),
+        bbox=(10, 12, 40, 16),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.8,
+        parent_center=(32, 32),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_targets",
+        lambda _image: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "create_edge_rois_from_rect",
+        lambda *_args, **_kwargs: [edge_roi],
+    )
+    monkeypatch.setattr(mtf_module, "MTF_AVG_SAMPLES", 1)
+
+    class _FakeAnalyzer:
+        def __init__(self, config, camera_matrix=None, dist_coeffs=None):
+            self.config = config
+
+        def compute_mtf(self, image, roi=None, roi_origin=None, debug_label=None):
+            return MTFResult(
+                mtf50=100.0,
+                mtf20=70.0,
+                mtf10=50.0,
+                edge_angle=measured_angle_deg,
+                valid=True,
+                sensor_nyquist=200.0,
+                capture_mode="raw_green",
+                capture_pixel_format=self.config.capture_pixel_format,
+                capture_binning_h=self.config.capture_binning_h,
+                capture_binning_v=self.config.capture_binning_v,
+                capture_exposure_us=self.config.capture_exposure_us,
+                capture_gain=self.config.capture_gain,
+                illumination_wavelength_um=self.config.wavelength_um,
+                source_encoding=self.config.source_encoding,
+                edge_angle_method="geometric",
+            )
+
+    monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
+
+    request = types.SimpleNamespace(
+        pixel_size_um=2.4,
+        auto_roi=True,
+        target_edge="",
+        camera_objective="Plan Apo 10x",
+        objective_magnification_x=10.0,
+        use_beamsplitter=False,
+        coaxial_light_voltage=0.0,
+        coaxial_light_current=0.0,
+        notes="boundary export",
+    )
+
+    result = handler.measure_mtf_callback(request, _make_measure_response())
+
+    assert result.success is True
+    csv_path = Path(result.status_message.split("summary=", 1)[1].split(",", 1)[0])
+    context_path = csv_path.parent / "context.csv"
+
+    with open(csv_path, newline="", encoding="utf-8") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    with open(context_path, newline="", encoding="utf-8") as csv_file:
+        context_rows = list(csv.DictReader(csv_file))
+
+    assert rows[0]["official_sop_angle_window_ok"] == expected_ok
+    assert rows[0]["selected_for_response"] == "1"
+    assert context_rows[0]["selected_official_sop_angle_window_ok"] == expected_ok
+    assert context_rows[0]["selected_measured_edge_angle_deg"] == str(measured_angle_deg)
+    if expected_reason_fragment:
+        assert expected_reason_fragment in rows[0]["official_sop_reason"]
+        assert expected_reason_fragment in context_rows[0]["selected_official_sop_reason"]
+    else:
+        assert rows[0]["official_sop_reason"] == ""
+        assert context_rows[0]["selected_official_sop_reason"] == ""
+
+
+def test_measure_mtf_marks_invalid_edge_as_not_officially_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    tmp_root.mkdir(exist_ok=True)
+    tmp_dir = tmp_root / "mtf_handler_invalid_edge"
+    tmp_dir.mkdir(exist_ok=True)
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(tmp_dir),
+                "measurement.username": "invalid_user",
+                "mtf.use_full_frame": False,
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._get_mtf_capture_image = lambda: (
+        np.full((64, 64), 2048, dtype=np.uint16),
+        123,
+        "bayer_rggb16",
+    )
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    handler._get_timestamp = lambda: "20260420_121500"
+
+    edge_roi = mtf_module.EdgeROI(
+        image=np.full((16, 40), 2048, dtype=np.uint16),
+        bbox=(10, 12, 40, 16),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.8,
+        parent_center=(32, 32),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_targets",
+        lambda _image: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "create_edge_rois_from_rect",
+        lambda *_args, **_kwargs: [edge_roi],
+    )
+    monkeypatch.setattr(mtf_module, "MTF_AVG_SAMPLES", 1)
+
+    class _FakeAnalyzer:
+        def __init__(self, config, camera_matrix=None, dist_coeffs=None):
+            self.config = config
+
+        def compute_mtf(self, image, roi=None, roi_origin=None, debug_label=None):
+            return MTFResult(
+                mtf50=0.0,
+                mtf20=0.0,
+                mtf10=0.0,
+                edge_angle=10.5,
+                valid=False,
+                error_msg="Angle outside node validation range",
+                capture_mode="raw_green",
+                capture_pixel_format=self.config.capture_pixel_format,
+                capture_binning_h=self.config.capture_binning_h,
+                capture_binning_v=self.config.capture_binning_v,
+                capture_exposure_us=self.config.capture_exposure_us,
+                capture_gain=self.config.capture_gain,
+                illumination_wavelength_um=self.config.wavelength_um,
+                source_encoding=self.config.source_encoding,
+                edge_angle_method="geometric",
+            )
+
+    monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
+
+    request = types.SimpleNamespace(
+        pixel_size_um=2.4,
+        auto_roi=True,
+        target_edge="",
+        camera_objective="Plan Apo 10x",
+        objective_magnification_x=10.0,
+        use_beamsplitter=False,
+        coaxial_light_voltage=0.0,
+        coaxial_light_current=0.0,
+        notes="invalid export",
+    )
+
+    result = handler.measure_mtf_callback(request, _make_measure_response())
+
+    assert result.success is False
+    run_dir = tmp_dir / "invalid_user" / "mtf_messungen" / "mtf_auto_20260420_121500"
+    summary_path = run_dir / "summary.csv"
+    context_path = run_dir / "context.csv"
+    assert summary_path.exists()
+    assert context_path.exists()
+
+    with open(summary_path, newline="", encoding="utf-8") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    with open(context_path, newline="", encoding="utf-8") as csv_file:
+        context_rows = list(csv.DictReader(csv_file))
+
+    assert len(rows) == 1
+    assert rows[0]["valid"] == "0"
+    assert rows[0]["official_sop_angle_window_ok"] == "0"
+    assert rows[0]["official_sop_reason"] == "edge technically invalid; no official SOP acceptance"
+    assert context_rows[0]["measurement_success"] == "0"
+    assert context_rows[0]["selected_official_sop_angle_window_ok"] == "0"
+    assert context_rows[0]["selected_official_sop_reason"] == "no valid selected edge"
+    assert context_rows[0]["selected_measured_edge_angle_deg"] == ""
+    assert "MTF failed on all candidate edges" in result.status_message
+    assert "switch between auto and manual ROI" in result.status_message
+
+
+def test_measure_mtf_reports_missing_camera_image_with_next_step():
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"),
+                "mtf.use_full_frame": False,
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._get_mtf_capture_image = lambda: (None, None, "bayer_rggb16")
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+
+    result = handler.measure_mtf_callback(
+        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=True, target_edge=""),
+        _make_measure_response(),
+    )
+
+    assert result.success is False
+    assert "No camera image available for MTF." in result.status_message
+    assert "rqt_image_view" in result.status_message
+
+
+def test_measure_mtf_reports_auto_roi_failure_with_manual_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"),
+                "mtf.use_full_frame": False,
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._get_mtf_capture_image = lambda: (
+        np.full((32, 32), 1024, dtype=np.uint16),
+        123,
+        "bayer_rggb16",
+    )
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_targets",
+        lambda _image: ("viz", [], []),
+    )
+
+    result = handler.measure_mtf_callback(
+        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=True, target_edge=""),
+        _make_measure_response(),
+    )
+
+    assert result.success is False
+    assert "Auto-ROI found no square or bar target." in result.status_message
+    assert "auto_roi=false" in result.status_message
+
+
+def test_measure_mtf_reports_manual_roi_cancel_with_retry_hint(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"),
+                "mtf.use_full_frame": False,
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._get_mtf_capture_image = lambda: (
+        np.full((32, 32), 1024, dtype=np.uint16),
+        123,
+        "bayer_rggb16",
+    )
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    handler._select_roi_interactive = lambda _image: (None, None)
+
+    result = handler.measure_mtf_callback(
+        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=False, target_edge=""),
+        _make_measure_response(),
+    )
+
+    assert result.success is False
+    assert "Manual ROI selection was cancelled." in result.status_message
+    assert "draw one ROI around a clean slanted edge" in result.status_message

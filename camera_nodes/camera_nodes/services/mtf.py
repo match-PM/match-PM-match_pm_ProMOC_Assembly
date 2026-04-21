@@ -69,6 +69,17 @@ class _MeasuredEdge:
     avg_delta_pct: float
 
 
+@dataclass(frozen=True)
+class _MeasurementRun:
+    """Bundle the resolved edge candidates and run folder context."""
+
+    edge_rois: list[EdgeROI]
+    edge_count: int
+    run_timestamp: str
+    run_dir: Path
+    run_id: str
+
+
 def apply_mtf_param_mapping(config: MTFConfig, get_param_raw) -> None:
     """Apply declarative parameter overrides to a config object."""
     for param_name, attr_name, cast, require_truthy in MTF_PARAM_MAP:
@@ -140,6 +151,11 @@ class MTFHandler(CallbackBase):
         roi = (x, y, w, h)
         roi_image = cv_image[y : y + h, x : x + w]
         return roi, roi_image
+
+    @staticmethod
+    def _with_next_step(message: str, next_step: str) -> str:
+        """Attach one short operator-facing next step to an error message."""
+        return f"{message} Next step: {next_step}"
 
     def _build_mtf_config(
         self,
@@ -250,6 +266,241 @@ class MTFHandler(CallbackBase):
             return self._wait_for_new_passthrough_image(last_timestamp, timeout=timeout)
         image, ts = self._wait_for_new_image(last_timestamp, timeout=timeout)
         return image, ts, "bgr8"
+
+    def _acquire_measurement_frame(self) -> tuple[np.ndarray, int | None, str, object | None]:
+        """Fetch the current measurement frame after the optional MTF camera switch."""
+        cv_image, image_ts_ns, image_encoding = self._get_mtf_capture_image()
+        if cv_image is None:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "No camera image available for MTF.",
+                    "check /promoc/assembly_camera/stream0/image_raw in rqt_image_view and retry.",
+                )
+            )
+
+        restore_state, switched_image = self._camera_format_controller.switch_to_full_frame_for_mtf(
+            image_ts_ns if image_ts_ns is not None else 0,
+            get_latest_image_fn=self._get_mtf_capture_image,
+            wait_for_new_image_fn=self._wait_for_new_mtf_capture_image,
+        )
+        if switched_image is not None:
+            cv_image = switched_image
+
+        capture_image, capture_ts_ns, capture_encoding = self._get_mtf_capture_image()
+        if capture_image is not None:
+            cv_image = capture_image
+            image_ts_ns = capture_ts_ns
+            image_encoding = capture_encoding
+        return cv_image, image_ts_ns, image_encoding, restore_state
+
+    def _read_capture_state(self) -> tuple[dict[str, object], list[str]]:
+        """Read the latest camera state snapshot used for scientific validation."""
+        capture_state = (
+            self._camera_format_controller.get_last_capture_state()
+            or self._camera_format_controller.read_capture_state()
+            or {}
+        )
+        capture_values = dict((capture_state or {}).get("values", {}))
+        capture_available_keys = list((capture_state or {}).get("available_keys", []))
+        return capture_state, capture_values, capture_available_keys
+
+    def _prepare_measurement_metadata(
+        self,
+        request,
+    ) -> tuple[float, dict[str, object]]:
+        """Resolve request metadata once before ROI selection and export writing."""
+        pixel_size_um = self._resolve_pixel_size_um(request)
+        measurement_metadata = self._collect_measurement_metadata(request, pixel_size_um)
+        measurement_context = self._format_measurement_metadata(measurement_metadata)
+        if measurement_context:
+            self._node.get_logger().info(f"MTF measurement context: {measurement_context}")
+        return pixel_size_um, measurement_metadata
+
+    def _validate_capture_or_write_failure(
+        self,
+        *,
+        request,
+        measurement_metadata: dict[str, object],
+        capture_state: dict[str, object],
+        capture_values: dict[str, object],
+        capture_available_keys: list[str],
+        image_encoding: str,
+    ) -> tuple[dict[str, object], str, list[str]]:
+        """Validate the scientific raw capture state and preserve failed runs on disk."""
+        try:
+            return self._validate_scientific_capture_state(
+                capture_state,
+                image_encoding,
+            )
+        except ImageProcessingError as exc:
+            capture_error = str(exc)
+            capture_mismatches = []
+            mismatch_prefix = "Scientific MTF capture readback mismatch: "
+            if capture_error.startswith(mismatch_prefix):
+                capture_mismatches = [
+                    item.strip()
+                    for item in capture_error[len(mismatch_prefix) :].split(",")
+                    if item.strip()
+                ]
+            summary_csv, context_csv = self._write_failed_measurement_run(
+                request=request,
+                measurement_metadata=measurement_metadata,
+                capture_values=capture_values,
+                capture_available_keys=capture_available_keys,
+                capture_mismatches=capture_mismatches,
+                image_encoding=image_encoding,
+                measurement_error=capture_error,
+            )
+            self._node.get_logger().error(
+                f"MTF capture validation failed: {capture_error}. "
+                f"summary={summary_csv}, context={context_csv}"
+            )
+            raise
+
+    def _prepare_measurement_run(
+        self,
+        cv_image: np.ndarray,
+        request,
+    ) -> _MeasurementRun:
+        """Resolve ROI candidates and create the run folder used for all exports."""
+        edge_rois = self._resolve_edge_rois(cv_image, request)
+        edge_count = len(edge_rois)
+        run_timestamp = self._get_timestamp()
+        run_dir, run_id = self._build_measurement_run_context(
+            request,
+            edge_rois,
+            timestamp=run_timestamp,
+        )
+        return _MeasurementRun(
+            edge_rois=edge_rois,
+            edge_count=edge_count,
+            run_timestamp=run_timestamp,
+            run_dir=run_dir,
+            run_id=run_id,
+        )
+
+    def _measure_run_edges(
+        self,
+        *,
+        measurement_run: _MeasurementRun,
+        request,
+        measurement_metadata: dict[str, object],
+        pixel_size_um: float,
+        min_edge_angle: float,
+        max_edge_angle: float,
+        capture_values: dict[str, object],
+        actual_pixel_format: str,
+        image_encoding: str,
+    ) -> tuple[list[dict[str, object]], _MeasuredEdge | None, str]:
+        """Measure each candidate edge through the shared analyzer and averaging path."""
+        edge_rows: list[dict[str, object]] = []
+        selected_edge: _MeasuredEdge | None = None
+        last_error = "Unknown error"
+
+        for edge_index, edge_roi in enumerate(measurement_run.edge_rois):
+            row, measured_edge, edge_error = self._measure_edge_candidate(
+                edge_roi=edge_roi,
+                edge_index=edge_index,
+                edge_count=measurement_run.edge_count,
+                run_dir=measurement_run.run_dir,
+                run_id=measurement_run.run_id,
+                request=request,
+                measurement_metadata=measurement_metadata,
+                pixel_size_um=pixel_size_um,
+                min_edge_angle=min_edge_angle,
+                max_edge_angle=max_edge_angle,
+                capture_values=capture_values,
+                actual_pixel_format=actual_pixel_format,
+                image_encoding=image_encoding,
+            )
+            edge_rows.append(row)
+            if measured_edge is not None and selected_edge is None:
+                selected_edge = measured_edge
+            if edge_error:
+                last_error = edge_error
+
+        if selected_edge is not None:
+            for row in edge_rows:
+                row["selected_for_response"] = int(
+                    row["edge_label"] == selected_edge.edge_label
+                )
+        return edge_rows, selected_edge, last_error
+
+    def _write_measurement_exports(
+        self,
+        *,
+        measurement_run: _MeasurementRun,
+        request,
+        measurement_metadata: dict[str, object],
+        capture_values: dict[str, object],
+        capture_available_keys: list[str],
+        capture_mismatches: list[str],
+        image_encoding: str,
+        edge_rows: list[dict[str, object]],
+        selected_edge: _MeasuredEdge | None,
+        last_error: str,
+    ) -> tuple[Path, Path]:
+        """Write per-edge and per-run artifacts after edge measurement finishes."""
+        valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
+        summary_csv = write_summary_csv(measurement_run.run_dir, edge_rows)
+        context_csv = write_context_csv(
+            measurement_run.run_dir,
+            build_context_row(
+                run_id=measurement_run.run_id,
+                timestamp=measurement_run.run_timestamp,
+                measurement_metadata=measurement_metadata,
+                roi_mode=self._roi_mode_label(request, measurement_run.edge_count),
+                focus_position_mm=self._focus_position_mm(),
+                capture_values=capture_values,
+                capture_available_keys=capture_available_keys,
+                capture_readback_mismatches=capture_mismatches,
+                capture_readback_ok=not capture_mismatches,
+                image_encoding=image_encoding,
+                edge_count=measurement_run.edge_count,
+                valid_edge_count=valid_edge_count,
+                selected_edge_label=selected_edge.edge_label if selected_edge else "",
+                selected_result=selected_edge.result if selected_edge else None,
+                selected_edge_angle_deg=(
+                    selected_edge.avg_angle if selected_edge is not None else None
+                ),
+                selected_sample_count=(
+                    len(selected_edge.valid_samples) if selected_edge is not None else 0
+                ),
+                measurement_success=selected_edge is not None,
+                measurement_error="" if selected_edge is not None else last_error,
+            ),
+        )
+        self._node.get_logger().info(
+            f"MTF export written: summary={summary_csv}, context={context_csv}"
+        )
+        return summary_csv, context_csv
+
+    def _finalize_measurement_response(
+        self,
+        *,
+        response,
+        measurement_run: _MeasurementRun,
+        selected_edge: _MeasuredEdge | None,
+        edge_rows: list[dict[str, object]],
+        summary_csv: Path,
+        last_error: str,
+    ):
+        """Return the selected edge response or fail with the preserved run artifacts."""
+        if selected_edge is None:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    f"MTF failed on all candidate edges. Last error: {last_error}. Summary: {summary_csv}",
+                    "refocus, tighten the ROI, or switch between auto and manual ROI before retrying.",
+                )
+            )
+
+        write_selected_edge_marker(measurement_run.run_dir, selected_edge.edge_label)
+        return self._populate_success_response(
+            response,
+            selected_edge,
+            edge_rows,
+            summary_csv,
+        )
 
     def _build_capture_summary(self, result) -> str:
         """Format compact capture metadata for logs and service status."""
@@ -528,13 +779,23 @@ class MTFHandler(CallbackBase):
                 )
                 return edge_rois
 
-        raise ImageProcessingError("Auto-ROI: No targets detected")
+        raise ImageProcessingError(
+            self._with_next_step(
+                "Auto-ROI found no square or bar target.",
+                "align the target more centrally or retry with auto_roi=false for manual ROI.",
+            )
+        )
 
     def _build_manual_edge_roi(self, cv_image: np.ndarray) -> list[EdgeROI]:
         """Collect one manual ROI and wrap it in the shared EdgeROI structure."""
         roi, roi_img = self._select_roi_interactive(cv_image)
         if roi is None:
-            raise ImageProcessingError("ROI selection cancelled")
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "Manual ROI selection was cancelled.",
+                    "draw one ROI around a clean slanted edge and retry the measurement.",
+                )
+            )
 
         x, y, w, h = roi
         contrast = RoiDetector.calculate_michelson_contrast(roi_img)
@@ -572,7 +833,12 @@ class MTFHandler(CallbackBase):
             if selected and "edge_roi" in selected:
                 self._node.get_logger().info(f"User selected: {selected['name']}")
                 return [selected["edge_roi"]]
-            raise ImageProcessingError("Interactive selection cancelled")
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "Interactive edge selection was cancelled.",
+                    "choose one detected edge or use target_edge='any' and retry.",
+                )
+            )
 
         filtered = [
             edge_roi for edge_roi in edge_rois if requested in edge_roi.edge_name.lower()
@@ -584,7 +850,10 @@ class MTFHandler(CallbackBase):
             return filtered
 
         raise ImageProcessingError(
-            f"Requested edge '{requested}' not found in detected targets"
+            self._with_next_step(
+                f"Requested edge '{requested}' was not found in the detected targets.",
+                "use target_edge='any' or pick one of top/right/bottom/left.",
+            )
         )
 
     def _resolve_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
@@ -850,6 +1119,7 @@ class MTFHandler(CallbackBase):
                 valid_edge_count=0,
                 selected_edge_label="",
                 selected_result=None,
+                selected_edge_angle_deg=None,
                 selected_sample_count=0,
                 measurement_success=False,
                 measurement_error=measurement_error,
@@ -874,27 +1144,16 @@ class MTFHandler(CallbackBase):
         response.edge_angle = measured_edge.avg_angle
         response.nyquist_frequency = float(result.nyquist_frequency)
 
-        edge_info = edge_roi.format_coords()
-        capture_summary = self._build_capture_summary(result)
-        if result.capture_mode == "raw_green":
-            capture_summary = (
-                f"{capture_summary}, "
-                f"G1avg={measured_edge.avg_g1_mtf50:.2f}, "
-                f"G2avg={measured_edge.avg_g2_mtf50:.2f}, "
-                f"DeltaAvg={measured_edge.avg_delta_pct:.1f}%"
-            )
+        roi_mode = "manual" if edge_roi.edge_name == "manual" else "auto"
         valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
         response.status_message = (
-            f"MTF50={response.mtf50:.2f} lp/mm "
-            f"(selected={measured_edge.edge_label}, "
+            f"MTF complete: mode={roi_mode}, selected={measured_edge.edge_label}, "
+            f"MTF50={response.mtf50:.2f} lp/mm, angle={response.edge_angle:.1f}deg, "
             f"valid_edges={valid_edge_count}/{len(edge_rows)}, "
-            f"avg={len(measured_edge.valid_samples)} samples, "
-            f"{edge_info}, {response.edge_angle:.1f}deg, "
-            f"C:{edge_roi.contrast:.2f}, {capture_summary}, "
-            f"csv={summary_csv})"
+            f"summary={summary_csv}"
         )
         if result.warning_msg:
-            response.status_message += f" WARN: {result.warning_msg}"
+            response.status_message += f", warn={result.warning_msg}"
 
         self._node.get_logger().info(
             f"MTF measurement successful: {response.status_message}"
@@ -922,11 +1181,17 @@ class MTFHandler(CallbackBase):
 
         if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
             raise ImageProcessingError(
-                f"Scientific MTF requires Bayer raw, readback is '{actual_pixel_format}'"
+                self._with_next_step(
+                    f"Scientific MTF requires Bayer raw, but readback is '{actual_pixel_format}'.",
+                    "check the camera pixel format and retry the measurement.",
+                )
             )
         if not self._is_raw_bayer_encoding(image_encoding):
             raise ImageProcessingError(
-                f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'"
+                self._with_next_step(
+                    f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'.",
+                    "check the camera stream encoding and retry the measurement.",
+                )
             )
 
         mismatches = self._camera_format_controller.collect_scientific_capture_mismatches(
@@ -935,7 +1200,10 @@ class MTFHandler(CallbackBase):
         )
         if mismatches:
             raise ImageProcessingError(
-                "Scientific MTF capture readback mismatch: " + ", ".join(mismatches)
+                self._with_next_step(
+                    "Scientific MTF capture readback mismatch: " + ", ".join(mismatches),
+                    "restore the scientific raw capture settings and retry the measurement.",
+                )
             )
         return capture_values, actual_pixel_format, mismatches
 
@@ -951,162 +1219,71 @@ class MTFHandler(CallbackBase):
         restore_state = None
 
         try:
-            # Step 1: fetch the latest frame and, if configured, switch the camera
-            # into the scientific full-frame raw mode before any ROI handling starts.
-            cv_image, image_ts_ns, image_encoding = self._get_mtf_capture_image()
-            if cv_image is None:
-                raise ImageProcessingError("No image available")
-
-            restore_state, switched_image = (
-                self._camera_format_controller.switch_to_full_frame_for_mtf(
-                    image_ts_ns if image_ts_ns is not None else 0,
-                    get_latest_image_fn=self._get_mtf_capture_image,
-                    wait_for_new_image_fn=self._wait_for_new_mtf_capture_image,
-                )
+            # Step 1: acquire the current work image after the optional camera
+            # switch into the scientific capture mode.
+            cv_image, _image_ts_ns, image_encoding, restore_state = (
+                self._acquire_measurement_frame()
             )
-            if switched_image is not None:
-                cv_image = switched_image
 
-            capture_image, capture_ts_ns, capture_encoding = self._get_mtf_capture_image()
-            if capture_image is not None:
-                cv_image = capture_image
-                image_ts_ns = capture_ts_ns
-                image_encoding = capture_encoding
-
-            # Step 2: validate that the actual camera readback matches the
-            # scientific raw-MTF contract before running the analyzer.
-            capture_state = (
-                self._camera_format_controller.get_last_capture_state()
-                or self._camera_format_controller.read_capture_state()
-                or {}
-            )
-            capture_values = dict((capture_state or {}).get("values", {}))
-            capture_available_keys = list((capture_state or {}).get("available_keys", []))
-            pixel_size_um = self._resolve_pixel_size_um(request)
-            measurement_metadata = self._collect_measurement_metadata(request, pixel_size_um)
-            measurement_context = self._format_measurement_metadata(measurement_metadata)
-            if measurement_context:
-                self._node.get_logger().info(f"MTF measurement context: {measurement_context}")
-            try:
-                capture_values, actual_pixel_format, capture_mismatches = (
-                    self._validate_scientific_capture_state(
-                        capture_state,
-                        image_encoding,
-                    )
-                )
-            except ImageProcessingError as exc:
-                capture_error = str(exc)
-                capture_mismatches = []
-                mismatch_prefix = "Scientific MTF capture readback mismatch: "
-                if capture_error.startswith(mismatch_prefix):
-                    capture_mismatches = [
-                        item.strip()
-                        for item in capture_error[len(mismatch_prefix) :].split(",")
-                        if item.strip()
-                    ]
-                summary_csv, context_csv = self._write_failed_measurement_run(
+            # Step 2: collect request metadata and validate that the camera
+            # really runs in the expected scientific raw mode.
+            capture_state, capture_values, capture_available_keys = self._read_capture_state()
+            pixel_size_um, measurement_metadata = self._prepare_measurement_metadata(request)
+            capture_values, actual_pixel_format, capture_mismatches = (
+                self._validate_capture_or_write_failure(
                     request=request,
                     measurement_metadata=measurement_metadata,
+                    capture_state=capture_state,
                     capture_values=capture_values,
                     capture_available_keys=capture_available_keys,
-                    capture_mismatches=capture_mismatches,
                     image_encoding=image_encoding,
-                    measurement_error=capture_error,
                 )
-                self._node.get_logger().error(
-                    f"MTF capture validation failed: {capture_error}. "
-                    f"summary={summary_csv}, context={context_csv}"
-                )
-                raise
+            )
 
+            # Step 3: resolve edge candidates and create one predictable run
+            # folder before we start the per-edge analyzer loop.
             min_edge_angle = self._param_float("mtf_min_edge_angle", 2.0)
             max_edge_angle = self._param_float("mtf_max_edge_angle", 10.0)
+            measurement_run = self._prepare_measurement_run(cv_image, request)
 
-            # Step 3: auto ROI and manual ROI both resolve into the same EdgeROI list.
-            edge_rois = self._resolve_edge_rois(cv_image, request)
-            edge_count = len(edge_rois)
-            run_timestamp = self._get_timestamp()
-            run_dir, run_id = self._build_measurement_run_context(
-                request,
-                edge_rois,
-                timestamp=run_timestamp,
+            # Step 4: measure every candidate edge through the shared analyzer
+            # path so auto ROI and manual ROI stay directly comparable.
+            edge_rows, selected_edge, last_error = self._measure_run_edges(
+                measurement_run=measurement_run,
+                request=request,
+                measurement_metadata=measurement_metadata,
+                pixel_size_um=pixel_size_um,
+                min_edge_angle=min_edge_angle,
+                max_edge_angle=max_edge_angle,
+                capture_values=capture_values,
+                actual_pixel_format=actual_pixel_format,
+                image_encoding=image_encoding,
             )
 
-            # Step 4: every edge goes through the same analyzer, averaging and
-            # export path, so auto and manual runs stay comparable.
-            edge_rows: list[dict[str, object]] = []
-            selected_edge: _MeasuredEdge | None = None
-            last_error = "Unknown error"
-
-            for edge_index, edge_roi in enumerate(edge_rois):
-                row, measured_edge, edge_error = self._measure_edge_candidate(
-                    edge_roi=edge_roi,
-                    edge_index=edge_index,
-                    edge_count=edge_count,
-                    run_dir=run_dir,
-                    run_id=run_id,
-                    request=request,
-                    measurement_metadata=measurement_metadata,
-                    pixel_size_um=pixel_size_um,
-                    min_edge_angle=min_edge_angle,
-                    max_edge_angle=max_edge_angle,
-                    capture_values=capture_values,
-                    actual_pixel_format=actual_pixel_format,
-                    image_encoding=image_encoding,
-                )
-                edge_rows.append(row)
-                if measured_edge is not None and selected_edge is None:
-                    selected_edge = measured_edge
-                if edge_error:
-                    last_error = edge_error
-
-            if selected_edge is not None:
-                for row in edge_rows:
-                    row["selected_for_response"] = int(
-                        row["edge_label"] == selected_edge.edge_label
-                    )
-
-            valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
-            summary_csv = write_summary_csv(run_dir, edge_rows)
-            context_csv = write_context_csv(
-                run_dir,
-                build_context_row(
-                    run_id=run_id,
-                    timestamp=run_timestamp,
-                    measurement_metadata=measurement_metadata,
-                    roi_mode=self._roi_mode_label(request, edge_count),
-                    focus_position_mm=self._focus_position_mm(),
-                    capture_values=capture_values,
-                    capture_available_keys=capture_available_keys,
-                    capture_readback_mismatches=capture_mismatches,
-                    capture_readback_ok=not capture_mismatches,
-                    image_encoding=image_encoding,
-                    edge_count=edge_count,
-                    valid_edge_count=valid_edge_count,
-                    selected_edge_label=selected_edge.edge_label if selected_edge else "",
-                    selected_result=selected_edge.result if selected_edge else None,
-                    selected_sample_count=(
-                        len(selected_edge.valid_samples) if selected_edge is not None else 0
-                    ),
-                    measurement_success=selected_edge is not None,
-                    measurement_error="" if selected_edge is not None else last_error,
-                ),
-            )
-            self._node.get_logger().info(
-                f"MTF export written: summary={summary_csv}, context={context_csv}"
+            # Step 5: export the full run before deciding whether the service
+            # should return success or surface the final failure.
+            summary_csv, _context_csv = self._write_measurement_exports(
+                measurement_run=measurement_run,
+                request=request,
+                measurement_metadata=measurement_metadata,
+                capture_values=capture_values,
+                capture_available_keys=capture_available_keys,
+                capture_mismatches=capture_mismatches,
+                image_encoding=image_encoding,
+                edge_rows=edge_rows,
+                selected_edge=selected_edge,
+                last_error=last_error,
             )
 
-            if selected_edge is None:
-                raise ImageProcessingError(
-                    f"MTF failed on all candidates. Last error: {last_error}. Summary: {summary_csv}"
-                )
-
-            write_selected_edge_marker(run_dir, selected_edge.edge_label)
-            return self._populate_success_response(
-                response,
-                selected_edge,
-                edge_rows,
-                summary_csv,
+            # Step 6: return the selected edge response or fail with the same
+            # preserved run folder that was already written above.
+            return self._finalize_measurement_response(
+                response=response,
+                measurement_run=measurement_run,
+                selected_edge=selected_edge,
+                edge_rows=edge_rows,
+                summary_csv=summary_csv,
+                last_error=last_error,
             )
 
         finally:

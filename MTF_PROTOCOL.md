@@ -40,12 +40,12 @@ geaendert werden.
 
 Offizielle Arbeitszone fuer Slanted-Edge-Vergleiche:
 
-- **empfohlener Winkelbereich:** `3° bis 10°`
-- **technischer Node-Hard-Gate:** derzeit `2° bis 10°`
+- **empfohlener Winkelbereich:** `3 deg bis 10 deg`
+- **technischer Node-Hard-Gate:** derzeit `2 deg bis 10 deg`
 
 Wichtig fuer die Auswertung:
 
-- der Standalone-Validator bewertet nur `3° bis 10°` als **offiziell akzeptiert**
+- der Standalone-Validator bewertet nur `3 deg bis 10 deg` als **offiziell akzeptiert**
 - ein synthetischer oder realer Fall kann deshalb technisch noch vom Node
   verarbeitet werden, aber fuer die offizielle SOP trotzdem als nicht akzeptiert
   gelten
@@ -148,6 +148,8 @@ Sie ist fuer spaetere Vergleiche gedacht und enthaelt unter anderem:
 - Fokusposition
 - Capture-Readback und verfuegbare Keys
 - Warnungen, Fehler und Notizen
+- offizielle SOP-Wertung der ausgewaehlten Antwortkante
+- gemessenen Endwinkel der ausgewaehlten Antwortkante
 
 ### summary.csv
 
@@ -161,6 +163,15 @@ Sie ist fuer spaetere Vergleiche gedacht und enthaelt unter anderem:
 - Analyse-Strip
 - Support-Points
 - Winkelmethode und Konsistenz
+- offizielle SOP-Wertung fuer die Kante auf Basis des gemessenen Endwinkels
+
+Wichtig:
+
+- ROS-Services bleiben dadurch unveraendert
+- technisch gueltige, aber ausserhalb der offiziellen Arbeitszone liegende Runs
+  bleiben `success=true`
+- die offizielle SOP-Akzeptanz steht nur in den CSV-Exporten und bleibt bewusst
+  getrennt von der technischen Node-Validitaet
 
 ## Validator
 
@@ -176,7 +187,7 @@ Er dient fuer:
 - algorithmische Regression
 - ROI-/Paritaets-Checks
 - Winkelstabilitaet auf synthetischen Targets
-- Boundary-Pruefung gegen die offizielle Arbeitszone `3° bis 10°`
+- Boundary-Pruefung gegen die offizielle Arbeitszone `3 deg bis 10 deg`
 
 Der Validator trennt dabei bewusst zwischen:
 
@@ -185,7 +196,7 @@ Der Validator trennt dabei bewusst zwischen:
 
 Beispiel:
 
-- ein synthetischer `2.5°`-Fall kann technisch noch `valid=True` sein
+- ein synthetischer `2.5 deg`-Fall kann technisch noch `valid=True` sein
 - im Validator wird er trotzdem als **offiziell nicht akzeptiert** gewertet
 
 Er ersetzt keine echte Laborvalidierung mit realen Targets und Wiederholungen.

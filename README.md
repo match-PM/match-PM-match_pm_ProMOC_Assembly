@@ -43,6 +43,35 @@ Nicht mehr Teil dieses Branches:
 Voraussetzung ist ein bereits eingerichteter Labor-PC mit den benoetigten
 Systemabhaengigkeiten und verfuegbarer Hardware.
 
+## Messablauf Fuer Studierende
+
+Der offizielle Standardablauf ist bewusst kurz:
+
+1. In jedem neuen Terminal `source ~/.bashrc` ausfuehren.
+2. Den Messstand mit dem Haupt-Launch starten.
+3. In `rqt_image_view` das Livebild pruefen.
+4. Bei Bedarf die Belichtung mit `set_exposure` nachziehen.
+5. Autofokus im Standardmodus ausfuehren.
+6. MTF zuerst immer mit `auto_roi=true` messen.
+7. Nur wenn Auto-ROI kein sauberes Target findet: auf manuelle ROI wechseln.
+8. Fuer die Auswertung zuerst `summary.csv`, danach bei Bedarf `context.csv`,
+   `*_plot.png`, `*_roi.png`, `*_esf.csv`, `*_lsf.csv` und `*_mtf.csv`
+   oeffnen.
+
+## Architektur In Kurzform
+
+Der MTF-Pfad bleibt absichtlich einfach:
+
+```text
+launch -> camera node -> MTF handler -> shared analyzer -> export folder
+```
+
+- `launch`: startet Kamera, Achse und den sichtbaren Messstand-Pfad
+- `camera node`: stellt die ROS-Services fuer Autofokus, MTF und Belichtung bereit
+- `MTF handler`: orchestriert Request, Capture-Validierung, ROI, Messung und Response
+- `shared analyzer`: berechnet Winkel, ESF, LSF und MTF
+- `export folder`: schreibt den Run-Ordner mit CSV, Plots und ROI-Artefakten
+
 ## Messstand Starten
 
 In jedem neuen Terminal zuerst:
@@ -67,18 +96,62 @@ rqt_image_view
 Im `rqt_image_view` den Topic `/promoc/assembly_camera/stream0/image_raw`
 waehlen.
 
+## Service Quick Start
+
+Die studentische Standardnutzung arbeitet direkt ueber die drei sichtbaren
+ROS-Services.
+
+Belichtung bei Bedarf anpassen:
+
+```bash
+ros2 service call /promoc/camera/set_exposure \
+  promoc_assembly_interfaces/srv/SetExposure \
+  "{exposure_time: 12000.0}"
+```
+
+Autofokus im Standardmodus:
+
+```bash
+ros2 service call /promoc/camera/autofocus \
+  promoc_assembly_interfaces/srv/AutoFocus \
+  "{start_position: 0.0, end_position: 25.0, focus_mode: 0, skip_flyover: false, save_best_image: false}"
+```
+
+MTF im Standardpfad mit Auto-ROI:
+
+```bash
+ros2 service call /promoc/camera/measure_mtf \
+  promoc_assembly_interfaces/srv/MeasureMTF \
+  "{pixel_size_um: 0.0, auto_roi: true, target_edge: 'any'}"
+```
+
+MTF-Fallback mit manueller ROI:
+
+```bash
+ros2 service call /promoc/camera/measure_mtf \
+  promoc_assembly_interfaces/srv/MeasureMTF \
+  "{pixel_size_um: 0.0, auto_roi: false, target_edge: 'any'}"
+```
+
 ## MTF Quick Start
 
 - `Auto-ROI`: Quadrat-Target ins Bild bringen, `measure_mtf` ausloesen, die 4
   Kanten werden automatisch bewertet.
 - `Manuelle ROI`: ROI direkt im Bild waehlen. Der Analyzer nutzt intern einen
   schmaleren Analyse-Streifen, damit die Winkeldetektion robuster bleibt.
+- `Standardpfad`: Erst `auto_roi=true` verwenden. Nur wenn kein geeignetes
+  Target gefunden wird oder die Zielkante unklar bleibt, auf manuelle ROI
+  wechseln.
 - `Ergebnisse`: Fuer jede Messung entsteht ein Run-Ordner mit `summary.csv`,
   `context.csv`, `selected_edge.txt` und pro Kante benannten
   `*_esf.csv`/`*_lsf.csv`/`*_mtf.csv`/`*_plot.png`/`*_roi.png`.
 - Fuer den schnellen Vergleich immer zuerst `summary.csv` oeffnen.
 - Fuer wissenschaftliche Vergleichsmessungen ist `context.csv` die kanonische
   Ein-Zeilen-Beschreibung der Messbedingung.
+- `summary.csv` markiert pro Kante zusaetzlich, ob der gemessene Endwinkel in
+  der offiziellen SOP-Arbeitszone `3 deg bis 10 deg` liegt.
+- `context.csv` spiegelt dieselbe SOP-Wertung fuer genau die Kante, die auch
+  an die ROS-Response zurueckgegeben wurde.
 
 ## Benutzerkonfiguration
 
@@ -153,6 +226,15 @@ ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/Set
 ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
 
+Der offizielle Bedienpfad fuer Studierende nutzt nur:
+
+- `/promoc/camera/set_exposure`
+- `/promoc/camera/autofocus` mit `focus_mode=0`
+- `/promoc/camera/measure_mtf` zuerst mit `auto_roi=true`
+
+Alle weiteren Modi und Debug-Pfade bleiben fuer Vergleichs- oder
+Entwicklungszwecke erhalten, sind aber nicht Teil des Standardablaufs.
+
 ## Wissenschaftliche MTF
 
 `/promoc/camera/measure_mtf` schaltet fuer die Messung in einen eigenen
@@ -172,10 +254,15 @@ Vergleich mehrerer Bedingungen passiert bewusst **ausserhalb von ROS** ueber
 Beam-Splitter-Vergleiche und die Bedeutung der CSV-Spalten stehen in
 [`MTF_PROTOCOL.md`](MTF_PROTOCOL.md).
 
+Entwickler- und Validator-Werkzeuge wie `mtf_synthetic_validation.py` bleiben
+im Repo erhalten, sind aber **nicht** Teil des normalen studentischen
+Messablaufs am Labor-PC.
+
 Fuer offizielle Slanted-Edge-Vergleiche gilt dabei die empfohlene Arbeitszone
-`3° bis 10°`. Der Node bleibt aus Kompatibilitaetsgruenden technisch bei
-`2° bis 10°`, der Standalone-Validator bewertet aber nur `3° bis 10°` als
-offiziell akzeptiert.
+`3 deg bis 10 deg`. Der Node bleibt aus Kompatibilitaetsgruenden technisch bei
+`2 deg bis 10 deg`, aber die Export-CSV trennt jetzt sauber zwischen
+technischer Node-Validitaet und offizieller SOP-Akzeptanz auf Basis des
+gemessenen Endwinkels.
 
 ## Entwicklung
 

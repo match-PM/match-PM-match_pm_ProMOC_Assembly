@@ -45,6 +45,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
 
 import camera_nodes.services.autofocus as autofocus_module  # noqa: E402
 from camera_nodes.services.autofocus import AutofocusHandler, AutofocusRunner  # noqa: E402
+from promoc_core.promoc_exceptions import ImageProcessingError  # noqa: E402
 
 
 class _Param:
@@ -254,3 +255,51 @@ def test_runner_retries_fourstep_peak_when_confirmation_score_drops(monkeypatch)
     assert best_image is None
     assert move_client.positions == [5.0, 5.5]
     assert handler.wait_calls == 2
+
+
+def test_fill_single_mode_response_uses_student_friendly_status():
+    response = types.SimpleNamespace(
+        success=False,
+        status_message="",
+        best_focus_position=0.0,
+        best_focus_value=0.0,
+        total_measurements_taken=0,
+        duration_seconds=0.0,
+        best_image_path="",
+        measurement_positions=[],
+        measurement_scores=[],
+    )
+
+    result = autofocus_module.fill_single_mode_response(
+        response,
+        mode_name="fourstep",
+        best_position=12.345,
+        best_score=987.0,
+        measurements=7,
+        duration_s=1.5,
+        measurement_positions=[12.0, 12.3],
+        measurement_scores=[500.0, 987.0],
+        best_image_path="C:/tmp/best.jpg",
+    )
+
+    assert result.success is True
+    assert "Autofocus complete" in result.status_message
+    assert "best_pos=12.345mm" in result.status_message
+    assert "measurements=7" in result.status_message
+    assert "image=C:/tmp/best.jpg" in result.status_message
+
+
+def test_wait_for_next_autofocus_frame_reports_operator_hint():
+    handler = _RunnerHandler()
+    handler._wait_for_new_image = lambda *_args, **_kwargs: (None, None)
+    runner = AutofocusRunner(handler)
+
+    try:
+        runner._wait_for_next_autofocus_frame(0)
+    except ImageProcessingError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected ImageProcessingError for stalled camera stream")
+
+    assert "camera stream stalled" in message.lower()
+    assert "rqt_image_view" in message
