@@ -109,7 +109,7 @@ New setups should not rely on it.
 ```bash
 # Use built-in mock implementation (no PMCLib needed)
 export USE_MOCK_PMC=true
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
 ```
 
 ## ✅ Validation and Testing
@@ -138,10 +138,10 @@ python3 test_basic_functionality.py
 source ../install/setup.bash
 
 # Test complete system (planar motor + linear axes)
-ros2 launch promoc_bringup promoc_assembly_launch.py
+ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
 
-# Test with demo controller
-ros2 launch promoc_bringup promoc_assembly_demo_launch.py
+# Official hardware runtime
+ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 
 # Test individual components
 ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
@@ -234,3 +234,4 @@ ls -la /dev/serial/by-id/usb-Thorlabs*
 - The master installer (`install_all.sh`) handles most edge cases automatically
 - For development without hardware, mock implementations are used automatically
 - PMCLib is proprietary and must be obtained separately from Match/IEMCA
+

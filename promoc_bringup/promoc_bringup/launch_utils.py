@@ -1,231 +1,177 @@
-"""
-Launch helper functions for ProMOC Bringup
+"""Launch helper functions for ProMOC bringup.
 
-Provides reusable helper functions for launch files to reduce
-code duplication and improve maintainability.
-
-Usage:
-    from promoc_bringup.launch_utils import (
-        discover_thorlabs_devices,
-        load_yaml_config,
-        create_node_with_params
-    )
+This module keeps the launch files small and readable:
+- resolve the canonical runtime mode
+- load repo config files
+- normalize user config onto a small runtime default set
+- provide helper lookups that multiple launch files can share
 """
 
+from __future__ import annotations
+
+from copy import deepcopy
+import glob
 import os
 import re
-import glob
-import yaml
 from typing import Dict, Optional, Tuple
+
+import yaml
+
+
+def resolve_runtime_mode(context, logger) -> str:
+    """
+    Resolve canonical runtime mode.
+
+    Accepted values:
+    - runtime_mode:=hardware
+    - runtime_mode:=sim
+    """
+    from launch.substitutions import LaunchConfiguration
+
+    runtime_mode = LaunchConfiguration("runtime_mode").perform(context).strip().lower()
+    if runtime_mode in ("hardware", "sim"):
+        return runtime_mode
+
+    if runtime_mode:
+        logger.warn(
+            f"Invalid runtime_mode='{runtime_mode}', falling back to 'hardware'."
+        )
+    return "hardware"
 
 
 def discover_thorlabs_devices() -> Dict[str, str]:
     """
-    Find Thorlabs APT stepper motor controllers connected via USB.
+    Find connected Thorlabs APT stepper motor controllers by stable USB path.
 
-    Searches `/dev/serial/by-id/` for Thorlabs APT controllers and returns
-    a mapping of serial number to stable device path.
-
-    Process:
-        1. Scan `/dev/serial/by-id/` for Thorlabs APT controllers
-        2. Extract serial number from device name
-        3. Return mapping: `{serial_number: device_path}`
-
-    Returns:
-        Dictionary mapping serial number to device path.
-        Empty dict if no devices found.
-
-    Example:
-        >>> devices = discover_thorlabs_devices()
-        >>> print(devices)
-        {'45407924': '/dev/serial/by-id/usb-Thorlabs_APT_...'}
+    Returns mapping: {serial_number: device_path}.
     """
-    port_map = {}
-    search_pattern = '/dev/serial/by-id/usb-Thorlabs_APT_Stepper_Motor_Controller_*'
+    port_map: Dict[str, str] = {}
+    search_pattern = "/dev/serial/by-id/usb-Thorlabs_APT_Stepper_Motor_Controller_*"
 
-    print("🛰️  Scanning for Thorlabs devices...")
-
+    print("Scanning for Thorlabs devices...")
     for device_path in glob.glob(search_pattern):
         try:
             filename = os.path.basename(device_path)
             match = re.search(
-                r'usb-Thorlabs_APT_Stepper_Motor_Controller_([0-9]+)',
-                filename
+                r"usb-Thorlabs_APT_Stepper_Motor_Controller_([0-9]+)",
+                filename,
             )
-
-            if match:
-                serial = match.group(1)
-                port_map[serial] = device_path
-                print(f"  ✅ Found: {serial} → {device_path}")
-            else:
-                print(f"  ⚠️ Unrecognized format: {filename}")
-
-        except Exception as e:
-            print(f"  ❌ Error processing {device_path}: {e}")
+            if not match:
+                print(f"  Warning: unrecognized device name format: {filename}")
+                continue
+            serial = match.group(1)
+            port_map[serial] = device_path
+            print(f"  Found: {serial} -> {device_path}")
+        except Exception as exc:
+            print(f"  Error processing {device_path}: {exc}")
 
     if port_map:
-        print(f"  → Found {len(port_map)} device(s)")
+        print(f"Found {len(port_map)} device(s).")
     else:
-        print("  → No devices found")
+        print("No devices found.")
 
     return port_map
 
 
 def load_yaml_config(config_path: str) -> Tuple[dict, Optional[str]]:
-    """
-    Load a YAML configuration file.
-
-    Args:
-        config_path: Full path to YAML file
-
-    Returns:
-        Tuple of (config_dict, error_message).
-        `error_message` is None if loading succeeded.
-
-    Example:
-        >>> config, error = load_yaml_config('/path/to/config.yaml')
-        >>> if error:
-        ...     print(f"Failed: {error}")
-    """
+    """Load YAML file and return (config, error)."""
     try:
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
+        with open(config_path, "r", encoding="utf-8") as file_handle:
+            config = yaml.safe_load(file_handle)
         return config, None
     except FileNotFoundError:
         return {}, f"File not found: {config_path}"
-    except yaml.YAMLError as e:
-        return {}, f"YAML parse error: {e}"
-    except Exception as e:
-        return {}, f"Error loading config: {e}"
+    except yaml.YAMLError as exc:
+        return {}, f"YAML parse error: {exc}"
+    except Exception as exc:
+        return {}, f"Error loading config: {exc}"
 
 
 def get_config_path(package_share_dir: str, config_name: str) -> str:
-    """
-    Get full path to config file in 'config/' folder.
-
-    Args:
-        package_share_dir: Result of get_package_share_directory()
-        config_name: Config filename (e.g., 'mover_node_params.yaml')
-
-    Returns:
-        Full path to config file
-    """
-    return os.path.join(package_share_dir, 'config', config_name)
+    """Get absolute path to a config file inside package `config/`."""
+    return os.path.join(package_share_dir, "config", config_name)
 
 
 def get_launch_path(package_share_dir: str, launch_name: str) -> str:
-    """
-    Get full path to launch file in 'launch/' folder.
+    """Get absolute path to a launch file inside package `launch/`."""
+    return os.path.join(package_share_dir, "launch", launch_name)
 
-    Args:
-        package_share_dir: Result of get_package_share_directory()
-        launch_name: Launch filename (e.g., 'camera.launch.py')
-
-    Returns:
-        Full path to launch file
-    """
-    return os.path.join(package_share_dir, 'launch', launch_name)
-
-
-# =============================================================================
-# Optical Measurement System Helpers
-# =============================================================================
 
 def load_user_config(bringup_share_dir: str) -> dict:
     """
-    Load user configuration with fallback to defaults.
+    Load and merge user config with defaults.
 
-    Args:
-        bringup_share_dir: Path to promoc_bringup share directory
+    Returns a normalized runtime config used by bringup launch files.
 
-    Returns:
-        Merged configuration dictionary
+    The CS runtime intentionally keeps this config surface small. Missing
+    sections fall back to explicit defaults so `system.launch.py` and the
+    secondary launch files can stay deterministic and easy to explain.
     """
-    user_config_path = get_config_path(bringup_share_dir, 'user_config.yaml')
+    user_config_path = get_config_path(bringup_share_dir, "user_config.yaml")
 
     defaults = {
-        'user': {
-            'name': 'default_user',
-            'measurement_base_path': os.path.join(os.path.expanduser('~'), 'Dokumente', 'Messungen'),
+        "measurement": {
+            "operator": "default_user",
+            "base_path": os.path.join(
+                os.path.expanduser("~"), "Dokumente", "Messungen"
+            ),
         },
-        'autofocus': {
-            'refinement_samples': 51,
-            'min_step_mm': 0.010,
-            'refinement_shrink_factor': 0.25,
+        "runtime": {"mode": "hardware"},
+        "autofocus": {
+            "refinement_samples": 51,
+            "min_step_mm": 0.010,
+            "refinement_shrink_factor": 0.25,
         },
-        'autofocus_profiles': {
-            'default': {},
-            'profiles': {},
+        "autofocus_profiles": {"default": {}, "profiles": {}},
+        "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
+        "camera": {"pixel_size_um": 2.40},
+        "measurement_conditions": {
+            "coaxial_light_voltage": 0.0,
+            "coaxial_light_current": 0.0,
+            "camera_objective": "unknown",
+            "notes": "",
         },
-        'fly_over': {
-            'refinement_mode': 0,
-            'refinement_strategy': 'linear',
-        },
-        'camera': {
-            'pixel_size_um': 2.40,
-            'mtf_csv_path': '/tmp/mtf_results.csv',
-        },
-        'mtf': {
-            'profile': 'default',
-            'debug_export_dir': '',
-        },
-        'measurement_conditions': {
-            'coaxial_light_voltage': 0.0,
-            'coaxial_light_current': 0.0,
-            'camera_objective': 'unknown',
-            'notes': '',
-        }
     }
 
-    if os.path.exists(user_config_path):
-        try:
-            config, error = load_yaml_config(user_config_path)
-            if not error:
-                for section in defaults:
-                    if section in config:
-                        defaults[section].update(config[section])
-                print(f"✓ Loaded user config: {user_config_path}")
-        except Exception as e:
-            print(f"⚠ Failed to load user config: {e}")
-    else:
-        print(f"ℹ No user config at {user_config_path}, using defaults")
+    if not os.path.exists(user_config_path):
+        print(f"Info: no user config at {user_config_path}, using defaults.")
+        return defaults
 
-    return defaults
+    try:
+        config, error = load_yaml_config(user_config_path)
+        if error:
+            print(f"Warning: failed to load user config: {error}")
+            return defaults
+
+        normalized = config or {}
+        merged = deepcopy(defaults)
+        for section in merged:
+            if isinstance(normalized.get(section), dict):
+                merged[section].update(normalized[section])
+
+        print(f"Loaded user config: {user_config_path}")
+        return merged
+    except Exception as exc:
+        print(f"Warning: failed to process user config: {exc}")
+        return defaults
 
 
 def load_camera_config(bringup_share_dir: str) -> dict:
-    """
-    Load camera configuration from ids_camera_params.yaml.
-
-    Args:
-        bringup_share_dir: Path to promoc_bringup share directory
-
-    Returns:
-        Camera parameters dictionary
-    """
-    config_path = get_config_path(bringup_share_dir, 'ids_camera_params.yaml')
+    """Load camera configuration from ids_camera_params.yaml."""
+    config_path = get_config_path(bringup_share_dir, "ids_camera_params.yaml")
     config, error = load_yaml_config(config_path)
     if error:
-        print(f"⚠ Camera config error: {error}")
+        print(f"Warning: camera config error: {error}")
         return {}
-    return config.get('camera_params', {})
+    return config.get("camera_params", {})
 
 
 def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
-    """
-    Load linear axis configuration for a specific axis.
-
-    Args:
-        bringup_share_dir: Path to promoc_bringup share directory
-        axis_name: Axis name (e.g., 'lts300_x_axis')
-
-    Returns:
-        Axis parameters dictionary
-    """
-    config_path = get_config_path(bringup_share_dir, 'linear_axes_params.yaml')
+    """Load linear axis configuration for a specific axis."""
+    config_path = get_config_path(bringup_share_dir, "linear_axes_params.yaml")
     config, error = load_yaml_config(config_path)
     if error:
-        print(f"⚠ Linear axis config error: {error}")
+        print(f"Warning: linear axis config error: {error}")
         return {}
     axis_config = config.get(axis_name, {})
-    return axis_config.get('ros__parameters', {})
+    return axis_config.get("ros__parameters", {})

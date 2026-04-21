@@ -1,0 +1,9 @@
+key,value
+roi_bbox_x,100
+roi_bbox_y,200
+analysis_roi_bounds,"(108, 204, 128, 226)"
+edge_angle_deg,5.2
+edge_angle_method,geometric
+edge_angle_phase,5.0
+edge_angle_consistency_deg,0.2
+edge_support_points,42

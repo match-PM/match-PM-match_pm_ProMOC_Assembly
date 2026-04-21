@@ -1,39 +1,32 @@
-# ProMOC User Configuration Setup
+# ProMOC User Configuration
 
-## Quick Start for Students
+## Quick Start
 
-1. **Copy the template:**
-   ```bash
-   cd promoc_bringup/config
-   cp user_config.example.yaml user_config.yaml
-   ```
+1. Copy a template:
+```bash
+cd promoc_bringup/config
+cp user_config.v2.example.yaml user_config.yaml
+```
 
-2. **Edit with your name:**
-   ```bash
-   nano user_config.yaml
-   ```
-   
-   Change `'YourName'` to your actual name (e.g., `'M.Mustermann'`)
+2. Edit values:
+```bash
+nano user_config.yaml
+```
 
-3. **Done!** Your measurement logs will now be saved to:
-   ```
-   ~/Dokumente/Messungen/{YourName}/autofocus_logs/
-   ```
+3. Use the system with your config:
+```bash
+ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+```
 
-## Configuration Options
+## Canonical v2 Keys
 
-The `user_config.yaml` file supports these settings:
-
-### Required
-- **`user.name`**: Your name for measurement logs
-
-### Optional
-- **`autofocus.refinement_samples`**: Samples per refinement level (default: 51)
-- **`autofocus.min_step_mm`**: Minimum step size in mm (default: 0.010)
-- **`autofocus.refinement_shrink_factor`**: Range reduction factor (default: 0.25)
-- **`camera.pixel_size_um`**: Sensor pixel size in µm (default: 3.45)
-- **`camera.mtf_csv_path`**: Path for MTF results (default: /tmp/mtf_results.csv)
+- `runtime.mode`: `hardware` or `sim`
+- `measurement.operator`: operator or user name
+- `measurement.base_path`: output base path
+- `camera.pixel_size_um`
+- `autofocus.*`
+- `measurement_conditions.*`
 
 ## Note
 
-⚠️ The `user_config.yaml` file is **not tracked by Git** - your personal settings stay local!
+`user_config.yaml` is git-ignored and remains local to each workstation.

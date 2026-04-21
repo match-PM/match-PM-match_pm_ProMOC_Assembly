@@ -1,266 +1,68 @@
-# ============================================================================
-# IDS U3-3800CP-C-HQ Rev.2.2 (AB12874) Camera Configuration
-# ============================================================================
-# This is the default camera configuration for the ProMOC Assembly system
-# 
-# Camera Model: IDS U3-3800CP-C-HQ Rev.2.2
-# Article Number: AB12874
-# Interface: USB3 Vision
-# Sensor: Sony IMX183CQK-J (CMOS Color, 1")
-# Resolution: 20.44 MPixel (5536 x 3692 pixels)
-# Datasheet: https://de.ids-imaging.com/IDS/pdfsheet_pdf.php?sku=AB12874
-# ============================================================================
+# IDS U3-3800CP-C-HQ Rev.2.2 default runtime camera configuration.
 
 camera_params:
-  # -------------------------------------------------------------------------
-  # Camera Identity & Connection
-  # -------------------------------------------------------------------------
-  # GUID of camera (get using `arv-tool-0.8` or `arv-tool`)
-  # To find your camera GUID, run: arv-tool-0.8 -l
-  guid: 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781'
-  
-  # Driver type for this camera
-  # Options: 'usb3vision' | 'gigevision'
-  driver: 'usb3vision'
-  
-  # Arbitrary name to identify camera (used for ROS node names and topics)
-  cameraname: 'promoc_camera'
-  
-  # -------------------------------------------------------------------------
-  # Sensor Specifications (Sony IMX183CQK-J)
-  # -------------------------------------------------------------------------
-  # Physical pixel size on sensor (in micrometers)
-  # Source: IDS datasheet - Pixelgröße: 2.4 µm
-  pixelsize: 2.4  # µm
-  # Uncertainty of Pixel Pitch (Lithography tolerances)
-  #realistic: < 0.01 µm. 
-  #for error propagation: negligible compared to Magnification Error.
+  guid: IDS Imaging Development Systems GmbH-1409f4a43375-4104401781
+  driver: usb3vision
+  cameraname: promoc_camera
+  pixelsize: 2.4
   pixel_size_uncertainty_um: 0.01
-  
-  # Optical sensor dimensions
-  # Source: IDS datasheet - Optische Fläche: 13.286 mm x 8.861 mm
   sensor_width_mm: 13.286
   sensor_height_mm: 8.861
-  
-  # Native sensor resolution (full frame)
-  # Source: IDS datasheet - Auflösung: 5536 x 3692 Pixel
   sensor_resolution_h: 5536
   sensor_resolution_v: 3692
-  
-  # Sensor aspect ratio: 3:2
-  # ADC: 12 Bit
-  # Color depth: 12 Bit
-  
-  # -------------------------------------------------------------------------
-  # Pixel Format
-  # -------------------------------------------------------------------------
-  # For this Sony IMX183CQK-J sensor, available Bayer patterns:
-  # - BayerRG8, BayerRG10, BayerRG12, BayerRG12p, BayerRG10p
-  # - RGB8, BGR8 (debayered formats)
-  # 
-  # RGB8 is used here for debayered color output
-  pixel_format: 'RGB8'
-  
-  # -------------------------------------------------------------------------
-  # Optical System Configuration
-  # -------------------------------------------------------------------------
-  # Magnification factor of the optical system
-  magnification: 1
-  
-  # Camera coordinate system mapping
-  # Define how camera sensor axes map to world coordinate system
-  camera_axis_1: 'x'
-  camera_axis_2: 'y'
-  camera_axis_1_angle: 0        # Degrees from normal 'x' axis
-  camera_axis_2_angle: '+'      # '+' = 90°, '-' = -90°
-  
-  # -------------------------------------------------------------------------
-  # Binning Configuration
-  # -------------------------------------------------------------------------
-  # Default binning factor (1 = full res, 2 = 2x2 binning)
-  # 2x2 Binning reduces resolution by 4 (20MP -> 5MP) but increases sensitivity
-  # and frame rate processing speed. Ideally used for standard operations.
+  magnification: 1.0
+  camera_axis_1: x
+  camera_axis_2: y
+  camera_axis_1_angle: 0
+  camera_axis_2_angle: +
+  pixel_format: RGB8
   binning_factor: 1
+  subscription_topic: /promoc/assembly_camera/stream0/image_raw
 
-  # -------------------------------------------------------------------------
-  # ROS Topics
-  # -------------------------------------------------------------------------
-  # Image subscription topic (where camera driver publishes images)
-  subscription_topic: '/promoc/assembly_camera/stream0/image_raw'
-
-# =============================================================================
-# Exposure Time Control
-# =============================================================================
-# IDS U3-3800CP-C-HQ Exposure Specifications:
-# - Standard exposure: 0.053 ms - 814 ms (53 µs - 814000 µs)
-# - Long exposure mode: up to 30000 ms (30 seconds)
 exposure_time:
-  # Service to control exposure time dynamically
-  srv_client_name: '/promoc/assembly_camera_controller/set_exposure_time'
-  srv_type: 'pm_genicam_controller_interfaces/srv/SetExposureTime'
-  
-  # Minimum exposure time in microseconds
-  # Source: IDS datasheet - Belichtungszeit min: 0.053 ms = 53 µs
-  min_val: 53.0  # µs
-  
-  # Maximum standard exposure time in microseconds
-  # Source: IDS datasheet - Belichtungszeit max: 814 ms = 814000 µs
-  # Note: Long exposure mode allows up to 30000 ms (30000000 µs)
-  max_val: 814000.0  # µs
+  srv_client_name: /promoc/assembly_camera_controller/set_exposure_time
+  srv_type: pm_genicam_controller_interfaces/srv/SetExposureTime
+  min_val: 53.0
+  max_val: 814000.0
 
-# =============================================================================
-# Frame Rate Specifications
-# =============================================================================
-# IDS U3-3800CP-C-HQ Frame Rate:
-# - Freerun mode: 19 fps (continuous acquisition)
-# - Trigger mode (continuous): 10 fps
-# - Trigger mode (maximum): 10 fps
 frame_rate:
-  freerun_max: 19.0      # fps
-  trigger_continuous: 10.0  # fps
-  trigger_max: 10.0      # fps
+  freerun_max: 19.0
+  trigger_continuous: 10.0
+  trigger_max: 10.0
 
-# =============================================================================
-# Camera Calibration Information
-# =============================================================================
-# This section contains the camera intrinsic calibration parameters
-# These values should be obtained through camera calibration process
-# Current values are from existing calibration - UPDATE if you recalibrate!
 camera_info:
-  # Image dimensions used during calibration
-  # Note: 1x1 Binning resolution (20 MP)
-  # Full Sensor: 5536 x 3692
-  # 2x2 Binning: 2768 x 1846
-  image_width: 5536
-  image_height: 3692
-  
+  image_width: 2448
+  image_height: 2048
   camera_name: assembly_camera_stream0
-  
-  # Camera intrinsic matrix K [3x3]
-  # [fx  0  cx]
-  # [0  fy  cy]
-  # [0   0   1]
   camera_matrix:
     rows: 3
     cols: 3
-    data: [1778.591345, 0.000000, 964.276439,
-          0.000000, 1789.714953, 804.364652,
-          0.000000, 0.000000, 1.000000]
-  
-  # Distortion model used
+    data: [1778.591345, 0.0, 964.276439, 0.0, 1789.714953, 804.364652, 0.0, 0.0, 1.0]
   distortion_model: plumb_bob
-  
-  # Distortion coefficients [k1, k2, p1, p2, k3]
   distortion_coefficients:
     rows: 1
     cols: 5
-    data: [-0.149383, 0.142808, 0.002512, -0.003641, 0.000000]
-  
-  # Rectification matrix R [3x3] (for stereo)
+    data: [0.0, 0.0, 0.0, 0.0, 0.0]
   rectification_matrix:
     rows: 3
     cols: 3
-    data: [0.969314, -0.024000, 0.244652,
-          0.025128, 0.999683, -0.001489,
-          -0.244539, 0.007591, 0.969610]
-  
-  # Projection matrix P [3x4]
+    data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
   projection_matrix:
     rows: 3
     cols: 4
-    data: [2720.246602, 0.000000, 710.195835, 0.000000,
-          0.000000, 2720.246602, 798.603073, 0.000000,
-          0.000000, 0.000000, 1.000000, 0.000000]
+    data: [1778.0, 0.0, 964.0, 0.0, 0.0, 1789.0, 804.0, 0.0, 0.0, 0.0, 1.0, 0.0]
 
-# =============================================================================
-# MTF (Modulation Transfer Function) Related Parameters
-# =============================================================================
-# Parameters relevant for MTF measurement and optical quality assessment
-mtf_params:
-  # Sensor-related parameters affecting MTF
-  nyquist_frequency: 208.33  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.0024))
-  
-  # Pixel size in mm (for MTF calculations)
-  pixel_size_mm: 0.0024  # 2.4 µm = 0.0024 mm
-  
-  # Recommended settings for MTF measurement
-  recommended_exposure_ms: 100.0  # Adjust based on your lighting
-  recommended_gain: 0.0           # Start with 0 gain for best SNR
-  
-  # Binning affects MTF - IDS U3-3800CP supports 2x2 binning
-  binning_modes:
-    - "1x1"  # No binning (best resolution)
-    - "2x2"  # 2x2 binning (increases sensitivity, reduces resolution)
-
-# =============================================================================
-# Dynamic Parameters (Runtime Adjustable via GenICam)
-# =============================================================================
-# See: https://github.com/FraunhoferIOSB/camera_aravis2
-# These parameters can be dynamically adjusted during runtime
 dynamic_parameters:
   - FeatureName: AcquisitionFrameRate
     Type: float
     Min: 1.0
-    Max: 19.0  # Maximum freerun frame rate per IDS specs
-    Description: Controls the acquisition rate (in Hertz) at which frames are captured.
-  
+    Max: 19.0
+    Description: Controls the acquisition rate in Hertz.
   - FeatureName: ExposureTime
     Type: float
-    Min: 53.0      # Minimum exposure time in µs
-    Max: 814000.0  # Maximum standard exposure in µs
+    Min: 53.0
+    Max: 814000.0
     Description: Exposure time in microseconds.
-  
   - FeatureName: Gain
     Type: float
     Description: Analog gain applied to the sensor signal.
-
-  - FeatureName: BinningHorizontal
-    Type: int
-    Min: 1
-    Max: 2
-    Description: Horizontal binning factor.
-
-  - FeatureName: BinningVertical
-    Type: int
-    Min: 1
-    Max: 2
-    Description: Vertical binning factor.
-
-  
-  - FeatureName: Width
-    Type: int
-    Min: 256
-    Max: 5536
-    Description: Width of the image in pixels.
-
-  - FeatureName: Height
-    Type: int
-    Min: 256
-    Max: 3692
-    Description: Height of the image in pixels.
-
-  # Additional available features on IDS U3-3800CP:
-  # - Auto exposure, Auto gain, Auto white balance
-  # - Gamma, LUT (Look-Up Table)
-  # - Mirror/Flip (Y axis)
-  # - Binning (2x2 supported)
-  # - ROI (Region of Interest)
-  # - Decimation (FPGA-based)
-
-# =============================================================================
-# Hardware Specifications Reference
-# =============================================================================
-# Additional hardware specs for reference (not used by software):
-#
-# Power consumption: 1.8 W - 3.5 W
-# Internal memory: 128 MB
-# Shutter type: Rolling Shutter
-# Sensor class: 1" (optical format)
-# Sensor diagonal: 15.97 mm
-# Binning factor: 2x2 (constrain - horizontal and vertical jointly)
-# Decimation factor: 2, 4, 8 (see datasheet)
-# Color processing: Auto exposure, Auto gain, Auto white balance, Gamma, LUT
-# Mirror/Flip: Y-axis supported
-# ROI: Supported
-# Firmware: Version 2.20+
-# =============================================================================

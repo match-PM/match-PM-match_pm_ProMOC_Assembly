@@ -1,4 +1,4 @@
-# Request: Autofocus with algorithm selection
+# Request: Autofocus with Four-Step runtime defaults
 
 # Start position for the scan (in mm)
 float64 start_position
@@ -6,17 +6,15 @@ float64 start_position
 # End position for the scan (in mm)
 float64 end_position
 
-# --- ALGORITHM SELECTION ---
-# 0 = Standard (Golden Section search, robust default)
-# 1 = HillClimbing (fast, adaptive step size with early termination)
-# 2 = Parabolic (iterative parabolic interpolation for sub-sample precision)
-# 3 = Fibonacci (efficient Fibonacci sequence based search)
-# 4 = Exhaustive (brute-force with minimum step, maximum precision reference)
+# --- COMPATIBILITY FIELD ---
+# The CS runtime branch keeps one maintained autofocus path: Four-Step.
+# The field remains in the interface for transition compatibility.
+# Use 0 for the standard path; other values are accepted but mapped to Four-Step.
 int32 focus_mode
 
 # --- OPTIONAL: Skip fly-over detection (use full range) ---
 # If true, skips fly-over and uses start_position to end_position directly
-# Used by verification to test all algorithms on same range
+# Useful for deterministic algorithm comparisons on the same scan range
 bool skip_flyover
 
 # --- OPTIONAL: Save best image ---

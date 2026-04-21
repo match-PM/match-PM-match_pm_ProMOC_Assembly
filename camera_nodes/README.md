@@ -1,83 +1,45 @@
-## Camera Integration Setup
+# camera_nodes
 
-This guide covers the installation and configuration of IDS cameras using the camera_aravis2 package.
+ROS2 camera runtime package for Four-Step autofocus, exposure control, and the
+camera simulator.
 
-### 1. Install External Dependencies
+## Start Here
 
-The camera integration depends on the external `camera_aravis2` package:
+Open these files in this order:
 
-```bash
-# Navigate to your workspace
-cd ~/ros2_ws/src
+1. `camera_nodes/camera_nodes/node.py`
+2. `camera_nodes/camera_nodes/services/autofocus.py`
+3. `camera_nodes/camera_nodes/algorithms/`
+4. `camera_nodes/camera_nodes/drivers/`
 
-# Clone camera_aravis2 (if not already done via dependencies.repos)
-git clone https://github.com/FraunhoferIOSB/camera_aravis2.git
+## What To Edit
 
-# Install system dependencies
-sudo apt install libaravis-dev aravis-tools
-```
-### Setup IDS Camera Permissions
+| Change | Start here |
+| --- | --- |
+| Node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
+| Autofocus behavior | `camera_nodes/camera_nodes/services/autofocus.py` |
+| Exposure behavior | `camera_nodes/camera_nodes/services/exposure.py` |
+| Camera algorithms | `camera_nodes/camera_nodes/algorithms/` |
+| Camera hardware or sim backend | `camera_nodes/camera_nodes/drivers/` |
+| Shared camera models | `camera_nodes/camera_nodes/models.py` |
 
-For IDS USB3Vision cameras, create udev rules to allow user access:
+## Canonical Runtime Files
 
-```bash
-sudo tee /etc/udev/rules.d/99-ids-cameras.rules <<EOF
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1409", ATTRS{idProduct}=="8000", MODE="0666"
-EOF
-```
+- `camera_nodes/camera_nodes/node.py`
+- `camera_nodes/camera_nodes/config.py`
+- `camera_nodes/camera_nodes/models.py`
+- `camera_nodes/camera_nodes/services/`
+- `camera_nodes/camera_nodes/drivers/`
+- `camera_nodes/camera_nodes/algorithms/`
+- `camera_nodes/camera_nodes/sim_node.py`
 
-### 2. Use vcs tool (Recommended)
+## Stable Public ROS APIs
 
-If you have vcs installed, you can use the dependencies file:
+- `/promoc/camera/autofocus`
+- `/promoc/camera/set_exposure`
 
-```bash
-cd ~/ros2_ws/src/match-PM-match_pm_ProMOC_Assembly
-vcs import ~/ros2_ws/src < dependencies.repos
-```
+## Related Docs
 
-### 3. Build the packages
-
-```bash
-cd ~/ros2_ws
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --packages-select camera_aravis2 camera_nodes
-```
-
-### 4. Test the installation
-
-```bash
-# Test camera discovery
-ros2 run camera_aravis2 camera_finder
-
-# Test your camera manager
-ros2 run camera_nodes camera_manager
-
-# Test with launch file
-ros2 launch camera_nodes camera_launch.py
-```
-
-### 5. Camera Configuration
-
-Find your camera GUID and update the launch files accordingly:
-
-```bash
-# List available cameras
-arv-tool-0.8
-
-# Or use the ROS2 tool
-ros2 run camera_aravis2 camera_finder
-```
-
-### External Dependencies
-
-- **camera_aravis2**: https://github.com/FraunhoferIOSB/camera_aravis2
-  - License: 3-clause BSD License
-  - Maintainer: Fraunhofer IOSB
-  - Purpose: GenICam camera driver for GigEVision and USB3Vision cameras
-
-This setup keeps external dependencies separate from your project code while providing seamless integration.
-
-## Callback User Guides
-
-- German: [`docs/callbacks_user_guide_de.md`](docs/callbacks_user_guide_de.md)
-- English: [`docs/callbacks_user_guide_en.md`](docs/callbacks_user_guide_en.md)
+- [`../docs/START_HERE.md`](../docs/START_HERE.md)
+- [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
+- [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)

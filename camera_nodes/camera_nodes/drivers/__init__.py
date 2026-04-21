@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .camera_driver import CameraDriver
+from .base import CameraDriver
 
 
 def __getattr__(name: str) -> Any:
@@ -26,11 +26,11 @@ def __getattr__(name: str) -> Any:
     dependencies for hardware drivers are not installed.
     """
     if name == 'SimulatedCameraDriver':
-        from .simulated_camera_driver import SimulatedCameraDriver
+        from .sim import SimulatedCameraDriver
 
         return SimulatedCameraDriver
     if name == 'AravisCameraDriver':
-        from .aravis_camera_driver import AravisCameraDriver
+        from .hardware import AravisCameraDriver
 
         return AravisCameraDriver
     if name == 'CameraDriver':
