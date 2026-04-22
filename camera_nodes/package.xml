@@ -4,7 +4,7 @@
   <name>camera_nodes</name>
   <version>0.1.0</version>
   <description>Camera integration for ProMOC Assembly system using IDS cameras</description>
-  <maintainer email="your.email@example.com">Your Name</maintainer>
+  <maintainer email="promoc@match.uni-hannover.de">ProMOC Team</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake_python</buildtool_depend>
@@ -24,8 +24,6 @@
   
   <!-- Test dependencies -->
   <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
   <export>

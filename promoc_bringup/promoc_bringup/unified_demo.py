@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """\
-Unified Demo Controller for ProMOC Assembly
+Optional unified demo controller for ProMOC Assembly.
+
+This node is a demo helper, not the canonical system startup path.
 
 Supports three demo modes:
 - planar_motor: XBot motion only
@@ -22,7 +24,7 @@ from rclpy.node import Node
 import time
 import threading
 import math
-from typing import Dict, List, Optional
+from typing import Dict
 
 # Service interfaces
 from promoc_assembly_interfaces.srv import (
@@ -30,7 +32,7 @@ from promoc_assembly_interfaces.srv import (
     LevitationXbots,
     SixDofMotion,
     Home,
-    MoveAbsolute
+    MoveAbsolute,
 )
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 
@@ -52,9 +54,9 @@ class UnifiedDemoController(Node):
     # =========================================================================
 
     def __init__(self):
-        super().__init__('unified_demo_controller')
+        super().__init__("unified_demo_controller")
         self.log = TaggedLogger(self.get_logger(), LogTags.SYS)
-        self.log.info('Unified Demo Controller starting...')
+        self.log.info("Unified Demo Controller starting...")
 
         # Initialize helper (it handles its own logging, or use node's logger?)
         # ServiceHelper gets 'node' and uses 'node.get_logger()'.
@@ -69,87 +71,84 @@ class UnifiedDemoController(Node):
 
         # Wait for services
         if not self._wait_for_required_services():
-            self.log.error('Required services not available. Exiting.')
+            self.log.error("Required services not available. Exiting.")
             return
 
         # Start demo thread
-        self.log.info(f'Starting demo in {self.demo_mode} mode')
+        self.log.info(f"Starting demo in {self.demo_mode} mode")
         self._start_demo_thread()
 
     def _load_parameters(self):
         """Load and validate ROS parameters."""
-        self.declare_parameter('demo_mode', 'full')
-        self.demo_mode = self.get_parameter('demo_mode').value
+        self.declare_parameter("demo_mode", "full")
+        self.demo_mode = self.get_parameter("demo_mode").value
 
-        valid_modes = ['full', 'planar_motor', 'linear_axes']
+        valid_modes = ["full", "planar_motor", "linear_axes"]
         if self.demo_mode not in valid_modes:
-            self.log.warn(
-                f"Invalid demo_mode '{self.demo_mode}'. Using 'full'."
-            )
-            self.demo_mode = 'full'
+            self.log.warn(f"Invalid demo_mode '{self.demo_mode}'. Using 'full'.")
+            self.demo_mode = "full"
 
-        self.declare_parameter('xbot_id', 1)
-        self.xbot_id = self.get_parameter('xbot_id').value
+        self.declare_parameter("xbot_id", 1)
+        self.xbot_id = self.get_parameter("xbot_id").value
 
-        self.declare_parameter('axes', ['lts300_x_axis', 'lts300_z_axis'])
-        self.axes_names = self.get_parameter('axes').value
+        self.declare_parameter("axes", ["lts300_x_axis", "lts300_z_axis"])
+        self.axes_names = self.get_parameter("axes").value
 
-        self.declare_parameter('cycle_delay', 5.0)
-        self.cycle_delay = self.get_parameter('cycle_delay').value
+        self.declare_parameter("cycle_delay", 5.0)
+        self.cycle_delay = self.get_parameter("cycle_delay").value
 
-        self.log.info('Configuration:')
-        self.log.info(f'   Demo mode: {self.demo_mode}')
-        self.log.info(f'   XBot ID: {self.xbot_id}')
-        self.log.info(f'   Axes: {self.axes_names}')
-        self.log.info(f'   Cycle delay: {self.cycle_delay}s')
+        self.log.info("Configuration:")
+        self.log.info(f"   Demo mode: {self.demo_mode}")
+        self.log.info(f"   XBot ID: {self.xbot_id}")
+        self.log.info(f"   Axes: {self.axes_names}")
+        self.log.info(f"   Cycle delay: {self.cycle_delay}s")
 
     def _setup_clients(self):
         """Create service clients based on demo mode."""
         self.axis_clients: Dict[str, dict] = {}
         self.axis_positions: Dict[str, float] = {}
 
-        if self.demo_mode in ['full', 'planar_motor']:
+        if self.demo_mode in ["full", "planar_motor"]:
             self.activate_client = self.create_client(
-                ActivateXbots, '/mover_node/activate_xbots'
+                ActivateXbots, "/promoc/mover/activate_xbots"
             )
             self.levitation_client = self.create_client(
-                LevitationXbots, '/mover_node/levitation_xbots'
+                LevitationXbots, "/promoc/mover/levitation_xbots"
             )
             self.six_dof_client = self.create_client(
-                SixDofMotion, '/mover_node/six_d_mover_motion'
+                SixDofMotion, "/promoc/mover/six_dof_motion"
             )
 
-        if self.demo_mode in ['full', 'linear_axes']:
+        if self.demo_mode in ["full", "linear_axes"]:
             self._setup_axis_clients()
 
     def _setup_axis_clients(self):
         """Setup linear axis clients."""
-        self.log.info('Searching for linear axis services...')
+        self.log.info("Searching for linear axis services...")
 
         for axis_name in self.axes_names:
             move_client = self.create_client(
-                MoveAbsolute, f'/{axis_name}/move_absolute'
+                MoveAbsolute, f"/promoc/linear_axis/{axis_name}/move_absolute"
             )
             home_client = self.create_client(
-                Home, f'/{axis_name}/home'
+                Home, f"/promoc/linear_axis/{axis_name}/home"
             )
 
             # Try to connect with short timeout
-            if (move_client.wait_for_service(timeout_sec=2.0) and
-                    home_client.wait_for_service(timeout_sec=2.0)):
-
+            if move_client.wait_for_service(
+                timeout_sec=2.0
+            ) and home_client.wait_for_service(timeout_sec=2.0):
                 self.log.info(f"  Found '{axis_name}'")
                 self.axis_clients[axis_name] = {
-                    'move': move_client,
-                    'home': home_client
+                    "move": move_client,
+                    "home": home_client,
                 }
 
                 self.create_subscription(
                     LinearAxisInfo,
-                    f'/promoc_assembly/{axis_name}/position',
-                    lambda msg, name=axis_name: self._axis_position_callback(
-                        msg, name),
-                    10
+                    f"/promoc/linear_axis/{axis_name}/position",
+                    lambda msg, name=axis_name: self._axis_position_callback(msg, name),
+                    10,
                 )
             else:
                 self.log.warn(f"  '{axis_name}' not available")
@@ -166,17 +165,19 @@ class UnifiedDemoController(Node):
         """Wait for all required services based on demo mode."""
         services = []
 
-        if self.demo_mode in ['full', 'planar_motor']:
-            services.extend([
-                (self.activate_client, 'activate_xbots'),
-                (self.levitation_client, 'levitation_xbots'),
-                (self.six_dof_client, 'six_dof_motion'),
-            ])
+        if self.demo_mode in ["full", "planar_motor"]:
+            services.extend(
+                [
+                    (self.activate_client, "activate_xbots"),
+                    (self.levitation_client, "levitation_xbots"),
+                    (self.six_dof_client, "six_dof_motion"),
+                ]
+            )
 
         if not self.helper.wait_for_services(services):
             return False
 
-        if self.demo_mode in ['full', 'planar_motor']:
+        if self.demo_mode in ["full", "planar_motor"]:
             if not self._wait_for_pmc_connection():
                 return False
 
@@ -184,7 +185,7 @@ class UnifiedDemoController(Node):
 
     def _wait_for_pmc_connection(self, max_retries: int = 10) -> bool:
         """Test PMC connection with retries."""
-        self.log.info('⏳ Testing PMC connection...')
+        self.log.info("⏳ Testing PMC connection...")
 
         for attempt in range(max_retries):
             if not rclpy.ok():
@@ -194,18 +195,17 @@ class UnifiedDemoController(Node):
             request.activation_status = True
 
             result = self.helper.call_service(
-                self.activate_client, request,
-                '✅ PMC connection OK',
-                '⚠️ PMC not ready',
-                timeout_sec=3.0
+                self.activate_client,
+                request,
+                "✅ PMC connection OK",
+                "⚠️ PMC not ready",
+                timeout_sec=3.0,
             )
 
             if self.helper.was_successful(result):
                 return True
 
-            self.log.info(
-                f'⏳ PMC not ready, retry {attempt + 1}/{max_retries}...'
-            )
+            self.log.info(f"⏳ PMC not ready, retry {attempt + 1}/{max_retries}...")
             time.sleep(2.0)
 
         return False
@@ -227,19 +227,17 @@ class UnifiedDemoController(Node):
         try:
             while rclpy.ok():
                 cycle_count += 1
-                self.log.info(f'🔄 Demo cycle #{cycle_count}')
+                self.log.info(f"🔄 Demo cycle #{cycle_count}")
 
                 self._run_demo_cycle()
 
-                self.log.info(
-                    f'✅ Cycle complete. Waiting {self.cycle_delay}s...'
-                )
+                self.log.info(f"✅ Cycle complete. Waiting {self.cycle_delay}s...")
                 self._interruptible_sleep(self.cycle_delay)
 
         except KeyboardInterrupt:
-            self.log.info('🛑 Demo stopped by user')
+            self.log.info("🛑 Demo stopped by user")
         except Exception as e:
-            self.log.error(f'❌ Demo error: {e}')
+            self.log.error(f"❌ Demo error: {e}")
 
     def _interruptible_sleep(self, seconds: float):
         """Sleep that can be cleanly interrupted on shutdown."""
@@ -253,9 +251,9 @@ class UnifiedDemoController(Node):
 
     def _run_demo_cycle(self):
         """Run one demo cycle based on mode."""
-        if self.demo_mode == 'planar_motor':
+        if self.demo_mode == "planar_motor":
             self._run_planar_motor_demo()
-        elif self.demo_mode == 'linear_axes':
+        elif self.demo_mode == "linear_axes":
             self._run_linear_axes_demo()
         else:
             self._run_full_demo()
@@ -266,7 +264,7 @@ class UnifiedDemoController(Node):
 
     def _run_planar_motor_demo(self):
         """Planar motor demo sequence."""
-        self.log.info('🤖 Planar Motor Demo')
+        self.log.info("🤖 Planar Motor Demo")
 
         self._activate_xbots(True)
         time.sleep(1.0)
@@ -296,7 +294,7 @@ class UnifiedDemoController(Node):
         steps_per_corner = 8
 
         for corner_idx, (x, y) in enumerate(corners):
-            self.log.info(f'📍 Corner {corner_idx + 1}: ({x}, {y})')
+            self.log.info(f"📍 Corner {corner_idx + 1}: ({x}, {y})")
 
             for step in range(steps_per_corner):
                 angle = (step / steps_per_corner) * 2 * math.pi
@@ -316,10 +314,10 @@ class UnifiedDemoController(Node):
 
     def _run_linear_axes_demo(self):
         """Linear axes demo sequence."""
-        self.log.info('↕️ Linear Axes Demo')
+        self.log.info("↕️ Linear Axes Demo")
 
         for axis_name in self.axis_clients:
-            self.log.info(f'  Moving {axis_name}...')
+            self.log.info(f"  Moving {axis_name}...")
             self._move_axis(axis_name, 250.0)
             time.sleep(2.0)
             self._move_axis(axis_name, 10.0)
@@ -331,7 +329,7 @@ class UnifiedDemoController(Node):
 
     def _run_full_demo(self):
         """Full system demo (planar motor + linear axes)."""
-        self.log.info('🔧 Full System Demo')
+        self.log.info("🔧 Full System Demo")
 
         self._run_planar_motor_demo()
         time.sleep(2.0)
@@ -350,9 +348,10 @@ class UnifiedDemoController(Node):
 
         status = "activated" if activate else "deactivated"
         self.helper.call_service(
-            self.activate_client, request,
-            f'✅ XBots {status}',
-            f'❌ Failed to {status[:-1]}e XBots'
+            self.activate_client,
+            request,
+            f"✅ XBots {status}",
+            f"❌ Failed to {status[:-1]}e XBots",
         )
 
     def _set_levitation(self, enable: bool):
@@ -362,15 +361,13 @@ class UnifiedDemoController(Node):
 
         status = "enabled" if enable else "disabled"
         self.helper.call_service(
-            self.levitation_client, request,
-            f'✅ Levitation {status}',
-            f'❌ Failed to set levitation'
+            self.levitation_client,
+            request,
+            f"✅ Levitation {status}",
+            "❌ Failed to set levitation",
         )
 
-    def _move_6dof(
-        self, x: float, y: float, z: float,
-        rx: float, ry: float, rz: float
-    ):
+    def _move_6dof(self, x: float, y: float, z: float, rx: float, ry: float, rz: float):
         """Executes a 6-DOF motion command."""
         request = SixDofMotion.Request()
         request.xbot_id = self.xbot_id
@@ -382,9 +379,10 @@ class UnifiedDemoController(Node):
         request.rz_pos = float(rz)
 
         self.helper.call_service(
-            self.six_dof_client, request,
-            f'📍 ({x:.0f}, {y:.0f}, {z:.1f})mm',
-            '❌ 6DOF motion failed'
+            self.six_dof_client,
+            request,
+            f"📍 ({x:.0f}, {y:.0f}, {z:.1f})mm",
+            "❌ 6DOF motion failed",
         )
 
     def _move_axis(self, axis_name: str, position: float):
@@ -397,10 +395,11 @@ class UnifiedDemoController(Node):
         request.axis_position = float(position)
 
         self.helper.call_service(
-            self.axis_clients[axis_name]['move'], request,
+            self.axis_clients[axis_name]["move"],
+            request,
             f"✅ {axis_name} → {position}mm",
             f"❌ {axis_name} move failed",
-            timeout_sec=30.0
+            timeout_sec=30.0,
         )
 
 
@@ -413,11 +412,11 @@ def main(args=None):
     try:
         rclpy.spin(controller)
     except KeyboardInterrupt:
-        controller.log.info('🛑 Shutting down...')
+        controller.log.info("🛑 Shutting down...")
     finally:
         controller.destroy_node()
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

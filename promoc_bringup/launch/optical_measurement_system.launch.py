@@ -64,7 +64,11 @@ def _create_startup_info():
     return LogInfo(
         msg="\n"
         "=== ProMOC Optical Measurement System ===\n"
+<<<<<<< HEAD
         "Secondary launch path. Camera services: /promoc/camera/autofocus, /promoc/camera/set_exposure\n"
+=======
+        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf\n"
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     )
 
 
@@ -108,12 +112,18 @@ def _create_x_axis_node(axis_config: dict):
         package="linear_axis_nodes",
         executable="lts300_node",
         name=LaunchConfiguration("x_axis_name"),
+<<<<<<< HEAD
         namespace="promoc/linear_axis",
+=======
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         output="screen",
         emulate_tty=True,
         parameters=[
             {
+<<<<<<< HEAD
                 "namespace": "promoc/linear_axis",
+=======
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
                 "serial_port": LaunchConfiguration("x_axis_port"),
                 "serial_number": axis_config.get("serial_number", "45456044"),
             }
@@ -127,6 +137,12 @@ def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
     )
     base_dir = os.path.expanduser(str(base_dir))
 
+<<<<<<< HEAD
+=======
+    mtf_config = config.get("mtf", {})
+    mtf_profile = str(mtf_config.get("profile", "default"))
+    mtf_debug_dir = str(mtf_config.get("debug_export_dir", "") or "")
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     af_profile_json = json.dumps(config.get("autofocus_profiles", {}))
 
     return Node(
@@ -143,6 +159,17 @@ def _create_camera_node(config: dict, camera_config: dict, use_simulator: bool):
                 "use_simulator": bool(use_simulator),
                 "x_axis_node_name": LaunchConfiguration("x_axis_name"),
                 "pixel_size_um": config["camera"]["pixel_size_um"],
+<<<<<<< HEAD
+=======
+                "mtf.use_full_frame": True,
+                "mtf.full_frame_width": camera_config.get("sensor_resolution_h", 5536),
+                "mtf.full_frame_height": camera_config.get("sensor_resolution_v", 3692),
+                "mtf.full_frame_offset_x": 0,
+                "mtf.full_frame_offset_y": 0,
+                "mtf.full_frame_binning": 1,
+                "mtf.profile": mtf_profile,
+                "mtf.debug_export_dir": mtf_debug_dir,
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
                 "enable_debug_overlay": False,
                 "autofocus.refinement_samples": config["autofocus"][
                     "refinement_samples"

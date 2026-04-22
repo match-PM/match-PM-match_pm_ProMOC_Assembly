@@ -1,4 +1,4 @@
 float64 exposure_time
 ---
 bool success
-string message
+string status_message

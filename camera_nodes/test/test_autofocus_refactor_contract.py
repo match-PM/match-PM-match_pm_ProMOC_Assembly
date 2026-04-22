@@ -8,17 +8,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+<<<<<<< HEAD
 def test_autofocus_algorithm_exposes_runtime_entrypoints():
+=======
+def test_autofocus_algorithm_exposes_public_hooks():
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     content = (
         ROOT / "camera_nodes" / "camera_nodes" / "algorithms" / "autofocus.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
+<<<<<<< HEAD
     assert "class MSPRAutofocus" in content
     assert "def start(" in content
     assert "def process_image(" in content
     assert "def _calculate_score(" in content
     assert "def __getattr__(name: str):" in content
     assert "'FourStepAutofocus': 'four_step'" in content
+=======
+    assert "def score_image(" in content
+    assert "def get_measurement_series(" in content
+    assert "def get_best_result(" in content
+    assert "def get_scan_step_mm(" in content
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
 
 def test_autofocus_service_is_self_contained():

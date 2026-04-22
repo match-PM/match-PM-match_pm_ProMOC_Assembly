@@ -56,7 +56,7 @@ Available Classes
 """
 
 from dataclasses import dataclass
-from typing import Tuple, Optional, List, Union
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -79,6 +79,7 @@ class Bounds3D:
         >>> workspace.clamp_position(0.6, 0.1, 0.05)
         (0.5, 0.1, 0.05)
     """
+
     x_min: float = 0.0
     x_max: float = 1.0
     y_min: float = 0.0
@@ -94,12 +95,14 @@ class Bounds3D:
             and self.z_min <= z <= self.z_max
         )
 
-    def clamp_position(self, x: float, y: float, z: float) -> Tuple[float, float, float]:
+    def clamp_position(
+        self, x: float, y: float, z: float
+    ) -> Tuple[float, float, float]:
         """Clamps a position to the valid range."""
         return (
             clamp(x, self.x_min, self.x_max),
             clamp(y, self.y_min, self.y_max),
-            clamp(z, self.z_min, self.z_max)
+            clamp(z, self.z_min, self.z_max),
         )
 
 
@@ -198,10 +201,15 @@ def clamp(value: float, min_val: float, max_val: float) -> float:
 
 
 def validate_position_3d(
-    x: float, y: float, z: float,
-    x_min: float, x_max: float,
-    y_min: float, y_max: float,
-    z_min: float, z_max: float
+    x: float,
+    y: float,
+    z: float,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+    z_min: float,
+    z_max: float,
 ) -> Tuple[bool, Optional[str]]:
     """
     Validates a 3D position against specified boundaries.
@@ -256,7 +264,7 @@ def validate_position_3d(
 def validate_position_6d(
     position: List[float],
     bounds: List[Tuple[float, float]],
-    axis_names: Optional[List[str]] = None
+    axis_names: Optional[List[str]] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Validates a 6D position (x, y, z, rx, ry, rz) against boundaries.
@@ -279,16 +287,17 @@ def validate_position_6d(
         >>> valid, error = validate_position_6d(pos, bounds)
     """
     if axis_names is None:
-        axis_names = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ']
+        axis_names = ["X", "Y", "Z", "RX", "RY", "RZ"]
 
     if len(position) != 6 or len(bounds) != 6:
         return False, "Position and bounds must have 6 elements"
 
     errors = []
-    for i, (val, (min_val, max_val), name) in enumerate(zip(position, bounds, axis_names)):
+    for val, (min_val, max_val), name in zip(position, bounds, axis_names):
         if not is_in_range(val, min_val, max_val):
             errors.append(
-                f"{name}={val:.4f} out of range [{min_val:.4f}, {max_val:.4f}]")
+                f"{name}={val:.4f} out of range [{min_val:.4f}, {max_val:.4f}]"
+            )
 
     if errors:
         return False, "; ".join(errors)
@@ -311,7 +320,9 @@ def validate_positive(value: float, name: str = "value") -> Tuple[bool, Optional
     return True, None
 
 
-def validate_non_negative(value: float, name: str = "value") -> Tuple[bool, Optional[str]]:
+def validate_non_negative(
+    value: float, name: str = "value"
+) -> Tuple[bool, Optional[str]]:
     """
     Checks if a value is non-negative (>= 0).
 
@@ -328,10 +339,7 @@ def validate_non_negative(value: float, name: str = "value") -> Tuple[bool, Opti
 
 
 def validate_id_range(
-    id_value: int,
-    min_id: int = 0,
-    max_id: int = 15,
-    name: str = "ID"
+    id_value: int, min_id: int = 0, max_id: int = 15, name: str = "ID"
 ) -> Tuple[bool, Optional[str]]:
     """
     Checks if an ID is within the allowed range.
@@ -360,7 +368,7 @@ def validate_id_range(
 def check_collision_risk(
     axis_position: float,
     other_axis_position: Optional[float],
-    collision_threshold: float
+    collision_threshold: float,
 ) -> Tuple[bool, Optional[str]]:
     """
     Checks for a collision risk between two axes.

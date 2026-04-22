@@ -14,6 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'config', 'cameras'), glob('config/cameras/*.yaml')),
         # Include URDF files
         (os.path.join('share', package_name, 'urdf', 'assemblies'),
             glob('urdf/assemblies/*.xacro')),
@@ -31,7 +32,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # New unified demo controller (recommended)
+            # Optional demo controller. Not a canonical startup path.
             'unified_demo = promoc_bringup.unified_demo:main',
         ],
     },

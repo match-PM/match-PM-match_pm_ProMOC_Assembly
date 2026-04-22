@@ -1,6 +1,10 @@
 # ProMOC User Configuration v2
 #
+<<<<<<< HEAD
 # Canonical keys:
+=======
+# Release N+1 canonical keys:
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 # - runtime.mode: hardware|sim
 # - measurement.operator
 # - measurement.base_path
@@ -24,6 +28,13 @@ fly_over:
   refinement_mode: 0
   refinement_strategy: linear
 
+<<<<<<< HEAD
+=======
+mtf:
+  profile: default
+  debug_export_dir: ""
+
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 measurement_conditions:
   coaxial_light_voltage: 0.0
   coaxial_light_current: 0.0

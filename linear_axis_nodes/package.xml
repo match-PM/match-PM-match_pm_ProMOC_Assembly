@@ -3,9 +3,9 @@
 <package format="3">
   <name>linear_axis_nodes</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="promoc@todo.todo">promoc</maintainer>
-  <license>TODO: License declaration</license>
+  <description>ROS2 nodes and drivers for Thorlabs LTS300 linear axes.</description>
+  <maintainer email="promoc@match.uni-hannover.de">ProMOC Team</maintainer>
+  <license>MIT</license>
 
   <buildtool_depend>ament_python</buildtool_depend>   <!-- Use ament_python for Python packages -->
   <build_depend>setuptools</build_depend>             <!-- Required for building Python packages -->
@@ -20,8 +20,6 @@
   <exec_depend>std_msgs</exec_depend>                 <!-- Standard message types -->
 
   <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
   <export>

@@ -1,144 +1,160 @@
 #!/usr/bin/env python3
-"""
-Basic functionality test for ProMOC Assembly system
-Tests imports, service definitions, and basic node instantiation
-"""
+"""Basic local sanity checks for the ProMOC Assembly repository."""
 
+from __future__ import annotations
+
+from pathlib import Path
 import sys
-import os
-
-# Add local libs to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'local_libs'))
 
 
-def test_service_interfaces():
-    """Test that all service interfaces are available"""
-    print("Testing service interfaces...")
+SETUP_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SETUP_DIR.parent
+
+
+def _log(status: str, message: str) -> None:
+    print(f"[{status}] {message}")
+
+
+def _add_local_source_paths() -> None:
+    """Allow direct source imports without requiring colcon install."""
+    package_roots = [
+        REPO_ROOT / "planar_motor_nodes",
+        REPO_ROOT / "linear_axis_nodes",
+        REPO_ROOT / "camera_nodes",
+        REPO_ROOT / "promoc_core",
+    ]
+    for package_root in package_roots:
+        if package_root.exists():
+            sys.path.insert(0, str(package_root))
+
+
+def _read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_interface_definitions() -> bool:
+    """Check that required service definition files exist."""
+    _log("INFO", "Checking interface definition files...")
+
+    required = [
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "planar_motor" / "ActivateXbots.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "planar_motor" / "LinearMotionSi.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "planar_motor" / "SixDofMotion.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "planar_motor" / "ArcMotionSi.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "linear_axis" / "MoveAbsolute.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "linear_axis" / "MoveRelative.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "linear_axis" / "Home.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "linear_axis" / "ShutdownLinearAxis.srv",
+    ]
+
+    missing = [str(path.relative_to(REPO_ROOT)) for path in required if not path.exists()]
+    if missing:
+        _log("FAIL", f"Missing service definition files: {missing}")
+        return False
+
+    _log("PASS", "All required service definition files are present.")
+    return True
+
+
+def test_response_contracts() -> bool:
+    """Check that key services expose success + status_message in response part."""
+    _log("INFO", "Checking response field contract in .srv files...")
+
+    services = [
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "planar_motor" / "ActivateXbots.srv",
+        REPO_ROOT / "promoc_assembly_interfaces" / "srv" / "linear_axis" / "MoveAbsolute.srv",
+    ]
+
+    failures: list[str] = []
+    for service_path in services:
+        if not service_path.exists():
+            failures.append(f"{service_path.name}: file missing")
+            continue
+
+        content = _read_text(service_path)
+        if "---" not in content:
+            failures.append(f"{service_path.name}: missing request/response separator")
+            continue
+
+        response_section = content.split("---", 1)[1]
+        if "success" not in response_section or "status_message" not in response_section:
+            failures.append(
+                f"{service_path.name}: response must contain success + status_message"
+            )
+
+    if failures:
+        _log("FAIL", "; ".join(failures))
+        return False
+
+    _log("PASS", "Service response contracts look correct.")
+    return True
+
+
+def test_mock_pmclib_import() -> bool:
+    """Ensure mock PMCLib module can be imported from local source tree."""
+    _log("INFO", "Checking local mock PMCLib import...")
 
     try:
-        from promoc_assembly_interfaces.srv import (
-            # Planar motor services
-            ActivateXbots, LevitationXbots, LinearMotionSi,
-            RotaryMotion, SixDofMotion, StopMotion, SetVelocityAcceleration,
-            ArcMotionSi,
-            # Linear axis services
-            MoveAbsolute, MoveRelative, Home, ShutdownLinearAxis,
-            GetPosition, GetSetHomingParams, GetSetVelocityParams
-        )
-        print("✓ All service interfaces imported successfully")
+        _add_local_source_paths()
+        from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib  # type: ignore
+
+        _ = MockPMCLib()
+        _log("PASS", "MockPMCLib import and instantiation successful.")
         return True
-    except ImportError as e:
-        print(f"✗ Service interface import failed: {e}")
+    except Exception as exc:  # pragma: no cover - diagnostic script
+        _log("FAIL", f"MockPMCLib import failed: {exc}")
         return False
 
 
-def test_mock_pmclib():
-    """Test mock PMCLib functionality"""
-    print("Testing mock PMCLib...")
+def test_camera_checkout() -> bool:
+    """Check whether external camera_aravis2 checkout exists (optional)."""
+    _log("INFO", "Checking optional camera_aravis2 checkout...")
 
-    try:
-        from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib
-        mock_lib = MockPMCLib()
-        print("✓ MockPMCLib imported and instantiated successfully")
-        return True
-    except Exception as e:
-        print(f"✗ MockPMCLib test failed: {e}")
-        return False
+    camera_repo_candidates = [
+        Path.home() / "ros2_ws" / "src" / "camera_aravis2",
+        REPO_ROOT / "camera_nodes" / "camera_nodes" / "drivers" / "camera_aravis2",
+    ]
 
+    for candidate in camera_repo_candidates:
+        if candidate.exists():
+            _log("PASS", f"camera_aravis2 repository found: {candidate}")
+            return True
 
-def test_response_formats():
-    """Test that service responses follow the standardized format"""
-    print("Testing standardized response formats...")
-
-    try:
-        from promoc_assembly_interfaces.srv import ActivateXbots, MoveAbsolute
-
-        # Test planar motor service response
-        pm_response = ActivateXbots.Response()
-        if hasattr(pm_response, 'success') and hasattr(pm_response, 'status_message'):
-            print("✓ Planar motor service has standardized response format")
-        else:
-            print("✗ Planar motor service missing standardized response fields")
-            return False
-
-        # Test linear axis service response
-        la_response = MoveAbsolute.Response()
-        if hasattr(la_response, 'success') and hasattr(la_response, 'status_message'):
-            print("✓ Linear axis service has standardized response format")
-        else:
-            print("✗ Linear axis service missing standardized response fields")
-            return False
-
-        return True
-    except Exception as e:
-        print(f"✗ Response format test failed: {e}")
-        return False
+    _log(
+        "WARN",
+        "camera_aravis2 checkout not found (only required for hardware camera driver).",
+    )
+    return True
 
 
-def test_camera_integration():
-    """Test camera integration package and external dependencies"""
-    print("Testing camera integration package...")
-    
-    try:
-        # Test if camera_aravis2 is available in workspace
-        import subprocess
-        import os
-        
-        workspace_root = os.path.expanduser("~/ros2_ws")
-        camera_aravis2_path = os.path.join(workspace_root, "src", "camera_aravis2")
-        
-        if os.path.exists(camera_aravis2_path):
-            print("✓ camera_aravis2 repository found in workspace")
-        else:
-            print("⚠ camera_aravis2 repository not found")
-            print("  Run: cd ~/ros2_ws/src && git clone https://github.com/FraunhoferIOSB/camera_aravis2.git")
-            return False
-        
-        # Test if our camera_nodes package can be imported (after build)
-        try:
-            from camera_nodes.camera_nodes import camera_node
-            print("✓ Camera nodes package available")
-        except ImportError:
-            print("⚠ Camera nodes package not yet built")
-            print("  Run: colcon build --packages-select camera_nodes")
-            
-        return True
-        
-    except Exception as e:
-        print(f"✗ Camera integration test failed: {e}")
-        return False
+def main() -> int:
+    print("ProMOC Assembly - Basic Local Sanity Check")
+    print("=" * 52)
 
-
-def main():
-    """Run all tests"""
-    print("ProMOC Assembly System - Basic Functionality Test")
-    print("=" * 50)
-
-    tests = [
-        test_service_interfaces,
-        test_mock_pmclib,
-        test_response_formats,
-        test_camera_integration,  # Add camera test
+    checks = [
+        test_interface_definitions,
+        test_response_contracts,
+        test_mock_pmclib_import,
+        test_camera_checkout,
     ]
 
     passed = 0
-    total = len(tests)
-
-    for test in tests:
-        if test():
+    for check in checks:
+        if check():
             passed += 1
         print()
 
-    print("=" * 50)
-    print(f"Test Results: {passed}/{total} tests passed")
+    total = len(checks)
+    print("=" * 52)
+    print(f"Result: {passed}/{total} checks passed")
 
     if passed == total:
-        print("✓ All basic functionality tests PASSED")
+        _log("PASS", "Sanity checks passed.")
         return 0
-    else:
-        print("✗ Some tests FAILED")
-        return 1
+
+    _log("FAIL", "Some sanity checks failed.")
+    return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

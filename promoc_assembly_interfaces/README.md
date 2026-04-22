@@ -1,26 +1,54 @@
 # ProMOC Assembly Interfaces
 
-This package contains the ROS2 interface definitions (Messages and Services) for the ProMOC Assembly system.
+## Purpose
 
-## 📦 Contents
+`promoc_assembly_interfaces` defines shared ROS2 contracts (`srv`, `msg`) used by
+camera, linear-axis, and mover nodes.
 
-### Messages (`msg/`)
-- **`planar_motor/XBotInfo.msg`**: Status information for a planar motor mover.
-- **`linear_axis/LinearAxisInfo.msg`**: Status information for a linear axis.
+This package should contain contracts only, no runtime node logic.
 
-### Services (`srv/`)
-- **`planar_motor/`**: Services for controlling planar motor movers (Activate, Move, Stop, etc.).
-- **`linear_axis/`**: Services for controlling linear axes (Home, Move, Stop, etc.).
-- **`camera/`**: Services for camera control (SetExposure, AutoFocus).
+## How To Run / Build
 
-## ⚠️ Important Note
-This package **only** contains interface definitions.
-- Shared Python logic, error handling, and exceptions have been moved to **`promoc_core`**.
-- If you are looking for `promoc_exceptions` or `error_handling`, please check the `promoc_core` package.
-
-## 🔨 Build
-This package uses `ament_cmake` and `rosidl_default_generators` to generate language-specific bindings.
+Build only this package:
 
 ```bash
 colcon build --packages-select promoc_assembly_interfaces
 ```
+
+Inspect generated interfaces:
+
+```bash
+ros2 interface list
+ros2 interface show promoc_assembly_interfaces/srv/AutoFocus
+```
+
+## Key APIs
+
+Interface groups:
+
+- `srv/camera/*` (autofocus, MTF, ROI, exposure)
+- `srv/linear_axis/*` (move, home, stop, status)
+- `srv/planar_motor/*` (activation, motion, stop, velocity)
+- `msg/linear_axis/*`, `msg/planar_motor/*` (runtime state topics)
+
+## Where To Edit
+
+| Goal | Start Here | Then Check |
+|---|---|---|
+| Add or modify a service | `promoc_assembly_interfaces/srv/<domain>/<Name>.srv` | `promoc_assembly_interfaces/CMakeLists.txt` |
+| Add or modify a message | `promoc_assembly_interfaces/msg/<domain>/<Name>.msg` | `promoc_assembly_interfaces/CMakeLists.txt` |
+| Fix generation or dependency wiring | `promoc_assembly_interfaces/CMakeLists.txt` | `promoc_assembly_interfaces/package.xml` |
+| Roll out a contract change | changed `.srv`/`.msg` file | downstream nodes in `camera_nodes`, `linear_axis_nodes`, `planar_motor_nodes` |
+
+## Verify Changes
+
+```bash
+colcon build --packages-select promoc_assembly_interfaces
+make release-n1-check
+```
+
+## Related Docs
+
+- Root onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
+- Package guide: [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
+- System overview: [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)

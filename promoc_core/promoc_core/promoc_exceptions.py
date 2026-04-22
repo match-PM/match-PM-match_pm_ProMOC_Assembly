@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 
 class ProMocError(Exception):
     """Base exception for all ProMOC errors.
-    
+
     Attributes:
         message: Description of the error
         details: Optional additional information (dict)
@@ -28,7 +28,7 @@ class ProMocError(Exception):
         self,
         message: str,
         details: Optional[Dict[str, Any]] = None,
-        error_code: int = 1
+        error_code: int = 1,
     ):
         super().__init__(message)
         self.message = message
@@ -46,11 +46,13 @@ class ProMocError(Exception):
 # Connection Errors
 # =============================================================================
 
+
 class ConnectionError(ProMocError):
     """Connection and communication errors.
-    
+
     Use for: device not found, disconnection, communication timeout.
     """
+
     pass
 
 
@@ -59,6 +61,7 @@ class CommunicationError(ConnectionError):
 
     Use for: device not connected, transport failure, protocol errors.
     """
+
     pass
 
 
@@ -67,11 +70,13 @@ class DeviceNotFoundError(ConnectionError):
 
     Use for: missing device, invalid port, device not enumerated.
     """
+
     pass
 
 
 class CommunicationTimeoutError(ConnectionError):
     """Communication timeout errors."""
+
     pass
 
 
@@ -79,21 +84,25 @@ class CommunicationTimeoutError(ConnectionError):
 # Motion Errors
 # =============================================================================
 
+
 class MotionError(ProMocError):
     """Errors during motion operations.
-    
+
     Use for: movement timeout, position out of bounds, collision, homing failure.
     """
+
     pass
 
 
 class MovementTimeoutError(MotionError):
     """Movement timeout errors."""
+
     pass
 
 
 class HomingRequiredError(MotionError):
     """Raised when homing is required before a motion."""
+
     pass
 
 
@@ -101,21 +110,25 @@ class HomingRequiredError(MotionError):
 # Safety Errors
 # =============================================================================
 
+
 class SafetyError(ProMocError):
     """Safety violations.
-    
+
     Use for: soft/hard limit violations, emergency stop, safety zone violations.
     """
+
     pass
 
 
 class PositionOutOfBoundsError(SafetyError):
     """Position is outside allowed bounds."""
+
     pass
 
 
 class CollisionDetectedError(SafetyError):
     """Collision risk detected."""
+
     pass
 
 
@@ -123,16 +136,19 @@ class CollisionDetectedError(SafetyError):
 # Hardware Errors
 # =============================================================================
 
+
 class HardwareError(ProMocError):
     """Hardware-related errors.
-    
+
     Use for: driver unavailable, initialization failure, sensor read error.
     """
+
     pass
 
 
 class DriverNotAvailableError(HardwareError):
     """Required driver library or interface not available."""
+
     pass
 
 
@@ -140,11 +156,13 @@ class DriverNotAvailableError(HardwareError):
 # Configuration Errors
 # =============================================================================
 
+
 class ConfigurationError(ProMocError):
     """Configuration and validation errors.
-    
+
     Use for: invalid parameters, missing configuration, validation failure.
     """
+
     pass
 
 
@@ -152,16 +170,19 @@ class ConfigurationError(ProMocError):
 # Service Errors
 # =============================================================================
 
+
 class ServiceError(ProMocError):
     """ROS2 service-related errors.
-    
+
     Use for: service call failure, invalid request, service timeout.
     """
+
     pass
 
 
 class ServiceCallFailedError(ServiceError):
     """Service call failed or returned an error."""
+
     pass
 
 
@@ -169,8 +190,10 @@ class ServiceCallFailedError(ServiceError):
 # Image Processing Errors (Camera-specific)
 # =============================================================================
 
+
 class ImageProcessingError(ProMocError):
     """Errors during image processing."""
+
     pass
 
 

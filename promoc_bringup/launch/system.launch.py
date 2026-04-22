@@ -10,6 +10,22 @@ The launch file is intentionally orchestration-only. It decides *what starts*
 and *which namespaces/configuration are applied*, while the runtime behavior
 stays inside the owning packages.
 """
+<<<<<<< HEAD
+
+from __future__ import annotations
+=======
+System launch file for ProMOC Assembly.
+
+Starts:
+- Camera stack (via camera.launch.py)
+- Planar motor (mover_node)
+- Linear axes (auto hardware detection in hardware mode)
+
+Canonical launch API:
+    ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+    ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
+"""
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
 from __future__ import annotations
 
@@ -47,8 +63,11 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
+<<<<<<< HEAD
     # Resolve one canonical runtime mode up front so every subsystem gets the
     # same interpretation of "hardware" vs "sim".
+=======
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
     is_sim = runtime_mode == "sim"
     bringup_pkg = get_package_share_directory("promoc_bringup")
@@ -73,10 +92,14 @@ def launch_setup(context, *args, **kwargs):
             Node(
                 package="planar_motor_nodes",
                 executable="mover_node",
+<<<<<<< HEAD
                 name="mover",
                 # Pin the mover under the canonical namespace here so the runtime
                 # contract does not depend on package-internal defaults.
                 namespace="promoc",
+=======
+                name="mover_node",
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
                 parameters=[mover_config],
                 output="screen",
                 arguments=["--ros-args", "--log-level", "INFO"],
@@ -138,9 +161,13 @@ def launch_setup(context, *args, **kwargs):
 def _create_axis_node(
     node_name: str, config_path: str, sim: bool, device_path: str = None
 ):
+<<<<<<< HEAD
     # The launch file owns the public axis namespace so all runtime packages can
     # rely on one stable `/promoc/linear_axis/...` contract.
     params = [config_path, {"use_sim_time": sim, "namespace": "promoc/linear_axis"}]
+=======
+    params = [config_path, {"use_sim_time": sim}]
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     if device_path:
         params.append({"serial_port": device_path})
 

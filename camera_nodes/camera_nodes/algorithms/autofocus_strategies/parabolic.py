@@ -26,22 +26,22 @@ class ParabolicAutofocus(MSPRAutofocus):
         if len(self._measurements) < 3:
             return None
         
-        # Find index of best measurement in coarse scan
+        # Step 1: Find the best measured sample in the current scan history.
         scores = [m.score for m in self._measurements]
         best_idx = np.argmax(scores)
         
-        # Safety: Need neighbors on both sides
+        # Step 2: Require one neighbor on each side for a stable local fit.
         if best_idx == 0 or best_idx == len(self._measurements) - 1:
             return None
         
-        # Select ONLY the 3 points around the peak (best + neighbors)
+        # Step 3: Fit only the local 3-point neighborhood around the peak.
         subset = self._measurements[best_idx - 1 : best_idx + 2]
         
         x = np.array([m.position_mm for m in subset])
         y = np.array([m.score for m in subset])
         
         try:
-            # Fit parabola: y = ax^2 + bx + c
+            # Step 4: Compute the parabola vertex and validate that it is plausible.
             coeffs = np.polyfit(x, y, 2)
             a, b, c = coeffs
             
@@ -68,9 +68,9 @@ class ParabolicAutofocus(MSPRAutofocus):
         """
         Override coarse scan to use local parabolic fitting.
         """
+        # Step 1: Continue the coarse scan until every planned point is sampled.
         self._coarse_index += 1
         
-        # Continue coarse scan?
         if self._coarse_index < len(self._coarse_positions):
             return AutofocusResult(
                 finished=False,
@@ -85,11 +85,10 @@ class ParabolicAutofocus(MSPRAutofocus):
                 current_range_mm=(self.config.end_mm - self.config.start_mm) / 2
             )
         
-        # Coarse scan complete -> try local parabolic fit
+        # Step 2: After the coarse scan, estimate a sub-step peak by local fitting.
         if not self._best_measurement:
-             return AutofocusResult(finished=True, phase=Phase.FINISHED, best_position_mm=self.config.start_mm, best_score=0.0)
+            return AutofocusResult(finished=True, phase=Phase.FINISHED, best_position_mm=self.config.start_mm, best_score=0.0)
         
-        # Attempt local parabolic fit (best + neighbors only)
         local_fit = self._fit_local_parabola()
         
         if local_fit:
@@ -98,6 +97,7 @@ class ParabolicAutofocus(MSPRAutofocus):
             self._interpolated_peak = predicted_peak_pos
             self._current_range_mm = self.config.step_mm * 2.0
         
+        # Step 3: Hand over to the standard refinement phase around that estimate.
         self._prepare_refinement()
         
         result = AutofocusResult(
@@ -129,21 +129,26 @@ class IterativeParabolicAutofocus(ParabolicAutofocus):
         return super().start()
 
     def _handle_refinement(self) -> AutofocusResult:
-        # Measure the point we just moved to (predicted peak)
+        # Step 1: Evaluate the predicted peak position from the previous move.
         current_measurement = self._measurements[-1]
         
-        # Check if this new point is better
+        # Step 2: Promote the new sample if it beats the current best score.
         if current_measurement.score > self._best_measurement.score:
             self._best_measurement = current_measurement
         
         self.iteration_count += 1
         
-        # Check convergence
+        # Step 3: Stop after enough iterations or once the search window is tiny.
         if self.iteration_count >= self.max_iterations or (self._current_range_mm is not None and self._current_range_mm < self.config.min_step_mm):
-             return AutofocusResult(finished=True, best_position_mm=self._best_measurement.position_mm, 
-                                    best_score=self._best_measurement.score, phase=Phase.FINISHED, progress=1.0)
+            return AutofocusResult(
+                finished=True,
+                best_position_mm=self._best_measurement.position_mm,
+                best_score=self._best_measurement.score,
+                phase=Phase.FINISHED,
+                progress=1.0,
+            )
 
-        # Re-fit with the new sample included.
+        # Step 4: Re-fit the local parabola using the newly measured point.
         local_fit = self._fit_local_parabola()
         
         next_pos = self._best_measurement.position_mm
@@ -151,10 +156,10 @@ class IterativeParabolicAutofocus(ParabolicAutofocus):
         if local_fit:
             pred_x, _ = local_fit
             next_pos = pred_x
-            # Shrink range for safety check.
+            # Step 5: Shrink the active window around the new prediction.
             self._current_range_mm = abs(pred_x - self._best_measurement.position_mm) * 2
         else:
-            # Fit failed, try small step
+            # Step 5: Fall back to a small forward probe when the fit is unstable.
             next_pos = self._best_measurement.position_mm + self.config.min_step_mm
             
         return AutofocusResult(

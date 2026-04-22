@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
+from enum import Enum, auto
+
 from ..autofocus import AutofocusConfig, AutofocusResult, MSPRAutofocus, Phase
+
+
+class _FibonacciState(Enum):
+    """Internal state for deciding which probe to measure or which side to drop."""
+
+    UNINITIALIZED = auto()
+    MEASURE_LEFT_PROBE = auto()
+    MEASURE_RIGHT_PROBE = auto()
+    DISCARD_LEFT_SEGMENT = auto()
+    DISCARD_RIGHT_SEGMENT = auto()
 
 
 class FibonacciAutofocus(MSPRAutofocus):
@@ -34,7 +46,7 @@ class FibonacciAutofocus(MSPRAutofocus):
         self._d = 0.0  # Inner right probe
         self._fc: float | None = None  # Score at c
         self._fd: float | None = None  # Score at d
-        self._state = "INIT"  # INIT, PROBE_C, PROBE_D, SHRINK_LEFT, SHRINK_RIGHT
+        self._state = _FibonacciState.UNINITIALIZED
 
     def start(self) -> float:
         # Reset strategy-local state for re-entrant runs.
@@ -46,7 +58,7 @@ class FibonacciAutofocus(MSPRAutofocus):
         self._d = 0.0
         self._fc = None
         self._fd = None
-        self._state = "INIT"
+        self._state = _FibonacciState.UNINITIALIZED
         return super().start()
 
     def _generate_fibonacci(self, max_val: int) -> list[int]:
@@ -63,7 +75,7 @@ class FibonacciAutofocus(MSPRAutofocus):
         
         center = self._best_measurement.position_mm
         
-        # First refinement: set up initial bracket
+        # Step 1: Build the initial search bracket around the coarse peak.
         if self._refinement_level == 0:
             # Initial bracket: +/- 2 * step_mm around peak.
             bracket_half = self.config.step_mm * 2.0
@@ -84,13 +96,13 @@ class FibonacciAutofocus(MSPRAutofocus):
             
             self._fc = None
             self._fd = None
-            self._state = "PROBE_C"
+            self._state = _FibonacciState.MEASURE_LEFT_PROBE
             
             # Start by measuring c
             self._refinement_positions = [self._c]
         
         else:
-            # Continue Fibonacci contraction
+            # Step 2: Contract the bracket using the next Fibonacci ratio.
             self._fib_index -= 1
             
             if self._fib_index < 2:
@@ -100,22 +112,22 @@ class FibonacciAutofocus(MSPRAutofocus):
             else:
                 ratio = self._fib_cache[self._fib_index - 1] / self._fib_cache[self._fib_index]
                 
-                if self._state == "SHRINK_LEFT":
-                    # Shrink from left (a moves right, c becomes new d)
+                if self._state == _FibonacciState.DISCARD_LEFT_SEGMENT:
+                    # Shrink from left: drop [a, c] and probe the new left inner point.
                     self._a = self._c
                     self._fd = self._fc
                     self._c = self._a + (self._b - self._a) * ratio
                     self._refinement_positions = [self._c]
-                    self._state = "PROBE_C"
+                    self._state = _FibonacciState.MEASURE_LEFT_PROBE
                 else:
-                    # Shrink from right (b moves left, d becomes new c)
+                    # Shrink from right: drop [d, b] and probe the new right inner point.
                     self._b = self._d
                     self._fc = self._fd
                     self._d = self._a + (self._b - self._a) * (1 - ratio)
                     self._refinement_positions = [self._d]
-                    self._state = "PROBE_D"
+                    self._state = _FibonacciState.MEASURE_RIGHT_PROBE
         
-        # Update step size
+        # Step 3: Publish the new interval width for the next move.
         self._current_step_mm = self._b - self._a
         self._current_range_mm = (self._b - self._a) / 2
         
@@ -126,17 +138,17 @@ class FibonacciAutofocus(MSPRAutofocus):
         """Handle Fibonacci refinement phase."""
         current_score = self._measurements[-1].score
         
-        # Store score based on which probe we measured
-        if self._state == "PROBE_C":
+        # Step 1: Store the score for the probe position we just measured.
+        if self._state == _FibonacciState.MEASURE_LEFT_PROBE:
             self._fc = current_score
-        elif self._state == "PROBE_D":
+        elif self._state == _FibonacciState.MEASURE_RIGHT_PROBE:
             self._fd = current_score
         
-        # Need to measure the other probe point?
+        # Step 2: Ensure both inner probe points have a score.
         if self._fc is None:
             self._refinement_positions = [self._c]
             self._refinement_index = 0
-            self._state = "PROBE_C"
+            self._state = _FibonacciState.MEASURE_LEFT_PROBE
             return AutofocusResult(
                 finished=False,
                 next_position_mm=self._c,
@@ -153,7 +165,7 @@ class FibonacciAutofocus(MSPRAutofocus):
         if self._fd is None:
             self._refinement_positions = [self._d]
             self._refinement_index = 0
-            self._state = "PROBE_D"
+            self._state = _FibonacciState.MEASURE_RIGHT_PROBE
             return AutofocusResult(
                 finished=False,
                 next_position_mm=self._d,
@@ -167,15 +179,15 @@ class FibonacciAutofocus(MSPRAutofocus):
                 current_range_mm=self._current_range_mm
             )
         
-        # Both probes measured - decide which side to keep
+        # Step 3: Compare both probe scores and keep the better half-interval.
         if self._fc > self._fd:
             # Peak is in [a, d], shrink from right
-            self._state = "SHRINK_RIGHT"
+            self._state = _FibonacciState.DISCARD_RIGHT_SEGMENT
         else:
             # Peak is in [c, b], shrink from left
-            self._state = "SHRINK_LEFT"
+            self._state = _FibonacciState.DISCARD_LEFT_SEGMENT
         
-        # Check termination
+        # Step 4: Stop once the remaining interval reaches target resolution.
         interval_size = self._b - self._a
         if interval_size <= self.config.min_step_mm * 2:
             # Converged - return global best observed measurement.
@@ -192,7 +204,7 @@ class FibonacciAutofocus(MSPRAutofocus):
                 current_range_mm=interval_size / 2
             )
         
-        # Continue to next refinement level
+        # Step 5: Prepare the next contraction move.
         self._prepare_refinement()
         
         return AutofocusResult(

@@ -27,18 +27,22 @@ class _SrvType:
 
 srv_mod.GetVelocityParameters = _SrvType
 srv_mod.SetVelocityParameters = _SrvType
+srv_mod.GetOperationStatus = _SrvType
+srv_mod.MoveAbsolute = _SrvType
 sys.modules["promoc_assembly_interfaces.srv"] = srv_mod
 if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod = types.ModuleType("promoc_assembly_interfaces")
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.callbacks.axis_helpers import temporary_velocity  # noqa: E402
+from camera_nodes.services.fly_over import temporary_velocity  # noqa: E402
 from promoc_core.promoc_exceptions import ServiceError  # noqa: E402
 
 
 class _VelocityResponse:
-    def __init__(self, success=True, min_velocity=0.1, acceleration=1.0, max_velocity=5.0):
+    def __init__(
+        self, success=True, min_velocity=0.1, acceleration=1.0, max_velocity=5.0
+    ):
         self.success = success
         self.min_velocity = min_velocity
         self.acceleration = acceleration

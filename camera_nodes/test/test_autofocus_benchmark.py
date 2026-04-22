@@ -199,3 +199,4 @@ def test_autofocus_benchmark_accuracy_vs_exhaustive():
                 f"{name} error {err:.4f}mm exceeds limit {max_abs_error_mm[name]:.4f}mm "
                 f"in scenario={scenario.name}"
             )
+

@@ -57,8 +57,8 @@ Categories
 - Optics:   lp/mm ↔ lp/px
 - Speed:    m/s ↔ mm/s
 """
+
 import math
-from typing import Union
 
 
 # =============================================================================
@@ -66,6 +66,7 @@ from typing import Union
 # =============================================================================
 # These are the most frequently used conversions in ProMOC.
 # ROS typically works in meters (SI), while hardware interfaces often use mm.
+
 
 def m_to_mm(value: float) -> float:
     """
@@ -184,6 +185,7 @@ def m_to_um(value: float) -> float:
 # =============================================================================
 # ROS uses radians, while humans and some interfaces use degrees.
 
+
 def rad_to_deg(value: float) -> float:
     """
     Converts radians to degrees.
@@ -259,6 +261,7 @@ def deg_to_mrad(value: float) -> float:
 # =============================================================================
 # These conversions are used for lens testing and MTF analysis.
 # Line pairs (lp) describe how well an optic can resolve fine details.
+
 
 def lp_mm_to_lp_px(lp_mm: float, pixel_size_um: float) -> float:
     """
@@ -352,6 +355,7 @@ def cycles_per_pixel_to_lp_mm(cpp: float, pixel_size_um: float) -> float:
 # Speed / Velocity Conversions
 # =============================================================================
 # Conversion between hardware velocity units and ROS units.
+
 
 def mm_s_to_m_s(value: float) -> float:
     """

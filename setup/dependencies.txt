@@ -53,9 +53,7 @@ setuptools>=45.0.0           # Modern setuptools for package building
 # --- Development and Testing ---
 pytest>=6.0.0               # Testing framework
 pytest-cov>=2.12.0          # Test coverage reporting
-flake8>=3.8.0               # Code linting and style checking
-black>=21.0.0               # Code formatting
-isort>=5.0.0                # Import sorting
+ruff>=0.7.0                 # Unified linting + formatting
 
 
 # --- Optional Scientific Computing ---
@@ -69,7 +67,8 @@ pandas>=1.0.0               # Data manipulation and analysis
 #
 # 1. PMCLib (proprietary):
 #    - Must be obtained separately from Match
-#    - Install with: pip install local_libs/pmclib-*.whl
+#    - Install with: pip install /path/to/pmclib-*.whl
+#    - Optional local checkout path: planar_motor_nodes/planar_motor_nodes/drivers/pmclib
 #    - For development without hardware: uses mock_pmclib.py
 #
 # 2. ROS2 dependencies:
@@ -83,4 +82,3 @@ pandas>=1.0.0               # Data manipulation and analysis
 # 4. Ubuntu 24.04 PEP 668:
 #    - Requires virtual environment or --break-system-packages
 #    - Handled automatically by install_python_deps.sh
-sphinx-intl

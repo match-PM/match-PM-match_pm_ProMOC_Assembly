@@ -39,9 +39,15 @@ def test_interface_cmake_has_no_verification_services():
 def test_start_here_is_hardware_first():
     start_here = ROOT / "docs" / "START_HERE.md"
     content = start_here.read_text(encoding="utf-8", errors="ignore")
+<<<<<<< HEAD
     assert "system.launch.py runtime_mode:=hardware" in content
     assert "/promoc/camera/autofocus" in content
     assert "/promoc/camera/measure_mtf" not in content
+=======
+    assert "make doctor-hw" in content
+    assert "make hw" in content
+    assert "make camera-hw" in content
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
 
 def test_docs_no_legacy_launch_names():

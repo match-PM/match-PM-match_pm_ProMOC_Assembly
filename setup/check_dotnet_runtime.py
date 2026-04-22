@@ -1,171 +1,177 @@
 #!/usr/bin/env python3
-"""
-.NET Runtime Detection and Configuration for PMCLib
+"""Detect available .NET runtimes and generate PMCLib runtime helper config."""
 
-This script detects available .NET runtimes and configures PMCLib accordingly.
-It can be used to troubleshoot .NET/Mono runtime issues with pythonnet.
-"""
+from __future__ import annotations
 
-import sys
+from pathlib import Path
 import subprocess
-import os
+import textwrap
 
 
-def check_dotnet():
-    """Check if .NET Core/SDK is available."""
+def check_dotnet() -> tuple[bool, str | None]:
+    """Return whether dotnet is available and its version."""
     try:
-        result = subprocess.run(['dotnet', '--version'],
-                                capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            version = result.stdout.strip()
-            print(f"✓ .NET Core/SDK found: {version}")
-            return True, version
+        result = subprocess.run(
+            ["dotnet", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
-        pass
+        result = None
 
-    print("✗ .NET Core/SDK not available")
+    if result and result.returncode == 0:
+        version = result.stdout.strip()
+        print(f"[PASS] .NET Core/SDK found: {version}")
+        return True, version
+
+    print("[FAIL] .NET Core/SDK not available")
     return False, None
 
 
-def check_mono():
-    """Check if Mono runtime is available."""
+def check_mono() -> tuple[bool, str | None]:
+    """Return whether mono is available and its version line."""
     try:
-        result = subprocess.run(['mono', '--version'],
-                                capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            version_line = result.stdout.split('\n')[0]
-            print(f"✓ Mono runtime found: {version_line}")
-            return True, version_line
+        result = subprocess.run(
+            ["mono", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
-        pass
+        result = None
 
-    print("✗ Mono runtime not available")
+    if result and result.returncode == 0:
+        version_line = result.stdout.splitlines()[0]
+        print(f"[PASS] Mono runtime found: {version_line}")
+        return True, version_line
+
+    print("[FAIL] Mono runtime not available")
     return False, None
 
 
-def test_pythonnet_runtime(runtime_name):
-    """Test pythonnet with specified runtime."""
+def test_pythonnet_runtime(runtime_name: str) -> bool:
+    """Try loading pythonnet with a specific runtime backend."""
     print(f"\nTesting pythonnet with {runtime_name}...")
-
     try:
         from pythonnet import load
 
-        # Try to load the specified runtime
-        if runtime_name == "coreclr":
-            load("coreclr")
-        elif runtime_name == "mono":
-            load("mono")
-        else:
-            print(f"Unknown runtime: {runtime_name}")
+        if runtime_name not in {"coreclr", "mono"}:
+            print(f"[FAIL] Unknown runtime: {runtime_name}")
             return False
 
-        # Try to import CLR
-        import clr
-        print(f"✓ pythonnet successfully loaded with {runtime_name}")
-        return True
+        load(runtime_name)
+        import clr  # noqa: F401
 
-    except Exception as e:
-        print(f"✗ pythonnet failed with {runtime_name}: {e}")
+        print(f"[PASS] pythonnet loaded with {runtime_name}")
+        return True
+    except Exception as exc:  # pragma: no cover - diagnostic script
+        print(f"[FAIL] pythonnet failed with {runtime_name}: {exc}")
         return False
 
 
-def create_pmclib_config():
-    """Create a configuration file for PMCLib runtime selection."""
-    config_content = """# PMCLib Runtime Configuration
-# This file helps PMCLib choose the appropriate .NET runtime
-
-import sys
-import os
-from pythonnet import load
-
-def configure_runtime():
-    \"\"\"Configure the best available .NET runtime for PMCLib.\"\"\"
-    
-    # Try .NET Core first (preferred)
-    try:
-        load("coreclr")
-        print("PMCLib using .NET Core runtime")
-        return True
-    except Exception as e:
-        print(f"Failed to load .NET Core: {e}")
-    
-    # Fallback to Mono
-    try:
-        load("mono")
-        print("PMCLib using Mono runtime")
-        return True
-    except Exception as e:
-        print(f"Failed to load Mono: {e}")
-    
-    # If both fail, raise an error
-    raise RuntimeError("No compatible .NET runtime found. Install .NET SDK or Mono.")
-
-# Auto-configure when imported
-if __name__ != "__main__":
-    configure_runtime()
-"""
-
-    config_path = os.path.join("local_libs", "pmclib_runtime_config.py")
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-
-    with open(config_path, 'w') as f:
-        f.write(config_content)
-
-    print(f"✓ Created runtime configuration: {config_path}")
+def _runtime_config_template() -> str:
+    return textwrap.dedent(
+        """\
+        # PMCLib Runtime Configuration
+        # Auto-generated by setup/check_dotnet_runtime.py
+        from pythonnet import load
 
 
-def main():
-    """Main runtime detection and configuration."""
+        def configure_runtime() -> bool:
+            \"\"\"Configure the best available .NET runtime for PMCLib.\"\"\"
+            try:
+                load("coreclr")
+                print("PMCLib using .NET Core runtime")
+                return True
+            except Exception as exc:
+                print(f"Failed to load .NET Core: {exc}")
+
+            try:
+                load("mono")
+                print("PMCLib using Mono runtime")
+                return True
+            except Exception as exc:
+                print(f"Failed to load Mono: {exc}")
+
+            raise RuntimeError(
+                "No compatible .NET runtime found. Install .NET SDK or Mono."
+            )
+
+
+        if __name__ != "__main__":
+            configure_runtime()
+        """
+    )
+
+
+def create_pmclib_config(project_root: Path) -> list[Path]:
+    """Create runtime helper config in current and legacy PMCLib locations."""
+    config_text = _runtime_config_template()
+    targets = [
+        project_root
+        / "planar_motor_nodes"
+        / "planar_motor_nodes"
+        / "drivers"
+        / "pmclib_runtime_config.py",
+        project_root / "local_libs" / "pmclib_runtime_config.py",
+    ]
+
+    written: list[Path] = []
+    for path in targets:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(config_text, encoding="utf-8")
+        written.append(path)
+
+    return written
+
+
+def main() -> int:
     print("ProMOC Assembly .NET Runtime Detection")
     print("=" * 40)
 
-    # Check available runtimes
-    dotnet_available, dotnet_version = check_dotnet()
-    mono_available, mono_version = check_mono()
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+
+    dotnet_available, _ = check_dotnet()
+    mono_available, _ = check_mono()
 
     if not dotnet_available and not mono_available:
-        print("\n✗ ERROR: No .NET runtime found!")
-        print("Please install either:")
+        print("\n[FAIL] No .NET runtime found.")
+        print("Install one of the following:")
         print("  - .NET SDK: sudo apt-get install dotnet-sdk-8.0")
         print("  - Mono: sudo apt-get install mono-complete")
-        sys.exit(1)
+        return 1
 
-    # Test pythonnet with available runtimes
     print("\n" + "=" * 40)
     print("Testing pythonnet compatibility...")
 
-    successful_runtimes = []
-
-    if dotnet_available:
-        if test_pythonnet_runtime("coreclr"):
-            successful_runtimes.append("coreclr (.NET Core)")
-
-    if mono_available:
-        if test_pythonnet_runtime("mono"):
-            successful_runtimes.append("mono")
+    successful_runtimes: list[str] = []
+    if dotnet_available and test_pythonnet_runtime("coreclr"):
+        successful_runtimes.append("coreclr (.NET Core)")
+    if mono_available and test_pythonnet_runtime("mono"):
+        successful_runtimes.append("mono")
 
     if not successful_runtimes:
-        print("\n✗ ERROR: pythonnet failed with all available runtimes!")
+        print("\n[FAIL] pythonnet failed with all available runtimes.")
         print("Try reinstalling pythonnet: pip install --force-reinstall pythonnet")
-        sys.exit(1)
+        return 1
 
-    print(f"\n✓ pythonnet compatible with: {', '.join(successful_runtimes)}")
+    print(f"\n[PASS] pythonnet compatible with: {', '.join(successful_runtimes)}")
 
-    # Create configuration
-    create_pmclib_config()
+    written_paths = create_pmclib_config(project_root)
+    for path in written_paths:
+        print(f"[PASS] Created runtime configuration: {path}")
 
     print("\n" + "=" * 40)
-    print("✓ .NET runtime configuration completed!")
-    print("\nRecommendations:")
-    if "coreclr (.NET Core)" in successful_runtimes:
-        print("  - .NET Core is available and preferred")
-    if "mono" in successful_runtimes:
-        print("  - Mono is available as fallback")
-
+    print("[PASS] .NET runtime configuration completed")
     print("\nNext steps:")
-    print("  1. Install PMCLib: pip install local_libs/pmclib-*.whl")
+    print("  1. Install PMCLib wheel: pip install /path/to/pmclib-*.whl")
     print("  2. Test PMCLib import: python3 -c 'import pmclib'")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

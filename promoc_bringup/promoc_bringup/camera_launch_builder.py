@@ -58,6 +58,27 @@ def build_camera_node_parameters(
     if use_simulator:
         return {"use_simulator": True}
 
+<<<<<<< HEAD
     return {
         "use_simulator": False,
+=======
+    camera_params = camera_params or {}
+    camera_config = camera_config or {}
+    camera_info = camera_config.get("camera_info", {})
+
+    return {
+        "use_simulator": False,
+        "mtf.use_full_frame": True,
+        "mtf.full_frame_width": camera_params.get(
+            "sensor_resolution_h",
+            camera_info.get("image_width", 5536),
+        ),
+        "mtf.full_frame_height": camera_params.get(
+            "sensor_resolution_v",
+            camera_info.get("image_height", 3692),
+        ),
+        "mtf.full_frame_offset_x": 0,
+        "mtf.full_frame_offset_y": 0,
+        "mtf.full_frame_binning": 1,
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     }

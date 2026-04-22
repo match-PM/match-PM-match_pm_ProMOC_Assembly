@@ -3,6 +3,13 @@ local_libs/
 
 # Python cache files
 __pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.tmp_test/
+camera_nodes/test/fixtures/_tmp_mtf/
+pytest-cache-files-*/
+**/pytest-cache-files-*/
 *.py[cod]
 *$py.class
 *.so

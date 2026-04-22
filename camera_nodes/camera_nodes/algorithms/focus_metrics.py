@@ -20,7 +20,10 @@ Bayer Sensor Optimization (Sony IMX183 / IDS U3-3800CP):
     - Better MTF/sharpness response
 
 Quickstart:
-    from camera_nodes.algorithms.focus_metrics import laplacian_variance, tenengrad
+    from camera_nodes.algorithms.focus_metrics import (
+        laplacian_variance,
+        tenengrad,
+    )
 
     score = laplacian_variance(image)
     score = tenengrad(image, threshold=0.0)
@@ -31,7 +34,6 @@ Important:
     - OpenCV (`cv2`) is required for conversion and some filters.
 """
 
-from typing import Optional
 import numpy as np
 
 try:
@@ -246,3 +248,4 @@ def sml(image: np.ndarray, threshold: float = 0.0) -> float:
         ml[ml < threshold] = 0
 
     return float(ml.sum())
+

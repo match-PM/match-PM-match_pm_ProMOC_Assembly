@@ -38,7 +38,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
     pkg_mod.srv = srv_mod
     sys.modules["promoc_assembly_interfaces"] = pkg_mod
 
-from camera_nodes.callbacks.fly_over import FlyOverDetector  # noqa: E402
+from camera_nodes.services.fly_over import FlyOverDetector  # noqa: E402
 
 
 class _Param:
@@ -125,3 +125,4 @@ def test_analyze_peak_handles_empty_scan_data():
     assert result.peak_start is None
     assert result.peak_end is None
     assert result.max_stddev == 0.0
+

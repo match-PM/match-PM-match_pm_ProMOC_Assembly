@@ -123,7 +123,11 @@ def test_autofocus_handler_builds_focus_profile():
     assert profile["scan_speed_mm_s"] > 0.0
 
 
+<<<<<<< HEAD
 def test_runner_build_plan_maps_legacy_modes_to_fourstep():
+=======
+def test_runner_build_plan_uses_request_range_for_exhaustive_mode():
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     handler = _RunnerHandler(
         {
             "autofocus.refinement_samples": 61,
@@ -147,9 +151,15 @@ def test_runner_build_plan_maps_legacy_modes_to_fourstep():
         focus_profile={"coarse_step_mm": 0.25, "min_step_mm": 0.03, "settle_s": 0.4},
     )
 
+<<<<<<< HEAD
     assert plan.mode_name == "fourstep"
     assert plan.algorithm.config.start_mm == 3.0
     assert plan.algorithm.config.end_mm == 5.0
+=======
+    assert plan.mode_name == "exhaustive"
+    assert plan.algorithm.config.start_mm == 1.0
+    assert plan.algorithm.config.end_mm == 9.0
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     assert plan.algorithm.config.step_mm == 0.25
     assert plan.algorithm.config.min_step_mm == 0.03
     assert plan.algorithm.config.refinement_samples == 61
@@ -175,7 +185,11 @@ def test_runner_build_plan_uses_peak_window_for_refinement_mode():
         focus_profile={"coarse_step_mm": 0.2, "settle_s": 0.15},
     )
 
+<<<<<<< HEAD
     assert plan.mode_name == "fourstep"
+=======
+    assert plan.mode_name == "goldensection"
+>>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     assert plan.algorithm.config.start_mm == 3.0
     assert plan.algorithm.config.end_mm == 5.0
     assert plan.algorithm.config.step_mm == 0.2

@@ -10,6 +10,12 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy]
+    env:
+      ROS_DISTRO: ${{ matrix.ros_distro }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,10 +25,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Python dependencies
+      - name: Install development dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy
+          python -m pip install -r requirements-dev.txt numpy
 
-      - name: Run minimal checks
+      - name: Run lint, unit, and N+1 contract checks
         run: make check

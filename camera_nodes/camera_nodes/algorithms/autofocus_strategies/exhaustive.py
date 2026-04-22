@@ -41,20 +41,20 @@ class ExhaustiveAutofocus(MSPRAutofocus):
         """
         self._reset_runtime_state()
 
-        # Generate ALL positions with minimum step size
+        # Step 1: Generate the full scan grid at minimum resolution.
         self._coarse_positions = list(np.arange(
             self.config.start_mm,
             self.config.end_mm + self._scan_step / 2,
             self._scan_step
         ))
         
-        # Clamp to valid range
+        # Step 2: Clamp positions into the configured travel range.
         self._coarse_positions = [
             max(self.config.start_mm, min(self.config.end_mm, pos))
             for pos in self._coarse_positions
         ]
         
-        # Remove duplicates
+        # Step 3: Remove duplicates caused by floating-point rounding.
         seen = set()
         unique = []
         for pos in self._coarse_positions:
@@ -75,12 +75,13 @@ class ExhaustiveAutofocus(MSPRAutofocus):
         
         Simply measure every single position.
         """
+        # Step 1: Advance to the next scan position.
         self._coarse_index += 1
         
         total = len(self._coarse_positions)
         progress = self._coarse_index / total
         
-        # Continue scanning?
+        # Step 2: Keep scanning until the last planned point is measured.
         if self._coarse_index < total:
             return AutofocusResult(
                 finished=False,
@@ -95,7 +96,7 @@ class ExhaustiveAutofocus(MSPRAutofocus):
                 current_range_mm=(self.config.end_mm - self.config.start_mm) / 2
             )
         
-        # Scan complete - return best position directly (no refinement needed)
+        # Step 3: Finish immediately because exhaustive search needs no refinement.
         self._phase = Phase.FINISHED
         return AutofocusResult(
             finished=True,

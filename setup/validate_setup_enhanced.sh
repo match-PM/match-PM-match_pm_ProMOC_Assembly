@@ -230,18 +230,14 @@ check_pmclib() {
         log_warning "PMCLib not available - using mock implementation for development"
     fi
     
-    # Check local_libs directory
+    # Check local PMCLib checkout (current + legacy locations)
     check_item
-    if [[ -d "$PROJECT_ROOT/local_libs" ]]; then
-        log_success "local_libs directory exists"
-        
-        if ls "$PROJECT_ROOT/local_libs/pmclib-"*.whl &> /dev/null; then
-            log_success "PMCLib wheel file found in local_libs/"
-        else
-            log_warning "No PMCLib wheel file found in local_libs/"
-        fi
+    if [[ -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" ]]; then
+        log_success "PMCLib local checkout found in planar_motor_nodes/.../drivers/pmclib"
+    elif [[ -d "$PROJECT_ROOT/local_libs/pmclib" ]]; then
+        log_warning "Legacy PMCLib location found in local_libs/pmclib (supported, but deprecated)"
     else
-        log_warning "local_libs directory not found"
+        log_warning "No local PMCLib checkout found (optional if pmclib is installed via pip wheel)"
     fi
 }
 
@@ -271,7 +267,7 @@ print('LinearAxisDriver import successful')
     if python3 -c "
 import sys
 sys.path.insert(0, '$PROJECT_ROOT/planar_motor_nodes')
-from planar_motor_nodes.mock_pmclib import MockPMCLib
+from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib
 print('MockPMCLib import successful')
 " &> /dev/null; then
         log_success "Mock PMCLib imports correctly"
@@ -343,7 +339,7 @@ fi)
 
 ### PMCLib Status
 - PMCLib: $(python3 -c "import pmclib; print('✅ Available')" 2>/dev/null || echo "⚠️ Using mock")
-- Wheel file: $(ls "$PROJECT_ROOT/local_libs/pmclib-"*.whl &> /dev/null && echo "✅ Found" || echo "❌ Not found")
+- Local checkout: $(test -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" && echo "✅ Found (drivers/pmclib)" || test -d "$PROJECT_ROOT/local_libs/pmclib" && echo "⚠️ Found (legacy local_libs/pmclib)" || echo "❌ Not found")
 
 ## Recommendations
 
@@ -361,7 +357,7 @@ fi)
 $(if [[ $WARNING_CHECKS -gt 0 ]]; then
 cat << 'WARNINGS'
 ### Warnings to Address:
-1. For PMCLib: Copy wheel to local_libs/ and install
+1. For PMCLib: install wheel (`pip install /path/to/pmclib-*.whl`) or add local checkout to planar_motor_nodes/.../drivers/pmclib
 2. For hardware: Install pylablib and pythonnet
 3. Update system packages: `sudo apt update && sudo apt upgrade`
 
@@ -374,7 +370,7 @@ fi)
 source $PROJECT_ROOT/install/setup.bash
 
 # Test simulation
-ros2 launch promoc_bringup dual_lts300_gazebo.launch.py
+ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
 
 # Test basic functionality
 python3 $SCRIPT_DIR/test_basic_functionality.py

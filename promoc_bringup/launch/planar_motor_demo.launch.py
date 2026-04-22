@@ -1,3 +1,9 @@
+"""Example launch for the optional planar-motor demo flow.
+
+This is not a canonical system startup path.
+Use ``system.launch.py`` for normal startup.
+"""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
@@ -13,7 +19,7 @@ def generate_launch_description():
 
     mover_node = Node(
         package='planar_motor_nodes',
-        executable='mover_service_node_test',
+        executable='mover_node',
         name='mover_node',
         parameters=[params_file],
         output='screen',

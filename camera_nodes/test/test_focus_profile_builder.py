@@ -116,3 +116,4 @@ def test_focus_profile_builder_json_override_precedence_combo_wins():
     assert profile.profile_source == "6x_bs1"
     assert profile.scan_speed_mm_s == 2.5
     assert profile.coarse_step_mm == 0.02
+

@@ -533,8 +533,8 @@ ros2 run linear_axis_nodes lts300_node --ros-args \\
     -r __node:=lts300_x_axis \\
     -p serial_port:=/dev/ttyUSB0
 
-# Start camera (requires camera_aravis2)
-ros2 launch promoc_bringup assembly_camera.launch.py
+# Start camera stack (hardware mode, requires camera_aravis2)
+ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware
 \`\`\`
 
 ## Troubleshooting
@@ -665,8 +665,8 @@ main() {
     echo "   # Test LTS300 linear axis"
     echo "   ros2 run linear_axis_nodes lts300_node"
     echo ""
-    echo "   # Test camera (if installed)"
-    echo "   ros2 launch promoc_bringup assembly_camera.launch.py"
+    echo "   # Test camera stack (if installed)"
+    echo "   ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware"
     echo ""
 }
 
