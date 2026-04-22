@@ -8,6 +8,11 @@ from .base import CallbackBase
 class ExposureHandler(CallbackBase):
     """Handler for exposure control."""
 
+    @staticmethod
+    def _format_exposure(exposure_us: float) -> str:
+        exposure_ms = float(exposure_us) / 1000.0
+        return f"{float(exposure_us):.1f} us ({exposure_ms:.3f} ms)"
+
     @handle_service_errors()
     def manual_set_exposure_callback(self, request, response):
         """Sets the manual exposure time.
@@ -16,7 +21,7 @@ class ExposureHandler(CallbackBase):
             request.exposure_time: Exposure time in microseconds
         """
         self._node.get_logger().info(
-            f"Setting exposure time to {request.exposure_time} µs"
+            f"Setting exposure time to {self._format_exposure(request.exposure_time)}"
         )
 
         if request.exposure_time <= 0:
@@ -42,6 +47,8 @@ class ExposureHandler(CallbackBase):
                 )
 
         response.success = True
-        response.status_message = f"Exposure set to {request.exposure_time} µs"
+        response.status_message = (
+            f"Exposure set to {self._format_exposure(request.exposure_time)}"
+        )
 
         return response

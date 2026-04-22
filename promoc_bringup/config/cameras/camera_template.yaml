@@ -60,7 +60,7 @@ camera_params:
   #
   # Convention: Use descriptive names like:
   #   - assembly_camera, inspection_camera, top_camera, side_camera
-  cameraname: 'assembly_camera'
+  cameraname: 'promoc_camera'
   
   # -------------------------------------------------------------------------
   # Sensor Physical Specifications
@@ -158,7 +158,7 @@ camera_params:
   #   /promoc/<cameraname>/stream0/image_raw
   #
   # If you change cameraname above, update this accordingly
-  subscription_topic: '/promoc/assembly_camera/stream0/image_raw'
+  subscription_topic: '/promoc/promoc_camera/stream0/image_raw'
 
 # =============================================================================
 # Exposure Time Control
@@ -176,7 +176,7 @@ camera_params:
 exposure_time:
   # Service client name for exposure control
   # Leave as-is unless you create custom service names
-  srv_client_name: '/promoc/assembly_camera_controller/set_exposure_time'
+  srv_client_name: '/promoc/promoc_camera_controller/set_exposure_time'
   srv_type: 'pm_genicam_controller_interfaces/srv/SetExposureTime'
   
   # Minimum exposure time (µs)
@@ -213,7 +213,7 @@ frame_rate:
 # ============================================================================
 # 1. Use ROS camera_calibration package:
 #    ros2 run camera_calibration cameracalibrator --size 8x6 --square 0.025 \
-#        --ros-args -r image:=/promoc/assembly_camera/stream0/image_raw
+#        --ros-args -r image:=/promoc/promoc_camera/stream0/image_raw
 #
 # 2. Use OpenCV calibration tools
 #
@@ -235,7 +235,7 @@ camera_info:
   image_height: 2048  # REPLACE with your image height
   
   # Camera identifier (matches topic name convention)
-  camera_name: assembly_camera_stream0
+  camera_name: promoc_camera_stream0
   
   # Camera intrinsic matrix K [3x3]
   # [fx  0  cx]

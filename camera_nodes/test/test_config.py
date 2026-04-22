@@ -50,13 +50,32 @@ def test_declare_and_load_runtime_config():
     # Override a couple of values to verify typed parsing.
     node._params["pixel_size_um"] = 3.45
     node._params["mtf.profile"] = "debug"
+    node._params["camera.image_topic"] = "/promoc/promoc_camera/stream0/image_raw"
+    node._params["autofocus.analysis_roi_width_px"] = 2000
 
     cfg = load_camera_runtime_config(node)
     assert cfg.core.pixel_size_um == 3.45
+    assert cfg.core.image_topic == "/promoc/promoc_camera/stream0/image_raw"
     assert not hasattr(cfg.core, "use_simulator")
     assert not hasattr(cfg.core, "x_axis_node_name")
+    assert cfg.autofocus.analysis_roi_width_px == 2000
     assert cfg.mtf.profile == "debug"
     assert cfg.mtf.capture_required_raw is True
+
+
+def test_declare_runtime_config_uses_promoc_camera_defaults():
+    node = _Node()
+    declare_camera_parameters(node)
+
+    cfg = load_camera_runtime_config(node)
+
+    assert cfg.core.image_topic == "/promoc/promoc_camera/stream0/image_raw"
+    assert cfg.core.camera_info_topic == "/promoc/promoc_camera/stream0/camera_info"
+    assert cfg.core.exposure_service == "/promoc/promoc_camera_controller/set_exposure_time"
+    assert cfg.core.param_set_service_primary == "/promoc/promoc_camera/set_parameters"
+    assert cfg.core.param_set_service_secondary == "/promoc/promoc_camera_controller/set_parameters"
+    assert cfg.core.default_pixel_format == "RGB8"
+    assert cfg.autofocus.exposure_guard_s == 0.02
 
 
 def test_deprecated_parameter_removed():

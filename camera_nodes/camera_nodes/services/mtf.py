@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import time
 
 import cv2
 import numpy as np
@@ -267,6 +268,79 @@ class MTFHandler(CallbackBase):
         image, ts = self._wait_for_new_image(last_timestamp, timeout=timeout)
         return image, ts, "bgr8"
 
+    def _current_stream_geometry(
+        self,
+        image: np.ndarray | None = None,
+    ) -> tuple[int, int]:
+        """Return current stream width/height from the live message or image."""
+        msg = getattr(self._node, "latest_image_msg", None)
+        if msg is not None:
+            width = int(getattr(msg, "width", 0) or 0)
+            height = int(getattr(msg, "height", 0) or 0)
+            if width > 0 and height > 0:
+                return width, height
+        if image is not None:
+            height, width = image.shape[:2]
+            return int(width), int(height)
+        return 0, 0
+
+    def _annotate_capture_geometry(
+        self,
+        capture_values: dict[str, object],
+        image: np.ndarray | None,
+    ) -> dict[str, object]:
+        """Attach actual/requested stream geometry to capture metadata."""
+        stream_width, stream_height = self._current_stream_geometry(image)
+        requested_width = self._param_int(
+            "mtf.capture_width",
+            self._param_int("camera.expected_width", 0),
+        )
+        requested_height = self._param_int(
+            "mtf.capture_height",
+            self._param_int("camera.expected_height", 0),
+        )
+        annotated = dict(capture_values or {})
+        annotated["stream_width_px"] = int(stream_width)
+        annotated["stream_height_px"] = int(stream_height)
+        annotated["requested_stream_width_px"] = int(requested_width)
+        annotated["requested_stream_height_px"] = int(requested_height)
+        annotated["stream_geometry_matches_request"] = bool(
+            stream_width > 0
+            and stream_height > 0
+            and requested_width > 0
+            and requested_height > 0
+            and stream_width == requested_width
+            and stream_height == requested_height
+        )
+        return annotated
+
+    def _wait_for_scientific_capture_frame(
+        self,
+        last_timestamp: int,
+    ) -> tuple[np.ndarray | None, int | None, str]:
+        """Wait for the next post-switch capture frame, preferring raw Bayer."""
+        latest_image, latest_ts, latest_encoding = self._get_mtf_capture_image()
+        if latest_image is not None and self._is_raw_bayer_encoding(latest_encoding):
+            return latest_image, latest_ts, latest_encoding
+
+        timeout_s = self._param_float("mtf.capture_image_timeout_s", 2.0)
+        deadline = time.time() + max(0.1, float(timeout_s))
+        current_ts = int(last_timestamp or 0)
+        while time.time() < deadline:
+            remaining = max(0.05, deadline - time.time())
+            image, image_ts, encoding = self._wait_for_new_mtf_capture_image(
+                current_ts,
+                timeout=min(0.4, remaining),
+            )
+            if image is None:
+                break
+            latest_image, latest_ts, latest_encoding = image, image_ts, encoding
+            if image_ts is not None:
+                current_ts = int(image_ts)
+            if self._is_raw_bayer_encoding(encoding):
+                return latest_image, latest_ts, latest_encoding
+        return latest_image, latest_ts, latest_encoding
+
     def _acquire_measurement_frame(self) -> tuple[np.ndarray, int | None, str, object | None]:
         """Fetch the current measurement frame after the optional MTF camera switch."""
         cv_image, image_ts_ns, image_encoding = self._get_mtf_capture_image()
@@ -274,21 +348,25 @@ class MTFHandler(CallbackBase):
             raise ImageProcessingError(
                 self._with_next_step(
                     "No camera image available for MTF.",
-                    "check /promoc/assembly_camera/stream0/image_raw in rqt_image_view and retry.",
+                    f"check {self._camera_image_topic()} in rqt_image_view and retry.",
                 )
             )
 
-        # The handler always works on the post-switch frame so ROI selection,
-        # analyzer input, and capture validation all refer to the same mode.
+        live_geometry = self._current_stream_geometry(cv_image)
         restore_state, switched_image = self._camera_format_controller.switch_to_full_frame_for_mtf(
             image_ts_ns if image_ts_ns is not None else 0,
             get_latest_image_fn=self._get_mtf_capture_image,
             wait_for_new_image_fn=self._wait_for_new_mtf_capture_image,
+            live_geometry=live_geometry,
         )
         if switched_image is not None:
             cv_image = switched_image
 
-        capture_image, capture_ts_ns, capture_encoding = self._get_mtf_capture_image()
+        capture_image, capture_ts_ns, capture_encoding = self._wait_for_scientific_capture_frame(
+            image_ts_ns if image_ts_ns is not None else 0
+        )
+        if capture_image is None:
+            capture_image, capture_ts_ns, capture_encoding = self._get_mtf_capture_image()
         if capture_image is not None:
             cv_image = capture_image
             image_ts_ns = capture_ts_ns
@@ -1214,24 +1292,29 @@ class MTFHandler(CallbackBase):
         if not self._param_bool("mtf.capture_required_raw", True):
             return capture_values, actual_pixel_format, []
 
+        raw_switch_error = self._camera_format_controller.get_last_operation_error().strip()
+        raw_switch_hint = f" Raw-switch status: {raw_switch_error}" if raw_switch_error else ""
+
         if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
             raise ImageProcessingError(
                 self._with_next_step(
-                    f"Scientific MTF requires Bayer raw, but readback is '{actual_pixel_format}'.",
+                    f"Scientific MTF requires Bayer raw, but readback is '{actual_pixel_format}'."
+                    f"{raw_switch_hint}",
                     "check the camera pixel format and retry the measurement.",
                 )
             )
         if not self._is_raw_bayer_encoding(image_encoding):
             raise ImageProcessingError(
                 self._with_next_step(
-                    f"Scientific MTF requires raw Bayer input, got encoding '{image_encoding or 'unknown'}'.",
+                    f"Scientific MTF requires raw Bayer input, got encoding "
+                    f"'{image_encoding or 'unknown'}'.{raw_switch_hint}",
                     "check the camera stream encoding and retry the measurement.",
                 )
             )
 
         mismatches = self._camera_format_controller.collect_scientific_capture_mismatches(
             capture_state,
-            self._camera_format_controller.build_mtf_capture_target(capture_values),
+            self._camera_format_controller.build_mtf_scientific_capture_target(capture_values),
         )
         if mismatches:
             raise ImageProcessingError(
@@ -1246,10 +1329,9 @@ class MTFHandler(CallbackBase):
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
         self._node.get_logger().info("MTF measurement service called.")
-        if self._param_bool("mtf.use_full_frame", True):
+        if self._param_bool("mtf.use_raw_capture", True):
             self._node.get_logger().info(
-                "MTF capture: switching camera format from cropped ROI to FULL resolution "
-                "(crop OFF, fullres ON)."
+                "MTF capture: enabling scientific raw Bayer on the current stream."
             )
         restore_state = None
 
@@ -1263,6 +1345,7 @@ class MTFHandler(CallbackBase):
             # Step 2: collect request metadata and validate that the camera
             # really runs in the expected scientific raw mode.
             capture_state, capture_values, capture_available_keys = self._read_capture_state()
+            capture_values = self._annotate_capture_geometry(capture_values, cv_image)
             pixel_size_um, measurement_metadata = self._prepare_measurement_metadata(request)
             capture_values, actual_pixel_format, capture_mismatches = (
                 self._validate_capture_or_write_failure(
@@ -1274,6 +1357,7 @@ class MTFHandler(CallbackBase):
                     image_encoding=image_encoding,
                 )
             )
+            capture_values = self._annotate_capture_geometry(capture_values, cv_image)
 
             # Step 3: resolve edge candidates and create one predictable run
             # folder before we start the per-edge analyzer loop.

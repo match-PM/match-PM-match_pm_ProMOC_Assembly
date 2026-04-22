@@ -19,6 +19,8 @@ from promoc_bringup.launch_utils import (
     load_linear_axis_config,
     load_user_config,
     load_yaml_config,
+    materialize_camera_info_yaml,
+    materialize_dynamic_parameters_yaml,
     resolve_runtime_mode,
 )
 
@@ -59,13 +61,44 @@ def launch_setup(context, *args, **kwargs):
 
     camera_params = camera_profile.get("camera_params", {})
     camera_info = camera_profile.get("camera_info", {})
+    exposure_config = camera_profile.get("exposure_time", {})
     camera_mtf_params = camera_profile.get("mtf_params", {})
+    dynamic_parameters = camera_profile.get("dynamic_parameters", [])
+    driver_declared_parameter_names = [
+        str(item.get("FeatureName", "")).strip()
+        for item in dynamic_parameters
+        if isinstance(item, dict) and str(item.get("FeatureName", "")).strip()
+    ]
     serial_port = _resolve_axis_port(axis_config)
+    camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
+    driver_camera_info_path = materialize_camera_info_yaml(
+        camera_info,
+        frame_id="camera_frame",
+        stream_name="stream0",
+    )
+    driver_dynamic_parameters_path = materialize_dynamic_parameters_yaml(
+        dynamic_parameters,
+        camera_name=camera_name,
+    )
 
     return [
         LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}"),
         _create_startup_info(),
-        _create_camera_driver_node(camera_params, camera_info),
+        LogInfo(
+            msg=(
+                "Camera stream target: "
+                f"{camera_params.get('sensor_resolution_h', camera_info.get('image_width', 5536))}x"
+                f"{camera_params.get('sensor_resolution_v', camera_info.get('image_height', 3692))}, "
+                f"exposure={float(exposure_config.get('default_ms', 30.0)):.2f} ms"
+            )
+        ),
+        _create_camera_driver_node(
+            camera_params,
+            camera_info,
+            exposure_config,
+            driver_camera_info_path,
+            driver_dynamic_parameters_path,
+        ),
         _create_x_axis_node(axis_config, serial_port),
         TimerAction(
             period=2.0,
@@ -75,6 +108,8 @@ def launch_setup(context, *args, **kwargs):
                     camera_params,
                     camera_info,
                     camera_mtf_params,
+                    exposure_config,
+                    driver_declared_parameter_names,
                 )
             ],
         ),
@@ -106,13 +141,27 @@ def _create_startup_info():
     )
 
 
-def _create_camera_driver_node(camera_params: dict, camera_info: dict):
+def _create_camera_driver_node(
+    camera_params: dict,
+    camera_info: dict,
+    exposure_config: dict,
+    camera_info_path: str,
+    dynamic_parameters_path: str,
+):
+    camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
     driver_type = camera_params.get("driver", "usb3vision")
     executable = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}[
         driver_type
     ]
+    target_width = int(
+        camera_params.get("sensor_resolution_h", camera_info.get("image_width", 5536))
+    )
+    target_height = int(
+        camera_params.get("sensor_resolution_v", camera_info.get("image_height", 3692))
+    )
+    target_exposure_us = float(exposure_config.get("default_ms", 30.0)) * 1000.0
     return Node(
-        name=camera_params.get("cameraname", "assembly_camera"),
+        name=camera_name,
         namespace="promoc",
         package="camera_aravis2",
         executable=executable,
@@ -123,21 +172,23 @@ def _create_camera_driver_node(camera_params: dict, camera_info: dict):
                 "guid": camera_params.get("guid", ""),
                 "frame_id": "camera_frame",
                 "stream_names": ["stream0"],
-                "camera_info_urls": [
-                    os.path.join(
-                        get_package_share_directory("camera_aravis2"),
-                        "config/camera_info_example_uv.yaml",
-                    )
-                ],
+                "camera_info_urls": [camera_info_path],
+                "dynamic_parameters_yaml_url": dynamic_parameters_path,
                 "verbose": False,
                 "ImageFormatControl": {
                     "PixelFormat": [camera_params.get("pixel_format", "RGB8")],
-                    "Width": camera_info.get("image_width", 5536),
-                    "Height": camera_info.get("image_height", 3692),
+                    "Width": target_width,
+                    "Height": target_height,
+                    "OffsetX": 0,
+                    "OffsetY": 0,
+                    "BinningHorizontal": 1,
+                    "BinningVertical": 1,
                 },
                 "AcquisitionControl": {
                     "AcquisitionFrameRateEnable": True,
                     "AcquisitionFrameRate": 10.0,
+                    "ExposureAuto": "Off",
+                    "ExposureTime": target_exposure_us,
                 },
             }
         ],
@@ -164,7 +215,15 @@ def _create_camera_node(
     camera_params: dict,
     camera_info: dict,
     camera_mtf_params: dict,
+    exposure_config: dict,
+    driver_declared_parameter_names: list[str],
 ):
+    camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
+    image_topic = f"/promoc/{camera_name}/stream0/image_raw"
+    camera_info_topic = f"/promoc/{camera_name}/stream0/camera_info"
+    exposure_service = f"/promoc/{camera_name}_controller/set_exposure_time"
+    param_set_service_primary = f"/promoc/{camera_name}/set_parameters"
+    param_set_service_secondary = f"/promoc/{camera_name}_controller/set_parameters"
     base_dir = config.get("measurement", {}).get("base_path") or os.path.join(
         os.path.expanduser("~"), "Dokumente", "Messungen"
     )
@@ -187,7 +246,31 @@ def _create_camera_node(
                 "measurement.username": config["measurement"]["operator"],
                 "measurement.base_path": base_dir,
                 "pixel_size_um": config["camera"]["pixel_size_um"],
-                "mtf.use_full_frame": True,
+                "camera.image_topic": image_topic,
+                "camera.camera_info_topic": camera_info_topic,
+                "camera.exposure_service": exposure_service,
+                "camera.param_set_service_primary": param_set_service_primary,
+                "camera.param_set_service_secondary": param_set_service_secondary,
+                "camera.driver_declared_parameters_json": json.dumps(
+                    driver_declared_parameter_names
+                ),
+                "camera.expected_width": camera_params.get(
+                    "sensor_resolution_h",
+                    camera_info.get("image_width", 5536),
+                ),
+                "camera.expected_height": camera_params.get(
+                    "sensor_resolution_v",
+                    camera_info.get("image_height", 3692),
+                ),
+                "camera.default_pixel_format": camera_params.get(
+                    "pixel_format",
+                    "RGB8",
+                ),
+                "camera.default_exposure_us": float(
+                    exposure_config.get("default_ms", 30.0)
+                )
+                * 1000.0,
+                "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": bool(mtf_config.get("use_raw_capture", True)),
                 "mtf.capture_required_raw": bool(
                     mtf_config.get("capture_required_raw", True)
@@ -212,7 +295,10 @@ def _create_camera_node(
                 "mtf.capture_offset_y": 0,
                 "mtf.capture_binning": 1,
                 "mtf.capture_exposure_us": float(
-                    camera_mtf_params.get("recommended_exposure_ms", 0.0)
+                    camera_mtf_params.get(
+                        "recommended_exposure_ms",
+                        exposure_config.get("default_ms", 30.0),
+                    )
                 )
                 * 1000.0,
                 "mtf.capture_gain": camera_mtf_params.get("recommended_gain", 0.0),

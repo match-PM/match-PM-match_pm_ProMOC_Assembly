@@ -12,7 +12,6 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 # Check ROS 2 distribution
@@ -22,29 +21,18 @@ if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
   set(ADDITIONAL_DEPENDENCIES service_msgs)
 endif()
 
-set(INTERFACE_FILES
-  "msg/linear_axis/LinearAxisInfo.msg"
-  "srv/linear_axis/MoveAbsolute.srv"
-  "srv/linear_axis/MoveRelative.srv"
-  "srv/linear_axis/Home.srv"
-  "srv/linear_axis/ShutdownLinearAxis.srv"
-  "srv/linear_axis/GetPosition.srv"
-  "srv/linear_axis/GetOperationStatus.srv"
-  "srv/linear_axis/GetSetHomingParams.srv"
-  "srv/linear_axis/SetVelocityParameters.srv"
-  "srv/linear_axis/GetVelocityParameters.srv"
-  "srv/linear_axis/EmergencyStop.srv"
-  "srv/linear_axis/JogAxis.srv"
-  "srv/linear_axis/Stop.srv"
-  "srv/linear_axis/SetJogParameters.srv"
-  "srv/linear_axis/GetJogParameters.srv"
-  "srv/camera/SetExposure.srv"
-  "srv/camera/AutoFocus.srv"
-  "srv/camera/MeasureMTF.srv"
-
+# Keep the package definition in sync with the filesystem after interface refactors.
+file(GLOB_RECURSE INTERFACE_FILES
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+  "msg/*.msg"
+  "srv/*.srv"
 )
+list(SORT INTERFACE_FILES)
 
-# CRITICAL: Generate the interfaces (this was missing!)
+if(NOT INTERFACE_FILES)
+  message(FATAL_ERROR "No ROS interface files found under msg/ or srv/")
+endif()
+
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${INTERFACE_FILES}
   DEPENDENCIES ${ADDITIONAL_DEPENDENCIES}

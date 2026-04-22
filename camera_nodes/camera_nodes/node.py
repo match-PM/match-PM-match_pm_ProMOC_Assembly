@@ -5,7 +5,12 @@ import time
 
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.msg import LinearAxisInfo
-from promoc_assembly_interfaces.srv import AutoFocus, MeasureMTF, SetExposure
+from promoc_assembly_interfaces.srv import (
+    AutoFocus,
+    AutoFocusROI,
+    MeasureMTF,
+    SetExposure,
+)
 from promoc_core.logging import LogTags, TaggedLogger
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -17,6 +22,7 @@ from .config import declare_camera_parameters, get_camera_param
 from .drivers import AravisCameraDriver, CameraDriver
 from .preview import ros_image_to_bgr8_preview
 from .services import AutofocusHandler, ExposureHandler, MTFHandler
+from .services.camera_format import CameraFormatController
 from .services.image_processing import CameraImageProcessing
 
 
@@ -35,6 +41,14 @@ class CameraNode(Node):
         self.bridge = CvBridge()
         self.pixel_size_um = self._param_float("pixel_size_um", 2.40)
         self.enable_debug_overlay = self._param_bool("enable_debug_overlay", False)
+        self.camera_image_topic = self._param_str(
+            "camera.image_topic",
+            "/promoc/promoc_camera/stream0/image_raw",
+        )
+        self.camera_info_topic = self._param_str(
+            "camera.camera_info_topic",
+            "/promoc/promoc_camera/stream0/camera_info",
+        )
 
         self.log.info("Camera node starting in hardware mode")
 
@@ -56,11 +70,19 @@ class CameraNode(Node):
         self._stream_start_time = time.time()
         self._last_stream_log_time = 0.0
         self._warned_preview_failures: set[str] = set()
+        self._startup_capture_logged = False
+        self._startup_capture_attempts = 0
+        self._startup_capture_max_attempts = 3
+        self._format_controller = CameraFormatController(self)
 
         self.cb_group = ReentrantCallbackGroup()
         self._create_subscriptions()
         self._create_publishers()
         self._create_services()
+        self._startup_capture_timer = self.create_timer(
+            2.0,
+            self._log_startup_capture_state,
+        )
 
         self.log.info("Camera node initialized")
 
@@ -83,7 +105,7 @@ class CameraNode(Node):
     def _create_subscriptions(self):
         self.assembly_image_sub = self.create_subscription(
             Image,
-            "/promoc/assembly_camera/stream0/image_raw",
+            self.camera_image_topic,
             self.assembly_image_callback,
             10,
         )
@@ -95,7 +117,7 @@ class CameraNode(Node):
         )
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
-            "/promoc/assembly_camera/stream0/camera_info",
+            self.camera_info_topic,
             self.camera_info_callback,
             10,
         )
@@ -113,6 +135,12 @@ class CameraNode(Node):
             AutoFocus,
             "/promoc/camera/autofocus",
             self.autofocus_handler.autofocus_callback,
+            callback_group=self.cb_group,
+        )
+        self.autofocus_roi_service = self.create_service(
+            AutoFocusROI,
+            "/promoc/camera/autofocus_roi",
+            self.autofocus_handler.autofocus_roi_callback,
             callback_group=self.cb_group,
         )
         self.mtf_service = self.create_service(
@@ -135,14 +163,152 @@ class CameraNode(Node):
         self._warned_preview_failures.add(key)
         self.log.warning(message)
 
+    def _log_startup_capture_state(self):
+        """Log the actual camera capture state once after startup."""
+        if self._startup_capture_logged:
+            return
+
+        self._startup_capture_attempts += 1
+        state = self._format_controller.read_capture_state()
+        state_values = dict((state or {}).get("values", {}))
+        state_width = int(state_values.get("width", 0) or 0)
+        state_height = int(state_values.get("height", 0) or 0)
+        if state is None:
+            live_width = int(getattr(self.latest_image_msg, "width", 0) or 0)
+            live_height = int(getattr(self.latest_image_msg, "height", 0) or 0)
+            if (
+                live_width > 0
+                and live_height > 0
+                and self._startup_capture_attempts >= 1
+            ):
+                expected_width = int(self._param_float("camera.expected_width", 0.0))
+                expected_height = int(self._param_float("camera.expected_height", 0.0))
+                expected_exposure_us = self._param_float(
+                    "camera.default_exposure_us",
+                    0.0,
+                )
+                parts = [
+                    "Camera capture readback unavailable via parameter services",
+                    f"live_stream={live_width}x{live_height}",
+                ]
+                if expected_width > 0 and expected_height > 0:
+                    parts.append(f"requested={expected_width}x{expected_height}")
+                if expected_exposure_us > 0:
+                    parts.append(
+                        "requested_exp="
+                        + self._format_controller._format_exposure_us(
+                            expected_exposure_us
+                        )
+                    )
+                self.log.warning(
+                    ", ".join(parts)
+                    + " [driver does not currently expose Width/Height readback as ROS parameters]"
+                )
+                self._startup_capture_logged = True
+                self._cancel_startup_capture_timer()
+                return
+
+            if self._startup_capture_attempts >= self._startup_capture_max_attempts:
+                self.log.warning(
+                    "Camera capture readback unavailable via parameter services; "
+                    "continuing without startup format readback."
+                )
+                self._startup_capture_logged = True
+                self._cancel_startup_capture_timer()
+            return
+
+        if state_width <= 0 or state_height <= 0:
+            live_width = int(getattr(self.latest_image_msg, "width", 0) or 0)
+            live_height = int(getattr(self.latest_image_msg, "height", 0) or 0)
+            if (
+                live_width > 0
+                and live_height > 0
+                and self._startup_capture_attempts >= 1
+            ):
+                expected_width = int(self._param_float("camera.expected_width", 0.0))
+                expected_height = int(self._param_float("camera.expected_height", 0.0))
+                expected_exposure_us = self._param_float(
+                    "camera.default_exposure_us",
+                    0.0,
+                )
+                parts = [
+                    "Camera capture readback unavailable via parameter services",
+                    f"live_stream={live_width}x{live_height}",
+                ]
+                if expected_width > 0 and expected_height > 0:
+                    parts.append(f"requested={expected_width}x{expected_height}")
+                if expected_exposure_us > 0:
+                    parts.append(
+                        "requested_exp="
+                        + self._format_controller._format_exposure_us(
+                            expected_exposure_us
+                        )
+                    )
+                self.log.warning(
+                    ", ".join(parts)
+                    + " [driver does not currently expose Width/Height readback as ROS parameters]"
+                )
+                self._startup_capture_logged = True
+                self._cancel_startup_capture_timer()
+                return
+
+            if self._startup_capture_attempts >= self._startup_capture_max_attempts:
+                self.log.warning(
+                    "Camera capture readback unavailable via parameter services; "
+                    "continuing without startup format readback."
+                )
+                self._startup_capture_logged = True
+                self._cancel_startup_capture_timer()
+            return
+
+        values = dict(state_values)
+        width = int(values.get("width", 0) or 0)
+        height = int(values.get("height", 0) or 0)
+        expected_width = int(self._param_float("camera.expected_width", 0.0))
+        expected_height = int(self._param_float("camera.expected_height", 0.0))
+        expected_exposure_us = self._param_float("camera.default_exposure_us", 0.0)
+        actual_exposure_us = values.get("exposure_time")
+
+        parts = [
+            "Camera capture state: "
+            + self._format_controller._format_values(values),
+        ]
+        if expected_width > 0 and expected_height > 0:
+            parts.append(f"requested={expected_width}x{expected_height}")
+        if actual_exposure_us is not None and expected_exposure_us > 0:
+            parts.append(
+                "requested_exp="
+                + self._format_controller._format_exposure_us(expected_exposure_us)
+            )
+
+        same_geometry = (
+            expected_width <= 0
+            or expected_height <= 0
+            or (width == expected_width and height == expected_height)
+        )
+        message = ", ".join(parts)
+        if same_geometry:
+            self.log.info(message)
+        else:
+            self.log.warning(
+                message
+                + " [stream geometry differs from requested full-frame target]"
+            )
+
+        self._startup_capture_logged = True
+        self._cancel_startup_capture_timer()
+
+    def _cancel_startup_capture_timer(self):
+        """Stop the one-shot startup capture timer once a final log was emitted."""
+        if self._startup_capture_timer is not None:
+            self._startup_capture_timer.cancel()
+            self._startup_capture_timer = None
+
     def _log_stream_health(self, msg: Image):
         self._image_count += 1
         now = time.time()
-        should_log = (
-            self._image_count % 50 == 0
-            or now - self._last_stream_log_time > 10.0
-        )
-        if not should_log   :
+        should_log = self._image_count % 50 == 0 or now - self._last_stream_log_time > 10.0
+        if not should_log:
             return
 
         runtime = now - self._stream_start_time

@@ -51,6 +51,7 @@ if "rcl_interfaces.srv" not in sys.modules:
                     setattr(self, key, value)
 
     rcl_srv.GetParameters = _SrvType
+    rcl_srv.ListParameters = _SrvType
     rcl_srv.SetParameters = _SrvType
     sys.modules["rcl_interfaces.srv"] = rcl_srv
 
@@ -68,19 +69,30 @@ ParameterValue = sys.modules["rcl_interfaces.msg"].ParameterValue
 
 
 class _Logger:
+    def __init__(self):
+        self.infos = []
+        self.warns = []
+        self.errors = []
+
     def info(self, *_args, **_kwargs):
-        return None
+        if _args:
+            self.infos.append(str(_args[0]))
 
     def warn(self, *_args, **_kwargs):
-        return None
+        if _args:
+            self.warns.append(str(_args[0]))
 
     def error(self, *_args, **_kwargs):
-        return None
+        if _args:
+            self.errors.append(str(_args[0]))
 
 
 class _Client:
+    def __init__(self, available: bool = True):
+        self.available = available
+
     def wait_for_service(self, timeout_sec=0.0):
-        return True
+        return self.available
 
 
 class _Node:
@@ -121,8 +133,8 @@ def test_read_capture_state_queries_capture_specific_parameters(monkeypatch):
         lambda _service: {
             "set": _Client(),
             "get": _Client(),
-            "set_service": "/promoc/assembly_camera/set_parameters",
-            "get_service": "/promoc/assembly_camera/get_parameters",
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
         },
     )
 
@@ -177,6 +189,25 @@ def test_collect_mismatches_handles_float_string_and_bool_values():
     assert mismatches == ["gain=0.0!=1.0"]
 
 
+def test_format_values_includes_exposure_in_us_and_ms():
+    text = CameraFormatController._format_values(
+        {
+            "width": 5536,
+            "height": 3692,
+            "offset_x": 0,
+            "offset_y": 0,
+            "bin_h": 1,
+            "bin_v": 1,
+            "pixel_format": "RGB8",
+            "exposure_time": 30000.0,
+        }
+    )
+
+    assert "5536x3692" in text
+    assert "pixfmt=RGB8" in text
+    assert "exp=30000.0us/30.000ms" in text
+
+
 def test_build_mtf_capture_target_enforces_scientific_raw_defaults():
     controller = CameraFormatController(
         _Node(
@@ -221,6 +252,58 @@ def test_build_mtf_capture_target_enforces_scientific_raw_defaults():
     assert target["color_transform_enable"] is False
 
 
+def test_param_set_services_uses_configured_camera_service_names():
+    controller = CameraFormatController(
+        _Node(
+            {
+                "camera.param_set_service_primary": "/promoc/promoc_camera/set_parameters",
+                "camera.param_set_service_secondary": "/promoc/promoc_camera_controller/set_parameters",
+            }
+        )
+    )
+
+    assert controller._param_set_services() == (
+        "/promoc/promoc_camera/set_parameters",
+        "/promoc/promoc_camera_controller/set_parameters",
+    )
+
+
+def test_read_capture_state_prefers_real_param_failure_over_secondary_unavailable(monkeypatch):
+    node = _Node()
+    controller = CameraFormatController(node)
+    not_set_value = ParameterValue(type=ParameterType.PARAMETER_NOT_SET)
+
+    def _fake_get_service_clients(set_service: str):
+        if set_service == "/promoc/promoc_camera/set_parameters":
+            return {
+                "set": _Client(True),
+                "get": _Client(True),
+                "set_service": set_service,
+                "get_service": "/promoc/promoc_camera/get_parameters",
+            }
+        return {
+            "set": _Client(False),
+            "get": _Client(False),
+            "set_service": set_service,
+            "get_service": "/promoc/promoc_camera_controller/get_parameters",
+        }
+
+    monkeypatch.setattr(controller, "_get_service_clients", _fake_get_service_clients)
+    monkeypatch.setattr(
+        controller,
+        "_call_get_parameters",
+        lambda _client, names, timeout_s=2.0: types.SimpleNamespace(
+            values=[not_set_value for _ in names]
+        ),
+    )
+
+    state = controller.read_capture_state()
+
+    assert state is None
+    assert node._logger.warns
+    assert "all queried format params not-set" in node._logger.warns[-1]
+
+
 def test_collect_scientific_capture_mismatches_only_checks_available_keys():
     controller = CameraFormatController(_Node())
 
@@ -248,6 +331,44 @@ def test_collect_scientific_capture_mismatches_only_checks_available_keys():
         "bin_h=2!=1",
         "gamma_enable=True!=False",
     ]
+
+
+def test_read_capture_state_returns_partial_scientific_state(monkeypatch):
+    controller = CameraFormatController(_Node())
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+        },
+    )
+
+    fake_values = {
+        "PixelFormat": "BayerRG12",
+        "ExposureTime": 30000.0,
+    }
+
+    def _fake_call_get_parameters(_client, names, timeout_s=2.0):
+        values = []
+        for name in names:
+            if name in fake_values:
+                values.append(_param_value(fake_values[name]))
+            else:
+                values.append(ParameterValue(type=ParameterType.PARAMETER_NOT_SET))
+        return types.SimpleNamespace(values=values)
+
+    monkeypatch.setattr(controller, "_call_get_parameters", _fake_call_get_parameters)
+
+    state = controller.read_capture_state()
+
+    assert state is not None
+    assert state["values"]["pixel_format"] == "BayerRG12"
+    assert state["values"]["exposure_time"] == 30000.0
+    assert "width" not in state["values"]
 
 
 def test_set_capture_state_skips_parameters_that_already_match(monkeypatch):
@@ -302,3 +423,260 @@ def test_set_capture_state_skips_parameters_that_already_match(monkeypatch):
 
     assert ok is True
     assert written == [("Height", 3692)]
+
+
+def test_set_capture_state_allows_optional_failures_with_required_pixel_format(monkeypatch):
+    node = _Node()
+    controller = CameraFormatController(node)
+    state = {
+        "set_service": "/promoc/promoc_camera/set_parameters",
+        "names": {
+            "pixel_format": "PixelFormat",
+            "gamma_enable": "GammaEnable",
+        },
+        "available_keys": ["pixel_format", "gamma_enable"],
+    }
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+        },
+    )
+
+    def _fake_call_set_parameter(_client, name, value, timeout_s=3.0):
+        if name == "GammaEnable":
+            return False, "parameter 'GammaEnable' cannot be set because it was not declared"
+        return True, ""
+
+    monkeypatch.setattr(controller, "_call_set_parameter", _fake_call_set_parameter)
+
+    ok = controller.set_capture_state(
+        state,
+        {"pixel_format": "BayerRG12", "gamma_enable": False},
+        required_keys=("pixel_format",),
+        best_effort_optional=True,
+    )
+
+    assert ok is True
+    assert node._logger.warns
+    assert "GammaEnable" in node._logger.warns[-1]
+
+
+def test_restore_after_mtf_without_state_uses_default_preview_pixel_format(monkeypatch):
+    controller = CameraFormatController(_Node({"camera.default_pixel_format": "RGB8"}))
+    captured = {}
+
+    monkeypatch.setattr(
+        controller,
+        "_try_set_capture_without_state",
+        lambda target, **kwargs: captured.setdefault("target", dict(target)) or True,
+    )
+    monkeypatch.setattr(controller, "read_capture_state", lambda: None)
+
+    controller.restore_after_mtf(None)
+
+    assert captured["target"]["pixel_format"] == "RGB8"
+
+
+def test_read_capture_state_queries_only_declared_plain_names(monkeypatch):
+    controller = CameraFormatController(_Node())
+    queried_names = []
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "list": _Client(),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+            "list_service": "/promoc/promoc_camera/list_parameters",
+            "declared_param_names": None,
+        },
+    )
+
+    monkeypatch.setattr(
+        controller,
+        "_call_list_parameters",
+        lambda _client, timeout_s=2.0: types.SimpleNamespace(
+            result=types.SimpleNamespace(names=["PixelFormat", "ExposureTime"])
+        ),
+    )
+
+    fake_values = {
+        "PixelFormat": "BayerRG12",
+        "ExposureTime": 30000.0,
+    }
+
+    def _fake_call_get_parameters(_client, names, timeout_s=2.0):
+        queried_names.extend(names)
+        return types.SimpleNamespace(values=[_param_value(fake_values[name]) for name in names])
+
+    monkeypatch.setattr(controller, "_call_get_parameters", _fake_call_get_parameters)
+
+    state = controller.read_capture_state()
+
+    assert state is not None
+    assert queried_names == ["PixelFormat", "ExposureTime"]
+    assert state["values"]["pixel_format"] == "BayerRG12"
+
+
+def test_read_capture_state_queries_only_declared_namespaced_names(monkeypatch):
+    controller = CameraFormatController(_Node())
+    queried_names = []
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "list": _Client(),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+            "list_service": "/promoc/promoc_camera/list_parameters",
+            "declared_param_names": None,
+        },
+    )
+
+    monkeypatch.setattr(
+        controller,
+        "_call_list_parameters",
+        lambda _client, timeout_s=2.0: types.SimpleNamespace(
+            result=types.SimpleNamespace(
+                names=[
+                    "ImageFormatControl.PixelFormat",
+                    "AcquisitionControl.ExposureTime",
+                ]
+            )
+        ),
+    )
+
+    fake_values = {
+        "ImageFormatControl.PixelFormat": "BayerRG12",
+        "AcquisitionControl.ExposureTime": 30000.0,
+    }
+
+    def _fake_call_get_parameters(_client, names, timeout_s=2.0):
+        queried_names.extend(names)
+        return types.SimpleNamespace(values=[_param_value(fake_values[name]) for name in names])
+
+    monkeypatch.setattr(controller, "_call_get_parameters", _fake_call_get_parameters)
+
+    state = controller.read_capture_state()
+
+    assert state is not None
+    assert queried_names == [
+        "ImageFormatControl.PixelFormat",
+        "AcquisitionControl.ExposureTime",
+    ]
+    assert state["values"]["pixel_format"] == "BayerRG12"
+
+
+def test_read_capture_state_uses_configured_declared_parameter_names(monkeypatch):
+    controller = CameraFormatController(
+        _Node(
+            {
+                "camera.driver_declared_parameters_json":
+                    '["Width", "Height", "PixelFormat", "ExposureTime", "Gain"]'
+            }
+        )
+    )
+    queried_names = []
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "list": _Client(False),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+            "list_service": "/promoc/promoc_camera/list_parameters",
+            "declared_param_names": None,
+        },
+    )
+
+    fake_values = {
+        "Width": 5536,
+        "Height": 3692,
+        "PixelFormat": "BayerRG12",
+        "ExposureTime": 30000.0,
+        "Gain": 1.0,
+    }
+
+    def _fake_call_get_parameters(_client, names, timeout_s=2.0):
+        queried_names.extend(names)
+        return types.SimpleNamespace(values=[_param_value(fake_values[name]) for name in names])
+
+    monkeypatch.setattr(controller, "_call_get_parameters", _fake_call_get_parameters)
+
+    state = controller.read_capture_state()
+
+    assert state is not None
+    assert "OffsetX" not in queried_names
+    assert "ImageFormatControl.Width" not in queried_names
+    assert queried_names == ["Width", "Height", "PixelFormat", "ExposureTime", "Gain"]
+
+
+def test_read_capture_state_intersects_configured_and_runtime_declared(monkeypatch):
+    controller = CameraFormatController(
+        _Node(
+            {
+                "camera.driver_declared_parameters_json":
+                    '["Width", "Height", "PixelFormat", "ExposureTime", "Gain", "GammaEnable"]'
+            }
+        )
+    )
+    queried_names = []
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "list": _Client(),
+            "set_service": "/promoc/promoc_camera/set_parameters",
+            "get_service": "/promoc/promoc_camera/get_parameters",
+            "list_service": "/promoc/promoc_camera/list_parameters",
+            "declared_param_names": None,
+        },
+    )
+
+    monkeypatch.setattr(
+        controller,
+        "_call_list_parameters",
+        lambda _client, timeout_s=2.0: types.SimpleNamespace(
+            result=types.SimpleNamespace(
+                names=["Width", "Height", "PixelFormat", "ExposureTime", "Gain"]
+            )
+        ),
+    )
+
+    fake_values = {
+        "Width": 5536,
+        "Height": 3692,
+        "PixelFormat": "BayerRG12",
+        "ExposureTime": 30000.0,
+        "Gain": 1.0,
+    }
+
+    def _fake_call_get_parameters(_client, names, timeout_s=2.0):
+        queried_names.extend(names)
+        return types.SimpleNamespace(values=[_param_value(fake_values[name]) for name in names])
+
+    monkeypatch.setattr(controller, "_call_get_parameters", _fake_call_get_parameters)
+
+    state = controller.read_capture_state()
+
+    assert state is not None
+    assert "GammaEnable" not in queried_names
+    assert queried_names == ["Width", "Height", "PixelFormat", "ExposureTime", "Gain"]

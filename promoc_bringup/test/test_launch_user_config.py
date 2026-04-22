@@ -11,7 +11,14 @@ PROMOC_BRINGUP_ROOT = ROOT / "promoc_bringup"
 if str(PROMOC_BRINGUP_ROOT) not in sys.path:
     sys.path.insert(0, str(PROMOC_BRINGUP_ROOT))
 
-from promoc_bringup.launch_utils import get_config_path, load_user_config, load_yaml_config  # noqa: E402
+from promoc_bringup.launch_utils import (  # noqa: E402
+    build_camera_info_payload,
+    get_config_path,
+    load_user_config,
+    load_yaml_config,
+    materialize_camera_info_yaml,
+    materialize_dynamic_parameters_yaml,
+)
 
 
 def test_load_user_config_maps_legacy_user_keys():
@@ -69,3 +76,64 @@ def test_ids_camera_profile_starts_in_raw_bayer_mode():
     assert config["camera_params"]["pixel_format"] == "BayerRG12"
     assert config["camera_params"]["mtf_capture_pixel_format"] == "BayerRG12"
     assert config["camera_params"]["mtf_capture_bayer_pattern"] == "RGGB"
+
+
+def test_build_camera_info_payload_uses_runtime_camera_name():
+    payload = build_camera_info_payload(
+        {
+            "image_width": 5536,
+            "image_height": 3692,
+            "camera_name": "stale_name",
+        },
+        frame_id="camera_frame",
+        stream_name="stream0",
+    )
+
+    assert payload["image_width"] == 5536
+    assert payload["image_height"] == 3692
+    assert payload["camera_name"] == "camera_frame_stream0"
+
+
+def test_materialize_camera_info_yaml_writes_expected_dimensions(tmp_path):
+    target_path = tmp_path / "camera_info.yaml"
+
+    result_path = materialize_camera_info_yaml(
+        {
+            "image_width": 5536,
+            "image_height": 3692,
+            "camera_matrix": {"rows": 3, "cols": 3, "data": [1.0] * 9},
+        },
+        frame_id="camera_frame",
+        stream_name="stream0",
+        target_path=str(target_path),
+    )
+
+    content = target_path.read_text(encoding="utf-8")
+
+    assert result_path == str(target_path)
+    assert "image_width: 5536" in content
+    assert "image_height: 3692" in content
+    assert "camera_name: camera_frame_stream0" in content
+
+
+def test_materialize_dynamic_parameters_yaml_writes_feature_list(tmp_path):
+    target_path = tmp_path / "dynamic_parameters.yaml"
+
+    result_path = materialize_dynamic_parameters_yaml(
+        [
+            {
+                "FeatureName": "Width",
+                "Type": "int",
+                "Min": 256,
+                "Max": 5536,
+            }
+        ],
+        camera_name="promoc_camera",
+        target_path=str(target_path),
+    )
+
+    content = target_path.read_text(encoding="utf-8")
+
+    assert result_path == str(target_path)
+    assert "- FeatureName: Width" in content
+    assert "Type: int" in content

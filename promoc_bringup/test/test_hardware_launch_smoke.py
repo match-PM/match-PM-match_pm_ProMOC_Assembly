@@ -17,3 +17,10 @@ def test_optical_launch_has_no_verification_node():
     assert "/promoc/camera/autofocus" in content
     assert "/promoc/camera/measure_mtf" in content
     assert "/promoc/camera/set_exposure" in content
+    assert "camera_info_example_uv.yaml" not in content
+    assert "\"ExposureTime\"" in content
+    assert "\"OffsetX\"" in content
+    assert "\"camera.image_topic\"" in content
+    assert "\"camera.exposure_service\"" in content
+    assert "\"camera.default_pixel_format\"" in content
+    assert "\"dynamic_parameters_yaml_url\"" in content

@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import types
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[2]
 for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
@@ -14,7 +16,18 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
         sys.path.insert(0, path_str)
 
 if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.SimpleNamespace()
+    def _fake_resize(image, size, interpolation=None):
+        target_width, target_height = size
+        if image.ndim == 2:
+            shape = (target_height, target_width)
+        else:
+            shape = (target_height, target_width, image.shape[2])
+        return np.zeros(shape, dtype=image.dtype)
+
+    sys.modules["cv2"] = types.SimpleNamespace(
+        INTER_AREA=3,
+        resize=_fake_resize,
+    )
 
 srv_mod = types.ModuleType("promoc_assembly_interfaces.srv")
 
@@ -54,13 +67,24 @@ class _Param:
 
 
 class _Logger:
+    def __init__(self):
+        self.infos = []
+        self.warnings = []
+        self.errors = []
+
     def info(self, *_args, **_kwargs):
+        if _args:
+            self.infos.append(str(_args[0]))
         return None
 
     def warn(self, *_args, **_kwargs):
+        if _args:
+            self.warnings.append(str(_args[0]))
         return None
 
     def error(self, *_args, **_kwargs):
+        if _args:
+            self.errors.append(str(_args[0]))
         return None
 
 
@@ -68,6 +92,7 @@ class _Node:
     def __init__(self, params: dict):
         self._params = dict(params)
         self._logger = _Logger()
+        self.latest_image_msg = None
 
     def has_parameter(self, name: str) -> bool:
         return name in self._params
@@ -82,6 +107,12 @@ class _Node:
 class _Request:
     objective_magnification_x = 0.0
     use_beamsplitter = False
+
+
+class _Response:
+    def __init__(self):
+        self.success = False
+        self.status_message = ""
 
 
 class _MoveClient:
@@ -114,14 +145,36 @@ class _RunnerHandler:
     def _get_latest_cv_image(self):
         return self.latest_image
 
+    def _get_latest_image_timestamp_ns(self):
+        return int(self.latest_image[1] or 0)
+
+    def _wait_for_new_image(self, last_timestamp, timeout=1.0):
+        image, ts = self.latest_image
+        return image, ts if ts is not None else last_timestamp + 1
+
+    def _prepare_autofocus_analysis_image(self, image, roi_rect=None):
+        return image
+
+    def _camera_image_topic(self):
+        return "/promoc/test_camera/stream0/image_raw"
+
 
 def test_autofocus_handler_builds_focus_profile():
-    handler = AutofocusHandler(_Node({}), camera_driver=object())
+    class _Driver:
+        def get_exposure(self):
+            return 45000.0
+
+    handler = AutofocusHandler(
+        _Node({"autofocus.exposure_guard_s": 0.02}),
+        camera_driver=_Driver(),
+    )
     profile = handler._build_focus_profile(_Request())
 
     assert isinstance(profile, dict)
     assert "scan_speed_mm_s" in profile
     assert profile["scan_speed_mm_s"] > 0.0
+    assert profile["exposure_time_us"] == 45000.0
+    assert profile["settle_s"] >= 0.065
 
 
 def test_runner_build_plan_uses_request_range_for_exhaustive_mode():
@@ -228,7 +281,7 @@ def test_runner_moves_fourstep_via_pre_approach_position():
 
 def test_runner_retries_fourstep_peak_when_confirmation_score_drops(monkeypatch):
     handler = _RunnerHandler()
-    handler.latest_image = (object(), None)
+    handler.latest_image = (object(), 5)
     runner = AutofocusRunner(handler)
     move_client = _MoveClient()
     request = types.SimpleNamespace(start_position=2.0, end_position=6.0)
@@ -249,12 +302,49 @@ def test_runner_retries_fourstep_peak_when_confirmation_score_drops(monkeypatch)
         request=request,
         clients={"move": move_client},
         save_best_image=False,
+        settle_s=0.05,
+        analysis_roi_rect=None,
     )
 
     assert best_score == 100.0
     assert best_image is None
     assert move_client.positions == [5.0, 5.5]
     assert handler.wait_calls == 2
+
+
+def test_runner_confirmation_waits_for_fresh_frame_after_settle(monkeypatch):
+    handler = _RunnerHandler()
+    handler.latest_image = (object(), 11)
+    wait_calls = []
+
+    def _wait_for_new_image(last_timestamp, timeout=1.0):
+        wait_calls.append((last_timestamp, timeout))
+        return object(), last_timestamp + 1
+
+    handler._wait_for_new_image = _wait_for_new_image
+    runner = AutofocusRunner(handler)
+    monkeypatch.setattr(autofocus_module.time, "sleep", lambda *_args, **_kwargs: None)
+
+    class _Algorithm:
+        def score_image(self, _image):
+            return 120.0
+
+    best_score, _best_image = runner._confirm_measurement_position(
+        "fourstep",
+        _Algorithm(),
+        target_pos=5.5,
+        best_position=5.5,
+        best_score=100.0,
+        best_image=None,
+        request=types.SimpleNamespace(start_position=2.0, end_position=6.0),
+        clients={"move": _MoveClient()},
+        save_best_image=False,
+        settle_s=0.04,
+        analysis_roi_rect=None,
+    )
+
+    assert best_score == 120.0
+    assert wait_calls == [(11, autofocus_module.AUTOFOCUS_NEW_IMAGE_TIMEOUT_S)]
 
 
 def test_fill_single_mode_response_uses_student_friendly_status():
@@ -303,3 +393,145 @@ def test_wait_for_next_autofocus_frame_reports_operator_hint():
 
     assert "camera stream stalled" in message.lower()
     assert "rqt_image_view" in message
+
+
+def test_prepare_autofocus_analysis_image_center_crop_and_downsample():
+    handler = AutofocusHandler(
+        _Node(
+            {
+                "autofocus.analysis_roi_width_px": 2000,
+                "autofocus.analysis_roi_height_px": 2000,
+                "autofocus.analysis_downsample_max_dim_px": 1024,
+                "autofocus.analysis_use_center_roi": True,
+                "autofocus.analysis_log_effective_roi": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._reset_analysis_logging()
+    image = np.zeros((3000, 4000, 3), dtype=np.uint8)
+
+    processed = handler._prepare_autofocus_analysis_image(image)
+
+    assert processed.shape == (1024, 1024, 3)
+    assert any("effective_roi=(1000,500,2000,2000)" in msg for msg in handler._node._logger.infos)
+
+
+def test_prepare_autofocus_analysis_image_clamps_small_source_image():
+    handler = AutofocusHandler(
+        _Node(
+            {
+                "autofocus.analysis_roi_width_px": 2000,
+                "autofocus.analysis_roi_height_px": 2000,
+                "autofocus.analysis_downsample_max_dim_px": 1024,
+                "autofocus.analysis_use_center_roi": True,
+                "autofocus.analysis_log_effective_roi": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._reset_analysis_logging()
+    image = np.zeros((800, 1200, 3), dtype=np.uint8)
+
+    processed = handler._prepare_autofocus_analysis_image(image)
+
+    assert processed.shape == (683, 1024, 3)
+    assert any("effective_roi=(0,0,1200,800)" in msg for msg in handler._node._logger.infos)
+
+
+def test_run_autofocus_loop_scores_preprocessed_analysis_image():
+    handler = _RunnerHandler(
+        {
+            "autofocus.analysis_roi_width_px": 2000,
+            "autofocus.analysis_roi_height_px": 2000,
+            "autofocus.analysis_downsample_max_dim_px": 1024,
+            "autofocus.analysis_use_center_roi": True,
+        }
+    )
+    real_handler = AutofocusHandler(handler._node, camera_driver=object())
+    handler._prepare_autofocus_analysis_image = real_handler._prepare_autofocus_analysis_image
+    handler._wait_for_new_image = (
+        lambda *_args, **_kwargs: (np.zeros((3000, 4000, 3), dtype=np.uint8), 1)
+    )
+    runner = AutofocusRunner(handler)
+
+    class _Algorithm:
+        def __init__(self):
+            self.config = types.SimpleNamespace(start_mm=0.0, end_mm=1.0)
+            self.seen_shape = None
+
+        def start(self):
+            return 0.0
+
+        def get_scan_step_mm(self):
+            return 1.0
+
+        def process_image(self, _position_mm, image):
+            self.seen_shape = image.shape
+            return types.SimpleNamespace(
+                finished=True,
+                best_position_mm=0.0,
+                best_score=123.0,
+                current_score=123.0,
+                phase=types.SimpleNamespace(name="FINISHED"),
+                next_position_mm=None,
+            )
+
+        def get_best_result(self):
+            return 0.0, 123.0
+
+    algorithm = _Algorithm()
+    best_position, best_score, measurements = runner.run_autofocus_loop(
+        algorithm,
+        clients={"move": _MoveClient()},
+        settle_s=0.0,
+    )
+
+    assert algorithm.seen_shape == (1024, 1024, 3)
+    assert best_position == 0.0
+    assert best_score == 123.0
+    assert measurements == 1
+
+
+def test_autofocus_roi_callback_uses_requested_roi_rect():
+    handler = AutofocusHandler(
+        _Node({"camera.expected_width": 4000, "camera.expected_height": 3000}),
+        camera_driver=object(),
+    )
+    captured = {}
+
+    def _fake_run(request, response, analysis_roi_rect):
+        captured["roi"] = analysis_roi_rect
+        response.success = True
+        return response
+
+    handler._run_autofocus_request = _fake_run
+    request = types.SimpleNamespace(
+        roi_x=100,
+        roi_y=150,
+        roi_width=800,
+        roi_height=600,
+    )
+
+    response = handler.autofocus_roi_callback(request, _Response())
+
+    assert response.success is True
+    assert captured["roi"] == (100, 150, 800, 600)
+
+
+def test_autofocus_roi_callback_rejects_fully_outside_roi():
+    handler = AutofocusHandler(
+        _Node({"camera.expected_width": 4000, "camera.expected_height": 3000}),
+        camera_driver=object(),
+    )
+    request = types.SimpleNamespace(
+        roi_x=5000,
+        roi_y=3500,
+        roi_width=200,
+        roi_height=200,
+    )
+
+    response = handler.autofocus_roi_callback(request, _Response())
+
+    assert response.success is False
+    assert "outside the current image" in response.status_message
