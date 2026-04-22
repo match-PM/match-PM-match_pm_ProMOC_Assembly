@@ -161,6 +161,7 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
         ("mtf.profile", "profile", str, "default"),
         ("mtf.use_full_frame", "use_full_frame", bool, False),
         ("mtf.use_raw_capture", "use_raw_capture", bool, True),
+        ("mtf.capture_required_raw", "capture_required_raw", bool, True),
         ("mtf.capture_pixel_format", "capture_pixel_format", str, "BayerRG12"),
         ("mtf.capture_bayer_pattern", "capture_bayer_pattern", str, "RGGB"),
         ("mtf.capture_width", "capture_width", int, 5536),

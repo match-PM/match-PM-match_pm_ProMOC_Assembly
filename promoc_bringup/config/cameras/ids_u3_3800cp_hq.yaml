@@ -58,8 +58,11 @@ camera_params:
   # - BayerRG8, BayerRG10, BayerRG12, BayerRG12p, BayerRG10p
   # - RGB8, BGR8 (debayered formats)
   # 
-  # RGB8 is used here for debayered color output
-  pixel_format: 'RGB8'
+  # The messstand starts directly in raw Bayer mode.
+  # MTF reads the raw stream, while AF/live preview derive an internal preview image.
+  pixel_format: 'BayerRG12'
+  mtf_capture_pixel_format: 'BayerRG12'
+  mtf_capture_bayer_pattern: 'RGGB'
   
   # -------------------------------------------------------------------------
   # Optical System Configuration

@@ -22,6 +22,8 @@ Nicht der Anspruch dieser Stufe:
 
 `/promoc/camera/measure_mtf` nutzt den wissenschaftlichen Raw-Pfad:
 
+- der Kamerastream startet bereits offiziell als `BayerRG12`
+- Autofokus/Fly-over erzeugen daraus intern nur ein 8-bit-Preview
 - `PixelFormat=BayerRG12`
 - `1x1`-Binning
 - echte Gruen-Sensel aus `RGGB`
@@ -31,6 +33,19 @@ Nicht der Anspruch dieser Stufe:
 
 Der Analyzer arbeitet direkt auf den Gruen-Samples. Es gibt kein Debayering und
 kein 2D-Infill fuer den offiziellen Vergleichspfad.
+
+Fallback-Reihenfolge bei Hardwareproblemen:
+
+- zuerst `BayerRG8` als alternatives Raw-Startprofil pruefen
+- `RGB8` nur als klar markierter Debug-/Notfallmodus verwenden
+
+Vor der ersten Messung des Tages wird ein kurzer Raw-First-Preflight empfohlen:
+
+- Topic `/promoc/assembly_camera/stream0/image_raw` liefert `bayer_rggb16`
+- bei Vollsensor ist `step = 11072`
+- `rqt_image_view` zeigt ein nutzbares Livebild
+- Autofokus funktioniert mit demselben Raw-Start
+- je eine kurze Auto-ROI- und manuelle ROI-Messung erzeugt vollstaendige Run-Ordner
 
 ## Vergleichs-SOP
 

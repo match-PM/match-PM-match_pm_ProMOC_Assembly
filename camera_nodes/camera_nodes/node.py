@@ -15,6 +15,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from .config import declare_camera_parameters, get_camera_param
 from .drivers import AravisCameraDriver, CameraDriver
+from .preview import ros_image_to_bgr8_preview
 from .services import AutofocusHandler, ExposureHandler, MTFHandler
 from .services.image_processing import CameraImageProcessing
 
@@ -54,6 +55,7 @@ class CameraNode(Node):
         self._image_count = 0
         self._stream_start_time = time.time()
         self._last_stream_log_time = 0.0
+        self._warned_preview_failures: set[str] = set()
 
         self.cb_group = ReentrantCallbackGroup()
         self._create_subscriptions()
@@ -126,6 +128,13 @@ class CameraNode(Node):
             callback_group=self.cb_group,
         )
 
+    def _warn_once(self, key: str, message: str):
+        """Log one warning per repeated preview/debug conversion failure."""
+        if key in self._warned_preview_failures:
+            return
+        self._warned_preview_failures.add(key)
+        self.log.warning(message)
+
     def _log_stream_health(self, msg: Image):
         self._image_count += 1
         now = time.time()
@@ -151,8 +160,16 @@ class CameraNode(Node):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         except Exception as exc:
-            self.get_logger().warning(f"Image conversion failed: {exc}")
-            return None
+            try:
+                cv_image = ros_image_to_bgr8_preview(msg, self.bridge.imgmsg_to_cv2)
+            except Exception as fallback_exc:
+                encoding = str(getattr(msg, "encoding", "") or "unknown")
+                self._warn_once(
+                    f"cache_driver_image:{encoding}",
+                    "Image conversion failed for driver cache "
+                    f"(encoding={encoding}, direct={exc}, fallback={fallback_exc}).",
+                )
+                return None
 
         self.camera_driver.set_latest_image(cv_image)
         return cv_image
@@ -163,13 +180,20 @@ class CameraNode(Node):
 
         try:
             if cv_image is None:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+                try:
+                    cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+                except Exception:
+                    cv_image = ros_image_to_bgr8_preview(msg, self.bridge.imgmsg_to_cv2)
             overlay = self.image_processor.draw_crosshair(cv_image)
             debug_msg = self.bridge.cv2_to_imgmsg(overlay, encoding="bgr8")
             debug_msg.header = msg.header
             self.debug_image_pub.publish(debug_msg)
         except Exception as exc:
-            self.log.warning(f"Failed to publish debug image: {exc}")
+            encoding = str(getattr(msg, "encoding", "") or "unknown")
+            self._warn_once(
+                f"publish_debug_image:{encoding}",
+                f"Failed to publish debug image (encoding={encoding}): {exc}",
+            )
 
     def assembly_image_callback(self, msg: Image):
         """Cache the latest image and publish optional debug overlay."""

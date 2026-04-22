@@ -15,6 +15,7 @@ from promoc_core.promoc_exceptions import HardwareError
 from promoc_core.logging import TaggedLogger, LogTags
 
 from ..algorithms import tenengrad
+from ..preview import is_bayer_encoding, ros_image_to_bgr8_preview
 
 
 class ParameterAccessor:
@@ -75,6 +76,7 @@ class CallbackBase:
         self.logger = TaggedLogger(node.get_logger(), LogTags.CAM)
         self._sift = None
         self.params = ParameterAccessor(node)
+        self._warned_image_failures: set[str] = set()
 
     # ==========================================================================
     # PARAMETER HELPERS
@@ -114,8 +116,27 @@ class CallbackBase:
             ts = self._msg_timestamp_ns(msg)
             return cv_img, ts
         except Exception as e:
-            self.logger.warn(f"Failed to convert image: {e}")
-            return None, None
+            encoding = str(getattr(msg, "encoding", ""))
+            try:
+                if not is_bayer_encoding(encoding):
+                    raise
+                cv_img = ros_image_to_bgr8_preview(msg, self._convert_image_msg)
+                ts = self._msg_timestamp_ns(msg)
+                return cv_img, ts
+            except Exception as fallback_exc:
+                self._warn_once(
+                    f"latest_cv_image:{encoding.lower() or 'unknown'}",
+                    "Failed to convert image for OpenCV processing "
+                    f"(encoding={encoding or 'unknown'}, direct={e}, fallback={fallback_exc})",
+                )
+                return None, None
+
+    def _warn_once(self, key: str, message: str):
+        """Log one warning per repeated conversion problem."""
+        if key in self._warned_image_failures:
+            return
+        self._warned_image_failures.add(key)
+        self.logger.warn(message)
 
     def _msg_timestamp_ns(self, msg) -> int:
         """Return ROS header timestamp in nanoseconds for an image-like message."""
@@ -147,12 +168,17 @@ class CallbackBase:
         msg = self._node.latest_image_msg
         if msg is None:
             return None, None, ""
+        encoding = str(getattr(msg, "encoding", ""))
         try:
             image = self._convert_image_msg(msg, "passthrough")
-            return image, self._msg_timestamp_ns(msg), str(getattr(msg, "encoding", ""))
+            return image, self._msg_timestamp_ns(msg), encoding
         except Exception as exc:
-            self.logger.warn(f"Failed to convert passthrough image: {exc}")
-            return None, None, str(getattr(msg, "encoding", ""))
+            self._warn_once(
+                f"latest_passthrough:{encoding.lower() or 'unknown'}",
+                "Failed to convert passthrough image "
+                f"(encoding={encoding or 'unknown'}): {exc}",
+            )
+            return None, None, encoding
 
     def _wait_for_new_image_from(
         self,

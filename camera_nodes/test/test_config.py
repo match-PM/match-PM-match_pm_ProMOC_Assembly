@@ -56,6 +56,7 @@ def test_declare_and_load_runtime_config():
     assert not hasattr(cfg.core, "use_simulator")
     assert not hasattr(cfg.core, "x_axis_node_name")
     assert cfg.mtf.profile == "debug"
+    assert cfg.mtf.capture_required_raw is True
 
 
 def test_deprecated_parameter_removed():

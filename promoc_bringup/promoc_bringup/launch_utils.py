@@ -123,7 +123,12 @@ def load_user_config(bringup_share_dir: str) -> dict:
         "autofocus_profiles": {"default": {}, "profiles": {}},
         "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
         "camera": {"pixel_size_um": 2.40},
-        "mtf": {"profile": "default", "debug_export_dir": ""},
+        "mtf": {
+            "profile": "default",
+            "debug_export_dir": "",
+            "use_raw_capture": True,
+            "capture_required_raw": True,
+        },
         "measurement_conditions": {
             "coaxial_light_voltage": 0.0,
             "coaxial_light_current": 0.0,

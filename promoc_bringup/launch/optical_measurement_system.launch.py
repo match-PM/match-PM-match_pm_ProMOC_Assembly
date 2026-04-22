@@ -188,8 +188,10 @@ def _create_camera_node(
                 "measurement.base_path": base_dir,
                 "pixel_size_um": config["camera"]["pixel_size_um"],
                 "mtf.use_full_frame": True,
-                "mtf.use_raw_capture": True,
-                "mtf.capture_required_raw": True,
+                "mtf.use_raw_capture": bool(mtf_config.get("use_raw_capture", True)),
+                "mtf.capture_required_raw": bool(
+                    mtf_config.get("capture_required_raw", True)
+                ),
                 "mtf.capture_pixel_format": camera_params.get(
                     "mtf_capture_pixel_format",
                     "BayerRG12",

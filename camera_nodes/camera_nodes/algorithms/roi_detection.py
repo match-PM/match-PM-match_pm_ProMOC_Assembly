@@ -106,10 +106,14 @@ class RoiDetector:
             vis_img = image.copy()
         else:
             gray = image
-            vis_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            vis_img = None
 
         # --- Step 2: Normalize contrast and reduce noise before thresholding. ---
         img_norm = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+        if img_norm.dtype != np.uint8:
+            img_norm = img_norm.astype(np.uint8)
+        if vis_img is None:
+            vis_img = cv2.cvtColor(img_norm, cv2.COLOR_GRAY2BGR)
         blur = cv2.GaussianBlur(img_norm, (5, 5), 0)
 
         # --- Step 3: Segment candidate targets from the background. ---

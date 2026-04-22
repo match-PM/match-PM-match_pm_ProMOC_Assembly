@@ -229,19 +229,23 @@ class CameraFormatController:
         for key in keys:
             if key not in actual or key not in target:
                 continue
-            actual_value = actual[key]
-            target_value = target[key]
-            if isinstance(actual_value, float) or isinstance(target_value, float):
-                matched = abs(float(actual_value) - float(target_value)) <= 1e-6
-            elif isinstance(actual_value, bool) or isinstance(target_value, bool):
-                matched = bool(actual_value) == bool(target_value)
-            elif isinstance(actual_value, str) or isinstance(target_value, str):
-                matched = str(actual_value) == str(target_value)
-            else:
-                matched = int(actual_value) == int(target_value)
-            if not matched:
+            if not CameraFormatController._values_equal(actual[key], target[key]):
                 mismatches.append(f"{key}={actual[key]}!={target[key]}")
         return mismatches
+
+    @staticmethod
+    def _values_equal(actual, target) -> bool:
+        """Compare parameter values with tolerant matching for floats and bools."""
+        try:
+            if isinstance(actual, float) or isinstance(target, float):
+                return abs(float(actual) - float(target)) <= 1e-6
+            if isinstance(actual, bool) or isinstance(target, bool):
+                return bool(actual) == bool(target)
+            if isinstance(actual, str) or isinstance(target, str):
+                return str(actual) == str(target)
+            return int(actual) == int(target)
+        except Exception:
+            return str(actual) == str(target)
 
     @staticmethod
     def _resolve_auto_off_target(current_value):
@@ -470,6 +474,7 @@ class CameraFormatController:
         set_service = state.get("set_service")
         names = state.get("names", {})
         available_keys = set(state.get("available_keys", []))
+        current_values = dict(state.get("values", {}))
         if not available_keys:
             # Backward compatibility with older state dicts.
             available_keys = set(names.keys())
@@ -552,6 +557,10 @@ class CameraFormatController:
                 or key not in available_keys
             ):
                 continue
+            if key in current_values and self._values_equal(
+                current_values[key], target_values[key]
+            ):
+                continue
             write_keys.append(key)
 
         if self._is_switch_logging_enabled():
@@ -580,16 +589,30 @@ class CameraFormatController:
                 )
 
         for required in ("width", "height"):
-            if required in target_values and required not in write_keys:
-                self._node.get_logger().error(
-                    f"Required camera capture key '{required}' is not available on parameter service."
-                )
-                return False
+            if required not in target_values or required in write_keys:
+                continue
+            if required in current_values and self._values_equal(
+                current_values[required], target_values[required]
+            ):
+                continue
+            reason = "is not available on parameter service"
+            if required in available_keys and required in names:
+                reason = "was not scheduled for write despite a differing target"
+            self._node.get_logger().error(
+                f"Required camera capture key '{required}' {reason}."
+            )
+            return False
 
         if not write_keys:
-            self._node.get_logger().warn(
-                "No applicable camera capture keys available for update; keeping current format."
-            )
+            if current_values:
+                if self._is_switch_logging_enabled():
+                    self._node.get_logger().info(
+                        "Camera capture already matches target; skipping parameter write."
+                    )
+            else:
+                self._node.get_logger().warn(
+                    "No applicable camera capture keys available for update; keeping current format."
+                )
             return True
 
         for key in write_keys:

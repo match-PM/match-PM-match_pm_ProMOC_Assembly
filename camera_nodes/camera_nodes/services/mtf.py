@@ -434,7 +434,29 @@ class MTFHandler(CallbackBase):
                 row["selected_for_response"] = int(
                     row["edge_label"] == selected_edge.edge_label
                 )
+        self._log_measurement_run_summary(edge_rows, selected_edge)
         return edge_rows, selected_edge, last_error
+
+    def _log_measurement_run_summary(
+        self,
+        edge_rows: list[dict[str, object]],
+        selected_edge: _MeasuredEdge | None,
+    ) -> None:
+        """Write one compact per-run summary after all edges have been evaluated."""
+        valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
+        if selected_edge is None:
+            self._node.get_logger().info(
+                f"MTF run summary: valid_edges={valid_edge_count}/{len(edge_rows)}, selected=none"
+            )
+            return
+
+        self._node.get_logger().info(
+            "MTF run summary: "
+            f"valid_edges={valid_edge_count}/{len(edge_rows)}, "
+            f"selected={selected_edge.edge_label}, "
+            f"MTF50={selected_edge.avg_mtf50:.2f} lp/mm, "
+            f"angle={selected_edge.avg_angle:.2f} deg"
+        )
 
     def _write_measurement_exports(
         self,
@@ -947,9 +969,6 @@ class MTFHandler(CallbackBase):
         analyzer.config.debug_export_dir = None
         analyzer.config.debug_export_csv = False
         analyzer.config.debug_export_png = False
-        self._node.get_logger().info(
-            f"Edge valid. Measuring {MTF_AVG_SAMPLES - 1} more frames for averaging..."
-        )
 
         roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
         last_ts = int(self._get_latest_image_timestamp_ns() or 0)

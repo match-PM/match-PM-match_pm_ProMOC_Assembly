@@ -31,6 +31,8 @@ fly_over:
 mtf:
   profile: default
   debug_export_dir: ""
+  use_raw_capture: true
+  capture_required_raw: true
 
 measurement_conditions:
   coaxial_light_voltage: 0.0

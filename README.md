@@ -96,6 +96,29 @@ rqt_image_view
 Im `rqt_image_view` den Topic `/promoc/assembly_camera/stream0/image_raw`
 waehlen.
 
+## Raw-First Preflight
+
+Vor der ersten Messung am Tag einmal kurz pruefen:
+
+1. Topic liefert `bayer_rggb16`.
+2. Bei Vollsensor passt `step = 11072`.
+3. Das Livebild ist in `rqt_image_view` sichtbar.
+4. Ein kurzer Autofokus-Lauf funktioniert.
+5. Je eine kurze Auto-ROI- und manuelle ROI-MTF-Messung erzeugt einen
+   vollstaendigen Run-Ordner.
+
+Beispiel fuer den schnellen Topic-Check:
+
+```bash
+ros2 topic echo /promoc/assembly_camera/stream0/image_raw --once
+```
+
+Wenn `BayerRG12` am realen Stand nicht stabil laeuft, ist die definierte
+Fallback-Reihenfolge:
+
+1. `BayerRG8`
+2. erst danach `RGB8` als klar markierter Debug-/Notfallmodus
+
 ## Service Quick Start
 
 Die studentische Standardnutzung arbeitet direkt ueber die drei sichtbaren
@@ -240,6 +263,9 @@ Entwicklungszwecke erhalten, sind aber nicht Teil des Standardablaufs.
 `/promoc/camera/measure_mtf` schaltet fuer die Messung in einen eigenen
 wissenschaftlichen Raw-Capture-Modus:
 
+- Der Kamerastream startet auf dem Messstand bereits direkt als `BayerRG12`
+- Autofokus und Live-/Debug-Pfade leiten daraus intern nur ein `BGR8`-Preview ab
+- Der wissenschaftliche MTF-Pfad bleibt dabei auf `raw passthrough`
 - `PixelFormat=BayerRG12`
 - `1x1`-Binning
 - Auto-Exposure, Auto-Gain und Auto-Whitebalance aus
@@ -257,6 +283,13 @@ Beam-Splitter-Vergleiche und die Bedeutung der CSV-Spalten stehen in
 Entwickler- und Validator-Werkzeuge wie `mtf_synthetic_validation.py` bleiben
 im Repo erhalten, sind aber **nicht** Teil des normalen studentischen
 Messablaufs am Labor-PC.
+
+Nur fuer Hardware-Notfaelle gibt es zwei klar getrennte Fallbacks:
+
+- `BayerRG8` als zweites Raw-Startprofil, wenn `BayerRG12` auf der Hardware
+  weiter Payload-/Buffer-Probleme macht
+- `RGB8` nur als Debug-/Notfallmodus ueber die MTF-Config, nicht als
+  offizieller wissenschaftlicher Messpfad
 
 Fuer offizielle Slanted-Edge-Vergleiche gilt dabei die empfohlene Arbeitszone
 `3 deg bis 10 deg`. Der Node bleibt aus Kompatibilitaetsgruenden technisch bei

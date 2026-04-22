@@ -248,3 +248,57 @@ def test_collect_scientific_capture_mismatches_only_checks_available_keys():
         "bin_h=2!=1",
         "gamma_enable=True!=False",
     ]
+
+
+def test_set_capture_state_skips_parameters_that_already_match(monkeypatch):
+    controller = CameraFormatController(_Node())
+    written = []
+
+    monkeypatch.setattr(
+        controller,
+        "_get_service_clients",
+        lambda _service: {
+            "set": _Client(),
+            "get": _Client(),
+            "set_service": "/promoc/assembly_camera/set_parameters",
+            "get_service": "/promoc/assembly_camera/get_parameters",
+        },
+    )
+    monkeypatch.setattr(
+        controller,
+        "_call_set_parameter",
+        lambda _client, name, value, timeout_s=3.0: (
+            written.append((name, value)) or (True, "")
+        ),
+    )
+
+    ok = controller.set_capture_state(
+        {
+            "set_service": "/promoc/assembly_camera/set_parameters",
+            "names": {
+                "pixel_format": "PixelFormat",
+                "bin_h": "BinningHorizontal",
+                "bin_v": "BinningVertical",
+                "width": "Width",
+                "height": "Height",
+            },
+            "available_keys": ["pixel_format", "bin_h", "bin_v", "width", "height"],
+            "values": {
+                "pixel_format": "BayerRG12",
+                "bin_h": 1,
+                "bin_v": 1,
+                "width": 5536,
+                "height": 3000,
+            },
+        },
+        {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "width": 5536,
+            "height": 3692,
+        },
+    )
+
+    assert ok is True
+    assert written == [("Height", 3692)]
