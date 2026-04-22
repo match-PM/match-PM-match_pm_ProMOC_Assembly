@@ -6,7 +6,7 @@ camera_params:
   # usb3vision or gigevision
   driver: 'usb3vision'
   # Arbitrary name to identify camera and used for ROS node names
-  cameraname: 'assembly_camera'
+  cameraname: 'promoc_camera'
   pixelsize: 2.2 # in um
   magnification: 1 
   sensor_resolution_h: 5536
@@ -15,10 +15,10 @@ camera_params:
   camera_axis_2: 'y'
   camera_axis_1_angle: 0                # Starting from normal 'x' in math. positive direction
   camera_axis_2_angle: '+'              # '+' -> 90 degree; '-' -> -90 degree 
-  subscription_topic: '/promoc/assembly_camera/stream0/image_raw'
+  subscription_topic: '/promoc/promoc_camera/stream0/image_raw'
 
 exposure_time:
-  srv_client_name: '/promoc/assembly_camera_controller/set_exposure_time'
+  srv_client_name: '/promoc/promoc_camera_controller/set_exposure_time'
   srv_type: 'pm_genicam_controller_interfaces/srv/SetExposureTime'
   min_val: 27.1
   max_val: 2000012.4
@@ -26,7 +26,7 @@ exposure_time:
 camera_info:
   image_width: 2448
   image_height: 2048
-  camera_name: assembly_camera_stream0
+  camera_name: promoc_camera_stream0
   camera_matrix:
     rows: 3
     cols: 3

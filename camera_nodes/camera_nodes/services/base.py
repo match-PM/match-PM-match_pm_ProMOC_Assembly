@@ -96,6 +96,13 @@ class CallbackBase:
     def _param_bool(self, name: str, default: bool = False) -> bool:
         return self.params.as_bool(name, default)
 
+    def _camera_image_topic(self) -> str:
+        """Return the configured camera image topic used for diagnostics."""
+        return self._param_str(
+            "camera.image_topic",
+            "/promoc/promoc_camera/stream0/image_raw",
+        )
+
     # ==========================================================================
     # IMAGE HELPERS
     # ==========================================================================
@@ -259,6 +266,22 @@ class CallbackBase:
             )
         return True
 
+    def _current_exposure_us(self) -> float:
+        """Return current exposure with fallback to the configured default."""
+        driver_exposure = None
+        try:
+            get_exposure = getattr(self._driver, "get_exposure", None)
+            if callable(get_exposure):
+                driver_exposure = get_exposure()
+        except Exception:
+            driver_exposure = None
+
+        try:
+            exposure_us = float(driver_exposure)
+        except (TypeError, ValueError):
+            exposure_us = self._param_float("camera.default_exposure_us", 0.0)
+        return max(0.0, float(exposure_us))
+
     @staticmethod
     def _get_center_roi(image: np.ndarray, size: int) -> np.ndarray:
         """Extracts a centered ROI from the image."""
@@ -270,6 +293,54 @@ class CallbackBase:
         start_x = max(0, cx - half)
         end_x = min(w, cx + half)
         return image[start_y:end_y, start_x:end_x]
+
+    @staticmethod
+    def _clamp_roi_rect(
+        image_width: int,
+        image_height: int,
+        roi_x: int,
+        roi_y: int,
+        roi_width: int,
+        roi_height: int,
+    ) -> tuple[int, int, int, int] | None:
+        """Clamp a pixel ROI to image bounds and return (x, y, w, h)."""
+        x0 = max(0, int(roi_x))
+        y0 = max(0, int(roi_y))
+        x1 = min(int(image_width), int(roi_x) + int(roi_width))
+        y1 = min(int(image_height), int(roi_y) + int(roi_height))
+        if x1 <= x0 or y1 <= y0:
+            return None
+        return x0, y0, x1 - x0, y1 - y0
+
+    @staticmethod
+    def _crop_to_roi(image: np.ndarray, roi_rect: tuple[int, int, int, int]) -> np.ndarray:
+        """Return a cropped image view for the given ROI rectangle."""
+        roi_x, roi_y, roi_width, roi_height = roi_rect
+        return image[roi_y : roi_y + roi_height, roi_x : roi_x + roi_width]
+
+    @staticmethod
+    def _downsample_image(
+        image: np.ndarray,
+        max_dimension_px: int,
+    ) -> np.ndarray:
+        """Downsample an image so its longest edge is at most max_dimension_px."""
+        max_dimension_px = int(max_dimension_px)
+        if max_dimension_px <= 0:
+            return image
+
+        height, width = image.shape[:2]
+        longest_edge = max(height, width)
+        if longest_edge <= max_dimension_px:
+            return image
+
+        scale = float(max_dimension_px) / float(longest_edge)
+        target_width = max(1, int(round(float(width) * scale)))
+        target_height = max(1, int(round(float(height) * scale)))
+        return cv2.resize(
+            image,
+            (target_width, target_height),
+            interpolation=cv2.INTER_AREA,
+        )
 
     # ==========================================================================
     # SHARPNESS METRICS

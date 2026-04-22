@@ -93,7 +93,7 @@ rqt
 rqt_image_view
 ```
 
-Im `rqt_image_view` den Topic `/promoc/assembly_camera/stream0/image_raw`
+Im `rqt_image_view` den Topic `/promoc/promoc_camera/stream0/image_raw`
 waehlen.
 
 ## Service Quick Start

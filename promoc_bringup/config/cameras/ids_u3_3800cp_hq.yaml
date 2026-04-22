@@ -86,7 +86,7 @@ camera_params:
   # ROS Topics
   # -------------------------------------------------------------------------
   # Image subscription topic (where camera driver publishes images)
-  subscription_topic: '/promoc/assembly_camera/stream0/image_raw'
+  subscription_topic: '/promoc/promoc_camera/stream0/image_raw'
 
 # =============================================================================
 # Exposure Time Control
@@ -96,8 +96,9 @@ camera_params:
 # - Long exposure mode: up to 30000 ms (30 seconds)
 exposure_time:
   # Service to control exposure time dynamically
-  srv_client_name: '/promoc/assembly_camera_controller/set_exposure_time'
+  srv_client_name: '/promoc/promoc_camera_controller/set_exposure_time'
   srv_type: 'pm_genicam_controller_interfaces/srv/SetExposureTime'
+  default_ms: 30.0
   
   # Minimum exposure time in microseconds
   # Source: IDS datasheet - Belichtungszeit min: 0.053 ms = 53 µs
@@ -134,7 +135,7 @@ camera_info:
   image_width: 5536
   image_height: 3692
   
-  camera_name: assembly_camera_stream0
+  camera_name: promoc_camera_stream0
   
   # Camera intrinsic matrix K [3x3]
   # [fx  0  cx]
@@ -184,8 +185,8 @@ mtf_params:
   pixel_size_mm: 0.0024  # 2.4 µm = 0.0024 mm
   
   # Recommended settings for MTF measurement
-  recommended_exposure_ms: 100.0  # Adjust based on your lighting
-  recommended_gain: 0.0           # Start with 0 gain for best SNR
+  recommended_exposure_ms: 30.0   # Start conservative for initial hardware bringup
+  recommended_gain: 1.0           # Keep within camera gain range for stable MTF capture
   
   # Binning affects MTF - IDS U3-3800CP supports 2x2 binning
   binning_modes:
@@ -213,6 +214,30 @@ dynamic_parameters:
   - FeatureName: Gain
     Type: float
     Description: Analog gain applied to the sensor signal.
+
+  - FeatureName: PixelFormat
+    Type: string
+    Description: Pixel format of the streamed image.
+
+  - FeatureName: ExposureAuto
+    Type: string
+    Description: Auto exposure mode.
+
+  - FeatureName: GainAuto
+    Type: string
+    Description: Auto gain mode.
+
+  - FeatureName: BalanceWhiteAuto
+    Type: string
+    Description: Auto white-balance mode.
+
+  - FeatureName: GammaEnable
+    Type: bool
+    Description: Enables gamma correction.
+
+  - FeatureName: ColorTransformationEnable
+    Type: bool
+    Description: Enables color transformation in the camera.
 
   - FeatureName: BinningHorizontal
     Type: int

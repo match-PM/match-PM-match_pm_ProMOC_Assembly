@@ -418,6 +418,24 @@ class FlyOverDetector:
                     cmd_scan_speed = float(vel_backup.max_velocity)
                     effective_real_speed = max(0.01, cmd_scan_speed * axis_speed_scale)
 
+        exposure_us = float((focus_profile or {}).get("exposure_time_us", 0.0) or 0.0)
+        if exposure_us > 0 and max_sample_step_mm > 0:
+            exposure_speed_cap = max_sample_step_mm / max(exposure_us / 1_000_000.0, 1e-6)
+            if exposure_speed_cap > 0 and effective_real_speed > exposure_speed_cap:
+                self._node.get_logger().warn(
+                    f"Fly-Over speed capped by exposure: {effective_real_speed:.2f} -> "
+                    f"{exposure_speed_cap:.2f} mm/s (exposure={exposure_us / 1000.0:.3f}ms, "
+                    f"max_step={max_sample_step_mm:.3f}mm)"
+                )
+                effective_real_speed = exposure_speed_cap
+                cmd_scan_speed = max(0.01, effective_real_speed / axis_speed_scale)
+                if (
+                    vel_backup.max_velocity > 0
+                    and cmd_scan_speed > vel_backup.max_velocity
+                ):
+                    cmd_scan_speed = float(vel_backup.max_velocity)
+                    effective_real_speed = max(0.01, cmd_scan_speed * axis_speed_scale)
+
         poll_s = min(
             base_poll_s,
             max(0.005, max_sample_step_mm / max(effective_real_speed, 1e-6)),
@@ -426,7 +444,8 @@ class FlyOverDetector:
             f"Fly-Over Params: ratio={peak_ratio:.2f}, margin={margin:.2f}mm, backtrack={backtrack:.2f}mm, "
             f"guard={guard:.2f}mm, min_width={min_window_width:.2f}mm, "
             f"target_speed={target_scan_speed:.2f}mm/s cmd_speed={cmd_scan_speed:.2f}mm/s "
-            f"est_real_speed={effective_real_speed:.2f}mm/s axis_scale={axis_speed_scale:.3f} poll={poll_s:.3f}s"
+            f"est_real_speed={effective_real_speed:.2f}mm/s axis_scale={axis_speed_scale:.3f} "
+            f"exp_ms={exposure_us / 1000.0:.3f} poll={poll_s:.3f}s"
         )
 
         with temporary_velocity(clients, cmd_scan_speed, backup=vel_backup):

@@ -80,6 +80,11 @@ CONTEXT_FIELDNAMES = [
     "capture_readback_ok",
     "capture_readback_mismatches",
     "capture_available_keys",
+    "stream_width_px",
+    "stream_height_px",
+    "requested_stream_width_px",
+    "requested_stream_height_px",
+    "stream_geometry_matches_request",
     "capture_pixel_format",
     "capture_binning_h",
     "capture_binning_v",
@@ -318,6 +323,17 @@ def build_context_row(
         "capture_readback_ok": int(bool(capture_readback_ok)),
         "capture_readback_mismatches": "; ".join(str(item) for item in capture_readback_mismatches),
         "capture_available_keys": "; ".join(str(item) for item in capture_available_keys),
+        "stream_width_px": int(capture_values.get("stream_width_px", 0) or 0),
+        "stream_height_px": int(capture_values.get("stream_height_px", 0) or 0),
+        "requested_stream_width_px": int(
+            capture_values.get("requested_stream_width_px", 0) or 0
+        ),
+        "requested_stream_height_px": int(
+            capture_values.get("requested_stream_height_px", 0) or 0
+        ),
+        "stream_geometry_matches_request": int(
+            bool(capture_values.get("stream_geometry_matches_request", False))
+        ),
         "capture_pixel_format": str(capture_values.get("pixel_format", "") or ""),
         "capture_binning_h": int(capture_values.get("bin_h", 0) or 0),
         "capture_binning_v": int(capture_values.get("bin_v", 0) or 0),

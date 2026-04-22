@@ -6,6 +6,7 @@ from copy import deepcopy
 import glob
 import os
 import re
+import tempfile
 from typing import Dict, Optional, Tuple
 
 import yaml
@@ -175,3 +176,59 @@ def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
         return {}
     axis_config = config.get(axis_name, {})
     return axis_config.get("ros__parameters", {})
+
+
+def build_camera_info_payload(
+    camera_info: dict,
+    frame_id: str = "camera_frame",
+    stream_name: str = "stream0",
+) -> dict:
+    """Build a camera_info_manager-compatible calibration payload."""
+    payload = deepcopy(camera_info or {})
+    payload["image_width"] = int(payload.get("image_width", 0) or 0)
+    payload["image_height"] = int(payload.get("image_height", 0) or 0)
+    payload["camera_name"] = f"{frame_id}_{stream_name}"
+    return payload
+
+
+def materialize_camera_info_yaml(
+    camera_info: dict,
+    frame_id: str = "camera_frame",
+    stream_name: str = "stream0",
+    target_path: str | None = None,
+) -> str:
+    """Write the runtime camera-info YAML and return its path."""
+    payload = build_camera_info_payload(
+        camera_info,
+        frame_id=frame_id,
+        stream_name=stream_name,
+    )
+    if target_path is None:
+        safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", payload["camera_name"])
+        target_path = os.path.join(
+            tempfile.gettempdir(),
+            f"{safe_name}_camera_info.yaml",
+        )
+
+    with open(target_path, "w", encoding="utf-8") as file_handle:
+        yaml.safe_dump(payload, file_handle, sort_keys=False)
+    return target_path
+
+
+def materialize_dynamic_parameters_yaml(
+    dynamic_parameters: list[dict] | None,
+    camera_name: str = "promoc_camera",
+    target_path: str | None = None,
+) -> str:
+    """Write camera_aravis2 dynamic-parameter YAML and return its path."""
+    payload = list(dynamic_parameters or [])
+    if target_path is None:
+        safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", camera_name)
+        target_path = os.path.join(
+            tempfile.gettempdir(),
+            f"{safe_name}_dynamic_parameters.yaml",
+        )
+
+    with open(target_path, "w", encoding="utf-8") as file_handle:
+        yaml.safe_dump(payload, file_handle, sort_keys=False)
+    return target_path

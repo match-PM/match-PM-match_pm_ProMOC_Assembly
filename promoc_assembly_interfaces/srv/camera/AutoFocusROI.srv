@@ -1,4 +1,4 @@
-# Request: Autofocus with algorithm selection
+# Request: Autofocus with algorithm selection on a pixel ROI
 
 # Start position for the scan (in mm)
 float64 start_position
@@ -30,6 +30,12 @@ bool save_best_image
 float64 objective_magnification_x  # e.g. 1.0, 3.0, 6.0 (0 = auto/fallback)
 bool use_beamsplitter              # True if beam splitter is in optical path
 string notes
+
+# --- ROI IN CURRENT STREAM PIXELS ---
+int32 roi_x
+int32 roi_y
+int32 roi_width
+int32 roi_height
 
 ---
 

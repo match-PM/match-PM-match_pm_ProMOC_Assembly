@@ -117,15 +117,20 @@ class AravisCameraDriver(CameraDriver):
             # ── Import service type ──
             from pm_genicam_controller_interfaces.srv import SetExposureTime
             self._SetExposureTime = SetExposureTime
+            exposure_service = self._node.get_parameter(
+                "camera.exposure_service"
+            ).value
 
             # ── Create service client ──
             self._exposure_client = self._node.create_client(
                 self._SetExposureTime,
-                '/promoc/assembly_camera_controller/set_exposure_time'
+                str(exposure_service),
             )
 
             self._connected = True
-            self._logger.info('Aravis driver connected successfully')
+            self._logger.info(
+                f"Aravis driver connected successfully via {exposure_service}"
+            )
             return True
 
         except ImportError as e:

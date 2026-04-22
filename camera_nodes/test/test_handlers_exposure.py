@@ -80,7 +80,8 @@ def test_exposure_handler_sets_exposure_on_valid_request():
 
     assert response.success is True
     assert driver.calls == [2500.0]
-    assert "2500.0" in response.status_message
+    assert "2500.0 us" in response.status_message
+    assert "2.500 ms" in response.status_message
 
 
 def test_exposure_handler_marks_error_for_invalid_request():
@@ -91,4 +92,3 @@ def test_exposure_handler_marks_error_for_invalid_request():
 
     assert response.success is False
     assert "positive" in response.status_message.lower()
-

@@ -47,6 +47,7 @@ class _SingleModeRunPlan:
     algorithm: object
     settle_s: float
     save_best_image: bool
+    analysis_roi_rect: tuple[int, int, int, int] | None = None
 
 
 @dataclass
@@ -172,6 +173,7 @@ class AutofocusRunner:
         clients,
         start_time: float,
         focus_profile: dict | None = None,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
     ):
         """Run a single autofocus mode and populate the ROS response."""
         self._handler._node.get_logger().info(
@@ -186,6 +188,7 @@ class AutofocusRunner:
             peak_end=peak_end,
             request=request,
             focus_profile=focus_profile,
+            analysis_roi_rect=analysis_roi_rect,
         )
         best_position, best_score, measurements, best_image = self._execute_single_mode(
             run_plan, clients
@@ -213,6 +216,8 @@ class AutofocusRunner:
                 request,
                 clients,
                 run_plan.save_best_image,
+                run_plan.settle_s,
+                run_plan.analysis_roi_rect,
             )
 
         best_image_path = self._save_best_image(
@@ -245,6 +250,7 @@ class AutofocusRunner:
         peak_end: float,
         request,
         focus_profile: dict | None,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
     ) -> _SingleModeRunPlan:
         """Resolve mode-specific range, config, and runtime options."""
         mode_name, algo_class = self._resolve_algorithm(mode)
@@ -261,6 +267,7 @@ class AutofocusRunner:
             algorithm=algo_class(config),
             settle_s=self._resolve_settle_time(focus_profile),
             save_best_image=bool(getattr(request, 'save_best_image', False)),
+            analysis_roi_rect=analysis_roi_rect,
         )
 
     def _resolve_algorithm(self, mode: int) -> tuple[str, object]:
@@ -330,6 +337,7 @@ class AutofocusRunner:
                     clients,
                     return_best_image=True,
                     settle_s=run_plan.settle_s,
+                    analysis_roi_rect=run_plan.analysis_roi_rect,
                 )
             )
             return best_position, best_score, measurements, best_image
@@ -338,6 +346,7 @@ class AutofocusRunner:
             run_plan.algorithm,
             clients,
             settle_s=run_plan.settle_s,
+            analysis_roi_rect=run_plan.analysis_roi_rect,
         )
         return best_position, best_score, measurements, None
 
@@ -390,19 +399,29 @@ class AutofocusRunner:
         request,
         clients,
         save_best_image: bool,
+        settle_s: float,
+        analysis_roi_rect: tuple[int, int, int, int] | None,
     ) -> tuple[float, object | None]:
         """Optionally re-measure the final point after the algorithm has completed."""
         if mode_name != 'fourstep':
             return float(best_score), best_image
 
-        time.sleep(FOURSTEP_SETTLE_S)
-        cv_image, _ = self._handler._get_latest_cv_image()
+        time.sleep(max(float(settle_s), FOURSTEP_SETTLE_S))
+        last_timestamp = self._handler._get_latest_image_timestamp_ns()
+        cv_image, _ = self._handler._wait_for_new_image(
+            last_timestamp,
+            timeout=AUTOFOCUS_NEW_IMAGE_TIMEOUT_S,
+        )
         if cv_image is None:
             return float(best_score), best_image
 
         try:
             prior_best_score = float(best_score)
-            final_score = float(algorithm.score_image(cv_image))
+            analysis_image = self._handler._prepare_autofocus_analysis_image(
+                cv_image,
+                roi_rect=analysis_roi_rect,
+            )
+            final_score = float(algorithm.score_image(analysis_image))
             if final_score >= prior_best_score:
                 best_score = final_score
                 if save_best_image:
@@ -457,7 +476,12 @@ class AutofocusRunner:
         self._handler._wait_for_axis_idle(clients)
 
     def run_autofocus_loop(
-        self, algorithm, clients, return_best_image: bool = False, settle_s: float = 0.1
+        self,
+        algorithm,
+        clients,
+        return_best_image: bool = False,
+        settle_s: float = 0.1,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
     ) -> tuple:
         """Run autofocus state machine until completion or timeout."""
         state = self._start_autofocus_loop(algorithm, clients, settle_s)
@@ -466,14 +490,18 @@ class AutofocusRunner:
         for _ in range(max_steps):
             # The algorithm always reacts to a freshly captured frame at the
             # current axis position; motion decisions are made one step later.
-            cv_image, state.last_timestamp = self._wait_for_next_autofocus_frame(
+            raw_image, state.last_timestamp = self._wait_for_next_autofocus_frame(
                 state.last_timestamp
             )
-            result = algorithm.process_image(state.current_pos, cv_image)
+            analysis_image = self._handler._prepare_autofocus_analysis_image(
+                raw_image,
+                roi_rect=analysis_roi_rect,
+            )
+            result = algorithm.process_image(state.current_pos, analysis_image)
             self._record_autofocus_result(
                 state,
                 result,
-                cv_image,
+                raw_image,
                 return_best_image=return_best_image,
             )
             self._log_autofocus_result(state.current_pos, result, state.best_score)
@@ -486,7 +514,7 @@ class AutofocusRunner:
             if result.next_position_mm is None:
                 break
 
-            state.current_pos = self._advance_autofocus_position(
+            state.current_pos, state.last_timestamp = self._advance_autofocus_position(
                 clients,
                 result.next_position_mm,
                 settle_s,
@@ -517,7 +545,10 @@ class AutofocusRunner:
         current_pos = float(algorithm.start())
         self._move_axis(clients, current_pos)
         time.sleep(max(0.0, float(settle_s)))
-        return _AutofocusLoopState(current_pos=current_pos)
+        return _AutofocusLoopState(
+            current_pos=current_pos,
+            last_timestamp=self._handler._get_latest_image_timestamp_ns(),
+        )
 
     def _calculate_max_steps(self, algorithm) -> int:
         """Estimate an upper bound for the autofocus iteration count."""
@@ -551,7 +582,7 @@ class AutofocusRunner:
             )
             raise ImageProcessingError(
                 'Autofocus failed: camera stream stalled (no new images). '
-                'Next step: check /promoc/assembly_camera/stream0/image_raw in '
+                f'Next step: check {self._handler._camera_image_topic()} in '
                 'rqt_image_view and retry.'
             )
         next_timestamp = last_timestamp if ts is None else int(ts)
@@ -603,12 +634,12 @@ class AutofocusRunner:
         clients,
         next_position_mm: float,
         settle_s: float,
-    ) -> float:
+    ) -> tuple[float, int]:
         """Move to the next requested autofocus position and dwell before capture."""
         next_pos = float(next_position_mm)
         self._move_axis(clients, next_pos)
         time.sleep(max(0.0, float(settle_s)))
-        return next_pos
+        return next_pos, self._handler._get_latest_image_timestamp_ns()
 
 class AutofocusHandler(CallbackBase):
     """Handler for autofocus with fly-over detection."""
@@ -617,14 +648,235 @@ class AutofocusHandler(CallbackBase):
         super().__init__(node, camera_driver)
         self._axis_clients = AxisClientManager(self)
         self._runner = AutofocusRunner(self)
+        self._analysis_config_logged = False
+        self._analysis_effective_logged = False
+
+    def _reset_analysis_logging(self) -> None:
+        """Reset per-run analysis logging guards."""
+        self._analysis_config_logged = False
+        self._analysis_effective_logged = False
+
+    def _get_reference_image_size(self) -> tuple[int, int] | None:
+        """Return the best available current image size for ROI validation."""
+        msg = getattr(self._node, "latest_image_msg", None)
+        if msg is not None:
+            width = int(getattr(msg, "width", 0) or 0)
+            height = int(getattr(msg, "height", 0) or 0)
+            if width > 0 and height > 0:
+                return width, height
+
+        width = self._param_int("camera.expected_width", 0)
+        height = self._param_int("camera.expected_height", 0)
+        if width > 0 and height > 0:
+            return width, height
+        return None
+
+    def _resolve_roi_request_rect(
+        self,
+        request,
+    ) -> tuple[int, int, int, int]:
+        """Validate and normalize an autofocus ROI request rectangle."""
+        roi_x = int(getattr(request, "roi_x", 0))
+        roi_y = int(getattr(request, "roi_y", 0))
+        roi_width = int(getattr(request, "roi_width", 0))
+        roi_height = int(getattr(request, "roi_height", 0))
+
+        if roi_width <= 0 or roi_height <= 0:
+            raise ConfigurationError(
+                "ROI width and height must be positive",
+                details={
+                    "roi_x": roi_x,
+                    "roi_y": roi_y,
+                    "roi_width": roi_width,
+                    "roi_height": roi_height,
+                },
+            )
+
+        reference_size = self._get_reference_image_size()
+        if reference_size is not None:
+            image_width, image_height = reference_size
+            if (
+                roi_x >= image_width
+                or roi_y >= image_height
+                or roi_x + roi_width <= 0
+                or roi_y + roi_height <= 0
+            ):
+                raise ConfigurationError(
+                    "Requested ROI lies outside the current image",
+                    details={
+                        "roi_x": roi_x,
+                        "roi_y": roi_y,
+                        "roi_width": roi_width,
+                        "roi_height": roi_height,
+                        "image_width": image_width,
+                        "image_height": image_height,
+                    },
+                )
+
+        return roi_x, roi_y, roi_width, roi_height
+
+    def _log_analysis_plan(
+        self,
+        roi_rect: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        """Emit the configured AF analysis strategy once per service call."""
+        if self._analysis_config_logged:
+            return
+
+        downsample_max = self._param_int(
+            "autofocus.analysis_downsample_max_dim_px",
+            1024,
+        )
+        if roi_rect is not None:
+            roi_desc = (
+                f"requested_roi=({roi_rect[0]},{roi_rect[1]},{roi_rect[2]},{roi_rect[3]})"
+            )
+            mode_desc = "requested-roi"
+        elif self._param_bool("autofocus.analysis_use_center_roi", True):
+            roi_desc = (
+                "center_roi="
+                f"{self._param_int('autofocus.analysis_roi_width_px', 2000)}x"
+                f"{self._param_int('autofocus.analysis_roi_height_px', 2000)}"
+            )
+            mode_desc = "center-roi"
+        else:
+            roi_desc = "full_frame"
+            mode_desc = "full-frame"
+
+        self._node.get_logger().info(
+            f"AF analysis path: mode={mode_desc}, {roi_desc}, "
+            f"downsample_max={downsample_max}px"
+        )
+        self._analysis_config_logged = True
+
+    def _prepare_autofocus_analysis_image(
+        self,
+        image,
+        roi_rect: tuple[int, int, int, int] | None = None,
+    ):
+        """Crop and optionally downsample a frame for autofocus scoring."""
+        if image is None:
+            return None
+
+        image_height, image_width = image.shape[:2]
+        requested_roi = roi_rect
+        if requested_roi is None and self._param_bool(
+            "autofocus.analysis_use_center_roi",
+            True,
+        ):
+            requested_width = max(
+                1,
+                self._param_int("autofocus.analysis_roi_width_px", 2000),
+            )
+            requested_height = max(
+                1,
+                self._param_int("autofocus.analysis_roi_height_px", 2000),
+            )
+            requested_roi = (
+                int((image_width - requested_width) / 2),
+                int((image_height - requested_height) / 2),
+                requested_width,
+                requested_height,
+            )
+
+        effective_roi = None
+        analysis_image = image
+        if requested_roi is not None:
+            effective_roi = self._clamp_roi_rect(
+                image_width,
+                image_height,
+                requested_roi[0],
+                requested_roi[1],
+                requested_roi[2],
+                requested_roi[3],
+            )
+            if effective_roi is None:
+                raise ImageProcessingError(
+                    "Autofocus analysis ROI lies outside the current image",
+                    details={
+                        "roi_x": requested_roi[0],
+                        "roi_y": requested_roi[1],
+                        "roi_width": requested_roi[2],
+                        "roi_height": requested_roi[3],
+                        "image_width": image_width,
+                        "image_height": image_height,
+                    },
+                )
+            analysis_image = self._crop_to_roi(image, effective_roi)
+
+        downsample_max = self._param_int(
+            "autofocus.analysis_downsample_max_dim_px",
+            1024,
+        )
+        processed_image = self._downsample_image(analysis_image, downsample_max)
+
+        if (
+            self._param_bool("autofocus.analysis_log_effective_roi", True)
+            and not self._analysis_effective_logged
+        ):
+            processed_height, processed_width = processed_image.shape[:2]
+            message_parts = [
+                f"AF analysis effective source={image_width}x{image_height}",
+            ]
+            if requested_roi is not None:
+                message_parts.append(
+                    "requested_roi="
+                    f"({requested_roi[0]},{requested_roi[1]},{requested_roi[2]},{requested_roi[3]})"
+                )
+            if effective_roi is not None:
+                message_parts.append(
+                    "effective_roi="
+                    f"({effective_roi[0]},{effective_roi[1]},{effective_roi[2]},{effective_roi[3]})"
+                )
+            message_parts.append(
+                f"analysis_image={processed_width}x{processed_height}"
+            )
+            self._node.get_logger().info(", ".join(message_parts))
+            self._analysis_effective_logged = True
+
+        return processed_image
 
     def _build_focus_profile(self, request) -> dict:
         """Build objective-aware autofocus profile for fly-over and refinement."""
-        return FocusProfileBuilder(self._node).build(request).as_dict()
+        focus_profile = FocusProfileBuilder(self._node).build(request).as_dict()
+        base_settle_s = float(focus_profile.get("settle_s", 0.1) or 0.1)
+        exposure_guard_s = self._param_float("autofocus.exposure_guard_s", 0.02)
+        exposure_time_us = self._current_exposure_us()
+        focus_profile["base_settle_s"] = base_settle_s
+        focus_profile["exposure_time_us"] = exposure_time_us
+        focus_profile["exposure_guard_s"] = exposure_guard_s
+        focus_profile["settle_s"] = max(
+            base_settle_s,
+            (float(exposure_time_us) / 1_000_000.0) + float(exposure_guard_s),
+        )
+        return focus_profile
 
     @handle_service_errors()
     def autofocus_callback(self, request, response):
         """Run autofocus: optional fly-over plus selected refinement mode."""
+        return self._run_autofocus_request(
+            request,
+            response,
+            analysis_roi_rect=None,
+        )
+
+    @handle_service_errors()
+    def autofocus_roi_callback(self, request, response):
+        """Run autofocus on a requested image ROI."""
+        return self._run_autofocus_request(
+            request,
+            response,
+            analysis_roi_rect=self._resolve_roi_request_rect(request),
+        )
+
+    def _run_autofocus_request(
+        self,
+        request,
+        response,
+        analysis_roi_rect: tuple[int, int, int, int] | None,
+    ):
+        """Shared implementation for central and ROI autofocus services."""
+        self._reset_analysis_logging()
         mode = getattr(request, "focus_mode", getattr(request, "refinement_mode", 0))
         start_time = time.time()
         focus_profile = self._build_focus_profile(request)
@@ -632,6 +884,7 @@ class AutofocusHandler(CallbackBase):
         self._node.get_logger().info(
             f"Autofocus: range {request.start_position}-{request.end_position}mm, mode={mode}"
         )
+        self._log_analysis_plan(analysis_roi_rect)
         mag_label = (
             f'{focus_profile["magnification_x"]:.2f}x'
             if focus_profile["magnification_x"] is not None
@@ -646,7 +899,10 @@ class AutofocusHandler(CallbackBase):
             f"max_sample_step={focus_profile['max_sample_step_mm']:.3f}mm "
             f"coarse_step={focus_profile['coarse_step_mm']:.3f}mm "
             f"min_step={focus_profile['min_step_mm']:.3f}mm "
-            f"settle={focus_profile['settle_s']:.2f}s"
+            f"settle={focus_profile['settle_s']:.2f}s "
+            f"(base={focus_profile['base_settle_s']:.2f}s, "
+            f"exp={focus_profile['exposure_time_us'] / 1000.0:.3f}ms, "
+            f"guard={focus_profile['exposure_guard_s']:.3f}s)"
         )
 
         if request.start_position >= request.end_position:
@@ -685,6 +941,7 @@ class AutofocusHandler(CallbackBase):
             clients,
             start_time,
             focus_profile,
+            analysis_roi_rect,
         )
 
     def _get_all_axis_clients(self):
@@ -729,6 +986,7 @@ class AutofocusHandler(CallbackBase):
         clients,
         start_time: float,
         focus_profile: dict | None = None,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
     ):
         return self._runner.run_single_mode(
             mode,
@@ -739,15 +997,21 @@ class AutofocusHandler(CallbackBase):
             clients,
             start_time,
             focus_profile,
+            analysis_roi_rect,
         )
 
     def _run_autofocus_loop(
-        self, af, clients, return_best_image: bool = False, settle_s: float = 0.1
+        self,
+        af,
+        clients,
+        return_best_image: bool = False,
+        settle_s: float = 0.1,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
     ) -> tuple:
         return self._runner.run_autofocus_loop(
             af,
             clients,
             return_best_image=return_best_image,
             settle_s=settle_s,
+            analysis_roi_rect=analysis_roi_rect,
         )
-

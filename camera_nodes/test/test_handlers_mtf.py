@@ -67,6 +67,7 @@ if "rcl_interfaces" not in sys.modules:
 from camera_nodes.services import mtf as mtf_module  # noqa: E402
 from camera_nodes.algorithms.mtf import MTFResult  # noqa: E402
 from camera_nodes.services.mtf import MTFHandler  # noqa: E402
+from promoc_core.promoc_exceptions import ImageProcessingError  # noqa: E402
 
 
 class _Param:
@@ -388,6 +389,8 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
                 "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": True,
                 "mtf.capture_required_raw": True,
+                "mtf.capture_width": 5536,
+                "mtf.capture_height": 3692,
             }
         ),
         camera_driver=object(),
@@ -561,6 +564,11 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert context_rows[0]["objective_magnification_x"] == "10.0"
     assert context_rows[0]["use_beamsplitter"] == "0"
     assert context_rows[0]["capture_readback_ok"] == "1"
+    assert context_rows[0]["stream_width_px"] == "64"
+    assert context_rows[0]["stream_height_px"] == "64"
+    assert context_rows[0]["requested_stream_width_px"] == "5536"
+    assert context_rows[0]["requested_stream_height_px"] == "3692"
+    assert context_rows[0]["stream_geometry_matches_request"] == "0"
     assert context_rows[0]["selected_edge_label"] == "01_top"
     assert context_rows[0]["valid_edge_count"] == "2"
     assert context_rows[0]["selected_measured_edge_angle_deg"] == "5.0"
@@ -722,6 +730,32 @@ def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
     assert context_rows[0]["selected_measured_edge_angle_deg"] == "4.8"
     assert context_rows[0]["selected_official_sop_angle_window_ok"] == "1"
     assert context_rows[0]["selected_official_sop_reason"] == ""
+
+
+def test_validate_scientific_capture_state_reports_raw_switch_error():
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._camera_format_controller._last_operation_error = (
+        "Failed to set PixelFormat=BayerRG12: parameter was not declared"
+    )
+
+    try:
+        handler._validate_scientific_capture_state({}, "rgb8")
+    except ImageProcessingError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected ImageProcessingError for rgb8 scientific capture")
+
+    assert "raw Bayer input" in message
+    assert "Raw-switch status" in message
+    assert "PixelFormat=BayerRG12" in message
 
 
 @pytest.mark.parametrize(
@@ -1039,6 +1073,7 @@ def test_measure_mtf_reports_missing_camera_image_with_next_step():
     assert result.success is False
     assert "No camera image available for MTF." in result.status_message
     assert "rqt_image_view" in result.status_message
+    assert "/promoc/promoc_camera/stream0/image_raw" in result.status_message
 
 
 def test_measure_mtf_reports_auto_roi_failure_with_manual_fallback(
