@@ -59,7 +59,7 @@ def raw_array_to_bgr8_preview(image: np.ndarray, encoding: str = "") -> np.ndarr
     for key, code in _BAYER_CODE_MAP.items():
         if key in encoding_lc:
             if code is None:
-                raise RuntimeError(f"OpenCV Bayer preview conversion unavailable for {key}")
+                return cv2.cvtColor(preview_u8, cv2.COLOR_GRAY2BGR)
             return cv2.cvtColor(preview_u8, code)
 
     if preview_u8.ndim == 2:

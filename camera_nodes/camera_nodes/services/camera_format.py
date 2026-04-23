@@ -86,7 +86,6 @@ class CameraFormatController:
         "pixel_format",
         "bin_h",
         "bin_v",
-        "exposure_time",
         "gain",
         "exposure_auto",
         "gain_auto",
@@ -139,10 +138,26 @@ class CameraFormatController:
 
         get_service = set_service.replace("set_parameters", "get_parameters")
         list_service = set_service.replace("set_parameters", "list_parameters")
+        client_kwargs = {}
+        callback_group = getattr(self._node, "cb_group", None)
+        if callback_group is not None:
+            client_kwargs["callback_group"] = callback_group
         cached = {
-            "set": self._node.create_client(SetParameters, set_service),
-            "get": self._node.create_client(GetParameters, get_service),
-            "list": self._node.create_client(ListParameters, list_service),
+            "set": self._node.create_client(
+                SetParameters,
+                set_service,
+                **client_kwargs,
+            ),
+            "get": self._node.create_client(
+                GetParameters,
+                get_service,
+                **client_kwargs,
+            ),
+            "list": self._node.create_client(
+                ListParameters,
+                list_service,
+                **client_kwargs,
+            ),
             "set_service": set_service,
             "get_service": get_service,
             "list_service": list_service,
@@ -578,6 +593,28 @@ class CameraFormatController:
             target["pixel_format"] = default_pixel_format
         return target
 
+    def _scientific_capture_requests_raw_bayer(self) -> bool:
+        """Return whether the configured scientific capture target expects raw Bayer."""
+        if not self._get_bool_param("mtf.use_raw_capture", True):
+            return False
+        target_pixel_format = self.params.as_str(
+            "mtf.capture_pixel_format",
+            "BayerRG12",
+        ).strip()
+        return str(target_pixel_format).lower().startswith("bayer")
+
+    def _should_skip_runtime_mtf_switch(
+        self,
+        live_encoding: str = "",
+    ) -> bool:
+        """Skip fragile runtime parameter writes when the live stream is already raw Bayer."""
+        if not self._get_bool_param("mtf.skip_runtime_switch_if_live_raw", True):
+            return False
+        if not self._scientific_capture_requests_raw_bayer():
+            return False
+        normalized = str(live_encoding or "").strip().lower()
+        return "bayer" in normalized
+
     def collect_scientific_capture_mismatches(
         self,
         state: dict | None,
@@ -843,6 +880,7 @@ class CameraFormatController:
         wait_for_new_image_fn: Callable[..., tuple],
         *,
         live_geometry: tuple[int, int] | None = None,
+        live_encoding: str = "",
     ):
         """Enable raw scientific capture on the current stream and return restore state."""
         self._last_capture_state = None
@@ -870,6 +908,18 @@ class CameraFormatController:
                     f"differs from requested {requested_width}x{requested_height}; "
                     "measuring anyway on the current stream."
                 )
+
+        if self._should_skip_runtime_mtf_switch(live_encoding):
+            if self._is_switch_logging_enabled():
+                self._node.get_logger().info(
+                    "MTF raw capture: live stream already provides raw Bayer "
+                    f"({str(live_encoding or 'unknown')}); skipping runtime parameter readback/switch."
+                )
+            return {
+                "skip_restore": True,
+                "reason": "live_raw_bayer",
+                "live_encoding": str(live_encoding or ""),
+            }, None
 
         state = self.read_capture_state()
         current = dict((state or {}).get("values", {}))
@@ -981,6 +1031,14 @@ class CameraFormatController:
     def restore_after_mtf(self, restore_state: dict | None):
         """Restore camera ROI/Binning after MTF measurement."""
         if not self._get_bool_param("mtf.restore_after_measurement", True):
+            return
+
+        if restore_state and bool(restore_state.get("skip_restore")):
+            if self._is_switch_logging_enabled():
+                reason = str(restore_state.get("reason", "skipped"))
+                self._node.get_logger().info(
+                    f"MTF format restore skipped: {reason}."
+                )
             return
 
         self._last_capture_state = None

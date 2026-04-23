@@ -82,6 +82,19 @@ class FlyOverDetector:
     def _param_bool(self, name: str, default: bool = False) -> bool:
         return self.params.as_bool(name, default)
 
+    @staticmethod
+    def _position_within_scan_range(
+        position_mm: float,
+        start_pos: float,
+        end_pos: float,
+        *,
+        tolerance_mm: float = 0.5,
+    ) -> bool:
+        """Return whether one sampled position plausibly belongs to the active scan."""
+        lower = min(float(start_pos), float(end_pos)) - max(0.0, float(tolerance_mm))
+        upper = max(float(start_pos), float(end_pos)) + max(0.0, float(tolerance_mm))
+        return lower <= float(position_mm) <= upper
+
     def _estimate_frame_period_s(self, timeout_s: float = 0.8) -> float | None:
         """Estimate camera frame period from image timestamps."""
         start = time.time()
@@ -188,9 +201,12 @@ class FlyOverDetector:
 
             current_pos = self._get_position(clients)
             if current_pos >= 0:
-                if last_pos is None or abs(current_pos - last_pos) > 1e-4:
-                    last_pos = current_pos
-                    last_pos_time = time.time()
+                if self._position_within_scan_range(current_pos, start_pos, end_pos):
+                    if last_pos is None or abs(current_pos - last_pos) > 1e-4:
+                        last_pos = current_pos
+                        last_pos_time = time.time()
+                else:
+                    current_pos = -1.0
 
             use_estimate = False
             if current_pos < 0 or (time.time() - last_pos_time > 1.0):
@@ -345,6 +361,13 @@ class FlyOverDetector:
 
         peak_start = max(start_pos, peak_window_min_m)
         peak_end = min(end_pos, peak_window_max_m)
+        if peak_start >= peak_end:
+            self._node.get_logger().warn(
+                f"Fly-Over peak window lies outside the requested scan range: "
+                f"raw_window={peak_window_min_m:.2f}-{peak_window_max_m:.2f}mm, "
+                f"scan_range={float(start_pos):.2f}-{float(end_pos):.2f}mm"
+            )
+            return FlyOverResult(None, None, max_stddev)
         return FlyOverResult(peak_start, peak_end, max_stddev)
 
     def detect(

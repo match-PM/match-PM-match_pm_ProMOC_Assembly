@@ -99,8 +99,16 @@ class _Node:
     def __init__(self, params: dict | None = None):
         self._logger = _Logger()
         self._params = dict(params or {})
+        self.cb_group = object()
+        self.created_clients = []
 
     def create_client(self, *_args, **_kwargs):
+        self.created_clients.append(
+            {
+                "args": _args,
+                "kwargs": dict(_kwargs),
+            }
+        )
         return _Client()
 
     def get_logger(self):
@@ -171,6 +179,20 @@ def test_read_capture_state_queries_capture_specific_parameters(monkeypatch):
     assert state["values"]["exposure_auto"] == "Off"
 
 
+def test_get_service_clients_uses_node_reentrant_callback_group():
+    node = _Node()
+    controller = CameraFormatController(node)
+
+    clients = controller._get_service_clients("/promoc/promoc_camera/set_parameters")
+
+    assert set(clients) >= {"set", "get", "list"}
+    assert len(node.created_clients) == 3
+    assert all(
+        entry["kwargs"].get("callback_group") is node.cb_group
+        for entry in node.created_clients
+    )
+
+
 def test_collect_mismatches_handles_float_string_and_bool_values():
     mismatches = CameraFormatController._collect_mismatches(
         actual={
@@ -187,6 +209,37 @@ def test_collect_mismatches_handles_float_string_and_bool_values():
     )
 
     assert mismatches == ["gain=0.0!=1.0"]
+
+
+def test_collect_scientific_capture_mismatches_ignores_exposure_time():
+    controller = CameraFormatController(_Node())
+
+    mismatches = controller.collect_scientific_capture_mismatches(
+        {
+            "values": {
+                "pixel_format": "BayerRG12",
+                "bin_h": 1,
+                "bin_v": 1,
+                "exposure_time": 30000.416015625,
+                "gain": 0.0,
+            },
+            "available_keys": {
+                "pixel_format",
+                "bin_h",
+                "bin_v",
+                "gain",
+            },
+        },
+        {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 30000.0,
+            "gain": 0.0,
+        },
+    )
+
+    assert mismatches == []
 
 
 def test_format_values_includes_exposure_in_us_and_ms():
@@ -481,6 +534,51 @@ def test_restore_after_mtf_without_state_uses_default_preview_pixel_format(monke
     controller.restore_after_mtf(None)
 
     assert captured["target"]["pixel_format"] == "RGB8"
+
+
+def test_switch_to_full_frame_for_mtf_skips_runtime_switch_when_live_stream_is_raw(monkeypatch):
+    node = _Node(
+        {
+            "mtf.use_raw_capture": True,
+            "mtf.capture_pixel_format": "BayerRG12",
+            "mtf.capture_width": 5536,
+            "mtf.capture_height": 3692,
+            "mtf.skip_runtime_switch_if_live_raw": True,
+        }
+    )
+    controller = CameraFormatController(node)
+
+    def _unexpected_read_capture_state():
+        raise AssertionError("read_capture_state should not be called for live raw Bayer")
+
+    monkeypatch.setattr(controller, "read_capture_state", _unexpected_read_capture_state)
+
+    restore_state, switched_image = controller.switch_to_full_frame_for_mtf(
+        0,
+        get_latest_image_fn=lambda: (None, None, "bayer_rggb16"),
+        wait_for_new_image_fn=lambda *_args, **_kwargs: (None, None, "bayer_rggb16"),
+        live_geometry=(5504, 3682),
+        live_encoding="bayer_rggb16",
+    )
+
+    assert switched_image is None
+    assert restore_state is not None
+    assert restore_state["skip_restore"] is True
+    assert restore_state["reason"] == "live_raw_bayer"
+
+
+def test_restore_after_mtf_skips_when_runtime_switch_was_bypassed(monkeypatch):
+    controller = CameraFormatController(_Node())
+
+    monkeypatch.setattr(
+        controller,
+        "_try_set_capture_without_state",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("restore should not attempt runtime parameter writes")
+        ),
+    )
+
+    controller.restore_after_mtf({"skip_restore": True, "reason": "live_raw_bayer"})
 
 
 def test_read_capture_state_queries_only_declared_plain_names(monkeypatch):

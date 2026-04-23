@@ -20,6 +20,7 @@ from .mtf_export import (
 )
 from ..algorithms.mtf import MTFAnalyzer, MTFConfig, MTFResult
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
+from ..preview import raw_array_to_bgr8_preview
 from promoc_core.error_handling import handle_service_errors
 
 MTF_AVG_SAMPLES = 10
@@ -27,6 +28,8 @@ MTF_DEFAULT_PIXEL_SIZE_UM = 2.40
 MTF_AUTO_ROI_EDGE_WIDTH = 60
 MTF_MIN_EDGE_CONTRAST = 0.2
 MTF_SAMPLE_TIMEOUT_S = 1.0
+MTF_EXPORT_CONTEXT_SCALE = 1.8
+MTF_EXPORT_CONTEXT_MIN_MARGIN_PX = 24
 
 MTF_PARAM_MAP = (
     ("mtf.lsf_window_mode", "lsf_window_mode", str, True),
@@ -358,6 +361,7 @@ class MTFHandler(CallbackBase):
             get_latest_image_fn=self._get_mtf_capture_image,
             wait_for_new_image_fn=self._wait_for_new_mtf_capture_image,
             live_geometry=live_geometry,
+            live_encoding=image_encoding,
         )
         if switched_image is not None:
             cv_image = switched_image
@@ -477,9 +481,10 @@ class MTFHandler(CallbackBase):
         capture_values: dict[str, object],
         actual_pixel_format: str,
         image_encoding: str,
-    ) -> tuple[list[dict[str, object]], _MeasuredEdge | None, str]:
+    ) -> tuple[list[dict[str, object]], list[_MeasuredEdge], _MeasuredEdge | None, str]:
         """Measure each candidate edge through the shared analyzer and averaging path."""
         edge_rows: list[dict[str, object]] = []
+        measured_edges: list[_MeasuredEdge] = []
         selected_edge: _MeasuredEdge | None = None
         last_error = "Unknown error"
 
@@ -502,8 +507,10 @@ class MTFHandler(CallbackBase):
                 image_encoding=image_encoding,
             )
             edge_rows.append(row)
-            if measured_edge is not None and selected_edge is None:
-                selected_edge = measured_edge
+            if measured_edge is not None:
+                measured_edges.append(measured_edge)
+                if selected_edge is None:
+                    selected_edge = measured_edge
             if edge_error:
                 last_error = edge_error
 
@@ -513,7 +520,7 @@ class MTFHandler(CallbackBase):
                     row["edge_label"] == selected_edge.edge_label
                 )
         self._log_measurement_run_summary(edge_rows, selected_edge)
-        return edge_rows, selected_edge, last_error
+        return edge_rows, measured_edges, selected_edge, last_error
 
     def _log_measurement_run_summary(
         self,
@@ -540,6 +547,7 @@ class MTFHandler(CallbackBase):
         self,
         *,
         measurement_run: _MeasurementRun,
+        source_image: np.ndarray,
         request,
         measurement_metadata: dict[str, object],
         capture_values: dict[str, object],
@@ -547,6 +555,7 @@ class MTFHandler(CallbackBase):
         capture_mismatches: list[str],
         image_encoding: str,
         edge_rows: list[dict[str, object]],
+        measured_edges: list[_MeasuredEdge],
         selected_edge: _MeasuredEdge | None,
         last_error: str,
     ) -> tuple[Path, Path]:
@@ -582,10 +591,194 @@ class MTFHandler(CallbackBase):
                 measurement_error="" if selected_edge is not None else last_error,
             ),
         )
+        self._write_visual_measurement_exports(
+            run_dir=measurement_run.run_dir,
+            source_image=source_image,
+            image_encoding=image_encoding,
+            edge_rows=edge_rows,
+            measured_edges=measured_edges,
+            selected_edge=selected_edge,
+        )
         self._node.get_logger().info(
             f"MTF export written: summary={summary_csv}, context={context_csv}"
         )
         return summary_csv, context_csv
+
+    def _preview_image_for_export(
+        self,
+        image: np.ndarray | None,
+        image_encoding: str,
+    ) -> np.ndarray | None:
+        """Convert the current measurement image into a drawable preview for exports."""
+        if image is None or getattr(image, "size", 0) == 0:
+            return None
+
+        try:
+            if (
+                self._is_raw_bayer_encoding(image_encoding)
+                or image.dtype != np.uint8
+                or len(image.shape) == 2
+            ):
+                return raw_array_to_bgr8_preview(image, image_encoding)
+            if len(image.shape) == 3:
+                return image.copy()
+        except Exception:
+            pass
+
+        try:
+            if len(image.shape) == 2:
+                normalized = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX)
+                gray_u8 = normalized.astype(np.uint8)
+                return cv2.cvtColor(gray_u8, cv2.COLOR_GRAY2BGR)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _expanded_context_bbox(
+        image_shape: tuple[int, ...],
+        bbox: tuple[int, int, int, int],
+        *,
+        scale: float = MTF_EXPORT_CONTEXT_SCALE,
+        min_margin_px: int = MTF_EXPORT_CONTEXT_MIN_MARGIN_PX,
+    ) -> tuple[int, int, int, int]:
+        """Expand one ROI bbox so exports keep more visual context around the edge."""
+        img_h, img_w = image_shape[:2]
+        x, y, w, h = [int(value) for value in bbox]
+        margin_x = max(int(round(w * max(0.0, scale - 1.0) * 0.5)), int(min_margin_px))
+        margin_y = max(int(round(h * max(0.0, scale - 1.0) * 0.5)), int(min_margin_px))
+        x1 = max(0, x - margin_x)
+        y1 = max(0, y - margin_y)
+        x2 = min(img_w, x + w + margin_x)
+        y2 = min(img_h, y + h + margin_y)
+        return x1, y1, max(1, x2 - x1), max(1, y2 - y1)
+
+    @staticmethod
+    def _draw_export_box(
+        image: np.ndarray,
+        bbox: tuple[int, int, int, int],
+        color: tuple[int, int, int],
+        *,
+        label: str = "",
+        thickness: int = 2,
+    ) -> None:
+        """Draw one labeled export rectangle if OpenCV drawing helpers are available."""
+        if not hasattr(cv2, "rectangle"):
+            return
+        x, y, w, h = [int(value) for value in bbox]
+        cv2.rectangle(image, (x, y), (x + w, y + h), color, thickness, cv2.LINE_AA)
+        if not label or not hasattr(cv2, "putText"):
+            return
+        text_y = max(16, y - 6)
+        cv2.putText(
+            image,
+            label,
+            (x + 2, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            image,
+            label,
+            (x + 2, text_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    def _write_visual_measurement_exports(
+        self,
+        *,
+        run_dir: Path,
+        source_image: np.ndarray,
+        image_encoding: str,
+        edge_rows: list[dict[str, object]],
+        measured_edges: list[_MeasuredEdge],
+        selected_edge: _MeasuredEdge | None,
+    ) -> None:
+        """Write one run overview and overwrite per-edge ROI images with larger context crops."""
+        if not hasattr(cv2, "imwrite"):
+            return
+
+        preview_image = self._preview_image_for_export(source_image, image_encoding)
+        if preview_image is None:
+            return
+
+        measured_by_label = {edge.edge_label: edge for edge in measured_edges}
+        selected_label = selected_edge.edge_label if selected_edge is not None else ""
+
+        overview = preview_image.copy()
+        for row in edge_rows:
+            edge_label = str(row.get("edge_label", "") or "")
+            bbox = (
+                int(row.get("roi_bbox_x", 0) or 0),
+                int(row.get("roi_bbox_y", 0) or 0),
+                int(row.get("roi_bbox_w", 0) or 0),
+                int(row.get("roi_bbox_h", 0) or 0),
+            )
+            is_valid = bool(row.get("valid", 0))
+            is_selected = edge_label == selected_label
+            color = (0, 220, 0) if is_selected else ((0, 215, 255) if is_valid else (0, 0, 255))
+            stats = ""
+            if is_valid:
+                stats = (
+                    f" MTF50={float(row.get('mtf50_lpmm', 0.0) or 0.0):.1f}"
+                    f" angle={float(row.get('edge_angle_deg', 0.0) or 0.0):.1f}"
+                )
+            self._draw_export_box(
+                overview,
+                bbox,
+                color,
+                label=f"{edge_label}{'*' if is_selected else ''}{stats}",
+            )
+
+            context_bbox = self._expanded_context_bbox(preview_image.shape, bbox)
+            cx, cy, cw, ch = context_bbox
+            roi_vis = preview_image[cy : cy + ch, cx : cx + cw].copy()
+            local_bbox = (bbox[0] - cx, bbox[1] - cy, bbox[2], bbox[3])
+            self._draw_export_box(
+                roi_vis,
+                local_bbox,
+                color,
+                label=f"{edge_label}{'*' if is_selected else ''}",
+            )
+
+            measured_edge = measured_by_label.get(edge_label)
+            if measured_edge is not None and measured_edge.result.analysis_roi_bounds:
+                if hasattr(cv2, "putText"):
+                    info_text = (
+                        f"MTF50={measured_edge.avg_mtf50:.2f} lp/mm  "
+                        f"angle={measured_edge.avg_angle:.2f} deg"
+                    )
+                    cv2.putText(
+                        roi_vis,
+                        info_text,
+                        (8, max(20, ch - 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.48,
+                        (255, 255, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
+                    cv2.putText(
+                        roi_vis,
+                        info_text,
+                        (8, max(20, ch - 12)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.48,
+                        color,
+                        1,
+                        cv2.LINE_AA,
+                    )
+
+            cv2.imwrite(str(run_dir / f"{self._slugify_label(edge_label)}_roi.png"), roi_vis)
+
+        cv2.imwrite(str(run_dir / "edges_overview.png"), overview)
 
     def _finalize_measurement_response(
         self,
@@ -1367,7 +1560,7 @@ class MTFHandler(CallbackBase):
 
             # Step 4: measure every candidate edge through the shared analyzer
             # path so auto ROI and manual ROI stay directly comparable.
-            edge_rows, selected_edge, last_error = self._measure_run_edges(
+            edge_rows, measured_edges, selected_edge, last_error = self._measure_run_edges(
                 measurement_run=measurement_run,
                 request=request,
                 measurement_metadata=measurement_metadata,
@@ -1383,6 +1576,7 @@ class MTFHandler(CallbackBase):
             # should return success or surface the final failure.
             summary_csv, _context_csv = self._write_measurement_exports(
                 measurement_run=measurement_run,
+                source_image=cv_image,
                 request=request,
                 measurement_metadata=measurement_metadata,
                 capture_values=capture_values,
@@ -1390,6 +1584,7 @@ class MTFHandler(CallbackBase):
                 capture_mismatches=capture_mismatches,
                 image_encoding=image_encoding,
                 edge_rows=edge_rows,
+                measured_edges=measured_edges,
                 selected_edge=selected_edge,
                 last_error=last_error,
             )

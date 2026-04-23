@@ -26,6 +26,7 @@ from promoc_core.promoc_exceptions import (
 
 from ..algorithms import AUTOFOCUS_ALGORITHMS, AutofocusConfig
 from ..models import FocusProfileBuilder
+from ..preview import is_bayer_encoding, raw_array_to_bgr8_preview
 from .base import CallbackBase
 from .fly_over import FlyOverDetector
 
@@ -37,6 +38,11 @@ FOURSTEP_APPROACH_OFFSET_MM = 0.5
 FOURSTEP_SETTLE_S = 0.3
 AUTOFOCUS_MAX_STEPS_DEFAULT = 500
 AUTOFOCUS_NEW_IMAGE_TIMEOUT_S = 2.0
+AUTOFOCUS_FRESH_FRAME_WAIT_S = 0.4
+AUTOFOCUS_AXIS_POSITION_TOLERANCE_MM = 0.05
+AUTOFOCUS_AXIS_WAIT_TIMEOUT_S = 60.0
+AUTOFOCUS_MOVE_RESPONSE_TIMEOUT_S = 2.0
+AUTOFOCUS_AXIS_POSITION_SERVICE_TIMEOUT_S = 0.25
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,16 @@ class _AutofocusLoopState:
     measurements: int = 0
 
 
+@dataclass(frozen=True)
+class _AutofocusFrame:
+    """One fresh autofocus frame prepared from the live camera stream."""
+
+    source_image: object
+    analysis_image: object
+    timestamp_ns: int
+    encoding: str = ""
+
+
 class AxisClientManager:
     """Build and cache linear-axis service clients for autofocus workflows."""
 
@@ -76,20 +92,46 @@ class AxisClientManager:
             return self._cached_axis_clients
 
         node = self._handler._node
+        client_kwargs = {}
+        callback_group = getattr(node, "cb_group", None)
+        if callback_group is not None:
+            client_kwargs["callback_group"] = callback_group
 
         clients = {
-            "move": node.create_client(MoveAbsolute, f"{AXIS_PREFIX}/move_absolute"),
-            "jog": node.create_client(JogAxis, f"{AXIS_PREFIX}/jog_axis"),
-            "status": node.create_client(
-                GetOperationStatus, f"{AXIS_PREFIX}/get_operation_status"
+            "move": node.create_client(
+                MoveAbsolute,
+                f"{AXIS_PREFIX}/move_absolute",
+                **client_kwargs,
             ),
-            "position": node.create_client(GetPosition, f"{AXIS_PREFIX}/get_position"),
-            "stop": node.create_client(Stop, f"{AXIS_PREFIX}/stop"),
+            "jog": node.create_client(
+                JogAxis,
+                f"{AXIS_PREFIX}/jog_axis",
+                **client_kwargs,
+            ),
+            "status": node.create_client(
+                GetOperationStatus,
+                f"{AXIS_PREFIX}/get_operation_status",
+                **client_kwargs,
+            ),
+            "position": node.create_client(
+                GetPosition,
+                f"{AXIS_PREFIX}/get_position",
+                **client_kwargs,
+            ),
+            "stop": node.create_client(
+                Stop,
+                f"{AXIS_PREFIX}/stop",
+                **client_kwargs,
+            ),
             "get_vel": node.create_client(
-                GetVelocityParameters, f"{AXIS_PREFIX}/get_velocity_parameters"
+                GetVelocityParameters,
+                f"{AXIS_PREFIX}/get_velocity_parameters",
+                **client_kwargs,
             ),
             "set_vel": node.create_client(
-                SetVelocityParameters, f"{AXIS_PREFIX}/set_velocity_parameters"
+                SetVelocityParameters,
+                f"{AXIS_PREFIX}/set_velocity_parameters",
+                **client_kwargs,
             ),
         }
 
@@ -110,15 +152,120 @@ class AxisClientManager:
                 raise ServiceError(f"Axis error: {response.status_message}")
             time.sleep(0.05)
 
-    def get_position(self, clients: dict[str, object]) -> float:
-        """Read axis position from topic cache first, service as fallback."""
-        node = self._handler._node
-        if hasattr(node, "current_axis_position") and node.current_axis_position >= 0:
-            return float(node.current_axis_position)
+    def _call_service_with_timeout(
+        self,
+        client,
+        request,
+        *,
+        timeout_s: float,
+    ):
+        """Call a ROS service with a bounded wait to avoid callback-thread deadlocks."""
+        call_async = getattr(client, "call_async", None)
+        if not callable(call_async):
+            try:
+                return client.call(request)
+            except Exception:
+                return None
+        try:
+            future = call_async(request)
+        except Exception:
+            return None
 
-        response = clients["position"].call(GetPosition.Request())
+        deadline = time.time() + max(0.01, float(timeout_s))
+        while time.time() < deadline:
+            if future.done():
+                try:
+                    return future.result()
+                except Exception:
+                    return None
+            time.sleep(0.01)
+        return None
+
+    def wait_for_axis_target(
+        self,
+        clients: dict[str, object],
+        target_pos_mm: float,
+        *,
+        tolerance_mm: float = AUTOFOCUS_AXIS_POSITION_TOLERANCE_MM,
+        timeout_s: float = AUTOFOCUS_AXIS_WAIT_TIMEOUT_S,
+    ) -> float:
+        """Wait until the published/service position reaches the requested target."""
+        deadline = time.time() + max(0.5, float(timeout_s))
+        stable_hits = 0
+        last_pos = None
+        target_pos_mm = float(target_pos_mm)
+        tolerance_mm = max(0.001, float(tolerance_mm))
+        status_client = clients.get("status")
+
+        while time.time() < deadline:
+            current_pos = self.get_position(clients, prefer_cached=False)
+            status_response = None
+            if status_client is not None:
+                status_response = self._call_service_with_timeout(
+                    status_client,
+                    GetOperationStatus.Request(),
+                    timeout_s=AUTOFOCUS_AXIS_POSITION_SERVICE_TIMEOUT_S,
+                )
+                if status_response and status_response.operation_status in [
+                    "error",
+                    "emergency_stop",
+                ]:
+                    raise ServiceError(f"Axis error: {status_response.status_message}")
+
+            position_in_tolerance = False
+            if current_pos >= 0:
+                last_pos = float(current_pos)
+                position_in_tolerance = abs(last_pos - target_pos_mm) <= tolerance_mm
+                if position_in_tolerance:
+                    if status_response and status_response.operation_status != "idle":
+                        stable_hits = 0
+                    else:
+                        stable_hits += 1
+                    if stable_hits >= 3:
+                        return last_pos
+                else:
+                    stable_hits = 0
+
+            if status_response and status_response.operation_status == "idle":
+                if last_pos is None:
+                    return target_pos_mm
+                if not position_in_tolerance:
+                    if last_pos is None or abs(last_pos - target_pos_mm) > tolerance_mm:
+                        self._handler._node.get_logger().warn(
+                            "AF axis wait: axis reported idle before exact target "
+                            "confirmation; continuing with idle-status fallback."
+                        )
+                    return float(last_pos) if last_pos is not None else target_pos_mm
+            time.sleep(0.05)
+
+        raise ServiceError(
+            f"Axis did not reach target {target_pos_mm:.3f}mm within {timeout_s:.1f}s "
+            f"(last_position={float(last_pos) if last_pos is not None else -1.0:.3f}mm)"
+        )
+
+    def get_position(
+        self,
+        clients: dict[str, object],
+        *,
+        prefer_cached: bool = True,
+    ) -> float:
+        """Read axis position, optionally bypassing the local topic cache."""
+        node = self._handler._node
+        cached_position = None
+        if hasattr(node, "current_axis_position") and node.current_axis_position >= 0:
+            cached_position = float(node.current_axis_position)
+            if prefer_cached:
+                return cached_position
+
+        response = self._call_service_with_timeout(
+            clients["position"],
+            GetPosition.Request(),
+            timeout_s=AUTOFOCUS_AXIS_POSITION_SERVICE_TIMEOUT_S,
+        )
         if response and response.success:
             return float(response.axis_position)
+        if cached_position is not None:
+            return cached_position
         return -1.0
 
 
@@ -177,7 +324,8 @@ class AutofocusRunner:
     ):
         """Run a single autofocus mode and populate the ROS response."""
         self._handler._node.get_logger().info(
-            f"Phase 2: Coarse + Fine in {peak_start:.1f}-{peak_end:.1f}mm, mode={mode}"
+            f"AF refine: mode={self._format_mode_name(mode)} "
+            f"window={float(peak_start):.3f}-{float(peak_end):.3f}mm"
         )
 
         # The run plan freezes the selected algorithm, scan window, and timing
@@ -198,15 +346,19 @@ class AutofocusRunner:
         )
 
         if best_position is not None:
-            # Some modes refine the best point numerically but still need one
-            # final physical move so the axis ends on the usable measurement position.
+            target_candidate = self._resolve_final_measurement_target(
+                run_plan.mode_name,
+                run_plan.algorithm,
+                best_position,
+                request,
+            )
             target_pos = self._move_to_measurement_position(
                 run_plan.mode_name,
-                best_position,
+                target_candidate,
                 request,
                 clients,
             )
-            best_score, best_image = self._confirm_measurement_position(
+            best_position, best_score, best_image = self._confirm_measurement_position(
                 run_plan.mode_name,
                 run_plan.algorithm,
                 target_pos,
@@ -273,6 +425,10 @@ class AutofocusRunner:
     def _resolve_algorithm(self, mode: int) -> tuple[str, object]:
         """Map the wire-level mode id to the configured algorithm class."""
         return _ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])
+
+    def _format_mode_name(self, mode: int) -> str:
+        """Return one short public mode label for logging."""
+        return str(self._resolve_algorithm(mode)[0])
 
     def _resolve_scan_window(
         self,
@@ -366,9 +522,25 @@ class AutofocusRunner:
             return
 
         self._handler._node.get_logger().info(
-            f'FOURSTEP Parabolic Peak: {peak_mm:.6f}mm (fit_points={len(fit_points)}) '
-            f'final_best={float(best_position or 0.0):.6f}mm'
+            f'AF fourstep fit: peak={peak_mm:.6f}mm '
+            f'final={float(best_position or 0.0):.6f}mm '
+            f'points={len(fit_points)}'
         )
+
+    def _resolve_final_measurement_target(
+        self,
+        mode_name: str,
+        algorithm,
+        best_position: float,
+        request,
+    ) -> float:
+        """Choose the final candidate to physically test after the scan."""
+        target_pos = float(best_position)
+        if mode_name == 'fourstep':
+            peak_pos = getattr(algorithm, 'parabolic_peak_mm', None)
+            if peak_pos is not None:
+                target_pos = float(peak_pos)
+        return self._clamp_request_range(target_pos, request)
 
     def _move_to_measurement_position(
         self,
@@ -401,47 +573,51 @@ class AutofocusRunner:
         save_best_image: bool,
         settle_s: float,
         analysis_roi_rect: tuple[int, int, int, int] | None,
-    ) -> tuple[float, object | None]:
+    ) -> tuple[float, float, object | None]:
         """Optionally re-measure the final point after the algorithm has completed."""
         if mode_name != 'fourstep':
-            return float(best_score), best_image
+            return float(best_position), float(best_score), best_image
 
         time.sleep(max(float(settle_s), FOURSTEP_SETTLE_S))
         last_timestamp = self._handler._get_latest_image_timestamp_ns()
-        cv_image, _ = self._handler._wait_for_new_image(
-            last_timestamp,
-            timeout=AUTOFOCUS_NEW_IMAGE_TIMEOUT_S,
-        )
-        if cv_image is None:
-            return float(best_score), best_image
+        try:
+            frame = self._wait_for_next_autofocus_frame(
+                last_timestamp,
+                analysis_roi_rect=analysis_roi_rect,
+            )
+        except ImageProcessingError:
+            return float(best_position), float(best_score), best_image
 
         try:
+            final_position = float(best_position)
             prior_best_score = float(best_score)
-            analysis_image = self._handler._prepare_autofocus_analysis_image(
-                cv_image,
-                roi_rect=analysis_roi_rect,
-            )
-            final_score = float(algorithm.score_image(analysis_image))
+            final_score = float(algorithm.score_image(frame.analysis_image))
             if final_score >= prior_best_score:
                 best_score = final_score
+                final_position = float(target_pos)
                 if save_best_image:
-                    best_image = cv_image
+                    best_image = frame.analysis_image.copy()
+                action = "accepted_peak"
             else:
-                pre_pos = self._clamp_request_range(
-                    float(best_position) - FOURSTEP_APPROACH_OFFSET_MM,
-                    request,
-                )
-                self._move_axis(clients, pre_pos)
-                self._move_axis(clients, target_pos)
+                if abs(float(target_pos) - float(best_position)) > 1e-6:
+                    self._move_to_measurement_position(
+                        mode_name,
+                        best_position,
+                        request,
+                        clients,
+                    )
+                action = "returned_to_scan_best"
 
             self._handler._node.get_logger().info(
-                f'FOURSTEP peak measurement: pos={target_pos:.3f}mm '
-                f'score={final_score:.0f} (kept_best={float(best_score):.0f})'
+                f'AF fourstep confirm: pos={target_pos:.3f}mm '
+                f'score={final_score:.0f} best={float(best_score):.0f} '
+                f'final={final_position:.3f}mm action={action}'
             )
+            return final_position, float(best_score), best_image
         except Exception:
             pass
 
-        return float(best_score), best_image
+        return float(best_position), float(best_score), best_image
 
     def _save_best_image(
         self,
@@ -472,7 +648,43 @@ class AutofocusRunner:
 
     def _move_axis(self, clients, target_pos: float) -> None:
         """Move the axis and wait for the motion controller to go idle."""
-        clients['move'].call(MoveAbsolute.Request(axis_position=float(target_pos)))
+        logger = self._handler._node.get_logger()
+        request = MoveAbsolute.Request(axis_position=float(target_pos))
+        response = None
+        axis_client_manager = getattr(self._handler, "_axis_clients", None)
+        if (
+            axis_client_manager is not None
+            and hasattr(axis_client_manager, "_call_service_with_timeout")
+        ):
+            logger.info(
+                f"AF move: target={float(target_pos):.3f}mm"
+            )
+            response = axis_client_manager._call_service_with_timeout(
+                clients["move"],
+                request,
+                timeout_s=AUTOFOCUS_MOVE_RESPONSE_TIMEOUT_S,
+            )
+            if response is None:
+                logger.warn(
+                    "AF move: response timeout; waiting on status/position."
+                )
+            elif not getattr(response, "success", True):
+                raise ServiceError(
+                    getattr(response, "status_message", "move_absolute failed")
+                )
+        else:
+            response = clients["move"].call(request)
+            if response is not None and not getattr(response, "success", True):
+                raise ServiceError(
+                    getattr(response, "status_message", "move_absolute failed")
+                )
+        wait_for_target = getattr(self._handler, "_wait_for_axis_target", None)
+        if callable(wait_for_target):
+            reached_pos = float(wait_for_target(clients, float(target_pos)))
+            logger.info(
+                f"AF move: reached={reached_pos:.3f}mm target={float(target_pos):.3f}mm"
+            )
+            return
         self._handler._wait_for_axis_idle(clients)
 
     def run_autofocus_loop(
@@ -487,24 +699,26 @@ class AutofocusRunner:
         state = self._start_autofocus_loop(algorithm, clients, settle_s)
         max_steps = self._calculate_max_steps(algorithm)
 
-        for _ in range(max_steps):
-            # The algorithm always reacts to a freshly captured frame at the
-            # current axis position; motion decisions are made one step later.
-            raw_image, state.last_timestamp = self._wait_for_next_autofocus_frame(
-                state.last_timestamp
+        for step_index in range(max_steps):
+            frame = self._wait_for_next_autofocus_frame(
+                state.last_timestamp,
+                analysis_roi_rect=analysis_roi_rect,
             )
-            analysis_image = self._handler._prepare_autofocus_analysis_image(
-                raw_image,
-                roi_rect=analysis_roi_rect,
-            )
-            result = algorithm.process_image(state.current_pos, analysis_image)
+            state.last_timestamp = frame.timestamp_ns
+            result = algorithm.process_image(state.current_pos, frame.analysis_image)
             self._record_autofocus_result(
                 state,
                 result,
-                raw_image,
+                frame.analysis_image,
                 return_best_image=return_best_image,
             )
-            self._log_autofocus_result(state.current_pos, result, state.best_score)
+            self._log_autofocus_result(
+                step_index + 1,
+                state.current_pos,
+                result,
+                state.best_score,
+                frame,
+            )
 
             if result.finished:
                 state.best_position = result.best_position_mm
@@ -543,11 +757,15 @@ class AutofocusRunner:
     ) -> _AutofocusLoopState:
         """Move to the algorithm start position and initialize loop bookkeeping."""
         current_pos = float(algorithm.start())
+        self._handler._node.get_logger().info(
+            f'AF start: pos={current_pos:.3f}mm settle={float(settle_s):.2f}s'
+        )
         self._move_axis(clients, current_pos)
         time.sleep(max(0.0, float(settle_s)))
+        last_ts = self._handler._get_latest_image_timestamp_ns()
         return _AutofocusLoopState(
             current_pos=current_pos,
-            last_timestamp=self._handler._get_latest_image_timestamp_ns(),
+            last_timestamp=last_ts,
         )
 
     def _calculate_max_steps(self, algorithm) -> int:
@@ -571,22 +789,56 @@ class AutofocusRunner:
     def _wait_for_next_autofocus_frame(
         self,
         last_timestamp: int,
-    ) -> tuple[object, int]:
-        """Wait for the next camera frame and fail loudly on stream stalls."""
-        cv_image, ts = self._handler._wait_for_new_image(
-            last_timestamp, timeout=AUTOFOCUS_NEW_IMAGE_TIMEOUT_S
+        *,
+        analysis_roi_rect: tuple[int, int, int, int] | None = None,
+    ) -> _AutofocusFrame:
+        """Wait for a fresh frame, but tolerate non-advancing timestamps when the image stream is alive."""
+        wait_timeout = min(
+            AUTOFOCUS_NEW_IMAGE_TIMEOUT_S,
+            max(0.05, AUTOFOCUS_FRESH_FRAME_WAIT_S),
         )
-        if cv_image is None:
+        raw_image, ts, encoding = self._handler._wait_for_new_passthrough_image(
+            last_timestamp,
+            timeout=wait_timeout,
+        )
+        if raw_image is None:
+            raw_image, ts = self._handler._wait_for_new_image(
+                last_timestamp,
+                timeout=wait_timeout,
+            )
+            encoding = ""
+
+        if raw_image is None:
+            raw_image, ts, encoding = self._handler._get_latest_passthrough_image()
+        if raw_image is None:
+            raw_image, ts = self._handler._get_latest_cv_image()
+            encoding = encoding or ""
+        if raw_image is None:
             self._handler._node.get_logger().error(
-                'Timeout waiting for new image in AF loop - Stream stalled?'
+                'Timeout waiting for autofocus frame - no usable image available.'
             )
             raise ImageProcessingError(
-                'Autofocus failed: camera stream stalled (no new images). '
+                'Autofocus failed: no usable camera frame available. '
                 f'Next step: check {self._handler._camera_image_topic()} in '
                 'rqt_image_view and retry.'
             )
+
+        if ts is None or int(ts) <= int(last_timestamp):
+            self._handler._node.get_logger().warn(
+                'AF frame: reusing cached image because timestamps did not advance.'
+            )
         next_timestamp = last_timestamp if ts is None else int(ts)
-        return cv_image, next_timestamp
+        analysis_image = self._handler._prepare_autofocus_analysis_image(
+            raw_image,
+            roi_rect=analysis_roi_rect,
+            encoding=encoding,
+        )
+        return _AutofocusFrame(
+            source_image=raw_image,
+            analysis_image=analysis_image,
+            timestamp_ns=next_timestamp,
+            encoding=str(encoding or ""),
+        )
 
     def _record_autofocus_result(
         self,
@@ -610,23 +862,38 @@ class AutofocusRunner:
 
     def _log_autofocus_result(
         self,
+        step_index: int,
         current_pos: float,
         result,
         best_score: float,
+        frame: _AutofocusFrame,
     ) -> None:
         """Emit one progress log line for the autofocus loop."""
         phase = getattr(result, 'phase', None)
         phase_name = phase.name if phase is not None else 'UNKNOWN'
+        frame_h, frame_w = frame.analysis_image.shape[:2]
+        next_position = getattr(result, "next_position_mm", None)
+        next_desc = "done" if getattr(result, "finished", False) else (
+            f"next={float(next_position):.3f}mm"
+            if next_position is not None
+            else "next=n/a"
+        )
         self._handler._node.get_logger().info(
-            f'AF {phase_name}: pos={current_pos:.3f}mm '
-            f'score={float(result.current_score):.0f} best={float(best_score):.0f}'
+            f'AF step {int(step_index):02d} {phase_name}: '
+            f'pos={current_pos:.3f}mm '
+            f'score={float(result.current_score):.0f} '
+            f'best={float(best_score):.0f} '
+            f'frame={frame_w}x{frame_h} '
+            f'enc={frame.encoding or "preview"} '
+            f'{next_desc}'
         )
 
     def _log_autofocus_completion(self, state: _AutofocusLoopState) -> None:
         """Emit the final summary line when the loop reports completion."""
         self._handler._node.get_logger().info(
-            f'AF complete: best_pos={float(state.best_position or 0.0):.3f}mm '
-            f'best_score={float(state.best_score):.0f} measurements={state.measurements}'
+            f'AF complete: best={float(state.best_position or 0.0):.3f}mm '
+            f'score={float(state.best_score):.0f} '
+            f'measurements={state.measurements}'
         )
 
     def _advance_autofocus_position(
@@ -670,6 +937,53 @@ class AutofocusHandler(CallbackBase):
         if width > 0 and height > 0:
             return width, height
         return None
+
+    def _select_roi_interactive(self, cv_image):
+        """Open one temporary selection window and return the chosen ROI."""
+        if cv_image is None:
+            return None, None
+
+        display_image = cv_image.copy()
+        image_height, image_width = display_image.shape[:2]
+        max_height = 800
+        scale_factor = 1.0
+
+        if image_height > max_height:
+            scale_factor = max_height / float(image_height)
+            display_image = cv2.resize(
+                display_image,
+                (int(image_width * scale_factor), int(image_height * scale_factor)),
+            )
+
+        window_name = "Select Autofocus ROI"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, display_image.shape[1], display_image.shape[0])
+        roi = cv2.selectROI(
+            window_name,
+            display_image,
+            fromCenter=False,
+            showCrosshair=True,
+        )
+        cv2.destroyWindow(window_name)
+        cv2.waitKey(1)
+
+        if roi == (0, 0, 0, 0):
+            return None, None
+
+        x_scaled, y_scaled, width_scaled, height_scaled = roi
+        x = int(x_scaled / scale_factor)
+        y = int(y_scaled / scale_factor)
+        width = int(width_scaled / scale_factor)
+        height = int(height_scaled / scale_factor)
+
+        x = max(0, min(x, image_width - 1))
+        y = max(0, min(y, image_height - 1))
+        width = max(1, min(width, image_width - x))
+        height = max(1, min(height, image_height - y))
+
+        roi_rect = (x, y, width, height)
+        roi_image = cv_image[y : y + height, x : x + width]
+        return roi_rect, roi_image
 
     def _resolve_roi_request_rect(
         self,
@@ -715,6 +1029,42 @@ class AutofocusHandler(CallbackBase):
 
         return roi_x, roi_y, roi_width, roi_height
 
+    def _resolve_or_select_roi_rect(
+        self,
+        request,
+    ) -> tuple[int, int, int, int]:
+        """Use an explicit ROI request when present, otherwise ask the operator."""
+        roi_x = int(getattr(request, "roi_x", 0) or 0)
+        roi_y = int(getattr(request, "roi_y", 0) or 0)
+        roi_width = int(getattr(request, "roi_width", 0) or 0)
+        roi_height = int(getattr(request, "roi_height", 0) or 0)
+
+        if roi_width > 0 and roi_height > 0:
+            return self._resolve_roi_request_rect(request)
+
+        if any(value != 0 for value in (roi_x, roi_y, roi_width, roi_height)):
+            return self._resolve_roi_request_rect(request)
+
+        cv_image, _timestamp_ns = self._get_latest_cv_image()
+        if cv_image is None:
+            raise ImageProcessingError(
+                "Autofocus ROI selection needs one live camera frame. "
+                f"Next step: check {self._camera_image_topic()} in rqt_image_view and retry."
+            )
+
+        roi_rect, _roi_image = self._select_roi_interactive(cv_image)
+        if roi_rect is None:
+            raise ImageProcessingError(
+                "Autofocus ROI selection was cancelled. "
+                "Next step: draw one ROI around the target area and retry autofocus."
+            )
+
+        self._node.get_logger().info(
+            f"AF ROI selected: x={roi_rect[0]} y={roi_rect[1]} "
+            f"w={roi_rect[2]} h={roi_rect[3]}"
+        )
+        return roi_rect
+
     def _log_analysis_plan(
         self,
         roi_rect: tuple[int, int, int, int] | None = None,
@@ -744,8 +1094,7 @@ class AutofocusHandler(CallbackBase):
             mode_desc = "full-frame"
 
         self._node.get_logger().info(
-            f"AF analysis path: mode={mode_desc}, {roi_desc}, "
-            f"downsample_max={downsample_max}px"
+            f"AF analysis: mode={mode_desc} {roi_desc} downsample={downsample_max}px"
         )
         self._analysis_config_logged = True
 
@@ -753,8 +1102,9 @@ class AutofocusHandler(CallbackBase):
         self,
         image,
         roi_rect: tuple[int, int, int, int] | None = None,
+        encoding: str = "",
     ):
-        """Crop and optionally downsample a frame for autofocus scoring."""
+        """Crop and downsample a frame before deriving the smaller AF analysis image."""
         if image is None:
             return None
 
@@ -809,6 +1159,8 @@ class AutofocusHandler(CallbackBase):
             1024,
         )
         processed_image = self._downsample_image(analysis_image, downsample_max)
+        if is_bayer_encoding(encoding) and getattr(processed_image, "ndim", 0) == 2:
+            processed_image = raw_array_to_bgr8_preview(processed_image, encoding)
 
         if (
             self._param_bool("autofocus.analysis_log_effective_roi", True)
@@ -816,7 +1168,7 @@ class AutofocusHandler(CallbackBase):
         ):
             processed_height, processed_width = processed_image.shape[:2]
             message_parts = [
-                f"AF analysis effective source={image_width}x{image_height}",
+                f"AF analysis effective: source={image_width}x{image_height}",
             ]
             if requested_roi is not None:
                 message_parts.append(
@@ -866,7 +1218,7 @@ class AutofocusHandler(CallbackBase):
         return self._run_autofocus_request(
             request,
             response,
-            analysis_roi_rect=self._resolve_roi_request_rect(request),
+            analysis_roi_rect=self._resolve_or_select_roi_rect(request),
         )
 
     def _run_autofocus_request(
@@ -878,11 +1230,13 @@ class AutofocusHandler(CallbackBase):
         """Shared implementation for central and ROI autofocus services."""
         self._reset_analysis_logging()
         mode = getattr(request, "focus_mode", getattr(request, "refinement_mode", 0))
+        mode_name = str(_ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])[0])
         start_time = time.time()
         focus_profile = self._build_focus_profile(request)
 
         self._node.get_logger().info(
-            f"Autofocus: range {request.start_position}-{request.end_position}mm, mode={mode}"
+            f"AF request: range={float(request.start_position):.3f}-{float(request.end_position):.3f}mm "
+            f"mode={mode_name} skip_flyover={bool(getattr(request, 'skip_flyover', False))}"
         )
         self._log_analysis_plan(analysis_roi_rect)
         mag_label = (
@@ -891,7 +1245,7 @@ class AutofocusHandler(CallbackBase):
             else "unknown"
         )
         self._node.get_logger().info(
-            f'Objective profile: objective="{focus_profile["objective"]}" '
+            f'AF profile: objective="{focus_profile["objective"]}" '
             f"mag={mag_label} beamsplitter={focus_profile['beamsplitter']} "
             f"profile={focus_profile['profile_source']} "
             f"scan_speed={focus_profile['scan_speed_mm_s']:.2f}mm/s "
@@ -911,11 +1265,13 @@ class AutofocusHandler(CallbackBase):
         clients = self._get_all_axis_clients()
         skip_flyover = getattr(request, "skip_flyover", False)
         if skip_flyover:
-            self._node.get_logger().info("Skipping fly-over, using full range.")
+            self._node.get_logger().info(
+                f"AF flyover: skipped, window={float(request.start_position):.3f}-{float(request.end_position):.3f}mm"
+            )
             peak_start = float(request.start_position)
             peak_end = float(request.end_position)
         else:
-            self._node.get_logger().info("Phase 1: Fly-Over Detection...")
+            self._node.get_logger().info("AF flyover: start")
             peak_start, peak_end, max_stddev = self._fly_over_detection(
                 request.start_position,
                 request.end_position,
@@ -928,8 +1284,8 @@ class AutofocusHandler(CallbackBase):
                     "target, check exposure/contrast, and retry autofocus."
                 )
             self._node.get_logger().info(
-                f"Peak detected: {peak_start:.1f}-{peak_end:.1f}mm "
-                f"(max_stddev={max_stddev:.1f})"
+                f"AF flyover: window={peak_start:.3f}-{peak_end:.3f}mm "
+                f"peak_stddev={max_stddev:.1f}"
             )
 
         return self._run_single_mode(
@@ -950,6 +1306,9 @@ class AutofocusHandler(CallbackBase):
     def _wait_for_axis_idle(self, clients):
         self._axis_clients.wait_for_axis_idle(clients)
 
+    def _wait_for_axis_target(self, clients, target_pos: float) -> float:
+        return self._axis_clients.wait_for_axis_target(clients, target_pos)
+
     def _get_position(self, clients) -> float:
         return self._axis_clients.get_position(clients)
 
@@ -966,7 +1325,10 @@ class AutofocusHandler(CallbackBase):
             get_latest_cv_image=self._get_latest_cv_image,
             get_center_roi=self._get_center_roi,
             wait_for_axis_idle=self._wait_for_axis_idle,
-            get_position=self._get_position,
+            get_position=lambda clients: self._axis_clients.get_position(
+                clients,
+                prefer_cached=False,
+            ),
         )
         result = detector.detect(
             start_pos=float(start_pos),

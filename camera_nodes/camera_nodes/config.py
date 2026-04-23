@@ -124,6 +124,7 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.capture_disable_white_balance_auto", True),
     ("mtf.capture_disable_gamma", True),
     ("mtf.capture_disable_color_transform", True),
+    ("mtf.skip_runtime_switch_if_live_raw", True),
     ("mtf.raw_green_pair_warn_pct", 10.0),
     ("mtf.green_wavelength_um", 0.555),
     ("mtf.restore_after_measurement", True),
@@ -252,6 +253,12 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
         ("mtf.capture_binning", "capture_binning", int, 1),
         ("mtf.capture_gain", "capture_gain", float, 0.0),
         ("mtf.capture_exposure_us", "capture_exposure_us", float, 0.0),
+        (
+            "mtf.skip_runtime_switch_if_live_raw",
+            "skip_runtime_switch_if_live_raw",
+            bool,
+            True,
+        ),
         ("mtf.angle_estimation_mode", "angle_estimation_mode", str, "hybrid"),
         (
             "mtf.raw_green_pair_warn_pct",

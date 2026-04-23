@@ -205,6 +205,7 @@ class FourStepAutofocus(MSPRAutofocus):
         subpixel_pos = self._calculate_subpixel_peak(x_vals, scores)
         self.parabolic_peak_mm = subpixel_pos
 
-        # Step 3: Replace the best position with the sub-pixel peak estimate.
-        if self._best_measurement and abs(subpixel_pos - self._best_measurement.position_mm) > 1e-6:
-            self._best_measurement.position_mm = subpixel_pos
+        # Step 3: Keep the fitted peak as a candidate only.  The runner will
+        # physically measure it and accept or reject it against the measured best
+        # point, so the algorithm must not overwrite the verified best sample.
+        return

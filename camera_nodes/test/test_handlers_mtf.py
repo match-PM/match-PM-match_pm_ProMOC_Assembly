@@ -55,6 +55,7 @@ if "rcl_interfaces.srv" not in sys.modules:
                     setattr(self, key, value)
 
     rcl_srv.GetParameters = _SrvType
+    rcl_srv.ListParameters = _SrvType
     rcl_srv.SetParameters = _SrvType
     sys.modules["rcl_interfaces.srv"] = rcl_srv
 
@@ -376,6 +377,155 @@ def test_measure_mtf_returns_failure_on_scientific_capture_mismatch(
     assert context_rows[0]["selected_measured_edge_angle_deg"] == ""
 
 
+def test_write_visual_measurement_exports_writes_overview_and_larger_roi(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    run_dir = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf" / "visual_exports"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    written: dict[str, tuple[int, ...]] = {}
+
+    monkeypatch.setattr(
+        mtf_module,
+        "cv2",
+        types.SimpleNamespace(
+            LINE_AA=16,
+            FONT_HERSHEY_SIMPLEX=0,
+            rectangle=lambda image, *_args, **_kwargs: image,
+            putText=lambda image, *_args, **_kwargs: image,
+            imwrite=lambda path, image: written.setdefault(Path(path).name, tuple(image.shape)) or True,
+        ),
+    )
+
+    edge_roi = mtf_module.EdgeROI(
+        image=np.zeros((40, 40), dtype=np.uint8),
+        bbox=(80, 60, 40, 40),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.9,
+        parent_center=(100, 80),
+    )
+    result = MTFResult(
+        valid=True,
+        mtf50=42.0,
+        edge_angle=4.5,
+        analysis_roi_bounds=(88, 68, 112, 92),
+    )
+    measured_edge = mtf_module._MeasuredEdge(
+        edge_label="01_top",
+        edge_roi=edge_roi,
+        result=result,
+        valid_samples=[result],
+        avg_mtf50=42.0,
+        avg_mtf20=0.0,
+        avg_mtf10=0.0,
+        avg_angle=4.5,
+        avg_g1_mtf50=0.0,
+        avg_g2_mtf50=0.0,
+        avg_delta_pct=0.0,
+    )
+
+    handler._write_visual_measurement_exports(
+        run_dir=run_dir,
+        source_image=np.zeros((200, 300, 3), dtype=np.uint8),
+        image_encoding="bgr8",
+        edge_rows=[
+            {
+                "edge_label": "01_top",
+                "roi_bbox_x": 80,
+                "roi_bbox_y": 60,
+                "roi_bbox_w": 40,
+                "roi_bbox_h": 40,
+                "valid": 1,
+                "selected_for_response": 1,
+                "mtf50_lpmm": 42.0,
+                "edge_angle_deg": 4.5,
+            }
+        ],
+        measured_edges=[measured_edge],
+        selected_edge=measured_edge,
+    )
+
+    assert "01_top_roi.png" in written
+    assert "edges_overview.png" in written
+    assert written["01_top_roi.png"][0] > 40
+    assert written["01_top_roi.png"][1] > 40
+
+
+def test_write_visual_measurement_exports_skips_analysis_box_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    run_dir = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf" / "visual_exports_no_analysis_box"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    rectangle_calls: list[tuple[tuple[int, int], tuple[int, int]]] = []
+
+    monkeypatch.setattr(
+        mtf_module,
+        "cv2",
+        types.SimpleNamespace(
+            LINE_AA=16,
+            FONT_HERSHEY_SIMPLEX=0,
+            rectangle=lambda image, pt1, pt2, *_args, **_kwargs: rectangle_calls.append((pt1, pt2)) or image,
+            putText=lambda image, *_args, **_kwargs: image,
+            imwrite=lambda _path, _image: True,
+        ),
+    )
+
+    edge_roi = mtf_module.EdgeROI(
+        image=np.zeros((40, 40), dtype=np.uint8),
+        bbox=(80, 60, 40, 40),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.9,
+        parent_center=(100, 80),
+    )
+    result = MTFResult(
+        valid=True,
+        mtf50=42.0,
+        edge_angle=4.5,
+        analysis_roi_bounds=(88, 68, 112, 92),
+    )
+    measured_edge = mtf_module._MeasuredEdge(
+        edge_label="01_top",
+        edge_roi=edge_roi,
+        result=result,
+        valid_samples=[result],
+        avg_mtf50=42.0,
+        avg_mtf20=0.0,
+        avg_mtf10=0.0,
+        avg_angle=4.5,
+        avg_g1_mtf50=0.0,
+        avg_g2_mtf50=0.0,
+        avg_delta_pct=0.0,
+    )
+
+    handler._write_visual_measurement_exports(
+        run_dir=run_dir,
+        source_image=np.zeros((200, 300, 3), dtype=np.uint8),
+        image_encoding="bgr8",
+        edge_rows=[
+            {
+                "edge_label": "01_top",
+                "roi_bbox_x": 80,
+                "roi_bbox_y": 60,
+                "roi_bbox_w": 40,
+                "roi_bbox_h": 40,
+                "valid": 1,
+                "selected_for_response": 1,
+                "mtf50_lpmm": 42.0,
+                "edge_angle_deg": 4.5,
+            }
+        ],
+        measured_edges=[measured_edge],
+        selected_edge=measured_edge,
+    )
+
+    assert len(rectangle_calls) == 2
+
+
 def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPatch):
     tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
     tmp_root.mkdir(exist_ok=True)
@@ -638,6 +788,11 @@ def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
     handler._select_roi_interactive = lambda _image: (
         (12, 14, 24, 30),
         np.full((30, 24), 2048, dtype=np.uint16),
+    )
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_all_targets",
+        lambda _roi_img: [],
     )
 
     class _FakeAnalyzer:

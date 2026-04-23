@@ -383,7 +383,10 @@ class CameraNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     camera_node = CameraNode()
-    executor = MultiThreadedExecutor()
+    # Autofocus/MTF issue nested service calls while image and axis callbacks
+    # are still active; force extra executor threads so these callbacks can
+    # make progress instead of deadlocking on synchronous client calls.
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(camera_node)
 
     try:

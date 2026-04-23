@@ -199,20 +199,6 @@ def _overlay_edge_line(
         cv2.circle(roi_vis, point, 3, (0, 0, 255), -1, cv2.LINE_AA)
 
 
-def _overlay_analysis_strip(roi_vis: np.ndarray, metadata: dict[str, object]) -> None:
-    """Draw the internal analysis strip relative to the manually/automatically chosen ROI."""
-    analysis_bounds = metadata.get("analysis_roi_bounds")
-    if not analysis_bounds or not isinstance(analysis_bounds, (tuple, list)) or len(analysis_bounds) != 4:
-        return
-    roi_x = int(metadata.get("roi_bbox_x", 0) or 0)
-    roi_y = int(metadata.get("roi_bbox_y", 0) or 0)
-    x1 = max(0, int(analysis_bounds[0]) - roi_x)
-    y1 = max(0, int(analysis_bounds[1]) - roi_y)
-    x2 = max(x1, int(analysis_bounds[2]) - roi_x)
-    y2 = max(y1, int(analysis_bounds[3]) - roi_y)
-    cv2.rectangle(roi_vis, (x1, y1), (x2, y2), (0, 200, 0), 1, cv2.LINE_AA)
-
-
 def _overlay_diagnostics(roi_vis: np.ndarray, metadata: dict[str, object]) -> None:
     """Render the most useful angle-diagnosis values directly into the ROI export."""
     lines = [
@@ -311,6 +297,8 @@ def export_debug(
 
         if config.debug_export_png:
             try:
+                import matplotlib
+                matplotlib.use("Agg", force=True)
                 import matplotlib.pyplot as plt
 
                 figure, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
@@ -363,7 +351,6 @@ def export_debug(
                     if edge_line is not None:
                         _overlay_edge_line(roi_vis, edge_line)
                     if metadata:
-                        _overlay_analysis_strip(roi_vis, metadata)
                         _overlay_diagnostics(roi_vis, metadata)
                     cv2.imwrite(str(out_dir / f"{stem}_roi.png"), roi_vis)
             except Exception:

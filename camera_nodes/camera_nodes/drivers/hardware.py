@@ -122,9 +122,14 @@ class AravisCameraDriver(CameraDriver):
             ).value
 
             # ── Create service client ──
+            client_kwargs = {}
+            callback_group = getattr(self._node, "cb_group", None)
+            if callback_group is not None:
+                client_kwargs["callback_group"] = callback_group
             self._exposure_client = self._node.create_client(
                 self._SetExposureTime,
                 str(exposure_service),
+                **client_kwargs,
             )
 
             self._connected = True
