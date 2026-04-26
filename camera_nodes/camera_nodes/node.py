@@ -143,10 +143,16 @@ class CameraNode(Node):
             self.autofocus_handler.autofocus_roi_callback,
             callback_group=self.cb_group,
         )
-        self.mtf_service = self.create_service(
+        self.mtf_center_service = self.create_service(
             MeasureMTF,
-            "/promoc/camera/measure_mtf",
-            self.mtf_handler.measure_mtf_callback,
+            "/promoc/camera/measure_mtf_center",
+            self.mtf_handler.measure_mtf_center_callback,
+            callback_group=self.cb_group,
+        )
+        self.mtf_roi_service = self.create_service(
+            MeasureMTF,
+            "/promoc/camera/measure_mtf_roi",
+            self.mtf_handler.measure_mtf_roi_callback,
             callback_group=self.cb_group,
         )
         self.set_exposure_service = self.create_service(

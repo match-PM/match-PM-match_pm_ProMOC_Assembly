@@ -98,9 +98,7 @@ camera_params:
 # - Standard exposure: 0.053 ms - 814 ms (53 µs - 814000 µs)
 # - Long exposure mode: up to 30000 ms (30 seconds)
 exposure_time:
-  # Service to control exposure time dynamically
-  srv_client_name: '/promoc/promoc_camera_controller/set_exposure_time'
-  srv_type: 'pm_genicam_controller_interfaces/srv/SetExposureTime'
+  # Start exposure loaded by the launch and used as the service fallback value.
   default_ms: 30.0
   
   # Minimum exposure time in microseconds

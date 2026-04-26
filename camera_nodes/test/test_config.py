@@ -71,11 +71,22 @@ def test_declare_runtime_config_uses_promoc_camera_defaults():
 
     assert cfg.core.image_topic == "/promoc/promoc_camera/stream0/image_raw"
     assert cfg.core.camera_info_topic == "/promoc/promoc_camera/stream0/camera_info"
-    assert cfg.core.exposure_service == "/promoc/promoc_camera_controller/set_exposure_time"
     assert cfg.core.param_set_service_primary == "/promoc/promoc_camera/set_parameters"
     assert cfg.core.param_set_service_secondary == "/promoc/promoc_camera_controller/set_parameters"
     assert cfg.core.default_pixel_format == "RGB8"
     assert cfg.autofocus.exposure_guard_s == 0.02
+    assert cfg.exposure.readback_tolerance_us == 500.0
+    assert cfg.mtf.profile == "default"
+    assert cfg.mtf.debug_export_dir == ""
+
+
+def test_declare_runtime_config_uses_conservative_mtf_defaults():
+    node = _Node()
+    declare_camera_parameters(node)
+
+    assert node._params["mtf.lsf_window_mode"] == "peak"
+    assert node._params["mtf.derivative_correction_max"] == 1.15
+    assert node._params["mtf.esf_smooth_mode"] == "sg"
 
 
 def test_deprecated_parameter_removed():

@@ -9,8 +9,8 @@ fuer den Messstand-Branch. Ziel ist ein lehrfreundlicher, aber belastbarer
 - Das Repo liefert **relative wissenschaftliche Validitaet** fuer
   Vergleichsmessungen im Labor.
 - Verglichen werden spaeter **CSV-Exporte ausserhalb von ROS**.
-- `auto_roi` und manuelle ROI sind gleichwertige Messpfade und muessen deshalb
-  dieselbe Export- und Diagnose-Struktur liefern.
+- `auto_roi`, lokale ROI-Suche und direkte manuelle ROI sind gleichwertige
+  Messpfade und muessen deshalb dieselbe Export- und Diagnose-Struktur liefern.
 
 Nicht der Anspruch dieser Stufe:
 
@@ -20,10 +20,12 @@ Nicht der Anspruch dieser Stufe:
 
 ## Offizieller Messmodus
 
-`/promoc/camera/measure_mtf` nutzt den wissenschaftlichen Raw-Pfad:
+`/promoc/camera/measure_mtf_center` und `/promoc/camera/measure_mtf_roi`
+nutzen denselben wissenschaftlichen Raw-Pfad:
 
 - der Kamerastream startet bereits offiziell als `BayerRG12`
 - Autofokus/Fly-over erzeugen daraus intern nur ein 8-bit-Preview
+- die Start-Belichtung kommt aus dem beim Launch geladenen Kamera-Profil
 - `PixelFormat=BayerRG12`
 - `1x1`-Binning
 - echte Gruen-Sensel aus `RGGB`
@@ -33,6 +35,21 @@ Nicht der Anspruch dieser Stufe:
 
 Der Analyzer arbeitet direkt auf den Gruen-Samples. Es gibt kein Debayering und
 kein 2D-Infill fuer den offiziellen Vergleichspfad.
+
+Der Standardpfad ist bewusst konservativer eingestellt:
+
+- Savitzky-Golay-ESF-Glaettung ist standardmaessig aktiv
+- die LSF wird standardmaessig um ihren Peak gefenstert
+- die ISO-Derivatkorrektur ist aktiv, aber auf einen konservativen Faktor
+  gedeckelt
+
+Damit sollen starke Overshoots softwareseitig gebremst werden, ohne sie
+diagnostisch zu verstecken.
+
+`/promoc/camera/set_exposure` nutzt fuer Live-Belichtungswechsel denselben
+ROS-Parameterpfad wie die restliche Kamera-Reconfigure-Logik. Wenn der
+Wunschwert nicht sauber geschrieben oder rueckgelesen werden kann, ist die
+beim Launch gesetzte Start-Belichtung die offizielle Fallback-Stufe.
 
 Fallback-Reihenfolge bei Hardwareproblemen:
 
@@ -102,7 +119,7 @@ Der offizielle MTF-Pfad ist absichtlich kurz:
 ```text
 launch
   -> camera node
-  -> measure_mtf service handler
+  -> measure_mtf_center / measure_mtf_roi service handler
   -> shared mtf analyzer
   -> debug export
   -> run folder (CSV + plots + ROI overlays)
@@ -111,7 +128,8 @@ launch
 Wichtige Rollen:
 
 - `promoc_bringup`: startet den Messstand
-- `camera_nodes/services/mtf.py`: orchestriert Request, ROI, Export und Response
+- `camera_nodes/services/mtf.py`: orchestriert beide Service-Einstiege, ROI,
+  Export und Response ueber einen gemeinsamen Kern
 - `camera_nodes/algorithms/mtf/`: Single Source of Truth fuer Winkel, ESF, LSF,
   MTF und Raw-Green-Auswertung
 - `mtf_synthetic_validation.py`: ruft denselben Repo-Kern fuer synthetische
@@ -139,6 +157,25 @@ Wichtige Rollen:
 Das ist wichtig, weil eine zu grosse oder schraeg gewaehlte manuelle ROI die
 Winkeldetektion sonst stark verziehen kann.
 
+### ROI-Suche Nach Vollstaendigem Quadrat
+
+- Nutzer waehlt nur eine aeussere Such-ROI
+- innerhalb dieser Such-ROI wird ein vollstaendiges Quadrat bzw. eine
+  vollstaendige Wuerfelflaeche gesucht
+- daraus werden lokal dieselben vier `EdgeROI`-Kandidaten abgeleitet wie beim
+  globalen Auto-ROI
+- die lokalen Kanten werden anschliessend wieder in globale Bildkoordinaten
+  zurueckprojiziert und durch dieselbe Analyzer- und Exportpipeline geschickt
+
+Der empfohlene Bedienpfad ist:
+
+1. `/promoc/camera/measure_mtf_center`
+2. bei Bedarf `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='search_square_in_roi'`
+3. nur als letzter Fallback `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='direct_manual'`
+
+`target_edge='any'/'top'/'right'/'bottom'/'left'/'select'` bleibt auch fuer
+diesen ROI-Suchpfad gueltig.
+
 ## Exportvertrag
 
 Jeder Run landet in genau einem Messordner und enthaelt mindestens:
@@ -156,6 +193,7 @@ Sie ist fuer spaetere Vergleiche gedacht und enthaelt unter anderem:
 - Operator
 - Timestamp
 - ROI-Modus
+- ROI-Erkennungsmodus im Sinne von `auto`, `roi_square_search` oder `manual`
 - Objektiv und Magnification
 - `use_beamsplitter`
 - coaxiale Lichtwerte
@@ -187,6 +225,8 @@ Wichtig:
   bleiben `success=true`
 - die offizielle SOP-Akzeptanz steht nur in den CSV-Exporten und bleibt bewusst
   getrennt von der technischen Node-Validitaet
+- Overshoot bleibt in `warning_msg`, `mtf_peak_raw`, `mtf_peak_used` und
+  `mtf_clipped` sichtbar; `mtf_clip_max` ist kein offizieller Standardfix
 
 ## Validator
 

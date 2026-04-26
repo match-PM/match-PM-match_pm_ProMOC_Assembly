@@ -1,5 +1,6 @@
 """MTF handler for Modulation Transfer Function measurements."""
 
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -155,6 +156,26 @@ class MTFHandler(CallbackBase):
         roi = (x, y, w, h)
         roi_image = cv_image[y : y + h, x : x + w]
         return roi, roi_image
+
+    @staticmethod
+    def _clone_request_with_overrides(request, **overrides):
+        """Copy one request object and apply explicit field overrides."""
+        cloned_request = copy.deepcopy(request)
+        for key, value in overrides.items():
+            setattr(cloned_request, key, value)
+        return cloned_request
+
+    @staticmethod
+    def _normalize_roi_detection_mode(request) -> str:
+        """Return one stable ROI detection mode for auto/manual paths."""
+        if bool(getattr(request, "auto_roi", False)):
+            return "auto"
+        mode = str(getattr(request, "roi_detection_mode", "") or "").strip().lower()
+        if mode in {"", "direct_manual", "manual"}:
+            return "direct_manual"
+        if mode == "search_square_in_roi":
+            return mode
+        return mode
 
     @staticmethod
     def _with_next_step(message: str, next_step: str) -> str:
@@ -784,6 +805,7 @@ class MTFHandler(CallbackBase):
         self,
         *,
         response,
+        request,
         measurement_run: _MeasurementRun,
         selected_edge: _MeasuredEdge | None,
         edge_rows: list[dict[str, object]],
@@ -802,6 +824,7 @@ class MTFHandler(CallbackBase):
         write_selected_edge_marker(measurement_run.run_dir, selected_edge.edge_label)
         return self._populate_success_response(
             response,
+            request,
             selected_edge,
             edge_rows,
             summary_csv,
@@ -910,6 +933,7 @@ class MTFHandler(CallbackBase):
             "request_pixel_size_um": float(request_pixel_size_um),
             "pixel_size_source": "request" if request_pixel_size_um > 0 else "node_parameter",
             "auto_roi": bool(getattr(request, "auto_roi", False)),
+            "roi_detection_mode": self._normalize_roi_detection_mode(request),
             "target_edge": str(getattr(request, "target_edge", "") or "").strip(),
             "camera_objective": camera_objective,
             "objective_magnification_x": objective_magnification_x,
@@ -948,6 +972,9 @@ class MTFHandler(CallbackBase):
             parts.append(f"coaxI={coaxial_current:.3f}")
         if metadata.get("auto_roi"):
             parts.append("auto_roi=yes")
+        roi_detection_mode = str(metadata.get("roi_detection_mode", "") or "").strip()
+        if roi_detection_mode and roi_detection_mode not in {"auto", "direct_manual"}:
+            parts.append(f"roi_mode={roi_detection_mode}")
         target_edge = metadata.get("target_edge")
         if target_edge:
             parts.append(f"target_edge={target_edge}")
@@ -976,7 +1003,8 @@ class MTFHandler(CallbackBase):
         elif auto_roi:
             mode_label = "auto"
         else:
-            mode_label = "manual"
+            roi_detection_mode = self._normalize_roi_detection_mode(request)
+            mode_label = "roi_search" if roi_detection_mode == "search_square_in_roi" else "manual"
         requested_edge = str(getattr(request, "target_edge", "") or "").strip().lower()
         requested_label = ""
         if requested_edge and requested_edge not in {"any", "select", "interactive"}:
@@ -1087,18 +1115,18 @@ class MTFHandler(CallbackBase):
         raise ImageProcessingError(
             self._with_next_step(
                 "Auto-ROI found no square or bar target.",
-                "align the target more centrally or retry with auto_roi=false for manual ROI.",
+                "align the target more centrally, retry with roi_detection_mode='search_square_in_roi', or switch to direct_manual.",
             )
         )
 
-    def _build_manual_edge_roi(self, cv_image: np.ndarray) -> list[EdgeROI]:
-        """Collect one manual ROI and wrap it in the shared EdgeROI structure."""
+    def _build_direct_manual_edge_roi(self, cv_image: np.ndarray) -> list[EdgeROI]:
+        """Collect one manual measurement ROI and wrap it in the shared EdgeROI structure."""
         roi, roi_img = self._select_roi_interactive(cv_image)
         if roi is None:
             raise ImageProcessingError(
                 self._with_next_step(
                     "Manual ROI selection was cancelled.",
-                    "draw one ROI around a clean slanted edge and retry the measurement.",
+                    "draw one ROI around a clean slanted edge and retry in direct_manual mode.",
                 )
             )
 
@@ -1114,6 +1142,38 @@ class MTFHandler(CallbackBase):
                 parent_center=(x + w // 2, y + h // 2),
             )
         ]
+
+    def _build_search_square_edge_rois(self, cv_image: np.ndarray) -> list[EdgeROI]:
+        """Collect one search ROI and detect a complete square inside it."""
+        search_roi, _search_image = self._select_roi_interactive(cv_image)
+        if search_roi is None:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "ROI square search was cancelled.",
+                    "draw a search ROI around the full cube face and retry the measurement.",
+                )
+            )
+
+        edge_rois = RoiDetector.detect_square_edge_rois_in_search_roi(
+            cv_image,
+            search_roi,
+            roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+        )
+        valid_edges = [edge for edge in edge_rois if edge.is_valid]
+        if valid_edges:
+            return valid_edges
+        if edge_rois:
+            self._node.get_logger().warn(
+                f"All {len(edge_rois)} ROI-detected square edges have low contrast, trying anyway..."
+            )
+            return edge_rois
+
+        raise ImageProcessingError(
+            self._with_next_step(
+                "Search ROI contained no complete square target.",
+                "choose a larger ROI that fully contains one cube face or switch to direct_manual mode.",
+            )
+        )
 
     def _apply_requested_edge_selection(
         self,
@@ -1163,11 +1223,21 @@ class MTFHandler(CallbackBase):
 
     def _resolve_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
         """Resolve auto/manual ROI selection into one shared candidate list."""
-        edge_rois = (
-            self._detect_auto_edge_rois(cv_image)
-            if bool(getattr(request, "auto_roi", False))
-            else self._build_manual_edge_roi(cv_image)
-        )
+        if bool(getattr(request, "auto_roi", False)):
+            edge_rois = self._detect_auto_edge_rois(cv_image)
+        else:
+            roi_detection_mode = self._normalize_roi_detection_mode(request)
+            if roi_detection_mode == "search_square_in_roi":
+                edge_rois = self._build_search_square_edge_rois(cv_image)
+            elif roi_detection_mode == "direct_manual":
+                edge_rois = self._build_direct_manual_edge_roi(cv_image)
+            else:
+                raise ImageProcessingError(
+                    self._with_next_step(
+                        f"Unsupported roi_detection_mode '{roi_detection_mode}'.",
+                        "use direct_manual or search_square_in_roi and retry the measurement.",
+                    )
+                )
         return self._apply_requested_edge_selection(edge_rois, request)
 
     def _prepare_edge_config(
@@ -1374,6 +1444,9 @@ class MTFHandler(CallbackBase):
         """Return one stable ROI mode label for exports."""
         auto_roi = bool(getattr(request, "auto_roi", False))
         if not auto_roi:
+            roi_detection_mode = self._normalize_roi_detection_mode(request)
+            if roi_detection_mode == "search_square_in_roi":
+                return "roi_square_search"
             return "manual"
         if edge_count >= 4:
             return "auto_square4"
@@ -1436,6 +1509,7 @@ class MTFHandler(CallbackBase):
     def _populate_success_response(
         self,
         response,
+        request,
         measured_edge: _MeasuredEdge,
         edge_rows: list[dict[str, object]],
         summary_csv: Path,
@@ -1450,7 +1524,8 @@ class MTFHandler(CallbackBase):
         response.edge_angle = measured_edge.avg_angle
         response.nyquist_frequency = float(result.nyquist_frequency)
 
-        roi_mode = "manual" if edge_roi.edge_name == "manual" else "auto"
+        roi_mode_label = self._roi_mode_label(request, len(edge_rows))
+        roi_mode = "roi_search" if roi_mode_label == "roi_square_search" else roi_mode_label
         valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
         response.status_message = (
             f"MTF complete: mode={roi_mode}, selected={measured_edge.edge_label}, "
@@ -1593,6 +1668,7 @@ class MTFHandler(CallbackBase):
             # preserved run folder that was already written above.
             return self._finalize_measurement_response(
                 response=response,
+                request=request,
                 measurement_run=measurement_run,
                 selected_edge=selected_edge,
                 edge_rows=edge_rows,
@@ -1604,6 +1680,30 @@ class MTFHandler(CallbackBase):
             self._camera_format_controller.restore_after_mtf(restore_state)
 
         return response
+
+    def measure_mtf_center_callback(self, request, response):
+        """Force the canonical center/full-image MTF path."""
+        normalized_request = self._clone_request_with_overrides(
+            request,
+            auto_roi=True,
+            roi_detection_mode="",
+        )
+        return self.measure_mtf_callback(normalized_request, response)
+
+    def measure_mtf_roi_callback(self, request, response):
+        """Force one ROI-based MTF path while keeping the shared handler core."""
+        roi_detection_mode = str(
+            getattr(request, "roi_detection_mode", "") or ""
+        ).strip().lower()
+        if roi_detection_mode in {"", "manual"}:
+            roi_detection_mode = "search_square_in_roi"
+
+        normalized_request = self._clone_request_with_overrides(
+            request,
+            auto_roi=False,
+            roi_detection_mode=roi_detection_mode,
+        )
+        return self.measure_mtf_callback(normalized_request, response)
 
     def _select_candidate_interactive(self, candidates):
         """Shows candidates side-by-side and lets user click to select."""

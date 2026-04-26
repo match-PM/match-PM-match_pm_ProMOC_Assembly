@@ -23,17 +23,17 @@ class MTFConfig:
     wavelength_um: float = 0.555  # Green light default
 
     # LSF windowing
-    lsf_window_mode: str = "full"  # full | peak | none
+    lsf_window_mode: str = "peak"  # full | peak | none
     lsf_peak_window_size: int = 0  # samples; 0 = auto
 
     # Derivative / ISO options
     derivative_mode: str = "iso"  # diff | iso
     apply_derivative_correction: bool = True
-    derivative_correction_max: float = 0.0  # 0 disables cap
+    derivative_correction_max: float = 1.15  # 0 disables cap
     apply_angle_correction: bool = True
 
     # ESF smoothing
-    esf_smooth_mode: str = "none"  # none | sg
+    esf_smooth_mode: str = "sg"  # none | sg
     esf_sg_window: int = 11
     esf_sg_poly: int = 2
 

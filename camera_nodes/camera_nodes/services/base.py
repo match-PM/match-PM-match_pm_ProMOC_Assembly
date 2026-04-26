@@ -279,21 +279,94 @@ class CallbackBase:
             raise error_box["error"]
         return result_box.get("value")
 
-    def _set_exposure_us(self, exposure_time_us: float) -> bool:
-        """Set exposure robustly from sync callback code."""
-        result = self._driver.set_exposure(float(exposure_time_us))
+    def _set_exposure_us(self, exposure_time_us: float) -> dict:
+        """Set exposure through the preferred runtime-control path."""
+        requested_exposure_us = float(exposure_time_us)
+        format_controller = getattr(self._node, "_format_controller", None)
+        default_exposure_us = max(
+            0.0,
+            self._param_float("camera.default_exposure_us", 0.0),
+        )
+
+        if format_controller is not None and hasattr(format_controller, "set_live_exposure"):
+            outcome = format_controller.set_live_exposure(requested_exposure_us)
+            if outcome.get("success"):
+                if hasattr(self._driver, "_current_exposure"):
+                    self._driver._current_exposure = float(  # noqa: SLF001
+                        outcome.get("applied_exposure_us", requested_exposure_us)
+                    )
+                outcome.setdefault("used_fallback", False)
+                return outcome
+
+            target_reason = str(outcome.get("reason", "exposure parameter write failed"))
+            if (
+                default_exposure_us > 0.0
+                and abs(default_exposure_us - requested_exposure_us) > 1e-6
+            ):
+                fallback = format_controller.set_live_exposure(default_exposure_us)
+                if fallback.get("success"):
+                    if hasattr(self._driver, "_current_exposure"):
+                        self._driver._current_exposure = float(  # noqa: SLF001
+                            fallback.get("applied_exposure_us", default_exposure_us)
+                        )
+                    fallback["used_fallback"] = True
+                    fallback["requested_exposure_us"] = requested_exposure_us
+                    fallback["fallback_reason"] = target_reason
+                    return fallback
+
+                fallback_reason = str(
+                    fallback.get("reason", "configured start exposure fallback failed")
+                )
+                raise HardwareError(
+                    message="Failed to set exposure and restore configured start exposure",
+                    details={
+                        "requested_exposure_us": requested_exposure_us,
+                        "target_reason": target_reason,
+                        "fallback_exposure_us": default_exposure_us,
+                        "fallback_reason": fallback_reason,
+                    },
+                )
+
+            raise HardwareError(
+                message="Failed to set exposure",
+                details={
+                    "requested_exposure_us": requested_exposure_us,
+                    "reason": target_reason,
+                },
+            )
+
+        result = self._driver.set_exposure(requested_exposure_us)
         if inspect.isawaitable(result):
             result = self._run_awaitable_blocking(result)
         success = bool(True if result is None else result)
         if not success:
             raise HardwareError(
                 message="Failed to set exposure",
-                details={"exposure_time_us": float(exposure_time_us)},
+                details={"requested_exposure_us": requested_exposure_us},
             )
-        return True
+        return {
+            "success": True,
+            "requested_exposure_us": requested_exposure_us,
+            "applied_exposure_us": requested_exposure_us,
+            "used_fallback": False,
+        }
 
     def _current_exposure_us(self) -> float:
         """Return current exposure with fallback to the configured default."""
+        format_controller = getattr(self._node, "_format_controller", None)
+        if format_controller is not None and hasattr(
+            format_controller, "read_current_exposure_us"
+        ):
+            try:
+                controller_exposure = format_controller.read_current_exposure_us()
+            except Exception:
+                controller_exposure = None
+            try:
+                if controller_exposure is not None:
+                    return max(0.0, float(controller_exposure))
+            except (TypeError, ValueError):
+                pass
+
         driver_exposure = None
         try:
             get_exposure = getattr(self._driver, "get_exposure", None)

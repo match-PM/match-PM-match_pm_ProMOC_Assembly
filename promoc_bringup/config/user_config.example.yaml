@@ -1,81 +1,39 @@
-# ============================================================================
-# ProMOC User Configuration Template
-# ============================================================================
-# Copy this file to 'user_config.yaml' and fill in your personal settings.
-# The user_config.yaml file is ignored by Git and won't be committed.
-# On the messstand branch the canonical format is now
-# `user_config.v2.example.yaml`, but the legacy keys in this file are still
-# accepted and mapped onto `measurement.operator` / `measurement.base_path`.
+# ProMOC User Configuration
 #
-# Quick Start:
-#   cp user_config.example.yaml user_config.yaml
-#   nano user_config.yaml  # Edit with your name
-#
-# ============================================================================
+# Copy this file to `user_config.yaml` and adjust the values for the local user.
+# This is the only maintained user-config template on the messstand branch.
+# MTF exports will be written below:
+#   <measurement.base_path>/<measurement.operator>/mtf_messungen/<run_id>/
 
-user:
-  # Your name for measurement logs (e.g., 'M.Mustermann', 'A.Schmidt')
-  # Logs will be saved to: ~/Dokumente/Messungen/{name}/autofocus_logs/
-  name: 'YourName'
+runtime:
+  mode: hardware
 
-  # Optional: Measurement base directory (default: ~/Dokumente/Messungen)
-  # measurement_base_path: '~/Dokumente/Messungen'
+measurement:
+  operator: YourName
+  base_path: ~/Dokumente/Messungen
 
-  # Optional: Enable debug image saving during autofocus
-  # save_debug_images: false
+camera:
+  pixel_size_um: 2.40
 
-# Autofocus algorithm tuning (optional overrides)
-# autofocus:
-#   refinement_samples: 51            # Number of samples per refinement level
-#   min_step_mm: 0.010                # Minimum step size (10µm, LTS300 limit: 4µm)
-#   refinement_shrink_factor: 0.25    # Range reduction per level (smaller = faster)
+autofocus:
+  refinement_samples: 51
+  min_step_mm: 0.01
+  refinement_shrink_factor: 0.25
 
-# Optional profile table for autofocus request fields:
-# - objective_magnification_x (e.g. 1.0, 3.0, 6.0)
-# - use_beamsplitter (true/false)
-# Lookup order: default -> "<mag>x" -> "bs0|bs1" -> "<mag>x_bs0|bs1"
-# autofocus_profiles:
-#   default:
-#     axis_speed_scale: 1.0
-#     scan_speed_mm_s: 5.0
-#     max_sample_step_mm: 0.10
-#     coarse_step_mm: 0.2
-#     min_step_mm: 0.01
-#     settle_s: 0.10
-#   profiles:
-#     "1x":
-#       scan_speed_mm_s: 8.0
-#       coarse_step_mm: 0.5
-#     "6x":
-#       scan_speed_mm_s: 1.5
-#       max_sample_step_mm: 0.05
-#       coarse_step_mm: 0.08
-#       min_step_mm: 0.005
-#       settle_s: 0.25
-#     "6x_bs1":
-#       scan_speed_mm_s: 1.0
-#       max_sample_step_mm: 0.03
-#       settle_s: 0.30
+fly_over:
+  refinement_mode: 0
+  refinement_strategy: linear
 
-# Fly-over autofocus selection (optional overrides)
-# fly_over:
-#   refinement_mode: 0                # 0=use refinement_strategy, 1=standard, 2=fast, 3=parabolic
-#   refinement_strategy: 'linear'     # 'linear' | 'standard' | 'fast' | 'parabolic'
+mtf:
+  profile: default
+  # The maintained default profile is already conservative against strong
+  # overshoot and keeps warnings/export diagnostics visible.
+  debug_export_dir: ""
+  use_raw_capture: true
+  capture_required_raw: true
 
-# Camera settings (optional overrides)
-# camera:
-#   pixel_size_um: 3.45               # Sensor pixel size in micrometers
-#   exposure_time_us: 5000            # Default exposure time
-
-# MTF settings (optional overrides)
-# mtf:
-#   profile: 'default'                # default | scientific | debug
-#   debug_export_dir: ''              # optional fixed debug dir
-
-# Measurement conditions for scientific documentation
-# These values will be written to CSV headers for reproducibility
 measurement_conditions:
-  coaxial_light_voltage: 18.15    # Coaxial light voltage in Volts
-  coaxial_light_current: 0.18     # Coaxial light current in Amperes
-  camera_objective: '3x'          # Used objective lens (e.g., '4x', '10x', '20x')
-  notes: ''                        # Additional notes (e.g., 'new lens', 'calibration run')
+  coaxial_light_voltage: 0.0
+  coaxial_light_current: 0.0
+  camera_objective: unknown
+  notes: ""

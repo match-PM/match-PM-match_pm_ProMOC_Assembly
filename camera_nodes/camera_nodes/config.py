@@ -18,10 +18,6 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("camera.default_pixel_format", "RGB8"),
     ("camera.image_topic", "/promoc/promoc_camera/stream0/image_raw"),
     ("camera.camera_info_topic", "/promoc/promoc_camera/stream0/camera_info"),
-    (
-        "camera.exposure_service",
-        "/promoc/promoc_camera_controller/set_exposure_time",
-    ),
     ("camera.param_set_service_primary", "/promoc/promoc_camera/set_parameters"),
     (
         "camera.param_set_service_secondary",
@@ -83,13 +79,13 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.debug_export_csv", True),
     ("mtf.debug_export_png", False),
     ("mtf.profile", "default"),
-    ("mtf.lsf_window_mode", "full"),
+    ("mtf.lsf_window_mode", "peak"),
     ("mtf.lsf_peak_window_size", 0),
     ("mtf.derivative_mode", "iso"),
     ("mtf.apply_derivative_correction", True),
-    ("mtf.derivative_correction_max", 0.0),
+    ("mtf.derivative_correction_max", 1.15),
     ("mtf.apply_angle_correction", True),
-    ("mtf.esf_smooth_mode", "none"),
+    ("mtf.esf_smooth_mode", "sg"),
     ("mtf.esf_sg_window", 11),
     ("mtf.esf_sg_poly", 2),
     ("mtf.edge_validation_mode", "warn"),
@@ -132,6 +128,7 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.log_format_switch", True),
     ("exposure.settle_frames_after_set", 2),
     ("exposure.frame_timeout_s", 1.0),
+    ("exposure.readback_tolerance_us", 500.0),
 )
 
 ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = ALL_PARAM_VALUES
@@ -157,12 +154,6 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
             "camera_info_topic",
             str,
             "/promoc/promoc_camera/stream0/camera_info",
-        ),
-        (
-            "camera.exposure_service",
-            "exposure_service",
-            str,
-            "/promoc/promoc_camera_controller/set_exposure_time",
         ),
         (
             "camera.param_set_service_primary",
@@ -271,6 +262,7 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
     "exposure": (
         ("exposure.settle_frames_after_set", "settle_frames_after_set", int, 2),
         ("exposure.frame_timeout_s", "frame_timeout_s", float, 1.0),
+        ("exposure.readback_tolerance_us", "readback_tolerance_us", float, 500.0),
     ),
 }
 

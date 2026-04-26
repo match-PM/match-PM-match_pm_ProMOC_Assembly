@@ -30,7 +30,7 @@ class ExposureHandler(CallbackBase):
                 details={"value": request.exposure_time},
             )
 
-        self._set_exposure_us(request.exposure_time)
+        outcome = self._set_exposure_us(request.exposure_time)
         settle_frames = 2
         timeout_s = 1.0
         settle_frames = self._param_int(
@@ -47,8 +47,18 @@ class ExposureHandler(CallbackBase):
                 )
 
         response.success = True
-        response.status_message = (
-            f"Exposure set to {self._format_exposure(request.exposure_time)}"
+        applied_exposure_us = float(
+            outcome.get("applied_exposure_us", request.exposure_time)
         )
+        if outcome.get("used_fallback"):
+            response.status_message = (
+                "Requested exposure could not be applied; "
+                "restored configured start exposure from camera profile to "
+                f"{self._format_exposure(applied_exposure_us)}"
+            )
+        else:
+            response.status_message = (
+                f"Exposure set to {self._format_exposure(applied_exposure_us)}"
+            )
 
         return response

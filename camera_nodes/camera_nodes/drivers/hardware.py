@@ -30,7 +30,8 @@ Architecture:
 Dependencies:
 =============
     - `camera_aravis2`: Must be running as a separate node.
-    - `pm_genicam_controller_interfaces`: Required for service definitions.
+    - `pm_genicam_controller_interfaces`: Optional legacy dependency for the
+      old exposure-control service path.
 
 Usage:
 ======
@@ -48,7 +49,6 @@ import numpy as np
 
 from promoc_core.promoc_exceptions import (
     CommunicationError,
-    DriverNotAvailableError,
     HardwareError,
 )
 
@@ -94,22 +94,17 @@ class AravisCameraDriver(CameraDriver):
 
     def connect(self, camera_name: str = None) -> bool:
         """
-        Initializes the connection to the camera_aravis2 driver.
+        Initializes the wrapper around the camera_aravis2 driver.
 
-        Steps:
-        ------
-        1. Import the required service definitions.
-        2. Create the service client.
-        3. (Optional) Wait for the service to become available.
+        The current messstand uses ROS parameter services for live exposure
+        changes. The dedicated exposure service is therefore only initialized
+        as an optional legacy fallback.
 
         Args:
             camera_name: Ignored (the camera is defined by the driver node).
 
         Returns:
-            bool: True if the service client was created successfully.
-
-        Raises:
-            DriverNotAvailableError: If the required interface package is not found.
+            bool: True if the driver wrapper was initialized successfully.
         """
         self._logger.info('Connecting to camera_aravis2 driver...')
 
@@ -117,32 +112,42 @@ class AravisCameraDriver(CameraDriver):
             # ── Import service type ──
             from pm_genicam_controller_interfaces.srv import SetExposureTime
             self._SetExposureTime = SetExposureTime
-            exposure_service = self._node.get_parameter(
-                "camera.exposure_service"
-            ).value
+            exposure_service = None
+            if self._node.has_parameter("camera.exposure_service"):
+                exposure_service = self._node.get_parameter(
+                    "camera.exposure_service"
+                ).value
 
             # ── Create service client ──
-            client_kwargs = {}
-            callback_group = getattr(self._node, "cb_group", None)
-            if callback_group is not None:
-                client_kwargs["callback_group"] = callback_group
-            self._exposure_client = self._node.create_client(
-                self._SetExposureTime,
-                str(exposure_service),
-                **client_kwargs,
-            )
+            if exposure_service:
+                client_kwargs = {}
+                callback_group = getattr(self._node, "cb_group", None)
+                if callback_group is not None:
+                    client_kwargs["callback_group"] = callback_group
+                self._exposure_client = self._node.create_client(
+                    self._SetExposureTime,
+                    str(exposure_service),
+                    **client_kwargs,
+                )
 
             self._connected = True
-            self._logger.info(
-                f"Aravis driver connected successfully via {exposure_service}"
-            )
+            if exposure_service:
+                self._logger.info(
+                    f"Aravis driver connected successfully via legacy exposure service {exposure_service}"
+                )
+            else:
+                self._logger.info(
+                    "Aravis driver connected successfully; live exposure uses camera parameter services."
+                )
             return True
 
-        except ImportError as e:
-            raise DriverNotAvailableError(
-                message='pm_genicam_controller_interfaces not available',
-                details={'error': str(e), 'driver': 'camera_aravis2'}
+        except ImportError:
+            self._connected = True
+            self._logger.info(
+                "Aravis driver connected without legacy exposure service; "
+                "live exposure uses camera parameter services."
             )
+            return True
 
     def disconnect(self):
         """Disconnects and releases resources."""

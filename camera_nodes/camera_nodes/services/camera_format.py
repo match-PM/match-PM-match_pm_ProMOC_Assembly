@@ -515,6 +515,91 @@ class CameraFormatController:
         """Return the most recent camera-format operation error."""
         return str(self._last_operation_error or "")
 
+    def read_current_exposure_us(self) -> float | None:
+        """Return the current exposure readback from camera parameters if available."""
+        state = self.read_capture_state()
+        if state is None:
+            return None
+        try:
+            return float(state.get("values", {}).get("exposure_time"))
+        except (TypeError, ValueError):
+            return None
+
+    def set_live_exposure(self, exposure_time_us: float) -> dict:
+        """Apply exposure via camera parameter services and verify via readback."""
+        target_exposure_us = float(exposure_time_us)
+        tolerance_us = max(
+            0.0,
+            self._get_float_param("exposure.readback_tolerance_us", 500.0),
+        )
+        self._last_operation_error = ""
+
+        state = self.read_capture_state()
+        if state is None:
+            ok = self._try_set_capture_without_state(
+                {"exposure_time": target_exposure_us},
+                required_keys=("exposure_time",),
+            )
+        else:
+            ok = self.set_capture_state(
+                state,
+                {"exposure_time": target_exposure_us},
+                required_keys=("exposure_time",),
+            )
+
+        if not ok:
+            reason = self.get_last_operation_error() or "exposure parameter write failed"
+            return {
+                "success": False,
+                "requested_exposure_us": target_exposure_us,
+                "reason": reason,
+            }
+
+        readback_state = self.read_capture_state()
+        if readback_state is None:
+            reason = "exposure write succeeded but readback was unavailable"
+            self._last_operation_error = reason
+            return {
+                "success": False,
+                "requested_exposure_us": target_exposure_us,
+                "reason": reason,
+            }
+
+        actual_exposure_us = readback_state.get("values", {}).get("exposure_time")
+        try:
+            actual_exposure_us = float(actual_exposure_us)
+        except (TypeError, ValueError):
+            reason = "exposure write succeeded but readback did not contain ExposureTime"
+            self._last_operation_error = reason
+            return {
+                "success": False,
+                "requested_exposure_us": target_exposure_us,
+                "reason": reason,
+            }
+
+        delta_us = abs(actual_exposure_us - target_exposure_us)
+        if delta_us > tolerance_us:
+            reason = (
+                "exposure readback mismatch: "
+                f"target={target_exposure_us:.1f}us, actual={actual_exposure_us:.1f}us, "
+                f"tolerance={tolerance_us:.1f}us"
+            )
+            self._last_operation_error = reason
+            return {
+                "success": False,
+                "requested_exposure_us": target_exposure_us,
+                "applied_exposure_us": actual_exposure_us,
+                "reason": reason,
+            }
+
+        self._last_operation_error = ""
+        return {
+            "success": True,
+            "requested_exposure_us": target_exposure_us,
+            "applied_exposure_us": actual_exposure_us,
+            "state": readback_state,
+        }
+
     def build_mtf_capture_target(self, current_values: dict | None = None) -> dict:
         """Build the desired scientific MTF capture state from params/current readback."""
         current = dict(current_values or {})

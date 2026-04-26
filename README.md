@@ -52,9 +52,12 @@ Der offizielle Standardablauf ist bewusst kurz:
 3. In `rqt_image_view` das Livebild pruefen.
 4. Bei Bedarf die Belichtung mit `set_exposure` nachziehen.
 5. Autofokus im Standardmodus ausfuehren.
-6. MTF zuerst immer mit `auto_roi=true` messen.
-7. Nur wenn Auto-ROI kein sauberes Target findet: auf manuelle ROI wechseln.
-8. Fuer die Auswertung zuerst `summary.csv`, danach bei Bedarf `context.csv`,
+6. MTF zuerst immer ueber `measure_mtf_center` messen.
+7. Wenn der Center-Pfad kein sauberes Target findet: auf `measure_mtf_roi`
+   mit `roi_detection_mode='search_square_in_roi'` wechseln.
+8. Nur wenn auch die ROI-Suche nicht passt: `measure_mtf_roi` im direkten
+   manuellen Modus verwenden.
+9. Fuer die Auswertung zuerst `summary.csv`, danach bei Bedarf `context.csv`,
    `*_plot.png`, `*_roi.png`, `*_esf.csv`, `*_lsf.csv` und `*_mtf.csv`
    oeffnen.
 
@@ -132,6 +135,11 @@ ros2 service call /promoc/camera/set_exposure \
   "{exposure_time: 12000.0}"
 ```
 
+Der Service schreibt die Belichtung live ueber den laufenden
+`camera_aravis2`-Parameterpfad. Wenn der Wunschwert nicht sauber
+uebernommen wird, faellt der Messstand sichtbar auf die beim Launch aus
+dem Kamera-Profil geladene Start-Belichtung zurueck.
+
 Autofokus im Standardmodus:
 
 ```bash
@@ -140,37 +148,58 @@ ros2 service call /promoc/camera/autofocus \
   "{start_position: 0.0, end_position: 25.0, focus_mode: 0, skip_flyover: false, save_best_image: false}"
 ```
 
-MTF im Standardpfad mit Auto-ROI:
+MTF im Standardpfad ueber den Center-Service:
 
 ```bash
-ros2 service call /promoc/camera/measure_mtf \
+ros2 service call /promoc/camera/measure_mtf_center \
   promoc_assembly_interfaces/srv/MeasureMTF \
   "{pixel_size_um: 0.0, auto_roi: true, target_edge: 'any'}"
 ```
 
-MTF-Fallback mit manueller ROI:
+MTF-Fallback mit lokaler ROI-Suche nach einer vollstaendigen Quadratkante:
 
 ```bash
-ros2 service call /promoc/camera/measure_mtf \
+ros2 service call /promoc/camera/measure_mtf_roi \
   promoc_assembly_interfaces/srv/MeasureMTF \
-  "{pixel_size_um: 0.0, auto_roi: false, target_edge: 'any'}"
+  "{pixel_size_um: 0.0, roi_detection_mode: 'search_square_in_roi', target_edge: 'any'}"
+```
+
+MTF-Fallback mit direkter manueller ROI:
+
+```bash
+ros2 service call /promoc/camera/measure_mtf_roi \
+  promoc_assembly_interfaces/srv/MeasureMTF \
+  "{pixel_size_um: 0.0, roi_detection_mode: 'direct_manual', target_edge: 'any'}"
 ```
 
 ## MTF Quick Start
 
-- `Auto-ROI`: Quadrat-Target ins Bild bringen, `measure_mtf` ausloesen, die 4
-  Kanten werden automatisch bewertet.
-- `Manuelle ROI`: ROI direkt im Bild waehlen. Der Analyzer nutzt intern einen
-  schmaleren Analyse-Streifen, damit die Winkeldetektion robuster bleibt.
-- `Standardpfad`: Erst `auto_roi=true` verwenden. Nur wenn kein geeignetes
-  Target gefunden wird oder die Zielkante unklar bleibt, auf manuelle ROI
-  wechseln.
+- `Center-MTF`: Quadrat-Target ins Bild bringen, `measure_mtf_center`
+  ausloesen, die 4 Kanten werden automatisch bewertet.
+- `ROI-Suche`: Nutzer markiert nur eine aeussere Such-ROI. Innerhalb dieser ROI
+  muss ein vollstaendiges Quadrat liegen; daraus werden lokal wieder die vier
+  Kantenkandidaten abgeleitet.
+- `Direkte manuelle ROI`: ROI direkt im Bild waehlen. Der Analyzer nutzt intern
+  einen schmaleren Analyse-Streifen, damit die Winkeldetektion robuster bleibt.
+- `Standardpfad`: Erst `measure_mtf_center` verwenden. Wenn kein geeignetes
+  Target gefunden wird oder die Zielkante unklar bleibt, `measure_mtf_roi` mit
+  `roi_detection_mode='search_square_in_roi'` nutzen. Nur wenn auch das nicht
+  passt, `measure_mtf_roi` im direkten manuellen Modus verwenden.
+- `target_edge`: `any`, `top`, `right`, `bottom`, `left` und `select`
+  funktionieren sowohl fuer den Center-Pfad als auch fuer die lokale
+  ROI-Suche.
 - `Ergebnisse`: Fuer jede Messung entsteht ein Run-Ordner mit `summary.csv`,
   `context.csv`, `selected_edge.txt` und pro Kante benannten
   `*_esf.csv`/`*_lsf.csv`/`*_mtf.csv`/`*_plot.png`/`*_roi.png`.
+- `Konservativer Standard`: Der Messstand nutzt im Standardpfad eine
+  konservativ geglaettete ESF/LSF-Verarbeitung, um starke MTF-Overshoots
+  softwareseitig zu bremsen.
 - Fuer den schnellen Vergleich immer zuerst `summary.csv` oeffnen.
 - Fuer wissenschaftliche Vergleichsmessungen ist `context.csv` die kanonische
   Ein-Zeilen-Beschreibung der Messbedingung.
+- Overshoot-Warnungen bleiben bewusst sichtbar; `mtf_clip_max` ist nicht der
+  offizielle Standardfix, sondern hoechstens spaeter ein bewusster
+  Debug-/Praesentationshebel.
 - `summary.csv` markiert pro Kante zusaetzlich, ob der gemessene Endwinkel in
   der offiziellen SOP-Arbeitszone `3 deg bis 10 deg` liegt.
 - `context.csv` spiegelt dieselbe SOP-Wertung fuer genau die Kante, die auch
@@ -181,7 +210,7 @@ ros2 service call /promoc/camera/measure_mtf \
 Die persoenliche Messstand-Konfiguration kommt aus:
 
 ```bash
-cp promoc_bringup/config/user_config.v2.example.yaml promoc_bringup/config/user_config.yaml
+cp promoc_bringup/config/user_config.example.yaml promoc_bringup/config/user_config.yaml
 ```
 
 Wichtige Felder in `promoc_bringup/config/user_config.yaml`:
@@ -235,7 +264,8 @@ ros2 launch promoc_bringup optical_measurement_system.launch.py
 Die oeffentliche Kamera-API des Messstand-Branches besteht nur aus:
 
 - `/promoc/camera/autofocus`
-- `/promoc/camera/measure_mtf`
+- `/promoc/camera/measure_mtf_center`
+- `/promoc/camera/measure_mtf_roi`
 - `/promoc/camera/set_exposure`
 
 Der Achsenpfad bleibt unter:
@@ -253,14 +283,16 @@ Der offizielle Bedienpfad fuer Studierende nutzt nur:
 
 - `/promoc/camera/set_exposure`
 - `/promoc/camera/autofocus` mit `focus_mode=0`
-- `/promoc/camera/measure_mtf` zuerst mit `auto_roi=true`
+- `/promoc/camera/measure_mtf_center` zuerst
+- `/promoc/camera/measure_mtf_roi` fuer ROI-Suche oder direkte manuelle ROI
 
 Alle weiteren Modi und Debug-Pfade bleiben fuer Vergleichs- oder
 Entwicklungszwecke erhalten, sind aber nicht Teil des Standardablaufs.
 
 ## Wissenschaftliche MTF
 
-`/promoc/camera/measure_mtf` schaltet fuer die Messung in einen eigenen
+Die beiden MTF-Services `/promoc/camera/measure_mtf_center` und
+`/promoc/camera/measure_mtf_roi` schalten fuer die Messung in denselben
 wissenschaftlichen Raw-Capture-Modus:
 
 - Der Kamerastream startet auf dem Messstand bereits direkt als `BayerRG12`

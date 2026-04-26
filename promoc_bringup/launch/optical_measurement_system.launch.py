@@ -137,8 +137,8 @@ def _create_startup_info():
     return LogInfo(
         msg="\n"
         "=== ProMOC Measurement Stand ===\n"
-        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf, /promoc/camera/set_exposure\n"
-    )
+        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
+      )
 
 
 def _create_camera_driver_node(
@@ -221,7 +221,6 @@ def _create_camera_node(
     camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
     image_topic = f"/promoc/{camera_name}/stream0/image_raw"
     camera_info_topic = f"/promoc/{camera_name}/stream0/camera_info"
-    exposure_service = f"/promoc/{camera_name}_controller/set_exposure_time"
     param_set_service_primary = f"/promoc/{camera_name}/set_parameters"
     param_set_service_secondary = f"/promoc/{camera_name}_controller/set_parameters"
     base_dir = config.get("measurement", {}).get("base_path") or os.path.join(
@@ -248,7 +247,6 @@ def _create_camera_node(
                 "pixel_size_um": config["camera"]["pixel_size_um"],
                 "camera.image_topic": image_topic,
                 "camera.camera_info_topic": camera_info_topic,
-                "camera.exposure_service": exposure_service,
                 "camera.param_set_service_primary": param_set_service_primary,
                 "camera.param_set_service_secondary": param_set_service_secondary,
                 "camera.driver_declared_parameters_json": json.dumps(

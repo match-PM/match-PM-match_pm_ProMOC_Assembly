@@ -50,6 +50,7 @@ if "rcl_interfaces.srv" not in sys.modules:
                     setattr(self, key, value)
 
     rcl_srv.GetParameters = _SrvType
+    rcl_srv.ListParameters = _SrvType
     rcl_srv.SetParameters = _SrvType
     sys.modules["rcl_interfaces.srv"] = rcl_srv
 if "rcl_interfaces" not in sys.modules:
@@ -179,6 +180,9 @@ def test_build_mtf_config_mapping_ignores_invalid_casts_and_applies_profile():
     # Profile applied after parameter mapping.
     assert config.derivative_mode == "iso"
     assert config.apply_derivative_correction is True
+    assert config.derivative_correction_max == 1.15
+    assert config.esf_smooth_mode == "sg"
+    assert config.lsf_window_mode == "peak"
 
 
 def test_build_mtf_config_uses_raw_capture_metadata_params():

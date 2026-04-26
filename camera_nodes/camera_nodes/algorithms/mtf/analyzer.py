@@ -1042,7 +1042,8 @@ class MTFAnalyzer:
         ):
             warning_msgs.append(
                 f"MTF overshoot {mtf_peak_raw:.2f} (> {self.config.mtf_warn_threshold:.2f}). "
-                "Possible sharpening/ISP or ROI/ESF issues."
+                "Conservative smoothing active; possible sharpening/ISP, ROI truncation, "
+                "or remaining ESF/derivative sensitivity."
             )
         return "; ".join(warning_msgs)
 

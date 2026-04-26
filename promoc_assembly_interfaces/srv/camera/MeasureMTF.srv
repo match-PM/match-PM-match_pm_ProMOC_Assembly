@@ -6,6 +6,13 @@ float32 pixel_size_um 0.0
 # Auto ROI selection (true=automatic ROI, false=manual ROI selection)
 bool auto_roi
 
+# Manual ROI behaviour when auto_roi=false.
+# Options:
+# - "" or "direct_manual": directly measure the manually drawn ROI
+# - "search_square_in_roi": draw a search ROI, detect one complete square inside it,
+#   and derive the edge candidates from that square
+string roi_detection_mode
+
 # --- OPTIONAL MEASUREMENT CONDITIONS ---
 # If values are not provided (empty/zero), the configured node parameters are used.
 float64 coaxial_light_voltage

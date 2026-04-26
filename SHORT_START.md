@@ -19,13 +19,14 @@ ros2 launch promoc_bringup optical_measurement_system.launch.py
 - Standardablauf:
   - bei Bedarf `set_exposure`
   - dann `autofocus` mit `focus_mode=0`
-  - dann `measure_mtf` zuerst mit `auto_roi=true`
-  - nur falls noetig `measure_mtf` mit manueller ROI
+  - dann `measure_mtf_center`
+  - nur falls noetig `measure_mtf_roi` zuerst mit `roi_detection_mode='search_square_in_roi'`
+  - nur als letzter Fallback `measure_mtf_roi` mit `roi_detection_mode='direct_manual'`
   - fuer die Auswertung zuerst `summary.csv` oeffnen
 
 ## Weitere Details
 
-- Die kanonische Benutzerkonfiguration ist `promoc_bringup/config/user_config.v2.example.yaml`.
+- Die kanonische Benutzerkonfiguration ist `promoc_bringup/config/user_config.example.yaml`.
 - Wissenschaftliches Protokoll: `MTF_PROTOCOL.md`
 - Vollstaendige Bedienanleitung: `README.md`
 

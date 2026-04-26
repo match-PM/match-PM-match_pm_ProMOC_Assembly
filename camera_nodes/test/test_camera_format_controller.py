@@ -520,6 +520,73 @@ def test_set_capture_state_allows_optional_failures_with_required_pixel_format(m
     assert "GammaEnable" in node._logger.warns[-1]
 
 
+def test_set_live_exposure_writes_and_verifies_readback(monkeypatch):
+    controller = CameraFormatController(_Node({"exposure.readback_tolerance_us": 500.0}))
+    states = iter(
+        [
+            {
+                "set_service": "/promoc/promoc_camera/set_parameters",
+                "names": {"exposure_time": "ExposureTime"},
+                "available_keys": ["exposure_time"],
+                "values": {"exposure_time": 30000.0},
+            },
+            {
+                "set_service": "/promoc/promoc_camera/set_parameters",
+                "names": {"exposure_time": "ExposureTime"},
+                "available_keys": ["exposure_time"],
+                "values": {"exposure_time": 12000.0},
+            },
+        ]
+    )
+    writes = []
+
+    monkeypatch.setattr(controller, "read_capture_state", lambda: next(states))
+    monkeypatch.setattr(
+        controller,
+        "set_capture_state",
+        lambda state, target, **kwargs: writes.append((dict(state), dict(target), dict(kwargs))) or True,
+    )
+
+    outcome = controller.set_live_exposure(12000.0)
+
+    assert outcome["success"] is True
+    assert outcome["applied_exposure_us"] == 12000.0
+    assert writes
+    assert writes[0][1] == {"exposure_time": 12000.0}
+
+
+def test_set_live_exposure_detects_readback_mismatch(monkeypatch):
+    controller = CameraFormatController(_Node({"exposure.readback_tolerance_us": 100.0}))
+    states = iter(
+        [
+            {
+                "set_service": "/promoc/promoc_camera/set_parameters",
+                "names": {"exposure_time": "ExposureTime"},
+                "available_keys": ["exposure_time"],
+                "values": {"exposure_time": 30000.0},
+            },
+            {
+                "set_service": "/promoc/promoc_camera/set_parameters",
+                "names": {"exposure_time": "ExposureTime"},
+                "available_keys": ["exposure_time"],
+                "values": {"exposure_time": 15000.0},
+            },
+        ]
+    )
+
+    monkeypatch.setattr(controller, "read_capture_state", lambda: next(states))
+    monkeypatch.setattr(
+        controller,
+        "set_capture_state",
+        lambda *_args, **_kwargs: True,
+    )
+
+    outcome = controller.set_live_exposure(12000.0)
+
+    assert outcome["success"] is False
+    assert "readback mismatch" in outcome["reason"]
+
+
 def test_restore_after_mtf_without_state_uses_default_preview_pixel_format(monkeypatch):
     controller = CameraFormatController(_Node({"camera.default_pixel_format": "RGB8"}))
     captured = {}

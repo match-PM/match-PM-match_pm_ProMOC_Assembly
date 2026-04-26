@@ -593,6 +593,88 @@ class RoiDetector:
         return edge_rois
 
     @staticmethod
+    def _rect_fully_inside_bounds(
+        rect: tuple,
+        image_shape: tuple[int, int],
+        margin_px: int = 2,
+    ) -> bool:
+        """Return whether the rotated rectangle stays clear of the image border."""
+        img_h, img_w = image_shape[:2]
+        box = cv2.boxPoints(rect)
+        min_x = float(np.min(box[:, 0]))
+        max_x = float(np.max(box[:, 0]))
+        min_y = float(np.min(box[:, 1]))
+        max_y = float(np.max(box[:, 1]))
+        return (
+            min_x >= float(margin_px)
+            and min_y >= float(margin_px)
+            and max_x <= float(img_w - 1 - margin_px)
+            and max_y <= float(img_h - 1 - margin_px)
+        )
+
+    @staticmethod
+    def _translate_edge_rois(
+        edge_rois: List["EdgeROI"],
+        offset_x: int,
+        offset_y: int,
+    ) -> List["EdgeROI"]:
+        """Translate local ROI detections back into global image coordinates."""
+        translated = []
+        for edge_roi in edge_rois:
+            x, y, w, h = edge_roi.bbox
+            px, py = edge_roi.parent_center
+            translated.append(
+                EdgeROI(
+                    image=edge_roi.image,
+                    bbox=(x + offset_x, y + offset_y, w, h),
+                    edge_direction=edge_roi.edge_direction,
+                    edge_name=edge_roi.edge_name,
+                    contrast=edge_roi.contrast,
+                    parent_center=(px + offset_x, py + offset_y),
+                )
+            )
+        return translated
+
+    @staticmethod
+    def detect_square_edge_rois_in_search_roi(
+        image: np.ndarray,
+        search_roi: Tuple[int, int, int, int],
+        roi_width: int = 60,
+    ) -> List["EdgeROI"]:
+        """
+        Detect one complete square inside a manually chosen search ROI.
+
+        Returns globally referenced EdgeROI objects derived from the detected square.
+        """
+        roi_x, roi_y, roi_w, roi_h = [int(value) for value in search_roi]
+        search_image = image[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
+        if search_image.size == 0:
+            return []
+
+        _, _bars, squares = RoiDetector.detect_targets(search_image)
+        if not squares:
+            return []
+
+        fully_visible_squares = [
+            rect
+            for rect in squares
+            if RoiDetector._rect_fully_inside_bounds(rect, search_image.shape[:2])
+        ]
+        if not fully_visible_squares:
+            return []
+
+        largest_square = max(
+            fully_visible_squares,
+            key=lambda rect: float(rect[1][0]) * float(rect[1][1]),
+        )
+        local_edge_rois = RoiDetector.create_edge_rois_from_rect(
+            search_image,
+            largest_square,
+            roi_width=roi_width,
+        )
+        return RoiDetector._translate_edge_rois(local_edge_rois, roi_x, roi_y)
+
+    @staticmethod
     def calculate_michelson_contrast(roi: np.ndarray) -> float:
         """Calculates Michelson contrast: (max - min) / (max + min)."""
         if roi.size == 0:
