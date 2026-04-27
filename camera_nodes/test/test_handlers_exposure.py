@@ -142,6 +142,29 @@ def test_exposure_handler_restores_configured_default_when_live_write_fails():
     assert "30000.0 us" in response.status_message
 
 
+def test_exposure_handler_clamps_to_camera_minimum_for_live_write():
+    driver = _Driver()
+    node = _Node(
+        {
+            "exposure.settle_frames_after_set": 0,
+            "camera.min_exposure_us": 53.0,
+            "camera.max_exposure_us": 814000.0,
+        }
+    )
+    node._format_controller = _FormatController(
+        [{"success": True, "applied_exposure_us": 53.0}]
+    )
+    handler = ExposureHandler(node=node, camera_driver=driver)
+
+    response = handler.manual_set_exposure_callback(_Request(30.0), _Response())
+
+    assert response.success is True
+    assert node._format_controller.calls == [53.0]
+    assert "clamped" in response.status_message.lower()
+    assert "30.0 us" in response.status_message
+    assert "53.0 us" in response.status_message
+
+
 def test_exposure_handler_reports_error_when_target_and_fallback_fail():
     driver = _Driver()
     node = _Node(

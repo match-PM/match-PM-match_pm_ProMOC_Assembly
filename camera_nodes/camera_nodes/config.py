@@ -15,6 +15,8 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("camera.expected_width", 0),
     ("camera.expected_height", 0),
     ("camera.default_exposure_us", 0.0),
+    ("camera.min_exposure_us", 0.0),
+    ("camera.max_exposure_us", 0.0),
     ("camera.default_pixel_format", "RGB8"),
     ("camera.image_topic", "/promoc/promoc_camera/stream0/image_raw"),
     ("camera.camera_info_topic", "/promoc/promoc_camera/stream0/camera_info"),
@@ -142,6 +144,8 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
         ("camera.expected_width", "expected_width", int, 0),
         ("camera.expected_height", "expected_height", int, 0),
         ("camera.default_exposure_us", "default_exposure_us", float, 0.0),
+        ("camera.min_exposure_us", "min_exposure_us", float, 0.0),
+        ("camera.max_exposure_us", "max_exposure_us", float, 0.0),
         ("camera.default_pixel_format", "default_pixel_format", str, "RGB8"),
         (
             "camera.image_topic",

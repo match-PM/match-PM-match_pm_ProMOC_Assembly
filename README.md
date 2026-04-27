@@ -135,6 +135,10 @@ ros2 service call /promoc/camera/set_exposure \
   "{exposure_time: 12000.0}"
 ```
 
+`exposure_time` ist in `µs`. Beispiel: `30000.0` bedeutet `30.0 ms`.
+Werte ausserhalb der Kameragrenzen werden auf den naechsten gueltigen
+Bereichswert geklemmt und im Service-Status klar rueckgemeldet.
+
 Der Service schreibt die Belichtung live ueber den laufenden
 `camera_aravis2`-Parameterpfad. Wenn der Wunschwert nicht sauber
 uebernommen wird, faellt der Messstand sichtbar auf die beim Launch aus

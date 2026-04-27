@@ -268,6 +268,12 @@ def _create_camera_node(
                     exposure_config.get("default_ms", 30.0)
                 )
                 * 1000.0,
+                "camera.min_exposure_us": float(
+                    exposure_config.get("min_val", 0.0)
+                ),
+                "camera.max_exposure_us": float(
+                    exposure_config.get("max_val", 0.0)
+                ),
                 "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": bool(mtf_config.get("use_raw_capture", True)),
                 "mtf.capture_required_raw": bool(
