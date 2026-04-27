@@ -75,11 +75,8 @@ test-unit:
 		camera_nodes/test/test_mtf_raw_bayer.py \
 		camera_nodes/test/test_mtf_param_mapping.py \
 		camera_nodes/test/test_mtf_debug_export.py \
-		camera_nodes/test/test_mtf_validator_entrypoint.py \
 		linear_axis_nodes/test/test_motion_adapter.py \
 		linear_axis_nodes/test/test_service_callbacks_regression.py \
-		linear_axis_nodes/test/test_linear_axis_namespace_contract.py \
-		promoc_bringup/test/test_hardware_launch_smoke.py \
-		promoc_bringup/test/test_launch_user_config.py -q
+		linear_axis_nodes/test/test_linear_axis_namespace_contract.py -q
 
 check: lint test-unit

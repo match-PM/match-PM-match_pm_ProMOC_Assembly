@@ -15,26 +15,32 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
+def _fake_resize(image, size, interpolation=None):
+    target_width, target_height = size
+    if image.ndim == 2:
+        shape = (target_height, target_width)
+    else:
+        shape = (target_height, target_width, image.shape[2])
+    return np.zeros(shape, dtype=image.dtype)
+
+
+def _fake_cvt_color(image, code):
+    if image.ndim == 2:
+        return np.repeat(image[:, :, None], 3, axis=2)
+    return image
+
+
 if "cv2" not in sys.modules:
-    def _fake_resize(image, size, interpolation=None):
-        target_width, target_height = size
-        if image.ndim == 2:
-            shape = (target_height, target_width)
-        else:
-            shape = (target_height, target_width, image.shape[2])
-        return np.zeros(shape, dtype=image.dtype)
-
-    def _fake_cvt_color(image, code):
-        if image.ndim == 2:
-            return np.repeat(image[:, :, None], 3, axis=2)
-        return image
-
-    sys.modules["cv2"] = types.SimpleNamespace(
-        INTER_AREA=3,
-        COLOR_GRAY2BGR=8,
-        resize=_fake_resize,
-        cvtColor=_fake_cvt_color,
-    )
+    sys.modules["cv2"] = types.SimpleNamespace()
+cv2_stub = sys.modules["cv2"]
+if not hasattr(cv2_stub, "INTER_AREA"):
+    cv2_stub.INTER_AREA = 3
+if not hasattr(cv2_stub, "COLOR_GRAY2BGR"):
+    cv2_stub.COLOR_GRAY2BGR = 8
+if not hasattr(cv2_stub, "resize"):
+    cv2_stub.resize = _fake_resize
+if not hasattr(cv2_stub, "cvtColor"):
+    cv2_stub.cvtColor = _fake_cvt_color
 
 srv_mod = types.ModuleType("promoc_assembly_interfaces.srv")
 

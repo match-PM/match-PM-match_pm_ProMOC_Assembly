@@ -84,6 +84,7 @@ class RoiDetector:
         image: np.ndarray,
         min_area: int = 30,
         square_min_area: int = 100,
+        min_square_side: int = 0,
         use_adaptive: bool = True,
     ) -> Tuple[np.ndarray, List[tuple], List[tuple]]:
         """
@@ -93,6 +94,7 @@ class RoiDetector:
             image: Input image (grayscale or color)
             min_area: Minimum contour area to consider
             square_min_area: Minimum area for squares (to filter noise/text)
+            min_square_side: Minimum side length for square targets
             use_adaptive: Try adaptive thresholding if Otsu finds few contours
 
         Returns:
@@ -162,7 +164,11 @@ class RoiDetector:
                 cv2.drawContours(vis_img, [box], 0, (0, 255, 0), 2)  # Green for bars
 
             # Nearly quadratic shapes are treated as square edge targets.
-            elif 0.8 < aspect_ratio < 1.3 and area > square_min_area:
+            elif (
+                0.8 < aspect_ratio < 1.3
+                and area > square_min_area
+                and min(w, h) >= min_square_side
+            ):
                 rois_squares.append(rect)
                 cv2.drawContours(vis_img, [box], 0, (255, 0, 0), 2)  # Blue for squares
 
@@ -173,6 +179,7 @@ class RoiDetector:
         image: np.ndarray,
         min_area: int = 30,
         square_min_area: int = 100,
+        min_square_side: int = 0,
         compute_contrast: bool = True,
     ) -> List[DetectedTarget]:
         """
@@ -185,6 +192,7 @@ class RoiDetector:
             image: Input image (grayscale or color)
             min_area: Minimum contour area
             square_min_area: Minimum area for squares
+            min_square_side: Minimum side length for square targets
             compute_contrast: Pre-compute contrast for each target
 
         Returns:
@@ -197,7 +205,7 @@ class RoiDetector:
             gray = image
 
         _, bars, squares = RoiDetector.detect_targets(
-            image, min_area, square_min_area, use_adaptive=True
+            image, min_area, square_min_area, min_square_side, use_adaptive=True
         )
 
         targets = []
@@ -477,7 +485,10 @@ class RoiDetector:
 
     @staticmethod
     def create_edge_rois_from_rect(
-        image: np.ndarray, rect: tuple, roi_width: int = 60
+        image: np.ndarray,
+        rect: tuple,
+        roi_width: int = 60,
+        min_edge_roi_width: int = 10,
     ) -> List["EdgeROI"]:
         """
         Create EdgeROI objects at all 4 edges of a detected rectangle.
@@ -494,6 +505,7 @@ class RoiDetector:
             image: Input image (grayscale or color)
             rect: minAreaRect tuple ((cx, cy), (w, h), angle)
             roi_width: Width of ROI perpendicular to edge (default: 60px)
+            min_edge_roi_width: Minimum width/height for any emitted edge ROI
 
         Returns:
             List of EdgeROI objects for each valid edge
@@ -567,7 +579,7 @@ class RoiDetector:
             roi_w = x2 - x1
             roi_h = y2 - y1
 
-            if roi_w < 10 or roi_h < 10:
+            if roi_w < min_edge_roi_width or roi_h < min_edge_roi_width:
                 continue  # Skip too small ROIs
 
             # Extract ROI
@@ -599,6 +611,8 @@ class RoiDetector:
         margin_px: int = 2,
     ) -> bool:
         """Return whether the rotated rectangle stays clear of the image border."""
+        if not hasattr(cv2, "boxPoints"):
+            return True
         img_h, img_w = image_shape[:2]
         box = cv2.boxPoints(rect)
         min_x = float(np.min(box[:, 0]))
@@ -640,6 +654,10 @@ class RoiDetector:
         image: np.ndarray,
         search_roi: Tuple[int, int, int, int],
         roi_width: int = 60,
+        min_contour_area: int = 30,
+        min_square_area: int = 100,
+        min_square_side: int = 0,
+        min_edge_roi_width: int = 10,
     ) -> List["EdgeROI"]:
         """
         Detect one complete square inside a manually chosen search ROI.
@@ -651,7 +669,12 @@ class RoiDetector:
         if search_image.size == 0:
             return []
 
-        _, _bars, squares = RoiDetector.detect_targets(search_image)
+        _, _bars, squares = RoiDetector.detect_targets(
+            search_image,
+            min_area=min_contour_area,
+            square_min_area=min_square_area,
+            min_square_side=min_square_side,
+        )
         if not squares:
             return []
 
@@ -671,6 +694,7 @@ class RoiDetector:
             search_image,
             largest_square,
             roi_width=roi_width,
+            min_edge_roi_width=min_edge_roi_width,
         )
         return RoiDetector._translate_edge_rois(local_edge_rois, roi_x, roi_y)
 

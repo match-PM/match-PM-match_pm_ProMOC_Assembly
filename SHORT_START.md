@@ -19,9 +19,9 @@ ros2 launch promoc_bringup optical_measurement_system.launch.py
 - Standardablauf:
   - bei Bedarf `set_exposure`
   - dann `autofocus` mit `focus_mode=0`
-  - dann `measure_mtf_center`
-  - nur falls noetig `measure_mtf_roi` zuerst mit `roi_detection_mode='search_square_in_roi'`
-  - nur als letzter Fallback `measure_mtf_roi` mit `roi_detection_mode='direct_manual'`
+  - dann `measure_mtf` mit `measurement_mode='auto'`
+  - nur falls noetig `measure_mtf` mit `measurement_mode='roi_search'`
+  - nur als letzter Fallback `measure_mtf` mit `measurement_mode='direct_manual'`
   - fuer die Auswertung zuerst `summary.csv` oeffnen
 
 ## Weitere Details

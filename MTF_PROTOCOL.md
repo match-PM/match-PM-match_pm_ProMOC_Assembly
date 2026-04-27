@@ -20,8 +20,9 @@ Nicht der Anspruch dieser Stufe:
 
 ## Offizieller Messmodus
 
-`/promoc/camera/measure_mtf_center` und `/promoc/camera/measure_mtf_roi`
-nutzen denselben wissenschaftlichen Raw-Pfad:
+`/promoc/camera/measure_mtf` ist der kanonische MTF-Service und nutzt denselben
+wissenschaftlichen Raw-Pfad wie die Kompatibilitaets-Aliase
+`/promoc/camera/measure_mtf_center` und `/promoc/camera/measure_mtf_roi`:
 
 - der Kamerastream startet bereits offiziell als `BayerRG12`
 - Autofokus/Fly-over erzeugen daraus intern nur ein 8-bit-Preview
@@ -77,10 +78,9 @@ Offizielle Arbeitszone fuer Slanted-Edge-Vergleiche:
 
 Wichtig fuer die Auswertung:
 
-- der Standalone-Validator bewertet nur `3 deg bis 10 deg` als **offiziell akzeptiert**
-- ein synthetischer oder realer Fall kann deshalb technisch noch vom Node
-  verarbeitet werden, aber fuer die offizielle SOP trotzdem als nicht akzeptiert
-  gelten
+- die CSV-Exporte bewerten nur `3 deg bis 10 deg` als **offiziell akzeptiert**
+- ein realer Fall kann deshalb technisch noch vom Node verarbeitet werden, aber
+  fuer die offizielle SOP trotzdem als nicht akzeptiert gelten
 
 Konstant halten:
 
@@ -119,7 +119,7 @@ Der offizielle MTF-Pfad ist absichtlich kurz:
 ```text
 launch
   -> camera node
-  -> measure_mtf_center / measure_mtf_roi service handler
+  -> measure_mtf service handler
   -> shared mtf analyzer
   -> debug export
   -> run folder (CSV + plots + ROI overlays)
@@ -128,18 +128,18 @@ launch
 Wichtige Rollen:
 
 - `promoc_bringup`: startet den Messstand
-- `camera_nodes/services/mtf.py`: orchestriert beide Service-Einstiege, ROI,
+- `camera_nodes/services/mtf.py`: orchestriert den kanonischen Service, Aliase, ROI,
   Export und Response ueber einen gemeinsamen Kern
 - `camera_nodes/algorithms/mtf/`: Single Source of Truth fuer Winkel, ESF, LSF,
   MTF und Raw-Green-Auswertung
-- `mtf_synthetic_validation.py`: ruft denselben Repo-Kern fuer synthetische
-  Validierung auf
 
 ## ROI-Pfade
 
 ### Auto-ROI
 
 - erkennt Quadrat- oder Bar-Targets
+- sucht im gesamten aktuellen Messbild nach vollstaendig sichtbaren Targets
+- nutzt konfigurierbare Mindestgroessen, um kleine Artefakte auszuschliessen
 - erzeugt mehrere `EdgeROI`-Kandidaten
 - wertet jede Kante ueber dieselbe Analyzer-Pipeline aus
 - exportiert pro Kante eigene Artefakte
@@ -159,7 +159,8 @@ Winkeldetektion sonst stark verziehen kann.
 
 ### ROI-Suche Nach Vollstaendigem Quadrat
 
-- Nutzer waehlt nur eine aeussere Such-ROI
+- Nutzer waehlt nur eine aeussere Such-ROI oder der Client uebergibt sie als
+  Pixelkoordinaten
 - innerhalb dieser Such-ROI wird ein vollstaendiges Quadrat bzw. eine
   vollstaendige Wuerfelflaeche gesucht
 - daraus werden lokal dieselben vier `EdgeROI`-Kandidaten abgeleitet wie beim
@@ -172,6 +173,12 @@ Der empfohlene Bedienpfad ist:
 1. `/promoc/camera/measure_mtf_center`
 2. bei Bedarf `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='search_square_in_roi'`
 3. nur als letzter Fallback `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='direct_manual'`
+
+Fuer neue Clients gilt stattdessen:
+
+1. `/promoc/camera/measure_mtf` mit `measurement_mode='auto'`
+2. bei Bedarf `measurement_mode='roi_search'` und optionalem ROI
+3. nur als letzter Fallback `measurement_mode='direct_manual'`
 
 `target_edge='any'/'top'/'right'/'bottom'/'left'/'select'` bleibt auch fuer
 diesen ROI-Suchpfad gueltig.
@@ -228,30 +235,3 @@ Wichtig:
 - Overshoot bleibt in `warning_msg`, `mtf_peak_raw`, `mtf_peak_used` und
   `mtf_clipped` sichtbar; `mtf_clip_max` ist kein offizieller Standardfix
 
-## Validator
-
-Der Standalone-Validator bleibt ein duennes Frontend um denselben Repo-Kern:
-
-```bash
-python mtf_synthetic_validation.py --profile quick
-python mtf_synthetic_validation.py --profile scientific --no-png
-```
-
-Er dient fuer:
-
-- algorithmische Regression
-- ROI-/Paritaets-Checks
-- Winkelstabilitaet auf synthetischen Targets
-- Boundary-Pruefung gegen die offizielle Arbeitszone `3 deg bis 10 deg`
-
-Der Validator trennt dabei bewusst zwischen:
-
-- **technischer Node-Validitaet**
-- **offizieller SOP-Akzeptanz**
-
-Beispiel:
-
-- ein synthetischer `2.5 deg`-Fall kann technisch noch `valid=True` sein
-- im Validator wird er trotzdem als **offiziell nicht akzeptiert** gewertet
-
-Er ersetzt keine echte Laborvalidierung mit realen Targets und Wiederholungen.

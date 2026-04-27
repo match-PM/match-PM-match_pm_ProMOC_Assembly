@@ -67,6 +67,17 @@ CONTEXT_FIELDNAMES = [
     "measurement_warning",
     "operator",
     "roi_mode",
+    "measurement_mode",
+    "roi_input_source",
+    "requested_roi_x",
+    "requested_roi_y",
+    "requested_roi_width",
+    "requested_roi_height",
+    "roi_detection_min_contour_area_px",
+    "roi_detection_min_square_area_px",
+    "roi_detection_min_square_side_px",
+    "roi_detection_min_edge_roi_width_px",
+    "roi_detection_edge_roi_width_px",
     "requested_target_edge",
     "selected_edge_label",
     "edge_count",
@@ -308,6 +319,31 @@ def build_context_row(
         "measurement_warning": warning_msg,
         "operator": str(measurement_metadata.get("measurement_operator", "default_user")),
         "roi_mode": roi_mode,
+        "measurement_mode": str(measurement_metadata.get("measurement_mode", "") or ""),
+        "roi_input_source": str(measurement_metadata.get("roi_input_source", "none") or "none"),
+        "requested_roi_x": int(measurement_metadata.get("requested_roi_x", 0) or 0),
+        "requested_roi_y": int(measurement_metadata.get("requested_roi_y", 0) or 0),
+        "requested_roi_width": int(
+            measurement_metadata.get("requested_roi_width", 0) or 0
+        ),
+        "requested_roi_height": int(
+            measurement_metadata.get("requested_roi_height", 0) or 0
+        ),
+        "roi_detection_min_contour_area_px": int(
+            measurement_metadata.get("roi_detection_min_contour_area", 0) or 0
+        ),
+        "roi_detection_min_square_area_px": int(
+            measurement_metadata.get("roi_detection_min_square_area", 0) or 0
+        ),
+        "roi_detection_min_square_side_px": int(
+            measurement_metadata.get("roi_detection_min_square_side", 0) or 0
+        ),
+        "roi_detection_min_edge_roi_width_px": int(
+            measurement_metadata.get("roi_detection_min_edge_roi_width", 0) or 0
+        ),
+        "roi_detection_edge_roi_width_px": int(
+            measurement_metadata.get("roi_detection_edge_roi_width", 0) or 0
+        ),
         "requested_target_edge": str(measurement_metadata.get("target_edge", "") or ""),
         "selected_edge_label": selected_edge_label,
         "edge_count": int(edge_count),

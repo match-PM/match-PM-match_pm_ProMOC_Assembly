@@ -137,7 +137,7 @@ def _create_startup_info():
     return LogInfo(
         msg="\n"
         "=== ProMOC Measurement Stand ===\n"
-        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
+        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
       )
 
 

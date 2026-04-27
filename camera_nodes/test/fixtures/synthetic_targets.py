@@ -9,8 +9,8 @@ runtime package under `camera_nodes/camera_nodes/`.
 
 Important:
     The expected-MTF helpers in this file are approximate and should not be
-    treated as scientific ground truth. The standalone benchmark validator uses
-    an analytical Gaussian-PSF * pixel-aperture reference instead.
+    treated as scientific ground truth. They exist only to keep unit tests
+    deterministic and hardware-independent.
 
 Usage:
     from synthetic_targets import generate_slanted_edge

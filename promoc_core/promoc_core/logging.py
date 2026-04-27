@@ -10,10 +10,10 @@ Usage:
     class MyNode(Node):
         def __init__(self):
             super().__init__('my_node')
-            self.log = TaggedLogger(self.get_logger(), LogTags.PMC_MOTION)
+            self.log = TaggedLogger(self.get_logger(), LogTags.LTS_MOVE)
 
         def move(self):
-            self.log.info("Moving to position...")  # [PMC:MOTION] Moving to position...
+            self.log.info("Moving to position...")  # [LTS:MOVE] Moving to position...
 """
 
 from typing import Any
@@ -21,12 +21,6 @@ from typing import Any
 
 class LogTags:
     """Predefined log tags for consistent formatting across packages."""
-
-    # Planar Motor
-    PMC = "[PMC]"
-    PMC_MOTION = "[PMC:MOTION]"
-    PMC_CTRL = "[PMC:CTRL]"
-    PMC_CONN = "[PMC:CONN]"
 
     # Linear Axis
     LTS = "[LTS]"
@@ -60,9 +54,9 @@ class TaggedLogger:
         tag: The tag prefix (use LogTags constants)
 
     Example:
-        >>> motion_log = TaggedLogger(self.get_logger(), LogTags.PMC_MOTION)
-        >>> motion_log.info("XBot moving to target")
-        # Output: [INFO] [node_name]: [PMC:MOTION] XBot moving to target
+        >>> motion_log = TaggedLogger(self.get_logger(), LogTags.LTS_MOVE)
+        >>> motion_log.info("Axis moving to target")
+        # Output: [INFO] [node_name]: [LTS:MOVE] Axis moving to target
     """
 
     def __init__(self, logger: Any, tag: str):

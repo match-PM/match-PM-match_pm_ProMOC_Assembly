@@ -139,7 +139,9 @@ def test_measure_mtf_center_callback_forces_auto_roi():
 
     def _fake_measure_callback(request, response):
         captured["auto_roi"] = request.auto_roi
+        captured["measurement_mode"] = getattr(request, "measurement_mode", "")
         captured["roi_detection_mode"] = getattr(request, "roi_detection_mode", "")
+        captured["roi_input_source"] = getattr(request, "_mtf_roi_input_source", "")
         return response
 
     handler.measure_mtf_callback = _fake_measure_callback
@@ -151,7 +153,9 @@ def test_measure_mtf_center_callback_forces_auto_roi():
     handler.measure_mtf_center_callback(request, _make_measure_response())
 
     assert captured["auto_roi"] is True
+    assert captured["measurement_mode"] == "auto"
     assert captured["roi_detection_mode"] == ""
+    assert captured["roi_input_source"] == "legacy_center"
 
 
 def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search():
@@ -160,7 +164,9 @@ def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search(
 
     def _fake_measure_callback(request, response):
         captured["auto_roi"] = request.auto_roi
+        captured["measurement_mode"] = getattr(request, "measurement_mode", "")
         captured["roi_detection_mode"] = getattr(request, "roi_detection_mode", "")
+        captured["roi_input_source"] = getattr(request, "_mtf_roi_input_source", "")
         return response
 
     handler.measure_mtf_callback = _fake_measure_callback
@@ -172,7 +178,9 @@ def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search(
     handler.measure_mtf_roi_callback(request, _make_measure_response())
 
     assert captured["auto_roi"] is False
+    assert captured["measurement_mode"] == "roi_search"
     assert captured["roi_detection_mode"] == "search_square_in_roi"
+    assert captured["roi_input_source"] == "legacy_roi"
 
 
 def test_detect_square_edge_rois_in_search_roi_translates_back_to_global_coordinates(
@@ -192,7 +200,7 @@ def test_detect_square_edge_rois_in_search_roi_translates_back_to_global_coordin
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], [((20.0, 20.0), (18.0, 18.0), 0.0)]),
+        lambda _image, *_args, **_kwargs: ("viz", [], [((20.0, 20.0), (18.0, 18.0), 0.0)]),
     )
     monkeypatch.setattr(
         mtf_module.RoiDetector,
@@ -214,6 +222,122 @@ def test_detect_square_edge_rois_in_search_roi_translates_back_to_global_coordin
     assert translated[0].bbox == (102, 203, 10, 12)
     assert translated[0].parent_center == (108, 209)
     assert translated[0].edge_name == "top"
+
+
+def test_auto_roi_uses_full_frame_square_detection_with_configured_minimums(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "mtf.roi_detection.min_contour_area_px": 700,
+                "mtf.roi_detection.min_square_area_px": 3000,
+                "mtf.roi_detection.min_square_side_px": 45,
+                "mtf.roi_detection.min_edge_roi_width_px": 22,
+                "mtf.roi_detection.edge_roi_width_px": 64,
+            }
+        ),
+        camera_driver=object(),
+    )
+    image = np.zeros((480, 640), dtype=np.uint16)
+    square = ((500.0, 80.0), (90.0, 90.0), 0.0)
+    captured = {}
+    edge_roi = mtf_module.EdgeROI(
+        image=np.full((24, 48), 1024, dtype=np.uint16),
+        bbox=(476, 56, 48, 24),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.8,
+        parent_center=(500, 80),
+    )
+
+    def _detect_targets(_image, **kwargs):
+        captured["detect_kwargs"] = kwargs
+        return "viz", [], [square]
+
+    def _create_edge_rois(_image, rect, **kwargs):
+        captured["rect"] = rect
+        captured["edge_kwargs"] = kwargs
+        return [edge_roi]
+
+    monkeypatch.setattr(mtf_module.RoiDetector, "detect_targets", _detect_targets)
+    monkeypatch.setattr(mtf_module.RoiDetector, "_rect_fully_inside_bounds", lambda *_args: True)
+    monkeypatch.setattr(mtf_module.RoiDetector, "create_edge_rois_from_rect", _create_edge_rois)
+
+    detected = handler._detect_auto_edge_rois(image)
+
+    assert detected == [edge_roi]
+    assert captured["rect"] == square
+    assert captured["detect_kwargs"]["min_area"] == 700
+    assert captured["detect_kwargs"]["square_min_area"] == 3000
+    assert captured["detect_kwargs"]["min_square_side"] == 45
+    assert captured["edge_kwargs"]["roi_width"] == 64
+    assert captured["edge_kwargs"]["min_edge_roi_width"] == 22
+
+
+def test_roi_search_with_request_roi_skips_interactive_selection(monkeypatch: pytest.MonkeyPatch):
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    image = np.zeros((120, 160), dtype=np.uint16)
+    edge_roi = mtf_module.EdgeROI(
+        image=np.full((24, 48), 1024, dtype=np.uint16),
+        bbox=(20, 30, 48, 24),
+        edge_direction="horizontal",
+        edge_name="top",
+        contrast=0.8,
+        parent_center=(44, 42),
+    )
+    captured = {}
+
+    handler._select_roi_interactive = lambda _image: pytest.fail(
+        "request ROI should not open interactive selection"
+    )
+
+    def _detect_in_search_roi(_image, search_roi, **kwargs):
+        captured["search_roi"] = search_roi
+        captured["kwargs"] = kwargs
+        return [edge_roi]
+
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_square_edge_rois_in_search_roi",
+        _detect_in_search_roi,
+    )
+    request = types.SimpleNamespace(
+        measurement_mode="roi_search",
+        auto_roi=False,
+        roi_detection_mode="",
+        roi_x=10,
+        roi_y=20,
+        roi_width=80,
+        roi_height=70,
+        target_edge="",
+    )
+
+    detected = handler._resolve_edge_rois(image, handler._normalize_measurement_request(request))
+
+    assert detected == [edge_roi]
+    assert captured["search_roi"] == (10, 20, 80, 70)
+    assert captured["kwargs"]["min_square_side"] == 40
+
+
+def test_roi_search_rejects_too_small_request_roi():
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    image = np.zeros((120, 160), dtype=np.uint16)
+    request = handler._normalize_measurement_request(
+        types.SimpleNamespace(
+            measurement_mode="roi_search",
+            auto_roi=False,
+            roi_detection_mode="",
+            roi_x=10,
+            roi_y=20,
+            roi_width=20,
+            roi_height=20,
+            target_edge="",
+        )
+    )
+
+    with pytest.raises(ImageProcessingError, match="ROI square search ROI too small"):
+        handler._resolve_edge_rois(image, request)
 
 
 @pytest.mark.parametrize(
@@ -293,7 +417,7 @@ def test_measure_mtf_uses_request_pixel_size_and_tracks_roi_origin(
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], [((20.0, 20.0), (12.0, 12.0), 0.0)]),
+        lambda _image, *_args, **_kwargs: ("viz", [], [((20.0, 20.0), (12.0, 12.0), 0.0)]),
     )
     monkeypatch.setattr(
         mtf_module.RoiDetector,
@@ -690,7 +814,7 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
+        lambda _image, *_args, **_kwargs: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
     )
     monkeypatch.setattr(
         mtf_module.RoiDetector,
@@ -1086,7 +1210,7 @@ def test_measure_mtf_marks_selected_edge_with_official_sop_window(
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
+        lambda _image, *_args, **_kwargs: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
     )
     monkeypatch.setattr(
         mtf_module.RoiDetector,
@@ -1225,7 +1349,7 @@ def test_measure_mtf_marks_invalid_edge_as_not_officially_accepted(
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
+        lambda _image, *_args, **_kwargs: ("viz", [], [((32.0, 32.0), (30.0, 30.0), 0.0)]),
     )
     monkeypatch.setattr(
         mtf_module.RoiDetector,
@@ -1378,7 +1502,7 @@ def test_measure_mtf_reports_auto_roi_failure_with_manual_fallback(
     monkeypatch.setattr(
         mtf_module.RoiDetector,
         "detect_targets",
-        lambda _image: ("viz", [], []),
+        lambda _image, *_args, **_kwargs: ("viz", [], []),
     )
 
     result = handler.measure_mtf_callback(
@@ -1388,7 +1512,7 @@ def test_measure_mtf_reports_auto_roi_failure_with_manual_fallback(
 
     assert result.success is False
     assert "Auto-ROI found no square or bar target." in result.status_message
-    assert "search_square_in_roi" in result.status_message
+    assert "measurement_mode='roi_search'" in result.status_message
     assert "direct_manual" in result.status_message
 
 

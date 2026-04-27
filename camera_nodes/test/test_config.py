@@ -61,6 +61,7 @@ def test_declare_and_load_runtime_config():
     assert cfg.autofocus.analysis_roi_width_px == 2000
     assert cfg.mtf.profile == "debug"
     assert cfg.mtf.capture_required_raw is True
+    assert cfg.mtf.roi_detection_min_square_side_px == 40
 
 
 def test_declare_runtime_config_uses_promoc_camera_defaults():
@@ -87,6 +88,11 @@ def test_declare_runtime_config_uses_conservative_mtf_defaults():
     assert node._params["mtf.lsf_window_mode"] == "peak"
     assert node._params["mtf.derivative_correction_max"] == 1.15
     assert node._params["mtf.esf_smooth_mode"] == "sg"
+    assert node._params["mtf.roi_detection.min_contour_area_px"] == 500
+    assert node._params["mtf.roi_detection.min_square_area_px"] == 2500
+    assert node._params["mtf.roi_detection.min_square_side_px"] == 40
+    assert node._params["mtf.roi_detection.min_edge_roi_width_px"] == 20
+    assert node._params["mtf.roi_detection.edge_roi_width_px"] == 60
 
 
 def test_deprecated_parameter_removed():

@@ -27,6 +27,10 @@ from promoc_core.error_handling import handle_service_errors
 MTF_AVG_SAMPLES = 10
 MTF_DEFAULT_PIXEL_SIZE_UM = 2.40
 MTF_AUTO_ROI_EDGE_WIDTH = 60
+MTF_ROI_DETECTION_MIN_CONTOUR_AREA_PX = 500
+MTF_ROI_DETECTION_MIN_SQUARE_AREA_PX = 2500
+MTF_ROI_DETECTION_MIN_SQUARE_SIDE_PX = 40
+MTF_ROI_DETECTION_MIN_EDGE_ROI_WIDTH_PX = 20
 MTF_MIN_EDGE_CONTRAST = 0.2
 MTF_SAMPLE_TIMEOUT_S = 1.0
 MTF_EXPORT_CONTEXT_SCALE = 1.8
@@ -178,9 +182,171 @@ class MTFHandler(CallbackBase):
         return mode
 
     @staticmethod
+    def _normalize_measurement_mode(request) -> str:
+        """Return the canonical MTF mode while honoring legacy request fields."""
+        mode = str(getattr(request, "measurement_mode", "") or "").strip().lower()
+        if mode in {"", "auto", "center", "full_frame"}:
+            if mode in {"auto", "center", "full_frame"}:
+                return "auto"
+            if bool(getattr(request, "auto_roi", False)):
+                return "auto"
+            roi_detection_mode = str(
+                getattr(request, "roi_detection_mode", "") or ""
+            ).strip().lower()
+            if roi_detection_mode == "search_square_in_roi":
+                return "roi_search"
+            return "direct_manual"
+        if mode in {"roi", "roi_search", "search_square_in_roi"}:
+            return "roi_search"
+        if mode in {"manual", "direct_manual"}:
+            return "direct_manual"
+        return mode
+
+    def _normalize_measurement_request(self, request):
+        """Clone the request and align legacy fields with measurement_mode."""
+        mode = self._normalize_measurement_mode(request)
+        if mode == "auto":
+            return self._clone_request_with_overrides(
+                request,
+                measurement_mode="auto",
+                auto_roi=True,
+                roi_detection_mode="",
+            )
+        if mode == "roi_search":
+            return self._clone_request_with_overrides(
+                request,
+                measurement_mode="roi_search",
+                auto_roi=False,
+                roi_detection_mode="search_square_in_roi",
+            )
+        if mode == "direct_manual":
+            return self._clone_request_with_overrides(
+                request,
+                measurement_mode="direct_manual",
+                auto_roi=False,
+                roi_detection_mode="direct_manual",
+            )
+        raise ImageProcessingError(
+            self._with_next_step(
+                f"Unsupported measurement_mode '{mode}'.",
+                "use auto, roi_search, or direct_manual and retry the measurement.",
+            )
+        )
+
+    @staticmethod
+    def _request_roi_is_set(request) -> bool:
+        """Return whether request carries an explicit pixel ROI."""
+        return (
+            int(getattr(request, "roi_width", 0) or 0) > 0
+            and int(getattr(request, "roi_height", 0) or 0) > 0
+        )
+
+    @staticmethod
+    def _request_roi_tuple(request) -> tuple[int, int, int, int]:
+        """Read ROI coordinates from the request."""
+        return (
+            int(getattr(request, "roi_x", 0) or 0),
+            int(getattr(request, "roi_y", 0) or 0),
+            int(getattr(request, "roi_width", 0) or 0),
+            int(getattr(request, "roi_height", 0) or 0),
+        )
+
+    @staticmethod
     def _with_next_step(message: str, next_step: str) -> str:
         """Attach one short operator-facing next step to an error message."""
         return f"{message} Next step: {next_step}"
+
+    def _roi_detection_settings(self) -> dict[str, int]:
+        """Read ROI-detection gates from node parameters."""
+        return {
+            "min_contour_area": max(
+                1,
+                self._param_int(
+                    "mtf.roi_detection.min_contour_area_px",
+                    MTF_ROI_DETECTION_MIN_CONTOUR_AREA_PX,
+                ),
+            ),
+            "min_square_area": max(
+                1,
+                self._param_int(
+                    "mtf.roi_detection.min_square_area_px",
+                    MTF_ROI_DETECTION_MIN_SQUARE_AREA_PX,
+                ),
+            ),
+            "min_square_side": max(
+                1,
+                self._param_int(
+                    "mtf.roi_detection.min_square_side_px",
+                    MTF_ROI_DETECTION_MIN_SQUARE_SIDE_PX,
+                ),
+            ),
+            "min_edge_roi_width": max(
+                1,
+                self._param_int(
+                    "mtf.roi_detection.min_edge_roi_width_px",
+                    MTF_ROI_DETECTION_MIN_EDGE_ROI_WIDTH_PX,
+                ),
+            ),
+            "edge_roi_width": max(
+                1,
+                self._param_int(
+                    "mtf.roi_detection.edge_roi_width_px",
+                    MTF_AUTO_ROI_EDGE_WIDTH,
+                ),
+            ),
+        }
+
+    def _annotate_request_roi(
+        self,
+        request,
+        source: str,
+        roi: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        """Attach resolved ROI traceability to the mutable request clone."""
+        setattr(request, "_mtf_roi_input_source", source)
+        if roi is not None:
+            x, y, w, h = [int(value) for value in roi]
+            setattr(request, "_mtf_resolved_roi", (x, y, w, h))
+            setattr(request, "roi_x", x)
+            setattr(request, "roi_y", y)
+            setattr(request, "roi_width", w)
+            setattr(request, "roi_height", h)
+
+    def _validate_and_clip_request_roi(
+        self,
+        cv_image: np.ndarray,
+        request,
+        *,
+        min_width: int,
+        min_height: int,
+        label: str,
+    ) -> tuple[int, int, int, int]:
+        """Validate an explicit request ROI and clip it to the current image."""
+        if not self._request_roi_is_set(request):
+            raise ImageProcessingError(
+                self._with_next_step(
+                    f"{label} requires roi_width > 0 and roi_height > 0.",
+                    "provide ROI coordinates or omit them to use interactive ROI selection.",
+                )
+            )
+
+        img_h, img_w = cv_image.shape[:2]
+        raw_x, raw_y, raw_w, raw_h = self._request_roi_tuple(request)
+        x1 = max(0, raw_x)
+        y1 = max(0, raw_y)
+        x2 = min(img_w, raw_x + raw_w)
+        y2 = min(img_h, raw_y + raw_h)
+        w = max(0, x2 - x1)
+        h = max(0, y2 - y1)
+        if w < min_width or h < min_height:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    f"{label} ROI too small after clipping: x={x1},y={y1} {w}x{h}px "
+                    f"(minimum {min_width}x{min_height}px).",
+                    "increase the ROI so it contains the full target and retry.",
+                )
+            )
+        return x1, y1, w, h
 
     def _build_mtf_config(
         self,
@@ -932,8 +1098,16 @@ class MTFHandler(CallbackBase):
             "effective_pixel_size_um": float(pixel_size_um),
             "request_pixel_size_um": float(request_pixel_size_um),
             "pixel_size_source": "request" if request_pixel_size_um > 0 else "node_parameter",
+            "measurement_mode": self._normalize_measurement_mode(request),
             "auto_roi": bool(getattr(request, "auto_roi", False)),
             "roi_detection_mode": self._normalize_roi_detection_mode(request),
+            "roi_input_source": str(
+                getattr(request, "_mtf_roi_input_source", "none") or "none"
+            ),
+            "requested_roi_x": int(getattr(request, "roi_x", 0) or 0),
+            "requested_roi_y": int(getattr(request, "roi_y", 0) or 0),
+            "requested_roi_width": int(getattr(request, "roi_width", 0) or 0),
+            "requested_roi_height": int(getattr(request, "roi_height", 0) or 0),
             "target_edge": str(getattr(request, "target_edge", "") or "").strip(),
             "camera_objective": camera_objective,
             "objective_magnification_x": objective_magnification_x,
@@ -942,10 +1116,21 @@ class MTFHandler(CallbackBase):
             "coaxial_light_current": coaxial_light_current,
             "notes": notes,
         }
+        metadata.update(
+            {
+                f"roi_detection_{key}": value
+                for key, value in self._roi_detection_settings().items()
+            }
+        )
         return {
             key: value
             for key, value in metadata.items()
-            if value is not None and not (isinstance(value, str) and value == "")
+            if value is not None
+            and not (isinstance(value, str) and value == "")
+            and not (
+                key.startswith("requested_roi_")
+                and not self._request_roi_is_set(request)
+            )
         }
 
     def _format_measurement_metadata(self, metadata: dict[str, object]) -> str:
@@ -972,9 +1157,23 @@ class MTFHandler(CallbackBase):
             parts.append(f"coaxI={coaxial_current:.3f}")
         if metadata.get("auto_roi"):
             parts.append("auto_roi=yes")
+        measurement_mode = str(metadata.get("measurement_mode", "") or "").strip()
+        if measurement_mode:
+            parts.append(f"mode={measurement_mode}")
         roi_detection_mode = str(metadata.get("roi_detection_mode", "") or "").strip()
         if roi_detection_mode and roi_detection_mode not in {"auto", "direct_manual"}:
             parts.append(f"roi_mode={roi_detection_mode}")
+        roi_source = str(metadata.get("roi_input_source", "") or "").strip()
+        if roi_source and roi_source != "none":
+            parts.append(f"roi_source={roi_source}")
+        if "requested_roi_width" in metadata and "requested_roi_height" in metadata:
+            parts.append(
+                "roi="
+                f"{int(metadata.get('requested_roi_x', 0) or 0)},"
+                f"{int(metadata.get('requested_roi_y', 0) or 0)} "
+                f"{int(metadata.get('requested_roi_width', 0) or 0)}x"
+                f"{int(metadata.get('requested_roi_height', 0) or 0)}"
+            )
         target_edge = metadata.get("target_edge")
         if target_edge:
             parts.append(f"target_edge={target_edge}")
@@ -997,14 +1196,15 @@ class MTFHandler(CallbackBase):
     ) -> tuple[Path, str]:
         """Create one predictable run folder for a single service call."""
         timestamp = timestamp or self._get_timestamp()
-        auto_roi = bool(getattr(request, "auto_roi", False))
-        if auto_roi and len(edge_rois) >= 4:
+        measurement_mode = self._normalize_measurement_mode(request)
+        if measurement_mode == "auto" and len(edge_rois) >= 4:
             mode_label = "square4"
-        elif auto_roi:
+        elif measurement_mode == "auto":
             mode_label = "auto"
+        elif measurement_mode == "roi_search":
+            mode_label = "roi_search"
         else:
-            roi_detection_mode = self._normalize_roi_detection_mode(request)
-            mode_label = "roi_search" if roi_detection_mode == "search_square_in_roi" else "manual"
+            mode_label = "manual"
         requested_edge = str(getattr(request, "target_edge", "") or "").strip().lower()
         requested_label = ""
         if requested_edge and requested_edge not in {"any", "select", "interactive"}:
@@ -1076,15 +1276,43 @@ class MTFHandler(CallbackBase):
 
     def _detect_auto_edge_rois(self, cv_image: np.ndarray) -> list[EdgeROI]:
         """Detect square/bar targets and return candidate edge ROIs."""
-        self._node.get_logger().info("Auto-ROI enabled: Detecting targets...")
-        _, bars, squares = RoiDetector.detect_targets(cv_image)
+        settings = self._roi_detection_settings()
+        self._node.get_logger().info(
+            "Auto-ROI enabled: detecting full-frame targets "
+            f"(min_square_area={settings['min_square_area']}px, "
+            f"min_square_side={settings['min_square_side']}px)."
+        )
+        _, bars, squares = RoiDetector.detect_targets(
+            cv_image,
+            min_area=settings["min_contour_area"],
+            square_min_area=settings["min_square_area"],
+            min_square_side=settings["min_square_side"],
+        )
 
         if squares:
-            largest_square = max(squares, key=lambda rect: rect[1][0] * rect[1][1])
+            fully_visible_squares = [
+                rect
+                for rect in squares
+                if RoiDetector._rect_fully_inside_bounds(rect, cv_image.shape[:2])
+            ]
+            if not fully_visible_squares:
+                self._node.get_logger().warn(
+                    f"Rejected {len(squares)} square candidate(s) touching image bounds."
+                )
+            largest_square = max(
+                fully_visible_squares,
+                key=lambda rect: float(rect[1][0]) * float(rect[1][1]),
+                default=None,
+            )
+        else:
+            largest_square = None
+
+        if largest_square is not None:
             edge_rois = RoiDetector.create_edge_rois_from_rect(
                 cv_image,
                 largest_square,
-                roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+                roi_width=settings["edge_roi_width"],
+                min_edge_roi_width=settings["min_edge_roi_width"],
             )
             valid_edges = [edge for edge in edge_rois if edge.is_valid]
             if valid_edges:
@@ -1104,7 +1332,8 @@ class MTFHandler(CallbackBase):
             edge_rois = RoiDetector.create_edge_rois_from_rect(
                 cv_image,
                 largest_bar,
-                roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+                roi_width=settings["edge_roi_width"],
+                min_edge_roi_width=settings["min_edge_roi_width"],
             )
             if edge_rois:
                 self._node.get_logger().info(
@@ -1115,19 +1344,40 @@ class MTFHandler(CallbackBase):
         raise ImageProcessingError(
             self._with_next_step(
                 "Auto-ROI found no square or bar target.",
-                "align the target more centrally, retry with roi_detection_mode='search_square_in_roi', or switch to direct_manual.",
+                "ensure the full target is visible, retry with measurement_mode='roi_search', or switch to direct_manual.",
             )
         )
 
-    def _build_direct_manual_edge_roi(self, cv_image: np.ndarray) -> list[EdgeROI]:
+    def _build_direct_manual_edge_roi(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
         """Collect one manual measurement ROI and wrap it in the shared EdgeROI structure."""
-        roi, roi_img = self._select_roi_interactive(cv_image)
-        if roi is None:
-            raise ImageProcessingError(
-                self._with_next_step(
-                    "Manual ROI selection was cancelled.",
-                    "draw one ROI around a clean slanted edge and retry in direct_manual mode.",
+        min_size = self._roi_detection_settings()["min_edge_roi_width"]
+        if self._request_roi_is_set(request):
+            roi = self._validate_and_clip_request_roi(
+                cv_image,
+                request,
+                min_width=min_size,
+                min_height=min_size,
+                label="Direct manual",
+            )
+            self._annotate_request_roi(request, "request", roi)
+            self._node.get_logger().info(
+                f"Direct manual ROI from request: x={roi[0]},y={roi[1]} {roi[2]}x{roi[3]}px"
+            )
+            x, y, w, h = roi
+            roi_img = cv_image[y : y + h, x : x + w]
+        else:
+            roi, roi_img = self._select_roi_interactive(cv_image)
+            if roi is None:
+                raise ImageProcessingError(
+                    self._with_next_step(
+                        "Manual ROI selection was cancelled.",
+                        "draw one ROI around a clean slanted edge and retry in direct_manual mode.",
+                    )
                 )
+            self._annotate_request_roi(request, "interactive", roi)
+            self._node.get_logger().info(
+                f"Direct manual ROI selected interactively: x={roi[0]},y={roi[1]} "
+                f"{roi[2]}x{roi[3]}px"
             )
 
         x, y, w, h = roi
@@ -1143,21 +1393,45 @@ class MTFHandler(CallbackBase):
             )
         ]
 
-    def _build_search_square_edge_rois(self, cv_image: np.ndarray) -> list[EdgeROI]:
+    def _build_search_square_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
         """Collect one search ROI and detect a complete square inside it."""
-        search_roi, _search_image = self._select_roi_interactive(cv_image)
-        if search_roi is None:
-            raise ImageProcessingError(
-                self._with_next_step(
-                    "ROI square search was cancelled.",
-                    "draw a search ROI around the full cube face and retry the measurement.",
+        settings = self._roi_detection_settings()
+        if self._request_roi_is_set(request):
+            search_roi = self._validate_and_clip_request_roi(
+                cv_image,
+                request,
+                min_width=settings["min_square_side"],
+                min_height=settings["min_square_side"],
+                label="ROI square search",
+            )
+            self._annotate_request_roi(request, "request", search_roi)
+            self._node.get_logger().info(
+                f"ROI square search from request: x={search_roi[0]},y={search_roi[1]} "
+                f"{search_roi[2]}x{search_roi[3]}px"
+            )
+        else:
+            search_roi, _search_image = self._select_roi_interactive(cv_image)
+            if search_roi is None:
+                raise ImageProcessingError(
+                    self._with_next_step(
+                        "ROI square search was cancelled.",
+                        "draw a search ROI around the full cube face and retry the measurement.",
+                    )
                 )
+            self._annotate_request_roi(request, "interactive", search_roi)
+            self._node.get_logger().info(
+                f"ROI square search selected interactively: x={search_roi[0]},y={search_roi[1]} "
+                f"{search_roi[2]}x{search_roi[3]}px"
             )
 
         edge_rois = RoiDetector.detect_square_edge_rois_in_search_roi(
             cv_image,
             search_roi,
-            roi_width=MTF_AUTO_ROI_EDGE_WIDTH,
+            roi_width=settings["edge_roi_width"],
+            min_contour_area=settings["min_contour_area"],
+            min_square_area=settings["min_square_area"],
+            min_square_side=settings["min_square_side"],
+            min_edge_roi_width=settings["min_edge_roi_width"],
         )
         valid_edges = [edge for edge in edge_rois if edge.is_valid]
         if valid_edges:
@@ -1224,13 +1498,15 @@ class MTFHandler(CallbackBase):
     def _resolve_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
         """Resolve auto/manual ROI selection into one shared candidate list."""
         if bool(getattr(request, "auto_roi", False)):
+            if not str(getattr(request, "_mtf_roi_input_source", "") or ""):
+                self._annotate_request_roi(request, "none", None)
             edge_rois = self._detect_auto_edge_rois(cv_image)
         else:
             roi_detection_mode = self._normalize_roi_detection_mode(request)
             if roi_detection_mode == "search_square_in_roi":
-                edge_rois = self._build_search_square_edge_rois(cv_image)
+                edge_rois = self._build_search_square_edge_rois(cv_image, request)
             elif roi_detection_mode == "direct_manual":
-                edge_rois = self._build_direct_manual_edge_roi(cv_image)
+                edge_rois = self._build_direct_manual_edge_roi(cv_image, request)
             else:
                 raise ImageProcessingError(
                     self._with_next_step(
@@ -1442,11 +1718,10 @@ class MTFHandler(CallbackBase):
 
     def _roi_mode_label(self, request, edge_count: int) -> str:
         """Return one stable ROI mode label for exports."""
-        auto_roi = bool(getattr(request, "auto_roi", False))
-        if not auto_roi:
-            roi_detection_mode = self._normalize_roi_detection_mode(request)
-            if roi_detection_mode == "search_square_in_roi":
-                return "roi_square_search"
+        measurement_mode = self._normalize_measurement_mode(request)
+        if measurement_mode == "roi_search":
+            return "roi_square_search"
+        if measurement_mode == "direct_manual":
             return "manual"
         if edge_count >= 4:
             return "auto_square4"
@@ -1596,6 +1871,7 @@ class MTFHandler(CallbackBase):
     @handle_service_errors()
     def measure_mtf_callback(self, request, response):
         """MTF measurement from current camera image."""
+        request = self._normalize_measurement_request(request)
         self._node.get_logger().info("MTF measurement service called.")
         if self._param_bool("mtf.use_raw_capture", True):
             self._node.get_logger().info(
@@ -1632,6 +1908,9 @@ class MTFHandler(CallbackBase):
             min_edge_angle = self._param_float("mtf_min_edge_angle", 2.0)
             max_edge_angle = self._param_float("mtf_max_edge_angle", 10.0)
             measurement_run = self._prepare_measurement_run(cv_image, request)
+            measurement_metadata.update(
+                self._collect_measurement_metadata(request, pixel_size_um)
+            )
 
             # Step 4: measure every candidate edge through the shared analyzer
             # path so auto ROI and manual ROI stay directly comparable.
@@ -1685,8 +1964,10 @@ class MTFHandler(CallbackBase):
         """Force the canonical center/full-image MTF path."""
         normalized_request = self._clone_request_with_overrides(
             request,
+            measurement_mode="auto",
             auto_roi=True,
             roi_detection_mode="",
+            _mtf_roi_input_source="legacy_center",
         )
         return self.measure_mtf_callback(normalized_request, response)
 
@@ -1700,8 +1981,12 @@ class MTFHandler(CallbackBase):
 
         normalized_request = self._clone_request_with_overrides(
             request,
+            measurement_mode=(
+                "roi_search" if roi_detection_mode == "search_square_in_roi" else "direct_manual"
+            ),
             auto_roi=False,
             roi_detection_mode=roi_detection_mode,
+            _mtf_roi_input_source="legacy_roi",
         )
         return self.measure_mtf_callback(normalized_request, response)
 
