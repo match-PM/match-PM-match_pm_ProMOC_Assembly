@@ -235,7 +235,7 @@ class MTFHandler(CallbackBase):
         config.capture_binning_h = self._param_int("mtf.capture_binning", 1)
         config.capture_binning_v = self._param_int("mtf.capture_binning", 1)
         config.capture_exposure_us = self._param_float("mtf.capture_exposure_us", 0.0)
-        config.capture_gain = self._param_float("mtf.capture_gain", 0.0)
+        config.capture_gain = self._param_float("mtf.capture_gain", 0.0) 
         config.source_encoding = self._param_str("mtf.capture_pixel_format", "").strip()
         config.raw_green_pair_warn_pct = self._param_float(
             "mtf.raw_green_pair_warn_pct",

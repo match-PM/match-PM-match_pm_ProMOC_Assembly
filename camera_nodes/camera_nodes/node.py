@@ -2,8 +2,8 @@
 """ROS2 runtime node for camera services."""
 
 import time
-
 from cv_bridge import CvBridge
+
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
     AutoFocus,

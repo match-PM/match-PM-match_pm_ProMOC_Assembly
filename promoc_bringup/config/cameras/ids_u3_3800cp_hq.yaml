@@ -99,7 +99,7 @@ camera_params:
 # - Long exposure mode: up to 30000 ms (30 seconds)
 exposure_time:
   # Start exposure loaded by the launch and used as the service fallback value.
-  default_ms: 60.0
+  default_ms: 30.0
   
   # Minimum exposure time in microseconds
   # Source: IDS datasheet - Belichtungszeit min: 0.053 ms = 53 µs
@@ -187,7 +187,7 @@ mtf_params:
   
   # Recommended settings for MTF measurement
   recommended_exposure_ms: 30.0   # Start conservative for initial hardware bringup
-  recommended_gain: 0.0           # Keep within camera gain range for stable MTF capture
+  recommended_gain: 1.0           # Keep within camera gain range for stable MTF capture
   
   # Binning affects MTF - IDS U3-3800CP supports 2x2 binning
   binning_modes:
