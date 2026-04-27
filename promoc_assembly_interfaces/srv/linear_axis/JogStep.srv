@@ -1,7 +1,0 @@
-
-int32 direction    # Direction: positive values = forward, negative = backward (normalized to ±1)
-
----
-bool success
-string status_message  
-float64 final_position    # Final position after jog step in mm (-1.0 if error)

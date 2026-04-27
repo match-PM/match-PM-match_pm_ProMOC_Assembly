@@ -1,7 +1,0 @@
-float64 new_max_velocity
-float64 new_acceleration
----
-float64 max_velocity
-float64 acceleration
-bool success
-string status_message
