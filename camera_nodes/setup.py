@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "camera_node = camera_nodes.node:main",
+            "mtf_batch_analyze = camera_nodes.mtf_batch_analyze:main",
         ],
     },
 )

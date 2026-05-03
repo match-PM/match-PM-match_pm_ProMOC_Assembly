@@ -22,8 +22,8 @@ class MTFAutomatedClient(Node):
         
         # Konstruktion der statischen Anfrage-Datenstruktur
         self.req = MeasureMTF.Request()
-        self.req.pixel_size_um = 2.4
-        self.req.auto_roi = True
+        self.req.measurement_mode = "capture_only"
+        self.req.target_edge = "any"
 
     def execute_measurements(self, iterations: int = 100):
         """Führt den Service-Aufruf sequenziell aus und loggt die optischen Kennzahlen."""

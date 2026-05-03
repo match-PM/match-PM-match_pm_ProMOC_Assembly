@@ -8,6 +8,7 @@ from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
     AutoFocus,
     AutoFocusROI,
+    GetRoiCoordinates,
     MeasureMTF,
     SetExposure,
 )
@@ -159,6 +160,12 @@ class CameraNode(Node):
             MeasureMTF,
             "/promoc/camera/measure_mtf_roi",
             self.mtf_handler.measure_mtf_roi_callback,
+            callback_group=self.cb_group,
+        )
+        self.roi_coordinates_service = self.create_service(
+            GetRoiCoordinates,
+            "/promoc/camera/get_roi_coordinates",
+            self.mtf_handler.get_roi_coordinates_callback,
             callback_group=self.cb_group,
         )
         self.set_exposure_service = self.create_service(

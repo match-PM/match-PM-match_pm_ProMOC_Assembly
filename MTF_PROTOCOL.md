@@ -9,7 +9,7 @@ fuer den Messstand-Branch. Ziel ist ein lehrfreundlicher, aber belastbarer
 - Das Repo liefert **relative wissenschaftliche Validitaet** fuer
   Vergleichsmessungen im Labor.
 - Verglichen werden spaeter **CSV-Exporte ausserhalb von ROS**.
-- `auto_roi`, lokale ROI-Suche und direkte manuelle ROI sind gleichwertige
+- Auto-ROI, lokale ROI-Suche und direkte manuelle ROI sind gleichwertige
   Messpfade und muessen deshalb dieselbe Export- und Diagnose-Struktur liefern.
 
 Nicht der Anspruch dieser Stufe:
@@ -96,22 +96,6 @@ Default fuer Vergleichsstudien:
 
 - **5 Wiederholungen pro Bedingung**
 
-### Beam-Splitter-Vergleich
-
-Fuer einen sauberen `use_beamsplitter`-Vergleich bleiben konstant:
-
-- Objektiv
-- Arbeitsdistanz
-- Target
-- Kamerawinkel
-- Beleuchtung
-- Fokuspfad
-
-Es wechselt nur:
-
-- `use_beamsplitter = false`
-- `use_beamsplitter = true`
-
 ## Datenfluss
 
 Der offizielle MTF-Pfad ist absichtlich kurz:
@@ -168,17 +152,33 @@ Winkeldetektion sonst stark verziehen kann.
 - die lokalen Kanten werden anschliessend wieder in globale Bildkoordinaten
   zurueckprojiziert und durch dieselbe Analyzer- und Exportpipeline geschickt
 
-Der empfohlene Bedienpfad ist:
-
-1. `/promoc/camera/measure_mtf_center`
-2. bei Bedarf `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='search_square_in_roi'`
-3. nur als letzter Fallback `/promoc/camera/measure_mtf_roi` mit `roi_detection_mode='direct_manual'`
-
-Fuer neue Clients gilt stattdessen:
+Der empfohlene Bedienpfad fuer neue Messablaeufe ist ein Service:
 
 1. `/promoc/camera/measure_mtf` mit `measurement_mode='auto'`
 2. bei Bedarf `measurement_mode='roi_search'` und optionalem ROI
 3. nur als letzter Fallback `measurement_mode='direct_manual'`
+
+Fuer schnelle Serienmessungen kann derselbe Service mit
+`measurement_mode='capture_only'` verwendet werden. Dieser Pfad schaltet und
+validiert die wissenschaftliche Raw-Capture-Konfiguration, nutzt standardmaessig
+ein Suchfenster fuer die lokale Quadrat-Suche, erkennt die Kanten einmal,
+speichert standardmaessig ein Fullframe-Raw plus pro Kante einen Raw-ROI-Stack
+und verschiebt die MTF-Berechnung in einen spaeteren Batch-Lauf. Das Suchfenster
+kann per `roi_x/y/width/height` uebergeben oder interaktiv im OpenCV-Bild
+gezogen werden; derselbe Ablauf gilt fuer Mitte, Rand und Ecke:
+
+Wenn die Kantenposition bereits bekannt ist, kann
+`measurement_mode='capture_only_direct'` verwendet werden. Dann ist
+`roi_x/y/width/height` direkt der Kanten-Crop; es wird keine Quadrat- oder
+Kantensuche ausgefuehrt.
+
+```bash
+ros2 run camera_nodes mtf_batch_analyze --input <run-or-folder> --recursive --overwrite
+```
+
+Wenn ein Bereich mehrfach automatisiert gemessen werden soll, kann der
+Hilfsservice `/promoc/camera/get_roi_coordinates` einmalig einen Suchrahmen
+interaktiv abfragen und die Pixelkoordinaten zur Wiederverwendung zurueckgeben.
 
 `target_edge='any'/'top'/'right'/'bottom'/'left'/'select'` bleibt auch fuer
 diesen ROI-Suchpfad gueltig.
@@ -192,6 +192,12 @@ Jeder Run landet in genau einem Messordner und enthaelt mindestens:
 - `selected_edge.txt`
 - pro Kante `*_esf.csv`, `*_lsf.csv`, `*_mtf.csv`, `*_plot.png`, `*_roi.png`
 
+Capture-only-Runs enthalten vor der Offline-Auswertung stattdessen
+`capture_manifest.json`, `capture_index.csv`, `summary.csv`, `context.csv`,
+`edges_overview.png`, `first_fullframe_raw.npy` und pro Kante `*_raw_stack.npy`
+plus `*_roi.png`. Nach dem Batch-Lauf werden dieselben finalen CSV-/Plot-
+Artefakte wie im Online-Pfad geschrieben.
+
 ### context.csv
 
 `context.csv` ist die **kanonische Ein-Zeilen-Beschreibung der Messbedingung**.
@@ -199,12 +205,13 @@ Sie ist fuer spaetere Vergleiche gedacht und enthaelt unter anderem:
 
 - Operator
 - Timestamp
-- ROI-Modus
-- ROI-Erkennungsmodus im Sinne von `auto`, `roi_square_search` oder `manual`
-- Objektiv und Magnification
-- `use_beamsplitter`
-- coaxiale Lichtwerte
-- effektive Pixelgroesse und deren Quelle
+- ROI-Modus, zum Beispiel `auto_square4`, `roi_square_search`, `manual` oder
+  `capture_only`
+- ROI-Erkennungsmodus, zum Beispiel `auto`, `search_square_in_roi` oder
+  `direct_manual`
+- Objektiv und Magnification aus der Messstand-Konfiguration
+- effektive Pixelgroesse aus der Kamera-Konfiguration
+- freie Notizen, zum Beispiel Lichtwerte, falls fuer die Messreihe relevant
 - Fokusposition
 - Capture-Readback und verfuegbare Keys
 - Warnungen, Fehler und Notizen

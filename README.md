@@ -158,7 +158,7 @@ MTF im Standardpfad ueber den kanonischen Service:
 ```bash
 ros2 service call /promoc/camera/measure_mtf \
   promoc_assembly_interfaces/srv/MeasureMTF \
-  "{pixel_size_um: 0.0, measurement_mode: 'auto', target_edge: 'any'}"
+  "{measurement_mode: 'auto', target_edge: 'any'}"
 ```
 
 MTF-Fallback mit lokaler ROI-Suche nach einer vollstaendigen Quadratkante:
@@ -166,7 +166,7 @@ MTF-Fallback mit lokaler ROI-Suche nach einer vollstaendigen Quadratkante:
 ```bash
 ros2 service call /promoc/camera/measure_mtf \
   promoc_assembly_interfaces/srv/MeasureMTF \
-  "{pixel_size_um: 0.0, measurement_mode: 'roi_search', target_edge: 'any'}"
+  "{measurement_mode: 'roi_search', target_edge: 'any'}"
 ```
 
 MTF-Fallback mit direkter manueller ROI:
@@ -174,14 +174,61 @@ MTF-Fallback mit direkter manueller ROI:
 ```bash
 ros2 service call /promoc/camera/measure_mtf \
   promoc_assembly_interfaces/srv/MeasureMTF \
-  "{pixel_size_um: 0.0, measurement_mode: 'direct_manual', target_edge: 'any'}"
+  "{measurement_mode: 'direct_manual', target_edge: 'any'}"
 ```
+
+Schneller Aufnahme-Pfad ohne direkte MTF-Berechnung:
+
+```bash
+ros2 service call /promoc/camera/measure_mtf \
+  promoc_assembly_interfaces/srv/MeasureMTF \
+  "{measurement_mode: 'capture_only', target_edge: 'any', roi_x: 0, roi_y: 0, roi_width: 0, roi_height: 0}"
+```
+
+Noch schneller, wenn die Kanten-ROI schon bekannt ist und keine Quadrat-Suche
+mehr laufen soll:
+
+```bash
+ros2 service call /promoc/camera/measure_mtf \
+  promoc_assembly_interfaces/srv/MeasureMTF \
+  "{measurement_mode: 'capture_only_direct', target_edge: 'any', roi_x: 120, roi_y: 240, roi_width: 220, roi_height: 120}"
+```
+
+Die spaetere Auswertung eines Capture-Ordners laeuft ohne Kamera:
+
+```bash
+ros2 run camera_nodes mtf_batch_analyze \
+  --input ~/Dokumente/Messungen/MaxMustermann/mtf_messungen \
+  --recursive --overwrite
+```
+
+Einmalig ROI-Koordinaten aus dem aktuellen Bild holen:
+
+```bash
+ros2 service call /promoc/camera/get_roi_coordinates \
+  promoc_assembly_interfaces/srv/GetRoiCoordinates \
+  "{window_name: 'Select MTF Search ROI'}"
+```
+
+Die Antwortwerte `roi_x`, `roi_y`, `roi_width` und `roi_height` koennen danach
+direkt in wiederholten `measure_mtf`-Calls verwendet werden.
 
 ## MTF Quick Start
 
 - `Auto-MTF`: Quadrat-Target ins Bild bringen, `measure_mtf` mit
   `measurement_mode='auto'`
   ausloesen, die 4 Kanten werden automatisch bewertet.
+- `Capture-only`: `measurement_mode='capture_only'` nutzt dieselbe Raw-Capture-
+  Validierung und standardmaessig die lokale Quadrat-Suche in einem Suchfenster.
+  Wenn `roi_width`/`roi_height` gesetzt sind, kommt das Suchfenster aus dem
+  Request; sonst wird interaktiv ein Rahmen im Bild gezogen. Das gilt auch fuer
+  Messungen in der Bildmitte. Gespeichert wird ein Fullframe-Raw zur
+  Nachvollziehbarkeit sowie kompakte Raw-ROI-Stacks fuer die Mittelung. Die
+  MTF-Berechnung kann danach ueber Nacht mit
+  `mtf_batch_analyze` laufen.
+- `Capture-only direkt`: `measurement_mode='capture_only_direct'` behandelt
+  `roi_x/y/width/height` direkt als Kanten-Crop. Damit entfaellt die
+  Quadrat-/Kantensuche pro Messung; ideal fuer feste Serienpositionen.
 - `ROI-Suche`: Nutzer markiert nur eine aeussere Such-ROI. Innerhalb dieser ROI
   muss ein vollstaendiges Quadrat liegen; daraus werden lokal wieder die vier
   Kantenkandidaten abgeleitet.
@@ -197,6 +244,10 @@ ros2 service call /promoc/camera/measure_mtf \
 - `Ergebnisse`: Fuer jede Messung entsteht ein Run-Ordner mit `summary.csv`,
   `context.csv`, `selected_edge.txt` und pro Kante benannten
   `*_esf.csv`/`*_lsf.csv`/`*_mtf.csv`/`*_plot.png`/`*_roi.png`.
+- `Capture-only Ergebnisse`: Vor der Offline-Auswertung enthaelt der Ordner
+  `capture_manifest.json`, `capture_index.csv`, `summary.csv`, `context.csv`,
+  `edges_overview.png`, `first_fullframe_raw.npy` und pro Kante
+  `*_raw_stack.npy` sowie `*_roi.png`.
 - `Konservativer Standard`: Der Messstand nutzt im Standardpfad eine
   konservativ geglaettete ESF/LSF-Verarbeitung, um starke MTF-Overshoots
   softwareseitig zu bremsen.
@@ -318,8 +369,8 @@ Die ESF wird direkt aus den realen Gruen-Sample-Koordinaten aufgebaut. Es gibt
 kein Debayering und kein 2D-Auffuellen fehlender Bayer-Pixel.
 
 Vergleich mehrerer Bedingungen passiert bewusst **ausserhalb von ROS** ueber
-`context.csv` und `summary.csv`. Das offizielle Messprotokoll, die SOP fuer
-Beam-Splitter-Vergleiche und die Bedeutung der CSV-Spalten stehen in
+`context.csv` und `summary.csv`. Das offizielle Messprotokoll und die Bedeutung
+der CSV-Spalten stehen in
 [`MTF_PROTOCOL.md`](MTF_PROTOCOL.md).
 
 Nur fuer Hardware-Notfaelle gibt es zwei klar getrennte Fallbacks:

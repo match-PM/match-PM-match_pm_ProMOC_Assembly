@@ -308,6 +308,18 @@ def _create_camera_node(
                 "mtf.capture_gain": camera_mtf_params.get("recommended_gain", 0.0),
                 "mtf.capture_settle_s": 0.35,
                 "mtf.capture_image_timeout_s": 2.0,
+                "mtf.capture_only_samples": int(
+                    mtf_config.get("capture_only_samples", 10)
+                ),
+                "mtf.capture_only_timeout_s": float(
+                    mtf_config.get("capture_only_timeout_s", 1.0)
+                ),
+                "mtf.capture_only_save_fullframe_raw": bool(
+                    mtf_config.get("capture_only_save_fullframe_raw", True)
+                ),
+                "mtf.capture_only_preview_png": bool(
+                    mtf_config.get("capture_only_preview_png", True)
+                ),
                 "mtf.capture_disable_exposure_auto": True,
                 "mtf.capture_disable_gain_auto": True,
                 "mtf.capture_disable_white_balance_auto": True,
@@ -335,12 +347,6 @@ def _create_camera_node(
                 "autofocus.fly_over.refinement_strategy": config["fly_over"][
                     "refinement_strategy"
                 ],
-                "measurement_conditions.coaxial_light_voltage": config[
-                    "measurement_conditions"
-                ]["coaxial_light_voltage"],
-                "measurement_conditions.coaxial_light_current": config[
-                    "measurement_conditions"
-                ]["coaxial_light_current"],
                 "measurement_conditions.camera_objective": config[
                     "measurement_conditions"
                 ]["camera_objective"],

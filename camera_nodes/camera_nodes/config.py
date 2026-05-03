@@ -72,8 +72,6 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("autofocus.fly_over.settle_very_high_mag_s", 0.25),
     ("autofocus.fly_over.refinement_strategy", "linear"),
     ("autofocus.fly_over.refinement_mode", 0),
-    ("measurement_conditions.coaxial_light_voltage", 0.0),
-    ("measurement_conditions.coaxial_light_current", 0.0),
     ("measurement_conditions.camera_objective", "unknown"),
     ("measurement_conditions.notes", ""),
     ("mtf.debug_export_dir", ""),
@@ -186,18 +184,6 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
     "measurement": (
         ("measurement.username", "username", str, ""),
         ("measurement.base_path", "base_path", str, ""),
-        (
-            "measurement_conditions.coaxial_light_voltage",
-            "coaxial_light_voltage",
-            float,
-            0.0,
-        ),
-        (
-            "measurement_conditions.coaxial_light_current",
-            "coaxial_light_current",
-            float,
-            0.0,
-        ),
         ("measurement_conditions.camera_objective", "camera_objective", str, "unknown"),
         ("measurement_conditions.notes", "notes", str, ""),
     ),

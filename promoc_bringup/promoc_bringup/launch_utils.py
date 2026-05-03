@@ -131,8 +131,6 @@ def load_user_config(bringup_share_dir: str) -> dict:
             "capture_required_raw": True,
         },
         "measurement_conditions": {
-            "coaxial_light_voltage": 0.0,
-            "coaxial_light_current": 0.0,
             "camera_objective": "unknown",
             "notes": "",
         },

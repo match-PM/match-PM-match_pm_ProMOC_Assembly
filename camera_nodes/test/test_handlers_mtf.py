@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 import sys
 import types
@@ -66,6 +67,8 @@ if "rcl_interfaces" not in sys.modules:
     sys.modules["rcl_interfaces"] = rcl_pkg
 
 from camera_nodes.services import mtf as mtf_module  # noqa: E402
+from camera_nodes import mtf_capture as mtf_capture_module  # noqa: E402
+from camera_nodes.algorithms.mtf import MTFConfig  # noqa: E402
 from camera_nodes.algorithms.mtf import MTFResult  # noqa: E402
 from camera_nodes.services.mtf import MTFHandler  # noqa: E402
 from promoc_core.promoc_exceptions import ImageProcessingError  # noqa: E402
@@ -138,24 +141,17 @@ def test_measure_mtf_center_callback_forces_auto_roi():
     captured = {}
 
     def _fake_measure_callback(request, response):
-        captured["auto_roi"] = request.auto_roi
         captured["measurement_mode"] = getattr(request, "measurement_mode", "")
-        captured["roi_detection_mode"] = getattr(request, "roi_detection_mode", "")
         captured["roi_input_source"] = getattr(request, "_mtf_roi_input_source", "")
         return response
 
     handler.measure_mtf_callback = _fake_measure_callback
-    request = types.SimpleNamespace(
-        auto_roi=False,
-        roi_detection_mode="search_square_in_roi",
-    )
+    request = types.SimpleNamespace()
 
     handler.measure_mtf_center_callback(request, _make_measure_response())
 
-    assert captured["auto_roi"] is True
     assert captured["measurement_mode"] == "auto"
-    assert captured["roi_detection_mode"] == ""
-    assert captured["roi_input_source"] == "legacy_center"
+    assert captured["roi_input_source"] == "alias_center"
 
 
 def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search():
@@ -163,24 +159,78 @@ def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search(
     captured = {}
 
     def _fake_measure_callback(request, response):
-        captured["auto_roi"] = request.auto_roi
         captured["measurement_mode"] = getattr(request, "measurement_mode", "")
-        captured["roi_detection_mode"] = getattr(request, "roi_detection_mode", "")
         captured["roi_input_source"] = getattr(request, "_mtf_roi_input_source", "")
         return response
 
     handler.measure_mtf_callback = _fake_measure_callback
-    request = types.SimpleNamespace(
-        auto_roi=True,
-        roi_detection_mode="",
-    )
+    request = types.SimpleNamespace()
 
     handler.measure_mtf_roi_callback(request, _make_measure_response())
 
-    assert captured["auto_roi"] is False
     assert captured["measurement_mode"] == "roi_search"
-    assert captured["roi_detection_mode"] == "search_square_in_roi"
-    assert captured["roi_input_source"] == "legacy_roi"
+    assert captured["roi_input_source"] == "alias_roi"
+
+
+def test_capture_only_defaults_to_roi_square_search():
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+
+    request = types.SimpleNamespace(
+        measurement_mode="capture_only",
+    )
+
+    normalized = handler._normalize_measurement_request(request)
+
+    assert normalized.measurement_mode == "capture_only"
+    assert handler._normalize_roi_detection_mode(normalized) == "search_square_in_roi"
+
+
+def test_capture_only_direct_uses_direct_roi_mode():
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+
+    request = types.SimpleNamespace(
+        measurement_mode="capture_direct",
+    )
+
+    normalized = handler._normalize_measurement_request(request)
+
+    assert normalized.measurement_mode == "capture_only_direct"
+    assert handler._normalize_roi_detection_mode(normalized) == "direct_manual"
+
+
+def test_get_roi_coordinates_callback_returns_interactive_roi():
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    handler._get_mtf_capture_image = lambda: (
+        np.zeros((80, 100), dtype=np.uint16),
+        123,
+        "bayer_rggb16",
+    )
+    handler._select_roi_interactive_with_title = lambda _image, title: (
+        (10, 20, 30, 40),
+        np.zeros((40, 30), dtype=np.uint16),
+    )
+    response = types.SimpleNamespace(
+        success=False,
+        status_message="",
+        roi_x=0,
+        roi_y=0,
+        roi_width=0,
+        roi_height=0,
+    )
+
+    result = handler.get_roi_coordinates_callback(
+        types.SimpleNamespace(window_name="Pick ROI"),
+        response,
+    )
+
+    assert result.success is True
+    assert (result.roi_x, result.roi_y, result.roi_width, result.roi_height) == (
+        10,
+        20,
+        30,
+        40,
+    )
+    assert "ROI selected" in result.status_message
 
 
 def test_detect_square_edge_rois_in_search_roi_translates_back_to_global_coordinates(
@@ -304,8 +354,6 @@ def test_roi_search_with_request_roi_skips_interactive_selection(monkeypatch: py
     )
     request = types.SimpleNamespace(
         measurement_mode="roi_search",
-        auto_roi=False,
-        roi_detection_mode="",
         roi_x=10,
         roi_y=20,
         roi_width=80,
@@ -326,8 +374,6 @@ def test_roi_search_rejects_too_small_request_roi():
     request = handler._normalize_measurement_request(
         types.SimpleNamespace(
             measurement_mode="roi_search",
-            auto_roi=False,
-            roi_detection_mode="",
             roi_x=10,
             roi_y=20,
             roi_width=20,
@@ -340,18 +386,8 @@ def test_roi_search_rejects_too_small_request_roi():
         handler._resolve_edge_rois(image, request)
 
 
-@pytest.mark.parametrize(
-    ("request_pixel_size", "expected_pixel_size", "pixel_size_source"),
-    [
-        (3.45, 3.45, "request"),
-        (0.0, 2.40, "node_parameter"),
-    ],
-)
-def test_measure_mtf_uses_request_pixel_size_and_tracks_roi_origin(
+def test_measure_mtf_uses_config_pixel_size_and_tracks_roi_origin(
     monkeypatch: pytest.MonkeyPatch,
-    request_pixel_size: float,
-    expected_pixel_size: float,
-    pixel_size_source: str,
 ):
     tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
     tmp_root.mkdir(exist_ok=True)
@@ -361,10 +397,11 @@ def test_measure_mtf_uses_request_pixel_size_and_tracks_roi_origin(
         node=_Node(
             {
                 "measurement.base_path": str(tmp_dir),
-                "pixel_size_um": 2.40,
+                "pixel_size_um": 3.45,
                 "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": True,
                 "mtf.capture_required_raw": True,
+                "measurement_conditions.camera_objective": "Plan Apo 10x",
             }
         ),
         camera_driver=object(),
@@ -470,23 +507,17 @@ def test_measure_mtf_uses_request_pixel_size_and_tracks_roi_origin(
     monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
 
     request = types.SimpleNamespace(
-        pixel_size_um=request_pixel_size,
-        auto_roi=True,
+        measurement_mode="auto",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=True,
-        coaxial_light_voltage=1.2,
-        coaxial_light_current=0.3,
         notes="scientific regression",
     )
 
     result = handler.measure_mtf_callback(request, _make_measure_response())
 
     assert result.success is True
-    assert _FakeAnalyzer.init_config.pixel_size_um == expected_pixel_size
+    assert _FakeAnalyzer.init_config.pixel_size_um == 3.45
     assert _FakeAnalyzer.init_config.measurement_metadata["camera_objective"] == "Plan Apo 10x"
-    assert _FakeAnalyzer.init_config.measurement_metadata["pixel_size_source"] == pixel_size_source
+    assert _FakeAnalyzer.init_config.measurement_metadata["pixel_size_source"] == "camera_config"
     assert _FakeAnalyzer.compute_calls[0]["roi_origin"] == (11, 13)
     assert "MTF complete:" in result.status_message
 
@@ -551,7 +582,7 @@ def test_measure_mtf_returns_failure_on_scientific_capture_mismatch(
     handler._get_timestamp = lambda: "20260419_100500"
 
     result = handler.measure_mtf_callback(
-        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=True, target_edge=""),
+        types.SimpleNamespace(measurement_mode="auto", target_edge=""),
         _make_measure_response(),
     )
 
@@ -748,6 +779,7 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
                 "mtf.capture_required_raw": True,
                 "mtf.capture_width": 5536,
                 "mtf.capture_height": 3692,
+                "measurement_conditions.camera_objective": "Plan Apo 10x",
             }
         ),
         camera_driver=object(),
@@ -866,14 +898,8 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
 
     request = types.SimpleNamespace(
-        pixel_size_um=2.4,
-        auto_roi=True,
+        measurement_mode="auto",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=False,
-        coaxial_light_voltage=0.0,
-        coaxial_light_current=0.0,
         notes="multi-edge export",
     )
 
@@ -919,7 +945,6 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert context_rows[0]["roi_mode"] == "auto"
     assert context_rows[0]["camera_objective"] == "Plan Apo 10x"
     assert context_rows[0]["objective_magnification_x"] == "10.0"
-    assert context_rows[0]["use_beamsplitter"] == "0"
     assert context_rows[0]["capture_readback_ok"] == "1"
     assert context_rows[0]["stream_width_px"] == "64"
     assert context_rows[0]["stream_height_px"] == "64"
@@ -930,8 +955,364 @@ def test_measure_mtf_exports_multi_edge_summary_csv(monkeypatch: pytest.MonkeyPa
     assert context_rows[0]["valid_edge_count"] == "2"
     assert context_rows[0]["selected_measured_edge_angle_deg"] == "5.0"
     assert context_rows[0]["selected_official_sop_angle_window_ok"] == "1"
-    assert context_rows[0]["selected_official_sop_angle_basis"] == "measured_final_edge_angle_deg"
+    assert (
+        context_rows[0]["selected_official_sop_angle_basis"]
+        == "measured_final_edge_angle_deg"
+    )
     assert context_rows[0]["selected_official_sop_reason"] == ""
+
+
+def test_measure_mtf_capture_only_writes_roi_stacks_without_analyzer(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    tmp_root.mkdir(exist_ok=True)
+    tmp_dir = tmp_root / "mtf_capture_only"
+    tmp_dir.mkdir(exist_ok=True)
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(tmp_dir),
+                "measurement.username": "capture_user",
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+                "mtf.capture_width": 64,
+                "mtf.capture_height": 64,
+                "mtf.capture_only_samples": 3,
+                "mtf.capture_only_timeout_s": 0.1,
+                "mtf.capture_only_preview_png": False,
+            }
+        ),
+        camera_driver=object(),
+    )
+    frames = [
+        np.full((64, 64), 1000 + index, dtype=np.uint16)
+        for index in range(3)
+    ]
+    handler._get_mtf_capture_image = lambda: (frames[0], 100, "bayer_rggb16")
+
+    wait_calls = {"count": 0}
+
+    def _wait_for_new(_last_ts, timeout=1.0):
+        wait_calls["count"] += 1
+        index = wait_calls["count"]
+        if index >= len(frames):
+            return None, None, "bayer_rggb16"
+        return frames[index], 100 + index, "bayer_rggb16"
+
+    handler._wait_for_new_mtf_capture_image = _wait_for_new
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    handler._get_timestamp = lambda: "20260430_090000"
+
+    edge_rois = [
+        mtf_module.EdgeROI(
+            image=frames[0][10:26, 12:52],
+            bbox=(12, 10, 40, 16),
+            edge_direction="horizontal",
+            edge_name="top",
+            contrast=0.8,
+            parent_center=(32, 32),
+        )
+    ]
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_square_edge_rois_in_search_roi",
+        lambda *_args, **_kwargs: edge_rois,
+    )
+
+    class _FailAnalyzer:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("capture_only must not run MTFAnalyzer")
+
+    monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FailAnalyzer)
+
+    request = types.SimpleNamespace(
+        measurement_mode="capture_only",
+        roi_x=0,
+        roi_y=0,
+        roi_width=64,
+        roi_height=64,
+        target_edge="",
+        notes="capture only",
+    )
+
+    result = handler.measure_mtf_callback(request, _make_measure_response())
+
+    assert result.success is True
+    assert result.mtf50 == 0.0
+    assert "capture-only complete" in result.status_message
+
+    run_dir = (
+        tmp_dir
+        / "capture_user"
+        / "mtf_messungen"
+        / "mtf_capture_only_20260430_090000"
+    )
+    manifest_path = run_dir / "capture_manifest.json"
+    assert manifest_path.exists()
+    assert (run_dir / "capture_index.csv").exists()
+    assert (run_dir / "summary.csv").exists()
+    assert (run_dir / "context.csv").exists()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["measurement_mode"] == "capture_only"
+    assert manifest["edges"][0]["edge_label"] == "top"
+    stack = np.load(run_dir / manifest["edges"][0]["stack_file"])
+    assert stack.shape == (3, 16, 40)
+    assert stack.dtype == np.uint16
+    assert [int(sample[0, 0]) for sample in stack] == [1000, 1001, 1002]
+
+
+def test_measure_mtf_capture_only_direct_skips_square_detection(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    tmp_root.mkdir(exist_ok=True)
+    tmp_dir = tmp_root / "mtf_capture_only_direct"
+    tmp_dir.mkdir(exist_ok=True)
+    handler = MTFHandler(
+        node=_Node(
+            {
+                "measurement.base_path": str(tmp_dir),
+                "measurement.username": "capture_user",
+                "mtf.use_raw_capture": True,
+                "mtf.capture_required_raw": True,
+                "mtf.capture_width": 64,
+                "mtf.capture_height": 64,
+                "mtf.capture_only_samples": 2,
+                "mtf.capture_only_timeout_s": 0.1,
+                "mtf.capture_only_preview_png": False,
+            }
+        ),
+        camera_driver=object(),
+    )
+    frames = [
+        np.full((64, 64), 2000 + index, dtype=np.uint16)
+        for index in range(2)
+    ]
+    handler._get_mtf_capture_image = lambda: (frames[0], 200, "bayer_rggb16")
+
+    wait_calls = {"count": 0}
+
+    def _wait_for_new(_last_ts, timeout=1.0):
+        wait_calls["count"] += 1
+        index = wait_calls["count"]
+        if index >= len(frames):
+            return None, None, "bayer_rggb16"
+        return frames[index], 200 + index, "bayer_rggb16"
+
+    handler._wait_for_new_mtf_capture_image = _wait_for_new
+    handler._camera_format_controller.switch_to_full_frame_for_mtf = (
+        lambda *_args, **_kwargs: (None, None)
+    )
+    handler._camera_format_controller.restore_after_mtf = lambda _state: None
+    handler._camera_format_controller.get_last_capture_state = lambda: {
+        "values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+            "exposure_auto": "Off",
+            "gain_auto": "Off",
+            "white_balance_auto": "Off",
+            "gamma_enable": False,
+            "color_transform_enable": False,
+        },
+        "available_keys": [
+            "pixel_format",
+            "bin_h",
+            "bin_v",
+            "exposure_time",
+            "gain",
+            "exposure_auto",
+            "gain_auto",
+            "white_balance_auto",
+            "gamma_enable",
+            "color_transform_enable",
+        ],
+    }
+    handler._camera_format_controller.collect_scientific_capture_mismatches = (
+        lambda _state, _target=None: []
+    )
+    handler._get_timestamp = lambda: "20260430_090500"
+
+    monkeypatch.setattr(
+        mtf_module.RoiDetector,
+        "detect_square_edge_rois_in_search_roi",
+        lambda *_args, **_kwargs: pytest.fail("direct capture must not search square ROIs"),
+    )
+
+    class _FailAnalyzer:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("capture_only_direct must not run MTFAnalyzer")
+
+    monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FailAnalyzer)
+
+    request = types.SimpleNamespace(
+        measurement_mode="capture_only_direct",
+        roi_x=8,
+        roi_y=9,
+        roi_width=24,
+        roi_height=22,
+        target_edge="",
+        notes="direct capture",
+    )
+
+    result = handler.measure_mtf_callback(request, _make_measure_response())
+
+    assert result.success is True
+    run_dir = (
+        tmp_dir
+        / "capture_user"
+        / "mtf_messungen"
+        / "mtf_capture_direct_20260430_090500"
+    )
+    manifest = json.loads((run_dir / "capture_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["measurement_mode"] == "capture_only_direct"
+    assert manifest["roi_mode"] == "capture_only_direct"
+    assert manifest["edges"][0]["bbox"] == [8, 9, 24, 22]
+    stack = np.load(run_dir / manifest["edges"][0]["stack_file"])
+    assert stack.shape == (2, 22, 24)
+    assert [int(sample[0, 0]) for sample in stack] == [2000, 2001]
+
+
+def test_offline_batch_analyzes_capture_manifest(monkeypatch: pytest.MonkeyPatch):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    run_dir = tmp_root / "mtf_batch_capture" / "mtf_capture_only_20260430_091500"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    stack = np.stack(
+        [
+            np.full((16, 40), 1200, dtype=np.uint16),
+            np.full((16, 40), 1300, dtype=np.uint16),
+        ],
+        axis=0,
+    )
+    np.save(run_dir / "top_raw_stack.npy", stack)
+
+    config = MTFConfig(
+        pixel_size_um=2.4,
+        input_mode="raw_bayer_rggb",
+        raw_bayer_pattern="RGGB",
+        capture_pixel_format="BayerRG12",
+        capture_binning_h=1,
+        capture_binning_v=1,
+        capture_exposure_us=100000.0,
+        capture_gain=0.0,
+        source_encoding="bayer_rggb16",
+    )
+    manifest = {
+        "schema_version": 1,
+        "run_id": "mtf_capture_only_20260430_091500",
+        "timestamp": "20260430_091500",
+        "measurement_mode": "capture_only",
+        "roi_mode": "capture_only",
+        "measurement_metadata": {
+            "measurement_operator": "capture_user",
+            "measurement_mode": "capture_only",
+            "effective_pixel_size_um": 2.4,
+            "pixel_size_source": "request",
+        },
+        "capture_values": {
+            "pixel_format": "BayerRG12",
+            "bin_h": 1,
+            "bin_v": 1,
+            "exposure_time": 100000.0,
+            "gain": 0.0,
+        },
+        "capture_available_keys": ["pixel_format"],
+        "capture_mismatches": [],
+        "image_encoding": "bayer_rggb16",
+        "edges": [
+            {
+                "edge_label": "top",
+                "edge_name": "top",
+                "edge_direction": "horizontal",
+                "bbox": [12, 10, 40, 16],
+                "parent_center": [32, 32],
+                "contrast": 0.8,
+                "sample_count": 2,
+                "dtype": "uint16",
+                "shape": list(stack.shape),
+                "stack_file": "top_raw_stack.npy",
+                "mtf_config": mtf_capture_module.config_to_manifest_dict(config),
+            }
+        ],
+    }
+    manifest_path = mtf_capture_module.write_capture_manifest(run_dir, manifest)
+
+    class _FakeAnalyzer:
+        def __init__(self, config):
+            self.config = config
+
+        def compute_mtf(self, image, roi=None, roi_origin=None, debug_label=None):
+            value = float(np.mean(image))
+            return MTFResult(
+                mtf50=value / 10.0,
+                mtf20=80.0,
+                mtf10=60.0,
+                edge_angle=5.0,
+                valid=True,
+                sensor_nyquist=200.0,
+                capture_mode="raw_green",
+                capture_pixel_format=self.config.capture_pixel_format,
+                capture_binning_h=self.config.capture_binning_h,
+                capture_binning_v=self.config.capture_binning_v,
+                capture_exposure_us=self.config.capture_exposure_us,
+                capture_gain=self.config.capture_gain,
+                edge_angle_method="geometric",
+            )
+
+    monkeypatch.setattr(mtf_capture_module, "MTFAnalyzer", _FakeAnalyzer)
+
+    result = mtf_capture_module.analyze_capture_manifest(
+        manifest_path,
+        overwrite=True,
+    )
+
+    assert result["selected_edge_label"] == "top"
+    assert (run_dir / "selected_edge.txt").read_text(encoding="utf-8").strip() == "top"
+    with open(run_dir / "summary.csv", newline="", encoding="utf-8") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    assert rows[0]["valid"] == "1"
+    assert rows[0]["sample_count"] == "2"
+    assert rows[0]["mtf50_lpmm"] == "125.0"
+    with open(run_dir / "context.csv", newline="", encoding="utf-8") as csv_file:
+        context_rows = list(csv.DictReader(csv_file))
+    assert context_rows[0]["measurement_success"] == "1"
+    assert context_rows[0]["selected_edge_label"] == "top"
 
 
 def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
@@ -1048,14 +1429,8 @@ def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(
     monkeypatch.setattr(mtf_module, "MTF_AVG_SAMPLES", 1)
 
     request = types.SimpleNamespace(
-        pixel_size_um=2.4,
-        auto_roi=False,
+        measurement_mode="direct_manual",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=False,
-        coaxial_light_voltage=0.0,
-        coaxial_light_current=0.0,
         notes="manual export",
     )
 
@@ -1245,14 +1620,8 @@ def test_measure_mtf_marks_selected_edge_with_official_sop_window(
     monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
 
     request = types.SimpleNamespace(
-        pixel_size_um=2.4,
-        auto_roi=True,
+        measurement_mode="auto",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=False,
-        coaxial_light_voltage=0.0,
-        coaxial_light_current=0.0,
         notes="boundary export",
     )
 
@@ -1384,14 +1753,8 @@ def test_measure_mtf_marks_invalid_edge_as_not_officially_accepted(
     monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
 
     request = types.SimpleNamespace(
-        pixel_size_um=2.4,
-        auto_roi=True,
+        measurement_mode="auto",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=False,
-        coaxial_light_voltage=0.0,
-        coaxial_light_current=0.0,
         notes="invalid export",
     )
 
@@ -1437,7 +1800,7 @@ def test_measure_mtf_reports_missing_camera_image_with_next_step():
     handler._camera_format_controller.restore_after_mtf = lambda _state: None
 
     result = handler.measure_mtf_callback(
-        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=True, target_edge=""),
+        types.SimpleNamespace(measurement_mode="auto", target_edge=""),
         _make_measure_response(),
     )
 
@@ -1506,7 +1869,7 @@ def test_measure_mtf_reports_auto_roi_failure_with_manual_fallback(
     )
 
     result = handler.measure_mtf_callback(
-        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=True, target_edge=""),
+        types.SimpleNamespace(measurement_mode="auto", target_edge=""),
         _make_measure_response(),
     )
 
@@ -1580,9 +1943,7 @@ def test_measure_mtf_reports_search_roi_failure_with_retry_hint(
 
     result = handler.measure_mtf_callback(
         types.SimpleNamespace(
-            pixel_size_um=0.0,
-            auto_roi=False,
-            roi_detection_mode="search_square_in_roi",
+            measurement_mode="roi_search",
             target_edge="",
         ),
         _make_measure_response(),
@@ -1714,15 +2075,8 @@ def test_measure_mtf_exports_roi_square_search_mode(
     monkeypatch.setattr(mtf_module, "MTFAnalyzer", _FakeAnalyzer)
 
     request = types.SimpleNamespace(
-        pixel_size_um=2.4,
-        auto_roi=False,
-        roi_detection_mode="search_square_in_roi",
+        measurement_mode="roi_search",
         target_edge="",
-        camera_objective="Plan Apo 10x",
-        objective_magnification_x=10.0,
-        use_beamsplitter=False,
-        coaxial_light_voltage=0.0,
-        coaxial_light_current=0.0,
         notes="roi search export",
     )
 
@@ -1819,7 +2173,7 @@ def test_measure_mtf_reports_manual_roi_cancel_with_retry_hint(
     handler._select_roi_interactive = lambda _image: (None, None)
 
     result = handler.measure_mtf_callback(
-        types.SimpleNamespace(pixel_size_um=0.0, auto_roi=False, target_edge=""),
+        types.SimpleNamespace(measurement_mode="direct_manual", target_edge=""),
         _make_measure_response(),
     )
 

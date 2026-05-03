@@ -31,9 +31,11 @@ mtf:
   debug_export_dir: ""
   use_raw_capture: true
   capture_required_raw: true
+  capture_only_samples: 10
+  capture_only_timeout_s: 1.0
+  capture_only_save_fullframe_raw: true
+  capture_only_preview_png: true
 
 measurement_conditions:
-  coaxial_light_voltage: 0.0
-  coaxial_light_current: 0.0
   camera_objective: unknown
   notes: ""

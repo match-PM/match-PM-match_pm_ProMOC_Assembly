@@ -1,42 +1,26 @@
 # Request: Parameters for MTF measurement
 
-# Pixel size in micrometers (0 for default 3.45µm)
-float32 pixel_size_um 0.0
-
 # Canonical measurement mode.
 # Options:
 # - "" or "auto": full-frame automatic square/target detection
 # - "roi_search": search for one complete square inside roi_x/y/width/height
 # - "direct_manual": measure roi_x/y/width/height directly as one edge ROI
+# - "capture_only": capture raw fullframe + ROI stacks for offline analysis
+# - "capture_only_direct": skip square search and capture roi_x/y/width/height directly
 string measurement_mode
 
-# Auto ROI selection (true=automatic ROI, false=manual ROI selection)
-# Legacy compatibility field. Prefer measurement_mode for new clients.
-bool auto_roi
-
-# Manual ROI behaviour when auto_roi=false.
-# Options:
-# - "" or "direct_manual": directly measure the manually drawn ROI
-# - "search_square_in_roi": draw a search ROI, detect one complete square inside it,
-#   and derive the edge candidates from that square
-string roi_detection_mode
-
-# --- OPTIONAL MEASUREMENT CONDITIONS ---
-# If values are not provided (empty/zero), the configured node parameters are used.
-float64 coaxial_light_voltage
-float64 coaxial_light_current
-string camera_objective
-float64 objective_magnification_x  # e.g. 1.0, 3.0, 6.0 (0 = auto/fallback)
-bool use_beamsplitter              # True if beam splitter is in optical path
+# Optional operator note copied into context.csv.
 string notes
 
-# Target Edge Selection (for squares)
-# Options: "any" (default), "top", "right", "bottom", "left"
+# Target edge selection for square detections.
+# Options: "any" (default), "top", "right", "bottom", "left", "select"
 string target_edge
 
 # --- OPTIONAL ROI IN CURRENT MEASUREMENT IMAGE PIXELS ---
-# Used when measurement_mode is "roi_search" or "direct_manual".
+# Used when measurement_mode is "roi_search", "direct_manual", "capture_only",
+# or "capture_only_direct".
 # ROI is considered set when roi_width > 0 and roi_height > 0.
+# If omitted for ROI modes, the operator can draw the ROI interactively.
 int32 roi_x
 int32 roi_y
 int32 roi_width

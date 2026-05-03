@@ -1,0 +1,12 @@
+# Request an interactive ROI selection on the current camera image.
+# If empty, the default window title is used.
+string window_name
+
+---
+
+bool success
+string status_message
+int32 roi_x
+int32 roi_y
+int32 roi_width
+int32 roi_height

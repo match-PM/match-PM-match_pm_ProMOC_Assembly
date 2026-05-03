@@ -19,6 +19,11 @@ from .mtf_export import (
     write_selected_edge_marker,
     write_summary_csv,
 )
+from ..mtf_capture import (
+    config_to_manifest_dict,
+    write_capture_index,
+    write_capture_manifest,
+)
 from ..algorithms.mtf import MTFAnalyzer, MTFConfig, MTFResult
 from ..algorithms.roi_detection import RoiDetector, EdgeROI
 from ..preview import raw_array_to_bgr8_preview
@@ -33,6 +38,8 @@ MTF_ROI_DETECTION_MIN_SQUARE_SIDE_PX = 40
 MTF_ROI_DETECTION_MIN_EDGE_ROI_WIDTH_PX = 20
 MTF_MIN_EDGE_CONTRAST = 0.2
 MTF_SAMPLE_TIMEOUT_S = 1.0
+MTF_CAPTURE_ONLY_SAMPLES = 10
+MTF_CAPTURE_ONLY_TIMEOUT_S = 1.0
 MTF_EXPORT_CONTEXT_SCALE = 1.8
 MTF_EXPORT_CONTEXT_MIN_MARGIN_PX = 24
 
@@ -113,6 +120,10 @@ class MTFHandler(CallbackBase):
 
     def _select_roi_interactive(self, cv_image):
         """Opens window for ROI selection."""
+        return self._select_roi_interactive_with_title(cv_image, "Select ROI")
+
+    def _select_roi_interactive_with_title(self, cv_image, window_name: str):
+        """Open an ROI selection window with a caller-provided title."""
         display_image = cv_image.copy()
         if len(display_image.shape) == 2 and display_image.dtype != np.uint8:
             display_image = cv2.normalize(
@@ -132,7 +143,7 @@ class MTFHandler(CallbackBase):
             new_height = int(height * scale_factor)
             display_image = cv2.resize(display_image, (new_width, new_height))
 
-        window_name = "Select ROI"
+        window_name = str(window_name or "Select ROI").strip() or "Select ROI"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, display_image.shape[1], display_image.shape[0])
 
@@ -166,70 +177,71 @@ class MTFHandler(CallbackBase):
         """Copy one request object and apply explicit field overrides."""
         cloned_request = copy.deepcopy(request)
         for key, value in overrides.items():
-            setattr(cloned_request, key, value)
+            try:
+                setattr(cloned_request, key, value)
+            except AttributeError:
+                # Generated ROS messages may reject removed/unknown fields.
+                pass
         return cloned_request
 
     @staticmethod
     def _normalize_roi_detection_mode(request) -> str:
-        """Return one stable ROI detection mode for auto/manual paths."""
-        if bool(getattr(request, "auto_roi", False)):
+        """Return the internal ROI detection mode derived from measurement_mode."""
+        mode = MTFHandler._normalize_measurement_mode(request)
+        if mode == "auto":
             return "auto"
-        mode = str(getattr(request, "roi_detection_mode", "") or "").strip().lower()
-        if mode in {"", "direct_manual", "manual"}:
-            return "direct_manual"
-        if mode == "search_square_in_roi":
-            return mode
-        return mode
+        if mode in {"roi_search", "capture_only"}:
+            return "search_square_in_roi"
+        return "direct_manual"
 
     @staticmethod
     def _normalize_measurement_mode(request) -> str:
-        """Return the canonical MTF mode while honoring legacy request fields."""
+        """Return the canonical MTF mode accepted by the service."""
         mode = str(getattr(request, "measurement_mode", "") or "").strip().lower()
         if mode in {"", "auto", "center", "full_frame"}:
-            if mode in {"auto", "center", "full_frame"}:
-                return "auto"
-            if bool(getattr(request, "auto_roi", False)):
-                return "auto"
-            roi_detection_mode = str(
-                getattr(request, "roi_detection_mode", "") or ""
-            ).strip().lower()
-            if roi_detection_mode == "search_square_in_roi":
-                return "roi_search"
-            return "direct_manual"
+            return "auto"
         if mode in {"roi", "roi_search", "search_square_in_roi"}:
             return "roi_search"
         if mode in {"manual", "direct_manual"}:
             return "direct_manual"
+        if mode in {"capture_only", "capture", "acquire_only"}:
+            return "capture_only"
+        if mode in {"capture_only_direct", "capture_direct", "direct_capture"}:
+            return "capture_only_direct"
         return mode
 
     def _normalize_measurement_request(self, request):
-        """Clone the request and align legacy fields with measurement_mode."""
+        """Clone the request and normalize measurement_mode aliases."""
         mode = self._normalize_measurement_mode(request)
         if mode == "auto":
             return self._clone_request_with_overrides(
                 request,
                 measurement_mode="auto",
-                auto_roi=True,
-                roi_detection_mode="",
             )
         if mode == "roi_search":
             return self._clone_request_with_overrides(
                 request,
                 measurement_mode="roi_search",
-                auto_roi=False,
-                roi_detection_mode="search_square_in_roi",
             )
         if mode == "direct_manual":
             return self._clone_request_with_overrides(
                 request,
                 measurement_mode="direct_manual",
-                auto_roi=False,
-                roi_detection_mode="direct_manual",
+            )
+        if mode == "capture_only":
+            return self._clone_request_with_overrides(
+                request,
+                measurement_mode="capture_only",
+            )
+        if mode == "capture_only_direct":
+            return self._clone_request_with_overrides(
+                request,
+                measurement_mode="capture_only_direct",
             )
         raise ImageProcessingError(
             self._with_next_step(
                 f"Unsupported measurement_mode '{mode}'.",
-                "use auto, roi_search, or direct_manual and retry the measurement.",
+                "use auto, roi_search, direct_manual, capture_only, or capture_only_direct and retry.",
             )
         )
 
@@ -303,10 +315,16 @@ class MTFHandler(CallbackBase):
         roi: tuple[int, int, int, int] | None = None,
     ) -> None:
         """Attach resolved ROI traceability to the mutable request clone."""
-        setattr(request, "_mtf_roi_input_source", source)
+        try:
+            setattr(request, "_mtf_roi_input_source", source)
+        except AttributeError:
+            pass
         if roi is not None:
             x, y, w, h = [int(value) for value in roi]
-            setattr(request, "_mtf_resolved_roi", (x, y, w, h))
+            try:
+                setattr(request, "_mtf_resolved_roi", (x, y, w, h))
+            except AttributeError:
+                pass
             setattr(request, "roi_x", x)
             setattr(request, "roi_y", y)
             setattr(request, "roi_width", w)
@@ -967,6 +985,266 @@ class MTFHandler(CallbackBase):
 
         cv2.imwrite(str(run_dir / "edges_overview.png"), overview)
 
+    @staticmethod
+    def _crop_edge_from_image(
+        image: np.ndarray,
+        edge_roi: EdgeROI,
+    ) -> np.ndarray | None:
+        """Return a copy of one edge crop from an image if the bbox fits."""
+        x, y, w, h = [int(value) for value in edge_roi.bbox]
+        if x < 0 or y < 0 or w <= 0 or h <= 0:
+            return None
+        if y + h > image.shape[0] or x + w > image.shape[1]:
+            return None
+        return image[y : y + h, x : x + w].copy()
+
+    def _capture_only_frame_sequence(
+        self,
+        *,
+        first_image: np.ndarray,
+        first_timestamp_ns: int | None,
+        first_encoding: str,
+    ) -> list[tuple[np.ndarray, str]]:
+        """Collect the current frame plus newer frames for capture-only mode."""
+        requested_samples = max(
+            1,
+            self._param_int("mtf.capture_only_samples", MTF_CAPTURE_ONLY_SAMPLES),
+        )
+        timeout_s = max(
+            0.05,
+            self._param_float(
+                "mtf.capture_only_timeout_s",
+                MTF_CAPTURE_ONLY_TIMEOUT_S,
+            ),
+        )
+        frames: list[tuple[np.ndarray, str]] = [(first_image, first_encoding)]
+        last_ts = int(first_timestamp_ns or self._get_latest_image_timestamp_ns() or 0)
+
+        for _ in range(requested_samples - 1):
+            next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
+                last_ts,
+                timeout=timeout_s,
+            )
+            if next_img is None:
+                self._node.get_logger().warn(
+                    "Timeout waiting for capture-only sample frame"
+                )
+                continue
+            if next_ts is not None:
+                last_ts = int(next_ts)
+            if (
+                self._param_bool("mtf.capture_required_raw", True)
+                and self._param_bool("mtf.use_raw_capture", True)
+                and not self._is_raw_bayer_encoding(next_encoding)
+            ):
+                self._node.get_logger().warn(
+                    f"Skipping capture-only frame with non-raw encoding "
+                    f"'{next_encoding}'"
+                )
+                continue
+            frames.append((next_img, next_encoding))
+
+        return frames
+
+    def _build_capture_only_placeholder_row(
+        self,
+        *,
+        run_id: str,
+        edge_label: str,
+        edge_roi: EdgeROI,
+        sample_count: int,
+    ) -> dict[str, object]:
+        """Build a summary row that marks an edge as pending offline analysis."""
+        result = MTFResult(
+            valid=False,
+            error_msg="capture_only: pending offline MTF batch analysis",
+            roi_bounds=edge_roi.bbox,
+            contrast=edge_roi.contrast,
+            edge_name=edge_roi.edge_name,
+            edge_direction=edge_roi.edge_direction,
+        )
+        row = build_edge_summary_row(
+            run_id=run_id,
+            edge_label=edge_label,
+            edge_roi=edge_roi,
+            result=result,
+            valid_samples=[],
+            selected_for_response=False,
+        )
+        row["sample_count"] = int(sample_count)
+        return row
+
+    def _write_capture_only_run(
+        self,
+        *,
+        response,
+        measurement_run: _MeasurementRun,
+        source_image: np.ndarray,
+        source_timestamp_ns: int | None,
+        request,
+        measurement_metadata: dict[str, object],
+        pixel_size_um: float,
+        min_edge_angle: float,
+        max_edge_angle: float,
+        capture_values: dict[str, object],
+        capture_available_keys: list[str],
+        capture_mismatches: list[str],
+        actual_pixel_format: str,
+        image_encoding: str,
+    ):
+        """Persist ROI stacks and return before running expensive MTF analysis."""
+        frames = self._capture_only_frame_sequence(
+            first_image=source_image,
+            first_timestamp_ns=source_timestamp_ns,
+            first_encoding=image_encoding,
+        )
+        edge_rows: list[dict[str, object]] = []
+        edge_entries: list[dict[str, object]] = []
+        edge_labels = [
+            self._build_edge_export_label(
+                edge_roi,
+                edge_index,
+                measurement_run.edge_count,
+            )
+            for edge_index, edge_roi in enumerate(measurement_run.edge_rois)
+        ]
+
+        for edge_index, edge_roi in enumerate(measurement_run.edge_rois):
+            edge_label = edge_labels[edge_index]
+            crops = []
+            for frame, _frame_encoding in frames:
+                crop = self._crop_edge_from_image(frame, edge_roi)
+                if crop is not None:
+                    crops.append(crop)
+            if not crops:
+                raise ImageProcessingError(
+                    self._with_next_step(
+                        f"Capture-only failed to crop edge '{edge_label}'.",
+                        "check ROI geometry and retry the capture.",
+                    )
+                )
+
+            stack = np.stack(crops, axis=0)
+            stack_name = f"{self._slugify_label(edge_label)}_raw_stack.npy"
+            np.save(measurement_run.run_dir / stack_name, stack)
+
+            config = self._prepare_edge_config(
+                pixel_size_um=pixel_size_um,
+                min_edge_angle=min_edge_angle,
+                max_edge_angle=max_edge_angle,
+                auto_roi=self._normalize_measurement_mode(request) == "auto",
+                run_dir=measurement_run.run_dir,
+                run_id=measurement_run.run_id,
+                edge_roi=edge_roi,
+                edge_label=edge_label,
+                edge_index=edge_index,
+                edge_count=measurement_run.edge_count,
+                measurement_metadata=measurement_metadata,
+                capture_values=capture_values,
+                actual_pixel_format=actual_pixel_format,
+                image_encoding=image_encoding,
+            )
+            edge_entries.append(
+                {
+                    "edge_label": edge_label,
+                    "edge_name": edge_roi.edge_name,
+                    "edge_direction": edge_roi.edge_direction,
+                    "bbox": [int(value) for value in edge_roi.bbox],
+                    "parent_center": [int(value) for value in edge_roi.parent_center],
+                    "contrast": float(edge_roi.contrast),
+                    "sample_count": int(stack.shape[0]),
+                    "dtype": str(stack.dtype),
+                    "shape": list(stack.shape),
+                    "stack_file": stack_name,
+                    "mtf_config": config_to_manifest_dict(config),
+                }
+            )
+            edge_rows.append(
+                self._build_capture_only_placeholder_row(
+                    run_id=measurement_run.run_id,
+                    edge_label=edge_label,
+                    edge_roi=edge_roi,
+                    sample_count=int(stack.shape[0]),
+                )
+            )
+
+        if self._param_bool("mtf.capture_only_save_fullframe_raw", False):
+            np.save(measurement_run.run_dir / "first_fullframe_raw.npy", source_image)
+
+        summary_csv = write_summary_csv(measurement_run.run_dir, edge_rows)
+        context_csv = write_context_csv(
+            measurement_run.run_dir,
+            build_context_row(
+                run_id=measurement_run.run_id,
+                timestamp=measurement_run.run_timestamp,
+                measurement_metadata=measurement_metadata,
+                roi_mode=self._roi_mode_label(request, measurement_run.edge_count),
+                focus_position_mm=self._focus_position_mm(),
+                capture_values=capture_values,
+                capture_available_keys=capture_available_keys,
+                capture_readback_mismatches=capture_mismatches,
+                capture_readback_ok=not capture_mismatches,
+                image_encoding=image_encoding,
+                edge_count=measurement_run.edge_count,
+                valid_edge_count=0,
+                selected_edge_label="",
+                selected_result=None,
+                selected_edge_angle_deg=None,
+                selected_sample_count=0,
+                measurement_success=True,
+                measurement_error="capture_only: pending offline MTF batch analysis",
+            ),
+        )
+        if self._param_bool("mtf.capture_only_preview_png", True):
+            self._write_visual_measurement_exports(
+                run_dir=measurement_run.run_dir,
+                source_image=source_image,
+                image_encoding=image_encoding,
+                edge_rows=edge_rows,
+                measured_edges=[],
+                selected_edge=None,
+            )
+
+        index_csv = write_capture_index(measurement_run.run_dir, edge_entries)
+        manifest = {
+            "schema_version": 1,
+            "run_id": measurement_run.run_id,
+            "timestamp": measurement_run.run_timestamp,
+            "measurement_mode": self._normalize_measurement_mode(request),
+            "roi_mode": self._roi_mode_label(request, measurement_run.edge_count),
+            "measurement_metadata": measurement_metadata,
+            "capture_values": capture_values,
+            "capture_available_keys": capture_available_keys,
+            "capture_mismatches": capture_mismatches,
+            "capture_readback_ok": not capture_mismatches,
+            "image_encoding": image_encoding,
+            "actual_pixel_format": actual_pixel_format,
+            "focus_position_mm": self._focus_position_mm(),
+            "requested_sample_count": self._param_int(
+                "mtf.capture_only_samples",
+                MTF_CAPTURE_ONLY_SAMPLES,
+            ),
+            "stored_frame_count": len(frames),
+            "edges": edge_entries,
+            "summary_csv": summary_csv.name,
+            "context_csv": context_csv.name,
+            "capture_index_csv": index_csv.name,
+        }
+        manifest_path = write_capture_manifest(measurement_run.run_dir, manifest)
+
+        response.success = True
+        response.mtf50 = 0.0
+        response.mtf20 = 0.0
+        response.mtf10 = 0.0
+        response.edge_angle = 0.0
+        response.nyquist_frequency = 0.0
+        response.status_message = (
+            f"MTF capture-only complete: edges={len(edge_entries)}, "
+            f"frames={len(frames)}, manifest={manifest_path}, summary={summary_csv}"
+        )
+        self._node.get_logger().info(response.status_message)
+        return response
+
     def _finalize_measurement_response(
         self,
         *,
@@ -996,6 +1274,43 @@ class MTFHandler(CallbackBase):
             summary_csv,
         )
 
+    @handle_service_errors()
+    def get_roi_coordinates_callback(self, request, response):
+        """Return one interactively selected ROI in current image coordinates."""
+        cv_image, _image_ts_ns, image_encoding = self._get_mtf_capture_image()
+        if cv_image is None:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "No camera image available for ROI selection.",
+                    f"check {self._camera_image_topic()} in rqt_image_view and retry.",
+                )
+            )
+
+        window_name = str(getattr(request, "window_name", "") or "").strip()
+        if not window_name:
+            window_name = "Select MTF Search ROI"
+        roi, _roi_img = self._select_roi_interactive_with_title(cv_image, window_name)
+        if roi is None:
+            raise ImageProcessingError(
+                self._with_next_step(
+                    "ROI coordinate selection was cancelled.",
+                    "draw a search window around the target and retry.",
+                )
+            )
+
+        x, y, w, h = [int(value) for value in roi]
+        response.success = True
+        response.roi_x = x
+        response.roi_y = y
+        response.roi_width = w
+        response.roi_height = h
+        response.status_message = (
+            f"ROI selected: x={x}, y={y}, width={w}, height={h}, "
+            f"encoding={image_encoding or 'unknown'}"
+        )
+        self._node.get_logger().info(response.status_message)
+        return response
+
     def _build_capture_summary(self, result) -> str:
         """Format compact capture metadata for logs and service status."""
         parts = [
@@ -1015,15 +1330,8 @@ class MTFHandler(CallbackBase):
             parts.append(f"delta={result.g1_g2_delta_pct:.1f}%")
         return ", ".join(parts)
 
-    def _resolve_pixel_size_um(self, request) -> float:
-        """Use request pixel size when positive, otherwise fall back to the node param."""
-        try:
-            request_pixel_size_um = float(getattr(request, "pixel_size_um", 0.0))
-        except (TypeError, ValueError):
-            request_pixel_size_um = 0.0
-        if request_pixel_size_um > 0:
-            return request_pixel_size_um
-
+    def _resolve_pixel_size_um(self, request=None) -> float:
+        """Use the configured camera pixel size for MTF calculations."""
         pixel_size_um = self._param_float("pixel_size_um", MTF_DEFAULT_PIXEL_SIZE_UM)
         if pixel_size_um <= 0:
             return MTF_DEFAULT_PIXEL_SIZE_UM
@@ -1047,44 +1355,13 @@ class MTFHandler(CallbackBase):
 
     def _collect_measurement_metadata(self, request, pixel_size_um: float) -> dict[str, object]:
         """Collect request metadata for logs and optional debug export."""
-        try:
-            request_pixel_size_um = float(getattr(request, "pixel_size_um", 0.0))
-        except (TypeError, ValueError):
-            request_pixel_size_um = 0.0
-        camera_objective = str(getattr(request, "camera_objective", "") or "").strip()
-        if not camera_objective:
-            camera_objective = self._param_str(
-                "measurement_conditions.camera_objective",
-                "unknown",
-            ).strip() or "unknown"
-
-        try:
-            objective_magnification_x = float(getattr(request, "objective_magnification_x", 0.0))
-        except (TypeError, ValueError):
-            objective_magnification_x = 0.0
-        if objective_magnification_x <= 0:
-            objective_magnification_x = self._parse_objective_magnification_x(camera_objective)
-
-        try:
-            coaxial_light_voltage = float(getattr(request, "coaxial_light_voltage", 0.0))
-        except (TypeError, ValueError):
-            coaxial_light_voltage = 0.0
-        if coaxial_light_voltage <= 0:
-            coaxial_light_voltage = self._param_float(
-                "measurement_conditions.coaxial_light_voltage",
-                0.0,
-            )
-
-        try:
-            coaxial_light_current = float(getattr(request, "coaxial_light_current", 0.0))
-        except (TypeError, ValueError):
-            coaxial_light_current = 0.0
-        if coaxial_light_current <= 0:
-            coaxial_light_current = self._param_float(
-                "measurement_conditions.coaxial_light_current",
-                0.0,
-            )
-
+        camera_objective = self._param_str(
+            "measurement_conditions.camera_objective",
+            "unknown",
+        ).strip() or "unknown"
+        objective_magnification_x = self._parse_objective_magnification_x(
+            camera_objective
+        )
         notes = str(getattr(request, "notes", "") or "").strip()
         if not notes:
             notes = self._param_str("measurement_conditions.notes", "").strip()
@@ -1096,10 +1373,8 @@ class MTFHandler(CallbackBase):
             ).strip()
             or "default_user",
             "effective_pixel_size_um": float(pixel_size_um),
-            "request_pixel_size_um": float(request_pixel_size_um),
-            "pixel_size_source": "request" if request_pixel_size_um > 0 else "node_parameter",
+            "pixel_size_source": "camera_config",
             "measurement_mode": self._normalize_measurement_mode(request),
-            "auto_roi": bool(getattr(request, "auto_roi", False)),
             "roi_detection_mode": self._normalize_roi_detection_mode(request),
             "roi_input_source": str(
                 getattr(request, "_mtf_roi_input_source", "none") or "none"
@@ -1111,9 +1386,6 @@ class MTFHandler(CallbackBase):
             "target_edge": str(getattr(request, "target_edge", "") or "").strip(),
             "camera_objective": camera_objective,
             "objective_magnification_x": objective_magnification_x,
-            "use_beamsplitter": bool(getattr(request, "use_beamsplitter", False)),
-            "coaxial_light_voltage": coaxial_light_voltage,
-            "coaxial_light_current": coaxial_light_current,
             "notes": notes,
         }
         metadata.update(
@@ -1147,14 +1419,6 @@ class MTFHandler(CallbackBase):
         magnification = float(metadata.get("objective_magnification_x", 0.0) or 0.0)
         if magnification > 0:
             parts.append(f"mag={magnification:.2f}x")
-        if metadata.get("use_beamsplitter"):
-            parts.append("beamsplitter=yes")
-        coaxial_voltage = float(metadata.get("coaxial_light_voltage", 0.0) or 0.0)
-        if coaxial_voltage > 0:
-            parts.append(f"coaxV={coaxial_voltage:.3f}")
-        coaxial_current = float(metadata.get("coaxial_light_current", 0.0) or 0.0)
-        if coaxial_current > 0:
-            parts.append(f"coaxI={coaxial_current:.3f}")
         if metadata.get("auto_roi"):
             parts.append("auto_roi=yes")
         measurement_mode = str(metadata.get("measurement_mode", "") or "").strip()
@@ -1201,6 +1465,10 @@ class MTFHandler(CallbackBase):
             mode_label = "square4"
         elif measurement_mode == "auto":
             mode_label = "auto"
+        elif measurement_mode == "capture_only_direct":
+            mode_label = "capture_direct"
+        elif measurement_mode == "capture_only":
+            mode_label = "capture_only"
         elif measurement_mode == "roi_search":
             mode_label = "roi_search"
         else:
@@ -1497,23 +1765,22 @@ class MTFHandler(CallbackBase):
 
     def _resolve_edge_rois(self, cv_image: np.ndarray, request) -> list[EdgeROI]:
         """Resolve auto/manual ROI selection into one shared candidate list."""
-        if bool(getattr(request, "auto_roi", False)):
+        measurement_mode = self._normalize_measurement_mode(request)
+        if measurement_mode == "auto":
             if not str(getattr(request, "_mtf_roi_input_source", "") or ""):
                 self._annotate_request_roi(request, "none", None)
             edge_rois = self._detect_auto_edge_rois(cv_image)
+        elif measurement_mode in {"roi_search", "capture_only"}:
+            edge_rois = self._build_search_square_edge_rois(cv_image, request)
+        elif measurement_mode in {"direct_manual", "capture_only_direct"}:
+            edge_rois = self._build_direct_manual_edge_roi(cv_image, request)
         else:
-            roi_detection_mode = self._normalize_roi_detection_mode(request)
-            if roi_detection_mode == "search_square_in_roi":
-                edge_rois = self._build_search_square_edge_rois(cv_image, request)
-            elif roi_detection_mode == "direct_manual":
-                edge_rois = self._build_direct_manual_edge_roi(cv_image, request)
-            else:
-                raise ImageProcessingError(
-                    self._with_next_step(
-                        f"Unsupported roi_detection_mode '{roi_detection_mode}'.",
-                        "use direct_manual or search_square_in_roi and retry the measurement.",
-                    )
+            raise ImageProcessingError(
+                self._with_next_step(
+                    f"Unsupported measurement_mode '{measurement_mode}'.",
+                    "use auto, roi_search, direct_manual, capture_only, or capture_only_direct and retry.",
                 )
+            )
         return self._apply_requested_edge_selection(edge_rois, request)
 
     def _prepare_edge_config(
@@ -1654,7 +1921,7 @@ class MTFHandler(CallbackBase):
             pixel_size_um=pixel_size_um,
             min_edge_angle=min_edge_angle,
             max_edge_angle=max_edge_angle,
-            auto_roi=bool(getattr(request, "auto_roi", False)),
+            auto_roi=self._normalize_measurement_mode(request) == "auto",
             run_dir=run_dir,
             run_id=run_id,
             edge_roi=edge_roi,
@@ -1719,6 +1986,10 @@ class MTFHandler(CallbackBase):
     def _roi_mode_label(self, request, edge_count: int) -> str:
         """Return one stable ROI mode label for exports."""
         measurement_mode = self._normalize_measurement_mode(request)
+        if measurement_mode == "capture_only_direct":
+            return "capture_only_direct"
+        if measurement_mode == "capture_only":
+            return "capture_only"
         if measurement_mode == "roi_search":
             return "roi_square_search"
         if measurement_mode == "direct_manual":
@@ -1882,7 +2153,7 @@ class MTFHandler(CallbackBase):
         try:
             # Step 1: acquire the current work image after the optional camera
             # switch into the scientific capture mode.
-            cv_image, _image_ts_ns, image_encoding, restore_state = (
+            cv_image, image_ts_ns, image_encoding, restore_state = (
                 self._acquire_measurement_frame()
             )
 
@@ -1911,6 +2182,27 @@ class MTFHandler(CallbackBase):
             measurement_metadata.update(
                 self._collect_measurement_metadata(request, pixel_size_um)
             )
+
+            if self._normalize_measurement_mode(request) in {
+                "capture_only",
+                "capture_only_direct",
+            }:
+                return self._write_capture_only_run(
+                    response=response,
+                    measurement_run=measurement_run,
+                    source_image=cv_image,
+                    source_timestamp_ns=image_ts_ns,
+                    request=request,
+                    measurement_metadata=measurement_metadata,
+                    pixel_size_um=pixel_size_um,
+                    min_edge_angle=min_edge_angle,
+                    max_edge_angle=max_edge_angle,
+                    capture_values=capture_values,
+                    capture_available_keys=capture_available_keys,
+                    capture_mismatches=capture_mismatches,
+                    actual_pixel_format=actual_pixel_format,
+                    image_encoding=image_encoding,
+                )
 
             # Step 4: measure every candidate edge through the shared analyzer
             # path so auto ROI and manual ROI stay directly comparable.
@@ -1961,32 +2253,20 @@ class MTFHandler(CallbackBase):
         return response
 
     def measure_mtf_center_callback(self, request, response):
-        """Force the canonical center/full-image MTF path."""
+        """Compatibility alias for the full-frame automatic MTF path."""
         normalized_request = self._clone_request_with_overrides(
             request,
             measurement_mode="auto",
-            auto_roi=True,
-            roi_detection_mode="",
-            _mtf_roi_input_source="legacy_center",
+            _mtf_roi_input_source="alias_center",
         )
         return self.measure_mtf_callback(normalized_request, response)
 
     def measure_mtf_roi_callback(self, request, response):
-        """Force one ROI-based MTF path while keeping the shared handler core."""
-        roi_detection_mode = str(
-            getattr(request, "roi_detection_mode", "") or ""
-        ).strip().lower()
-        if roi_detection_mode in {"", "manual"}:
-            roi_detection_mode = "search_square_in_roi"
-
+        """Compatibility alias for ROI square search through the shared service."""
         normalized_request = self._clone_request_with_overrides(
             request,
-            measurement_mode=(
-                "roi_search" if roi_detection_mode == "search_square_in_roi" else "direct_manual"
-            ),
-            auto_roi=False,
-            roi_detection_mode=roi_detection_mode,
-            _mtf_roi_input_source="legacy_roi",
+            measurement_mode="roi_search",
+            _mtf_roi_input_source="alias_roi",
         )
         return self.measure_mtf_callback(normalized_request, response)
 

@@ -85,9 +85,6 @@ CONTEXT_FIELDNAMES = [
     "selected_sample_count",
     "camera_objective",
     "objective_magnification_x",
-    "use_beamsplitter",
-    "coaxial_light_voltage",
-    "coaxial_light_current",
     "effective_pixel_size_um",
     "pixel_size_source",
     "focus_position_mm",
@@ -352,13 +349,6 @@ def build_context_row(
         "camera_objective": str(measurement_metadata.get("camera_objective", "") or ""),
         "objective_magnification_x": float(
             measurement_metadata.get("objective_magnification_x", 0.0) or 0.0
-        ),
-        "use_beamsplitter": int(bool(measurement_metadata.get("use_beamsplitter", False))),
-        "coaxial_light_voltage": float(
-            measurement_metadata.get("coaxial_light_voltage", 0.0) or 0.0
-        ),
-        "coaxial_light_current": float(
-            measurement_metadata.get("coaxial_light_current", 0.0) or 0.0
         ),
         "effective_pixel_size_um": float(
             measurement_metadata.get("effective_pixel_size_um", 0.0) or 0.0
