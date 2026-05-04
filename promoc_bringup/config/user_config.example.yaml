@@ -19,6 +19,12 @@ autofocus:
   refinement_samples: 51
   min_step_mm: 0.01
   refinement_shrink_factor: 0.25
+  analysis_roi_x_px: -1
+  analysis_roi_y_px: -1
+  analysis_roi_width_px: 2048
+  analysis_roi_height_px: 2048
+  analysis_downsample_max_dim_px: 2048
+  analysis_use_center_roi: true
 
 fly_over:
   refinement_mode: 0
@@ -31,8 +37,11 @@ mtf:
   debug_export_dir: ""
   use_raw_capture: true
   capture_required_raw: true
+  min_edge_angle: 2.0
+  max_edge_angle: 11.0
   capture_only_samples: 10
   capture_only_timeout_s: 1.0
+  capture_only_context_margin_px: 64
   capture_only_save_fullframe_raw: true
   capture_only_preview_png: true
 

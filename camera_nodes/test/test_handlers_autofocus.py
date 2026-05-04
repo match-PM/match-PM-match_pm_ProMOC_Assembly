@@ -705,7 +705,7 @@ def test_wait_for_next_autofocus_frame_reuses_latest_cached_frame_when_timestamp
 
     frame = runner._wait_for_next_autofocus_frame(11)
 
-    assert frame.analysis_image.shape == (1024, 1024, 3)
+    assert frame.analysis_image.shape == (2048, 2048, 3)
     assert frame.timestamp_ns == 11
 
 
@@ -713,9 +713,9 @@ def test_prepare_autofocus_analysis_image_center_crop_and_downsample():
     handler = AutofocusHandler(
         _Node(
             {
-                "autofocus.analysis_roi_width_px": 2000,
-                "autofocus.analysis_roi_height_px": 2000,
-                "autofocus.analysis_downsample_max_dim_px": 1024,
+                "autofocus.analysis_roi_width_px": 2048,
+                "autofocus.analysis_roi_height_px": 2048,
+                "autofocus.analysis_downsample_max_dim_px": 2048,
                 "autofocus.analysis_use_center_roi": True,
                 "autofocus.analysis_log_effective_roi": True,
             }
@@ -727,17 +727,45 @@ def test_prepare_autofocus_analysis_image_center_crop_and_downsample():
 
     processed = handler._prepare_autofocus_analysis_image(image)
 
-    assert processed.shape == (1024, 1024, 3)
-    assert any("effective_roi=(1000,500,2000,2000)" in msg for msg in handler._node._logger.infos)
+    assert processed.shape == (2048, 2048, 3)
+    assert any("effective_roi=(976,476,2048,2048)" in msg for msg in handler._node._logger.infos)
+
+
+def test_prepare_autofocus_analysis_image_uses_configured_roi_origin():
+    handler = AutofocusHandler(
+        _Node(
+            {
+                "autofocus.analysis_roi_x_px": 1979,
+                "autofocus.analysis_roi_y_px": 1010,
+                "autofocus.analysis_roi_width_px": 1689,
+                "autofocus.analysis_roi_height_px": 1624,
+                "autofocus.analysis_downsample_max_dim_px": 2048,
+                "autofocus.analysis_use_center_roi": True,
+                "autofocus.analysis_log_effective_roi": True,
+            }
+        ),
+        camera_driver=object(),
+    )
+    handler._reset_analysis_logging()
+    image = np.zeros((3692, 5536, 3), dtype=np.uint8)
+
+    processed = handler._prepare_autofocus_analysis_image(image)
+
+    assert processed.shape == (1624, 1689, 3)
+    assert any(
+        "requested_roi=(1979,1010,1689,1624)" in msg
+        and "effective_roi=(1979,1010,1689,1624)" in msg
+        for msg in handler._node._logger.infos
+    )
 
 
 def test_prepare_autofocus_analysis_image_clamps_small_source_image():
     handler = AutofocusHandler(
         _Node(
             {
-                "autofocus.analysis_roi_width_px": 2000,
-                "autofocus.analysis_roi_height_px": 2000,
-                "autofocus.analysis_downsample_max_dim_px": 1024,
+                "autofocus.analysis_roi_width_px": 2048,
+                "autofocus.analysis_roi_height_px": 2048,
+                "autofocus.analysis_downsample_max_dim_px": 2048,
                 "autofocus.analysis_use_center_roi": True,
                 "autofocus.analysis_log_effective_roi": True,
             }
@@ -749,16 +777,16 @@ def test_prepare_autofocus_analysis_image_clamps_small_source_image():
 
     processed = handler._prepare_autofocus_analysis_image(image)
 
-    assert processed.shape == (683, 1024, 3)
+    assert processed.shape == (800, 1200, 3)
     assert any("effective_roi=(0,0,1200,800)" in msg for msg in handler._node._logger.infos)
 
 
 def test_run_autofocus_loop_scores_preprocessed_analysis_image():
     handler = _RunnerHandler(
         {
-            "autofocus.analysis_roi_width_px": 2000,
-            "autofocus.analysis_roi_height_px": 2000,
-            "autofocus.analysis_downsample_max_dim_px": 1024,
+            "autofocus.analysis_roi_width_px": 2048,
+            "autofocus.analysis_roi_height_px": 2048,
+            "autofocus.analysis_downsample_max_dim_px": 2048,
             "autofocus.analysis_use_center_roi": True,
         }
     )
@@ -801,7 +829,7 @@ def test_run_autofocus_loop_scores_preprocessed_analysis_image():
         settle_s=0.0,
     )
 
-    assert algorithm.seen_shape == (1024, 1024, 3)
+    assert algorithm.seen_shape == (2048, 2048, 3)
     assert best_position == 0.0
     assert best_score == 123.0
     assert measurements == 1

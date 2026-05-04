@@ -1075,7 +1075,7 @@ class AutofocusHandler(CallbackBase):
 
         downsample_max = self._param_int(
             "autofocus.analysis_downsample_max_dim_px",
-            1024,
+            2048,
         )
         if roi_rect is not None:
             roi_desc = (
@@ -1083,12 +1083,20 @@ class AutofocusHandler(CallbackBase):
             )
             mode_desc = "requested-roi"
         elif self._param_bool("autofocus.analysis_use_center_roi", True):
-            roi_desc = (
-                "center_roi="
-                f"{self._param_int('autofocus.analysis_roi_width_px', 2000)}x"
-                f"{self._param_int('autofocus.analysis_roi_height_px', 2000)}"
-            )
-            mode_desc = "center-roi"
+            configured_x = self._param_int("autofocus.analysis_roi_x_px", -1)
+            configured_y = self._param_int("autofocus.analysis_roi_y_px", -1)
+            configured_roi = configured_x >= 0 and configured_y >= 0
+            roi_width = self._param_int("autofocus.analysis_roi_width_px", 2048)
+            roi_height = self._param_int("autofocus.analysis_roi_height_px", 2048)
+            if configured_roi:
+                roi_desc = (
+                    f"configured_roi=({configured_x},{configured_y},"
+                    f"{roi_width},{roi_height})"
+                )
+                mode_desc = "configured-roi"
+            else:
+                roi_desc = f"center_roi={roi_width}x{roi_height}"
+                mode_desc = "center-roi"
         else:
             roi_desc = "full_frame"
             mode_desc = "full-frame"
@@ -1116,15 +1124,23 @@ class AutofocusHandler(CallbackBase):
         ):
             requested_width = max(
                 1,
-                self._param_int("autofocus.analysis_roi_width_px", 2000),
+                self._param_int("autofocus.analysis_roi_width_px", 2048),
             )
             requested_height = max(
                 1,
-                self._param_int("autofocus.analysis_roi_height_px", 2000),
+                self._param_int("autofocus.analysis_roi_height_px", 2048),
             )
+            configured_x = self._param_int("autofocus.analysis_roi_x_px", -1)
+            configured_y = self._param_int("autofocus.analysis_roi_y_px", -1)
+            if configured_x >= 0 and configured_y >= 0:
+                requested_x = configured_x
+                requested_y = configured_y
+            else:
+                requested_x = int((image_width - requested_width) / 2)
+                requested_y = int((image_height - requested_height) / 2)
             requested_roi = (
-                int((image_width - requested_width) / 2),
-                int((image_height - requested_height) / 2),
+                requested_x,
+                requested_y,
                 requested_width,
                 requested_height,
             )
@@ -1156,7 +1172,7 @@ class AutofocusHandler(CallbackBase):
 
         downsample_max = self._param_int(
             "autofocus.analysis_downsample_max_dim_px",
-            1024,
+            2048,
         )
         processed_image = self._downsample_image(analysis_image, downsample_max)
         if is_bayer_encoding(encoding) and getattr(processed_image, "ndim", 0) == 2:

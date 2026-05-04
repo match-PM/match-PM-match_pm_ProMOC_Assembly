@@ -173,8 +173,19 @@ Wenn die Kantenposition bereits bekannt ist, kann
 Kantensuche ausgefuehrt.
 
 ```bash
-ros2 run camera_nodes mtf_batch_analyze --input <run-or-folder> --recursive --overwrite
+ros2 run camera_nodes mtf_batch_analyze \
+  --input <run-or-folder> \
+  --recursive --overwrite \
+  --target-edge top --min-valid-edges 1
 ```
+
+Die Batch-Auswertung akzeptiert Teilresultate. Es muessen nicht alle vier
+Kanten gueltig sein; mit `--min-valid-edges 1` reicht eine gueltige Zielkante.
+Pro Kante werden die MTF-Werte ueber alle gueltigen Samples des Raw-Stacks
+gemittelt und die verworfenen Samples in `summary.csv` mitgezaehlt. Die
+technische Analyzer-Grenze erlaubt Kanten bis `11°`; die offizielle
+SOP-Akzeptanz bleibt davon getrennt und markiert weiterhin nur `3°...10°` als
+gueltiges SOP-Fenster.
 
 Wenn ein Bereich mehrfach automatisiert gemessen werden soll, kann der
 Hilfsservice `/promoc/camera/get_roi_coordinates` einmalig einen Suchrahmen
@@ -195,8 +206,10 @@ Jeder Run landet in genau einem Messordner und enthaelt mindestens:
 Capture-only-Runs enthalten vor der Offline-Auswertung stattdessen
 `capture_manifest.json`, `capture_index.csv`, `summary.csv`, `context.csv`,
 `edges_overview.png`, `first_fullframe_raw.npy` und pro Kante `*_raw_stack.npy`
-plus `*_roi.png`. Nach dem Batch-Lauf werden dieselben finalen CSV-/Plot-
-Artefakte wie im Online-Pfad geschrieben.
+plus `*_roi.png`. Die `*_raw_stack.npy` enthalten einen konfigurierbaren
+Raw-Kontext um die Kanten-BBox; `capture_manifest.json` speichert dazu
+`stack_bbox`, `stack_origin` und `edge_bbox_in_stack`. Nach dem Batch-Lauf
+werden dieselben finalen CSV-/Plot-Artefakte wie im Online-Pfad geschrieben.
 
 ### context.csv
 
@@ -241,4 +254,3 @@ Wichtig:
   getrennt von der technischen Node-Validitaet
 - Overshoot bleibt in `warning_msg`, `mtf_peak_raw`, `mtf_peak_used` und
   `mtf_clipped` sichtbar; `mtf_clip_max` ist kein offizieller Standardfix
-

@@ -199,8 +199,18 @@ Die spaetere Auswertung eines Capture-Ordners laeuft ohne Kamera:
 ```bash
 ros2 run camera_nodes mtf_batch_analyze \
   --input ~/Dokumente/Messungen/MaxMustermann/mtf_messungen \
-  --recursive --overwrite
+  --recursive --overwrite \
+  --target-edge top --min-valid-edges 1
 ```
+
+`--target-edge` ist optional (`top`, `right`, `bottom`, `left`) und waehlt die
+gewollte Kante, wenn sie gueltige Samples hat. `--min-valid-edges 1` erlaubt
+Teilresultate; die MTF-Werte werden pro Kante ueber alle gueltigen Samples im
+Raw-Stack gemittelt. Die technische Analyzer-Winkelgrenze liegt bei `11°`,
+waehrend die offizielle SOP-Bewertung weiter `3°...10°` verwendet. Zusaetzlich
+entsteht eine `batch_summary.csv`. Nach der Offline-Auswertung werden die
+`*_roi.png` als vergroesserte Review-Bilder aus dem Raw-Stack neu geschrieben;
+der sichtbare Rahmen zeigt den tatsaechlich analysierten Streifen.
 
 Einmalig ROI-Koordinaten aus dem aktuellen Bild holen:
 
@@ -247,7 +257,10 @@ direkt in wiederholten `measure_mtf`-Calls verwendet werden.
 - `Capture-only Ergebnisse`: Vor der Offline-Auswertung enthaelt der Ordner
   `capture_manifest.json`, `capture_index.csv`, `summary.csv`, `context.csv`,
   `edges_overview.png`, `first_fullframe_raw.npy` und pro Kante
-  `*_raw_stack.npy` sowie `*_roi.png`.
+  `*_raw_stack.npy` sowie `*_roi.png`. Die Raw-Stacks enthalten einen
+  konfigurierbaren Kontext-Rand um die Kante
+  (`mtf.capture_only_context_margin_px`), damit die Offline-Auswertung bei
+  knapp erkannten linken/rechten Kanten robuster bleibt.
 - `Konservativer Standard`: Der Messstand nutzt im Standardpfad eine
   konservativ geglaettete ESF/LSF-Verarbeitung, um starke MTF-Overshoots
   softwareseitig zu bremsen.

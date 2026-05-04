@@ -314,6 +314,9 @@ def _create_camera_node(
                 "mtf.capture_only_timeout_s": float(
                     mtf_config.get("capture_only_timeout_s", 1.0)
                 ),
+                "mtf.capture_only_context_margin_px": int(
+                    mtf_config.get("capture_only_context_margin_px", 64)
+                ),
                 "mtf.capture_only_save_fullframe_raw": bool(
                     mtf_config.get("capture_only_save_fullframe_raw", True)
                 ),
@@ -332,6 +335,12 @@ def _create_camera_node(
                 ),
                 "mtf.profile": mtf_profile,
                 "mtf.debug_export_dir": mtf_debug_dir,
+                "mtf_min_edge_angle": float(
+                    mtf_config.get("min_edge_angle", 2.0)
+                ),
+                "mtf_max_edge_angle": float(
+                    mtf_config.get("max_edge_angle", 11.0)
+                ),
                 "enable_debug_overlay": False,
                 "autofocus.refinement_samples": config["autofocus"][
                     "refinement_samples"
@@ -340,6 +349,24 @@ def _create_camera_node(
                 "autofocus.refinement_shrink_factor": config["autofocus"][
                     "refinement_shrink_factor"
                 ],
+                "autofocus.analysis_roi_x_px": int(
+                    config["autofocus"].get("analysis_roi_x_px", -1)
+                ),
+                "autofocus.analysis_roi_y_px": int(
+                    config["autofocus"].get("analysis_roi_y_px", -1)
+                ),
+                "autofocus.analysis_roi_width_px": int(
+                    config["autofocus"].get("analysis_roi_width_px", 2048)
+                ),
+                "autofocus.analysis_roi_height_px": int(
+                    config["autofocus"].get("analysis_roi_height_px", 2048)
+                ),
+                "autofocus.analysis_downsample_max_dim_px": int(
+                    config["autofocus"].get("analysis_downsample_max_dim_px", 2048)
+                ),
+                "autofocus.analysis_use_center_roi": bool(
+                    config["autofocus"].get("analysis_use_center_roi", True)
+                ),
                 "autofocus.profile_table_json": af_profile_json,
                 "autofocus.fly_over.refinement_mode": config["fly_over"][
                     "refinement_mode"

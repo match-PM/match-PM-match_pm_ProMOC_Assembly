@@ -14,7 +14,7 @@ class MTFConfig:
     roi_height: int = 200
     roi_center: Optional[Tuple[int, int]] = None
     min_edge_angle: float = 2.0
-    max_edge_angle: float = 10.0
+    max_edge_angle: float = 11.0
     oversample_factor: int = 4
     canny_low: int = 50
     canny_high: int = 150

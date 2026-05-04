@@ -998,6 +998,36 @@ class MTFHandler(CallbackBase):
             return None
         return image[y : y + h, x : x + w].copy()
 
+    def _crop_capture_context_from_image(
+        self,
+        image: np.ndarray,
+        edge_roi: EdgeROI,
+    ) -> tuple[np.ndarray, tuple[int, int, int, int], tuple[int, int, int, int]] | None:
+        """Return a raw context crop plus absolute/local geometry for one edge."""
+        margin_px = max(
+            0,
+            self._param_int("mtf.capture_only_context_margin_px", 64),
+        )
+        edge_bbox = tuple(int(value) for value in edge_roi.bbox)
+        context_bbox = self._expanded_context_bbox(
+            image.shape,
+            edge_bbox,
+            scale=1.0,
+            min_margin_px=margin_px,
+        )
+        cx, cy, cw, ch = context_bbox
+        if cx < 0 or cy < 0 or cw <= 0 or ch <= 0:
+            return None
+        if cy + ch > image.shape[0] or cx + cw > image.shape[1]:
+            return None
+        local_edge_bbox = (
+            edge_bbox[0] - cx,
+            edge_bbox[1] - cy,
+            edge_bbox[2],
+            edge_bbox[3],
+        )
+        return image[cy : cy + ch, cx : cx + cw].copy(), context_bbox, local_edge_bbox
+
     def _capture_only_frame_sequence(
         self,
         *,
@@ -1112,10 +1142,16 @@ class MTFHandler(CallbackBase):
         for edge_index, edge_roi in enumerate(measurement_run.edge_rois):
             edge_label = edge_labels[edge_index]
             crops = []
+            context_bbox = None
+            edge_bbox_in_stack = None
             for frame, _frame_encoding in frames:
-                crop = self._crop_edge_from_image(frame, edge_roi)
-                if crop is not None:
+                context_crop = self._crop_capture_context_from_image(frame, edge_roi)
+                if context_crop is not None:
+                    crop, frame_context_bbox, frame_edge_bbox_in_stack = context_crop
                     crops.append(crop)
+                    if context_bbox is None:
+                        context_bbox = frame_context_bbox
+                        edge_bbox_in_stack = frame_edge_bbox_in_stack
             if not crops:
                 raise ImageProcessingError(
                     self._with_next_step(
@@ -1127,6 +1163,13 @@ class MTFHandler(CallbackBase):
             stack = np.stack(crops, axis=0)
             stack_name = f"{self._slugify_label(edge_label)}_raw_stack.npy"
             np.save(measurement_run.run_dir / stack_name, stack)
+            stack_bbox = context_bbox or tuple(int(value) for value in edge_roi.bbox)
+            local_edge_bbox = edge_bbox_in_stack or (
+                0,
+                0,
+                int(edge_roi.bbox[2]),
+                int(edge_roi.bbox[3]),
+            )
 
             config = self._prepare_edge_config(
                 pixel_size_um=pixel_size_um,
@@ -1150,6 +1193,13 @@ class MTFHandler(CallbackBase):
                     "edge_name": edge_roi.edge_name,
                     "edge_direction": edge_roi.edge_direction,
                     "bbox": [int(value) for value in edge_roi.bbox],
+                    "stack_bbox": [int(value) for value in stack_bbox],
+                    "stack_origin": [int(stack_bbox[0]), int(stack_bbox[1])],
+                    "edge_bbox_in_stack": [int(value) for value in local_edge_bbox],
+                    "context_margin_px": self._param_int(
+                        "mtf.capture_only_context_margin_px",
+                        64,
+                    ),
                     "parent_center": [int(value) for value in edge_roi.parent_center],
                     "contrast": float(edge_roi.contrast),
                     "sample_count": int(stack.shape[0]),
@@ -2177,7 +2227,7 @@ class MTFHandler(CallbackBase):
             # Step 3: resolve edge candidates and create one predictable run
             # folder before we start the per-edge analyzer loop.
             min_edge_angle = self._param_float("mtf_min_edge_angle", 2.0)
-            max_edge_angle = self._param_float("mtf_max_edge_angle", 10.0)
+            max_edge_angle = self._param_float("mtf_max_edge_angle", 11.0)
             measurement_run = self._prepare_measurement_run(cv_image, request)
             measurement_metadata.update(
                 self._collect_measurement_metadata(request, pixel_size_um)

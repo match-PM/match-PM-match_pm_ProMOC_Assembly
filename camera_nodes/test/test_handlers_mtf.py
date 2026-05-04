@@ -1089,8 +1089,12 @@ def test_measure_mtf_capture_only_writes_roi_stacks_without_analyzer(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["measurement_mode"] == "capture_only"
     assert manifest["edges"][0]["edge_label"] == "top"
+    assert manifest["edges"][0]["bbox"] == [12, 10, 40, 16]
+    assert manifest["edges"][0]["stack_bbox"] == [0, 0, 64, 64]
+    assert manifest["edges"][0]["stack_origin"] == [0, 0]
+    assert manifest["edges"][0]["edge_bbox_in_stack"] == [12, 10, 40, 16]
     stack = np.load(run_dir / manifest["edges"][0]["stack_file"])
-    assert stack.shape == (3, 16, 40)
+    assert stack.shape == (3, 64, 64)
     assert stack.dtype == np.uint16
     assert [int(sample[0, 0]) for sample in stack] == [1000, 1001, 1002]
 
@@ -1204,8 +1208,10 @@ def test_measure_mtf_capture_only_direct_skips_square_detection(
     assert manifest["measurement_mode"] == "capture_only_direct"
     assert manifest["roi_mode"] == "capture_only_direct"
     assert manifest["edges"][0]["bbox"] == [8, 9, 24, 22]
+    assert manifest["edges"][0]["stack_bbox"] == [0, 0, 64, 64]
+    assert manifest["edges"][0]["edge_bbox_in_stack"] == [8, 9, 24, 22]
     stack = np.load(run_dir / manifest["edges"][0]["stack_file"])
-    assert stack.shape == (2, 22, 24)
+    assert stack.shape == (2, 64, 64)
     assert [int(sample[0, 0]) for sample in stack] == [2000, 2001]
 
 
@@ -1313,6 +1319,131 @@ def test_offline_batch_analyzes_capture_manifest(monkeypatch: pytest.MonkeyPatch
         context_rows = list(csv.DictReader(csv_file))
     assert context_rows[0]["measurement_success"] == "1"
     assert context_rows[0]["selected_edge_label"] == "top"
+
+
+def test_offline_batch_accepts_partial_edges_and_target_selection(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tmp_root = ROOT / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf"
+    run_dir = tmp_root / "mtf_batch_partial" / "mtf_capture_only_20260430_092000"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    top_stack = np.full((3, 16, 40), 100, dtype=np.uint16)
+    bottom_stack = np.stack(
+        [
+            np.full((16, 40), 1200, dtype=np.uint16),
+            np.full((16, 40), 100, dtype=np.uint16),
+            np.full((16, 40), 1300, dtype=np.uint16),
+        ],
+        axis=0,
+    )
+    np.save(run_dir / "01_top_raw_stack.npy", top_stack)
+    np.save(run_dir / "02_bottom_raw_stack.npy", bottom_stack)
+
+    config = MTFConfig(
+        pixel_size_um=2.4,
+        input_mode="raw_bayer_rggb",
+        raw_bayer_pattern="RGGB",
+        capture_pixel_format="BayerRG12",
+        capture_binning_h=1,
+        capture_binning_v=1,
+        capture_exposure_us=100000.0,
+        capture_gain=0.0,
+        source_encoding="bayer_rggb16",
+    )
+    manifest = {
+        "schema_version": 1,
+        "run_id": "mtf_capture_only_20260430_092000",
+        "timestamp": "20260430_092000",
+        "measurement_mode": "capture_only",
+        "roi_mode": "capture_only",
+        "measurement_metadata": {
+            "measurement_operator": "capture_user",
+            "measurement_mode": "capture_only",
+            "effective_pixel_size_um": 2.4,
+            "pixel_size_source": "request",
+        },
+        "capture_values": {"pixel_format": "BayerRG12", "bin_h": 1, "bin_v": 1},
+        "capture_available_keys": ["pixel_format"],
+        "capture_mismatches": [],
+        "image_encoding": "bayer_rggb16",
+        "edges": [
+            {
+                "edge_label": "01_top",
+                "edge_name": "top",
+                "edge_direction": "horizontal",
+                "bbox": [12, 10, 40, 16],
+                "parent_center": [32, 32],
+                "contrast": 0.8,
+                "sample_count": 3,
+                "dtype": "uint16",
+                "shape": list(top_stack.shape),
+                "stack_file": "01_top_raw_stack.npy",
+                "mtf_config": mtf_capture_module.config_to_manifest_dict(config),
+            },
+            {
+                "edge_label": "02_bottom",
+                "edge_name": "bottom",
+                "edge_direction": "horizontal",
+                "bbox": [12, 40, 40, 16],
+                "parent_center": [32, 32],
+                "contrast": 0.8,
+                "sample_count": 3,
+                "dtype": "uint16",
+                "shape": list(bottom_stack.shape),
+                "stack_file": "02_bottom_raw_stack.npy",
+                "mtf_config": mtf_capture_module.config_to_manifest_dict(config),
+            },
+        ],
+    }
+    manifest_path = mtf_capture_module.write_capture_manifest(run_dir, manifest)
+
+    class _FakeAnalyzer:
+        def __init__(self, config):
+            self.config = config
+
+        def compute_mtf(self, image, roi=None, roi_origin=None, debug_label=None):
+            value = float(np.mean(image))
+            if value < 1000.0:
+                return MTFResult(valid=False, error_msg="low contrast sample")
+            return MTFResult(
+                mtf50=value / 10.0,
+                mtf20=80.0,
+                mtf10=60.0,
+                edge_angle=5.0,
+                valid=True,
+                sensor_nyquist=200.0,
+                capture_mode="raw_green",
+                capture_pixel_format=self.config.capture_pixel_format,
+                edge_angle_method="geometric",
+            )
+
+    monkeypatch.setattr(mtf_capture_module, "MTFAnalyzer", _FakeAnalyzer)
+
+    result = mtf_capture_module.analyze_capture_manifest(
+        manifest_path,
+        overwrite=True,
+        target_edge="bottom",
+        min_valid_edges=1,
+    )
+
+    assert result["measurement_success"] is True
+    assert result["valid_edge_count"] == 1
+    assert result["selected_edge_label"] == "02_bottom"
+    assert result["selected_sample_count"] == 2
+    assert (run_dir / "selected_edge.txt").read_text(encoding="utf-8").strip() == "02_bottom"
+    with open(run_dir / "summary.csv", newline="", encoding="utf-8") as csv_file:
+        rows = {row["edge_label"]: row for row in csv.DictReader(csv_file)}
+    assert rows["01_top"]["valid"] == "0"
+    assert rows["02_bottom"]["valid"] == "1"
+    assert rows["02_bottom"]["stored_sample_count"] == "3"
+    assert rows["02_bottom"]["valid_sample_count"] == "2"
+    assert rows["02_bottom"]["rejected_sample_count"] == "1"
+    assert rows["02_bottom"]["mtf50_lpmm"] == "125.0"
+    if hasattr(mtf_capture_module.cv2, "imread"):
+        review_png = mtf_capture_module.cv2.imread(str(run_dir / "02_bottom_roi.png"))
+        assert review_png is not None
+        assert review_png.shape[1] >= 720
+        assert review_png.shape[0] >= 420
 
 
 def test_measure_mtf_manual_roi_exports_summary_and_keeps_manual_label(

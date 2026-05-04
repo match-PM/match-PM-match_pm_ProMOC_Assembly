@@ -17,6 +17,9 @@ SUMMARY_FIELDNAMES = [
     "edge_direction",
     "valid",
     "sample_count",
+    "stored_sample_count",
+    "valid_sample_count",
+    "rejected_sample_count",
     "contrast",
     "roi_bbox_x",
     "roi_bbox_y",
@@ -198,11 +201,18 @@ def build_edge_summary_row(
     result: Any,
     valid_samples: list[Any],
     selected_for_response: bool,
+    stored_sample_count: int | None = None,
 ) -> dict[str, object]:
     """Build one normalized summary row for a measured edge."""
     x, y, w, h = [int(value) for value in edge_roi.bbox]
     analysis_x, analysis_y, analysis_w, analysis_h = _analysis_bounds(result)
     measured_angle_deg = _resolve_measured_edge_angle_deg(result, valid_samples)
+    valid_sample_count = int(len(valid_samples))
+    stored_count = (
+        valid_sample_count
+        if stored_sample_count is None
+        else max(0, int(stored_sample_count))
+    )
     sop_fields = _build_official_sop_fields(
         is_valid=bool(getattr(result, "valid", False)),
         measured_angle_deg=measured_angle_deg,
@@ -216,7 +226,10 @@ def build_edge_summary_row(
         "edge_name": str(edge_roi.edge_name),
         "edge_direction": str(edge_roi.edge_direction),
         "valid": int(bool(getattr(result, "valid", False))),
-        "sample_count": int(len(valid_samples)),
+        "sample_count": valid_sample_count,
+        "stored_sample_count": stored_count,
+        "valid_sample_count": valid_sample_count,
+        "rejected_sample_count": max(0, stored_count - valid_sample_count),
         "contrast": float(edge_roi.contrast),
         "roi_bbox_x": x,
         "roi_bbox_y": y,
