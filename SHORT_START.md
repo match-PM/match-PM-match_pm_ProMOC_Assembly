@@ -15,7 +15,7 @@ ros2 launch promoc_bringup optical_measurement_system.launch.py
 
 - Danach:
   - `rqt`
-  - `rqt_image_view`
+  - `ros2 run rqt_image_view rqt_image_view `
 - Standardablauf:
   - bei Bedarf `set_exposure`
   - dann `autofocus` mit `focus_mode=0`

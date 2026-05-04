@@ -13,8 +13,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='pmlab',
-    maintainer_email='thesterni91@gmail.com',
+    maintainer="ProMOC Team",
+    maintainer_email="promoc@match.uni-hannover.de",
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
