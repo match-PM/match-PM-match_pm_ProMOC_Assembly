@@ -117,14 +117,8 @@ SOP-Fensters markiert.
 ros2 run camera_nodes mtf_batch_analyze \
   --input "$HOME/Dokumente/Messungen/Yannis Wesser/Test/mtf_messungen" \
   --recursive --overwrite \
-  --target-edge top \
-  --min-valid-edges 1
-```
 
-`--target-edge` kann `top`, `right`, `bottom` oder `left` sein. Mit
-`--min-valid-edges 1` reicht eine gueltige Zielkante; es muessen nicht alle
-vier Kanten gueltig sein. Pro Kante werden die MTF-Werte ueber alle gueltigen
-Samples aus den gespeicherten Raw-Stacks gemittelt.
+```
 
 Ergebnisdateien:
 
@@ -138,8 +132,8 @@ selected_edge.txt
 ```
 
 Die `*_roi.png` werden nach der Offline-Auswertung als vergroesserte
-Review-Bilder neu geschrieben. Der sichtbare Rahmen markiert den tatsaechlich
-analysierten Streifen, aus dem ESF/LSF/MTF berechnet werden.
+Review-Bilder neu geschrieben. Gruen/rot markiert die gespeicherte Kanten-ROI,
+blau markiert den tatsaechlich analysierten Streifen.
 
 ## Weitere Details
 
