@@ -24,7 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'run_mtf_client = start_mtf.mtf_automated_client:main'
+            'run_mtf_client = start_mtf.mtf_automated_client:main',
+            'grid_tracker = start_mtf.verschiebung:main',
+            'verzeichnung = start_mtf.verzeichnung:main',
         ],
     },
 )

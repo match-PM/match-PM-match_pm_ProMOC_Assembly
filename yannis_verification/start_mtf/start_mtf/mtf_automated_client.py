@@ -5,6 +5,7 @@ import time
 # Korrekter Import der Service-Definition aus dem Interface-Paket
 from promoc_assembly_interfaces.srv import MeasureMTF
 
+
 class MTFAutomatedClient(Node):
     def __init__(self):
         super().__init__('mtf_automated_client')
@@ -13,8 +14,25 @@ class MTFAutomatedClient(Node):
         # Hinweis: Verwende hier den exakten Service-Namen. Du hast zuvor
         # '/promoc/camera/measure_mtf_roi' in der Liste gefunden. 
         # Falls es auch '/promoc/camera/measure_mtf_center' gibt, tausche den String entsprechend aus.
-        self.service_name = '/promoc/camera/measure_mtf_center'
+        #self.service_name = '/promoc/camera/measure_mtf_center'
+        self.service_name = '/promoc/camera/measure_mtf'
+        ''' 
+        # Anpassung an die neue Struktur des MTF-Services:
+        self.service_name = '/promoc/camera/measure_mtf'
+
+
+        Falls du auch AF nutzen möchtest z.b nach 50 Messungen einmal refokusierne oder so, kannst du auch den gleich einen AF CLienten erstellen und die entsprechenden Anfragen vorbereiten.
+
+        self.af_client = self.create_client(AutofocusROI, '/promoc/camera/autofocus_roi')
+
+        self.af_req = AutofocusROI.Request() 
+
+
+        '''
+        
+
         self.client = self.create_client(MeasureMTF, self.service_name)
+        
         
         # Blockierende Schleife, bis der Server im Netzwerk registriert ist
         while not self.client.wait_for_service(timeout_sec=1.0):
@@ -22,8 +40,28 @@ class MTFAutomatedClient(Node):
         
         # Konstruktion der statischen Anfrage-Datenstruktur
         self.req = MeasureMTF.Request()
+        
         self.req.measurement_mode = "capture_only"
-        self.req.target_edge = "any"
+        self.req.target_edge = "any" # wenns nicht geht nichts
+        
+        # Parameter
+        self.req.roi_x = 2722
+        self.req.roi_y = 1749
+        self.req.roi_width = 1000
+        self.req.roi_height = 1000
+        '''
+        # AF Parameter falls du den nutzen möchtest
+        self.af_req.start_position = 275
+        self.af_req.end_position = 285
+        self.af_req.focus_mode = 0
+        self.af_req.skip_flyover = True
+        
+        self.af_req.roi_x = self.req.roi_x 
+        self.af_req.roi_y = self.req.roi_y 
+        self.af_req.roi_width = self.req.roi_width 
+        self.af_req.roi_height = self.req.roi_height 
+        '''
+        
 
     def execute_measurements(self, iterations: int = 100):
         """Führt den Service-Aufruf sequenziell aus und loggt die optischen Kennzahlen."""
