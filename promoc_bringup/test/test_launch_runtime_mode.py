@@ -31,15 +31,6 @@ def test_camera_launch_is_runtime_mode_only():
     assert not _declares_launch_argument(content, "use_simulator")
 
 
-def test_optical_launch_is_runtime_mode_only():
-    content = (
-        ROOT / "promoc_bringup" / "launch" / "optical_measurement_system.launch.py"
-    ).read_text(encoding="utf-8", errors="ignore")
-    assert "runtime_mode" in content
-    assert not _declares_launch_argument(content, "sim_mode")
-    assert not _declares_launch_argument(content, "use_simulator")
-
-
 def test_camera_launch_uses_dedicated_parameter_builder():
     content = (ROOT / "promoc_bringup" / "launch" / "camera.launch.py").read_text(
         encoding="utf-8", errors="ignore"

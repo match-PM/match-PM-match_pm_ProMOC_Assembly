@@ -51,16 +51,11 @@ def test_declare_and_load_runtime_config():
     node._params["use_simulator"] = True
     node._params["x_axis_node_name"] = "lts300_z_axis"
     node._params["pixel_size_um"] = 3.45
-<<<<<<< HEAD
-=======
-    node._params["mtf.profile"] = "debug"
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
     cfg = load_camera_runtime_config(node)
     assert cfg.core.use_simulator is True
     assert cfg.core.x_axis_node_name == "lts300_z_axis"
     assert cfg.core.pixel_size_um == 3.45
-<<<<<<< HEAD
     assert cfg.exposure.frame_timeout_s == 1.0
 
 
@@ -68,12 +63,3 @@ def test_mtf_parameters_removed():
     node = _Node()
     declare_camera_parameters(node)
     assert "mtf.profile" not in node._params
-=======
-    assert cfg.mtf.profile == "debug"
-
-
-def test_deprecated_parameter_removed():
-    node = _Node()
-    declare_camera_parameters(node)
-    assert "mtf_csv_path" not in node._params
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0

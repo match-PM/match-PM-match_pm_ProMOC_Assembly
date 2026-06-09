@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Launch helper functions for ProMOC bringup.
 
 This module keeps the launch files small and readable:
@@ -10,12 +9,6 @@ This module keeps the launch files small and readable:
 
 from __future__ import annotations
 
-=======
-"""Launch helper functions for ProMOC bringup."""
-
-from __future__ import annotations
-
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 from copy import deepcopy
 import glob
 import os
@@ -109,13 +102,10 @@ def load_user_config(bringup_share_dir: str) -> dict:
     Load and merge user config with defaults.
 
     Returns a normalized runtime config used by bringup launch files.
-<<<<<<< HEAD
 
     The CS runtime intentionally keeps this config surface small. Missing
     sections fall back to explicit defaults so `system.launch.py` and the
     secondary launch files can stay deterministic and easy to explain.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     """
     user_config_path = get_config_path(bringup_share_dir, "user_config.yaml")
 
@@ -135,10 +125,6 @@ def load_user_config(bringup_share_dir: str) -> dict:
         "autofocus_profiles": {"default": {}, "profiles": {}},
         "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
         "camera": {"pixel_size_um": 2.40},
-<<<<<<< HEAD
-=======
-        "mtf": {"profile": "default", "debug_export_dir": ""},
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         "measurement_conditions": {
             "coaxial_light_voltage": 0.0,
             "coaxial_light_current": 0.0,

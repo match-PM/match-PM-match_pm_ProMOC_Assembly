@@ -111,10 +111,9 @@ def _evaluate() -> list[CheckResult]:
         )
     )
     results.append(
-        _check_contains(
+        _check_file_absent(
             "promoc_bringup/launch/optical_measurement_system.launch.py",
-            ["runtime_mode", 'namespace="promoc/linear_axis"'],
-            "secondary optical launch is clearly secondary and namespace-safe",
+            "optical measurement launch removed",
         )
     )
 
@@ -169,8 +168,13 @@ def _evaluate() -> list[CheckResult]:
     )
 
     for rel_path in [
+        "promoc_bringup/launch/optical_measurement_system.launch.py",
         "camera_nodes/camera_nodes/services/mtf.py",
+        "camera_nodes/camera_nodes/services/camera_format.py",
         "camera_nodes/camera_nodes/algorithms/mtf",
+        "camera_nodes/camera_nodes/algorithms/field_curvature.py",
+        "camera_nodes/camera_nodes/algorithms/roi_detection.py",
+        "camera_nodes/scripts/reproduce_mtf.py",
         "camera_nodes/test/test_camera_mtf_config_mapping.py",
         "verification",
         "promoc_assembly_interfaces/srv/camera/MeasureMTF.srv",
@@ -180,23 +184,11 @@ def _evaluate() -> list[CheckResult]:
         "promoc_assembly_interfaces/srv/camera/VerifyMTF.srv",
         "promoc_assembly_interfaces/srv/camera/VerifyCorrelation.srv",
         "promoc_assembly_interfaces/srv/camera/RunVerification.srv",
+        "promoc_bringup/scripts/release_n_check.py",
+        "promoc_bringup/scripts/release_n_smoke.py",
+        "promoc_bringup/scripts/generate_param_docs.py",
     ]:
         results.append(_check_file_absent(rel_path, f"removed: {rel_path}"))
-
-    results.append(
-        _check_contains(
-            "README.md",
-            ["system.launch.py", "set_exposure", "autofocus"],
-            "README describes the CS runtime path",
-        )
-    )
-    results.append(
-        _check_not_contains(
-            "README.md",
-            ["measure_mtf", "detect_rois", "select_roi"],
-            "README no longer advertises removed MTF paths",
-        )
-    )
     results.append(
         _check_not_contains(
             "promoc_bringup/config/user_config.example.yaml",

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-<<<<<<< HEAD
 """ROS2 runtime node for the CS camera package.
 
 The node has a narrow responsibility:
@@ -11,36 +10,21 @@ The node has a narrow responsibility:
 It deliberately does not contain autofocus business logic itself. That logic
 lives in `services/`, which keeps this file readable as the package entry point.
 """
-=======
-"""ROS2 runtime node for camera services."""
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
 import time
 
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.msg import LinearAxisInfo
-<<<<<<< HEAD
 from promoc_assembly_interfaces.srv import AutoFocus, SetExposure
-=======
-from promoc_assembly_interfaces.srv import AutoFocus, DetectRois, MeasureMTF, SetExposure
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 from promoc_core.logging import LogTags, TaggedLogger
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
-<<<<<<< HEAD
 from .config import declare_camera_parameters, get_camera_param
 from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
 from .services import AutofocusHandler, ExposureHandler
-=======
-from std_srvs.srv import Trigger
-
-from .config import declare_camera_parameters, get_camera_param
-from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
-from .services import AutofocusHandler, ExposureHandler, MTFHandler
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 from .services.image_processing import CameraImageProcessing
 
 
@@ -62,12 +46,9 @@ class CameraNode(Node):
         mode = "SIMULATOR" if self.use_simulator else "REAL"
         self.log.info(f"Camera node starting in {mode} mode")
 
-<<<<<<< HEAD
         # Driver selection is the only hardware choice made here. Once the
         # driver is connected, the rest of the node behaves the same for both
         # hardware and simulator mode.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         self.camera_driver: CameraDriver = self._create_driver()
         self.camera_driver.connect()
 
@@ -76,10 +57,6 @@ class CameraNode(Node):
             pixel_size_um=self.pixel_size_um,
         )
         self.autofocus_handler = AutofocusHandler(self, self.camera_driver)
-<<<<<<< HEAD
-=======
-        self.mtf_handler = MTFHandler(self, self.camera_driver)
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         self.exposure_handler = ExposureHandler(self, self.camera_driver)
 
         self.latest_image_msg = None
@@ -90,12 +67,9 @@ class CameraNode(Node):
         self._last_stream_log_time = 0.0
 
         self.cb_group = ReentrantCallbackGroup()
-<<<<<<< HEAD
 
         # Keep ROS wiring grouped at the end of initialization so the startup
         # order is easy to explain: params -> driver -> handlers -> ROS API.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         self._create_subscriptions()
         self._create_publishers()
         self._create_services()
@@ -123,12 +97,9 @@ class CameraNode(Node):
         return AravisCameraDriver(self, self.log)
 
     def _create_subscriptions(self):
-<<<<<<< HEAD
         # The camera node listens to the shared image stream and the current axis
         # position. Handlers then read that cached state instead of creating
         # their own subscriptions.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         self.assembly_image_sub = self.create_subscription(
             Image,
             "/promoc/assembly_camera/stream0/image_raw",
@@ -157,44 +128,14 @@ class CameraNode(Node):
         self.debug_image_pub = self.create_publisher(Image, "/camera/image_debug", 10)
 
     def _create_services(self):
-<<<<<<< HEAD
         # The CS runtime keeps exactly two maintained camera services. Anything
         # more specialized belongs in a different branch or package.
-=======
-        self.select_roi_service = self.create_service(
-            Trigger,
-            "/promoc/camera/select_roi",
-            self.mtf_handler.select_roi_callback,
-            callback_group=self.cb_group,
-        )
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         self.autofocus_service = self.create_service(
             AutoFocus,
             "/promoc/camera/autofocus",
             self.autofocus_handler.autofocus_callback,
             callback_group=self.cb_group,
         )
-<<<<<<< HEAD
-=======
-        self.autofocus_comparison_service = self.create_service(
-            AutoFocus,
-            "/promoc/camera/autofocus_comparison",
-            self.autofocus_handler.autofocus_comparison_callback,
-            callback_group=self.cb_group,
-        )
-        self.mtf_service = self.create_service(
-            MeasureMTF,
-            "/promoc/camera/measure_mtf",
-            self.mtf_handler.measure_mtf_callback,
-            callback_group=self.cb_group,
-        )
-        self.detect_rois_service = self.create_service(
-            DetectRois,
-            "/promoc/camera/detect_rois",
-            self.mtf_handler.detect_rois_callback,
-            callback_group=self.cb_group,
-        )
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
         if not self.use_simulator and self.camera_driver.is_connected:
             self.set_exposure_service = self.create_service(
@@ -211,11 +152,7 @@ class CameraNode(Node):
             self._image_count % 50 == 0
             or now - self._last_stream_log_time > 10.0
         )
-<<<<<<< HEAD
         if not should_log:
-=======
-        if not should_log   :
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
             return
 
         runtime = now - self._stream_start_time

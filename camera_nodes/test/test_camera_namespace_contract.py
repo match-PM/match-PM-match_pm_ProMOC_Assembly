@@ -14,17 +14,11 @@ def test_camera_node_registers_only_canonical_services():
     )
 
     assert "/promoc/camera/autofocus" in content
-<<<<<<< HEAD
     assert "/promoc/camera/set_exposure" in content
     assert "/promoc/camera/measure_mtf" not in content
     assert "/promoc/camera/detect_rois" not in content
     assert "/promoc/camera/select_roi" not in content
     assert "/promoc/camera/autofocus_comparison" not in content
-=======
-    assert "/promoc/camera/measure_mtf" in content
-    assert "/promoc/camera/detect_rois" in content
-    assert "/promoc/camera/set_exposure" in content
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
     assert "/promoc/camera_node/" not in content
 

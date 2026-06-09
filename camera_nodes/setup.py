@@ -14,11 +14,7 @@ setup(
     zip_safe=True,
     maintainer="ProMOC Team",
     maintainer_email="promoc@match.uni-hannover.de",
-<<<<<<< HEAD
     description="Camera services for Four-Step autofocus and exposure control",
-=======
-    description="Camera services for autofocus, MTF measurement, and exposure control",
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     license="MIT",
     tests_require=["pytest"],
     entry_points={

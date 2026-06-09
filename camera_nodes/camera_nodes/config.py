@@ -58,42 +58,6 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("measurement_conditions.coaxial_light_current", 0.0),
     ("measurement_conditions.camera_objective", "unknown"),
     ("measurement_conditions.notes", ""),
-<<<<<<< HEAD
-=======
-    ("mtf.debug_export_dir", ""),
-    ("mtf.debug_export_prefix", "mtf"),
-    ("mtf.debug_export_csv", True),
-    ("mtf.debug_export_png", False),
-    ("mtf.profile", "default"),
-    ("mtf.lsf_window_mode", "full"),
-    ("mtf.lsf_peak_window_size", 0),
-    ("mtf.derivative_mode", "iso"),
-    ("mtf.apply_derivative_correction", True),
-    ("mtf.derivative_correction_max", 0.0),
-    ("mtf.apply_angle_correction", True),
-    ("mtf.esf_smooth_mode", "none"),
-    ("mtf.esf_sg_window", 11),
-    ("mtf.esf_sg_poly", 2),
-    ("mtf.edge_validation_mode", "warn"),
-    ("mtf.edge_validation_percentile", 90.0),
-    ("mtf.edge_validation_min_points", 50),
-    ("mtf.edge_validation_only_auto", False),
-    ("mtf.clip_to_nyquist", True),
-    ("mtf.export_dual_curves", False),
-    ("mtf.clip_max", 0.0),
-    ("mtf.warn_threshold", 1.05),
-    ("mtf.use_full_frame", False),
-    ("mtf.full_frame_width", 5536),
-    ("mtf.full_frame_height", 3692),
-    ("mtf.full_frame_offset_x", 0),
-    ("mtf.full_frame_offset_y", 0),
-    ("mtf.full_frame_binning", 1),
-    ("mtf.full_frame_settle_s", 0.25),
-    ("mtf.full_frame_image_timeout_s", 2.0),
-    ("mtf.restore_after_measurement", True),
-    ("mtf.restore_settle_s", 0.15),
-    ("mtf.log_format_switch", True),
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     ("exposure.settle_frames_after_set", 2),
     ("exposure.frame_timeout_s", 1.0),
 )
@@ -146,16 +110,6 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
         ),
         ("autofocus.fly_over.refinement_mode", "fly_over_refinement_mode", int, 0),
     ),
-<<<<<<< HEAD
-=======
-    "mtf": (
-        ("mtf.profile", "profile", str, "default"),
-        ("mtf.use_full_frame", "use_full_frame", bool, False),
-        ("mtf.full_frame_width", "full_frame_width", int, 5536),
-        ("mtf.full_frame_height", "full_frame_height", int, 3692),
-        ("mtf.debug_export_dir", "debug_export_dir", str, ""),
-    ),
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
     "exposure": (
         ("exposure.settle_frames_after_set", "settle_frames_after_set", int, 2),
         ("exposure.frame_timeout_s", "frame_timeout_s", float, 1.0),
@@ -193,9 +147,5 @@ def load_camera_runtime_config(node) -> SimpleNamespace:
         core=_load_group(node, "core"),
         measurement=_load_group(node, "measurement"),
         autofocus=_load_group(node, "autofocus"),
-<<<<<<< HEAD
-=======
-        mtf=_load_group(node, "mtf"),
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         exposure=_load_group(node, "exposure"),
     )

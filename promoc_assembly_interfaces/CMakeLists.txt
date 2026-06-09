@@ -32,6 +32,7 @@ set(INTERFACE_FILES
   "srv/planar_motor/SixDofMotion.srv"
   "srv/planar_motor/StopMotion.srv"
   "srv/planar_motor/SetVelocityAcceleration.srv"
+  "msg/test/Test.msg"
   "msg/linear_axis/LinearAxisInfo.msg"
   "srv/linear_axis/MoveAbsolute.srv"
   "srv/linear_axis/MoveRelative.srv"
@@ -49,12 +50,6 @@ set(INTERFACE_FILES
   "srv/linear_axis/GetJogParameters.srv"
   "srv/camera/SetExposure.srv"
   "srv/camera/AutoFocus.srv"
-<<<<<<< HEAD
-=======
-  "srv/camera/MeasureMTF.srv"
-  "srv/camera/DetectRois.srv"
-
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 )
 
 # CRITICAL: Generate the interfaces (this was missing!)

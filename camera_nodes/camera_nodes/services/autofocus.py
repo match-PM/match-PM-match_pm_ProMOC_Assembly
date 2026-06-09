@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Autofocus service implementation for the CS runtime.
 
 The public ROS service stays compact, but internally the work is split into
@@ -13,13 +12,6 @@ service callback into one large function.
 
 from __future__ import annotations
 
-=======
-"""Autofocus handler with fly-over detection and execution support."""
-
-from __future__ import annotations
-
-import csv
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 from dataclasses import dataclass
 from datetime import datetime
 import time
@@ -42,20 +34,12 @@ from promoc_core.promoc_exceptions import (
     ServiceError,
 )
 
-<<<<<<< HEAD
 from ..algorithms import AutofocusConfig, FourStepAutofocus
-=======
-from ..algorithms import AUTOFOCUS_ALGORITHMS, AutofocusConfig
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 from ..models import FocusProfileBuilder
 from .base import CallbackBase
 from .fly_over import FlyOverDetector
 
-<<<<<<< HEAD
 _FOUR_STEP_MODE_IDS = {0, 5}
-=======
-_ALGO_LOOKUP = {mode: (name, cls) for mode, name, cls in AUTOFOCUS_ALGORITHMS}
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
 COARSE_STEP_MM = 0.5
 FOURSTEP_APPROACH_OFFSET_MM = 0.5
@@ -99,11 +83,8 @@ class AxisClientManager:
         if self._cached_axis_clients:
             return self._cached_axis_clients
 
-<<<<<<< HEAD
         # Resolve the canonical axis prefix once so every autofocus step talks
         # to the same runtime contract under `/promoc/linear_axis/...`.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         axis_name = self._handler._param_str("x_axis_node_name", "lts300_x_axis")
         axis_prefix = f"/promoc/linear_axis/{axis_name}"
         node = self._handler._node
@@ -203,12 +184,9 @@ class AutofocusRunner:
             f"Phase 2: Coarse + Fine in {peak_start:.1f}-{peak_end:.1f}mm, mode={mode}"
         )
 
-<<<<<<< HEAD
         # The runner owns the mechanical execution of one autofocus run:
         # resolve config, execute the algorithm, confirm the final position, and
         # map the result back to the ROS response shape.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         run_plan = self._build_single_mode_run_plan(
             mode=mode,
             peak_start=peak_start,
@@ -291,7 +269,6 @@ class AutofocusRunner:
         )
 
     def _resolve_algorithm(self, mode: int) -> tuple[str, object]:
-<<<<<<< HEAD
         """Resolve the runtime autofocus mode.
 
         The CS runtime branch keeps only the Four-Step algorithm as the
@@ -305,10 +282,6 @@ class AutofocusRunner:
                 f"focus_mode={mode} is deprecated in cs_development; using Four-Step."
             )
         return "fourstep", FourStepAutofocus
-=======
-        """Map the wire-level mode id to the configured algorithm class."""
-        return _ALGO_LOOKUP.get(mode, _ALGO_LOOKUP[0])
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 
     def _resolve_scan_window(
         self,
@@ -317,13 +290,7 @@ class AutofocusRunner:
         peak_end: float,
         request,
     ) -> tuple[float, float]:
-<<<<<<< HEAD
         """Use the fly-over peak window for the maintained Four-Step path."""
-=======
-        """Choose full-range or fly-over peak window based on the algorithm."""
-        if mode_name in {'exhaustive', 'twostage'}:
-            return float(request.start_position), float(request.end_position)
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         return float(peak_start), float(peak_end)
 
     def _build_algorithm_config(
@@ -651,98 +618,6 @@ class AutofocusRunner:
         time.sleep(max(0.0, float(settle_s)))
         return next_pos
 
-<<<<<<< HEAD
-=======
-    def run_comparison(
-        self,
-        peak_start: float,
-        peak_end: float,
-        request,
-        response,
-        clients,
-        start_time: float,
-        focus_profile: dict | None = None,
-    ):
-        """Run all autofocus algorithms and persist comparison CSV."""
-        self._handler._node.get_logger().info('Comparison Test: Running all 5 modes...')
-        results: dict[str, dict[str, float | int]] = {}
-
-        settle_s = self._resolve_settle_time(focus_profile)
-
-        for mode, name, algo_class in AUTOFOCUS_ALGORITHMS:
-            self._handler._node.get_logger().info(
-                f'--- Running {name.upper()} (mode {mode}) ---'
-            )
-            config = self._build_algorithm_config(
-                range_start=float(peak_start),
-                range_end=float(peak_end),
-                focus_profile=focus_profile,
-            )
-            algorithm = algo_class(config)
-            mode_start = time.time()
-            best_pos, best_score, measurements = self.run_autofocus_loop(
-                algorithm, clients, settle_s=settle_s
-            )
-            mode_duration = time.time() - mode_start
-            results[name] = {
-                'position': float(best_pos or 0.0),
-                'score': float(best_score),
-                'duration': float(mode_duration),
-                'measurements': int(measurements),
-            }
-            self._handler._node.get_logger().info(
-                f'{name}: pos={float(best_pos or 0.0):.3f}mm, '
-                f'score={float(best_score):.0f}, time={mode_duration:.1f}s'
-            )
-
-        output_dir = self._handler._get_output_dir('autofocus_comparison')
-        csv_path = output_dir / f'comparison_{self._handler._get_timestamp()}.csv'
-        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(['# Autofocus Comparison Test'])
-            writer.writerow(
-                [f'# Range: {peak_start:.1f}-{peak_end:.1f}mm (after fly-over)']
-            )
-            writer.writerow([])
-            writer.writerow(
-                ['algorithm', 'position_mm', 'score', 'duration_s', 'measurements']
-            )
-            for algo_name, data in results.items():
-                writer.writerow(
-                    [
-                        algo_name,
-                        f"{float(data['position']):.4f}",
-                        f"{float(data['score']):.0f}",
-                        f"{float(data['duration']):.2f}",
-                        int(data['measurements']),
-                    ]
-                )
-
-        best_algo = max(results.keys(), key=lambda key: float(results[key]['score']))
-        best = results[best_algo]
-        if float(best['position']) > 0:
-            clients['move'].call(
-                MoveAbsolute.Request(axis_position=float(best['position']))
-            )
-            self._handler._wait_for_axis_idle(clients)
-
-        response.success = True
-        response.status_message = (
-            f"Comparison: Best={best_algo} at {float(best['position']):.3f}mm "
-            f"(score={float(best['score']):.0f}). CSV: {csv_path}"
-        )
-        response.best_focus_position = float(best['position'])
-        response.best_focus_value = float(best['score'])
-        response.total_measurements_taken = int(
-            sum(int(item['measurements']) for item in results.values())
-        )
-        response.duration_seconds = time.time() - start_time
-
-        self._handler._node.get_logger().info(f'Comparison results saved to {csv_path}')
-        return response
-
-
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 class AutofocusHandler(CallbackBase):
     """Handler for autofocus with fly-over detection."""
 
@@ -758,11 +633,8 @@ class AutofocusHandler(CallbackBase):
     @handle_service_errors()
     def autofocus_callback(self, request, response):
         """Run autofocus: optional fly-over plus selected refinement mode."""
-<<<<<<< HEAD
         # Keep request handling here and push the execution details down into
         # the runner. That makes the service flow readable from top to bottom.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
         mode = getattr(request, "focus_mode", getattr(request, "refinement_mode", 0))
         start_time = time.time()
         focus_profile = self._build_focus_profile(request)
@@ -797,11 +669,8 @@ class AutofocusHandler(CallbackBase):
             peak_start = float(request.start_position)
             peak_end = float(request.end_position)
         else:
-<<<<<<< HEAD
             # Fly-over remains the fast first stage that narrows the search
             # window before the maintained Four-Step refinement begins.
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
             self._node.get_logger().info("Phase 1: Fly-Over Detection...")
             peak_start, peak_end, max_stddev = self._fly_over_detection(
                 request.start_position,
@@ -890,65 +759,3 @@ class AutofocusHandler(CallbackBase):
             return_best_image=return_best_image,
             settle_s=settle_s,
         )
-
-<<<<<<< HEAD
-=======
-    def _run_comparison(
-        self,
-        peak_start: float,
-        peak_end: float,
-        request,
-        response,
-        clients,
-        start_time: float,
-        focus_profile: dict | None = None,
-    ):
-        return self._runner.run_comparison(
-            peak_start,
-            peak_end,
-            request,
-            response,
-            clients,
-            start_time,
-            focus_profile,
-        )
-
-    @handle_service_errors()
-    def autofocus_comparison_callback(self, request, response):
-        """Run all autofocus modes sequentially and export a comparison CSV."""
-        start_time = time.time()
-
-        self._node.get_logger().info(
-            f"Comparison Test: range {request.start_position}-{request.end_position}mm"
-        )
-
-        if request.start_position >= request.end_position:
-            raise ConfigurationError("start_position must be < end_position")
-
-        clients = self._get_all_axis_clients()
-        focus_profile = self._build_focus_profile(request)
-
-        self._node.get_logger().info("Phase 1: Fly-Over Detection...")
-        peak_start, peak_end, max_stddev = self._fly_over_detection(
-            request.start_position,
-            request.end_position,
-            clients,
-            focus_profile,
-        )
-        if peak_start is None or peak_end is None:
-            raise ImageProcessingError("No target detected during fly-over")
-
-        self._node.get_logger().info(
-            f"Peak: {peak_start:.1f}-{peak_end:.1f}mm (max_stddev={max_stddev:.1f})"
-        )
-
-        return self._run_comparison(
-            peak_start,
-            peak_end,
-            request,
-            response,
-            clients,
-            start_time,
-            focus_profile,
-        )
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
