@@ -5,4 +5,4 @@ float64 rx_pos
 float64 ry_pos
 float64 rz_pos
 string xbot_state
-
+DeviceStatus device_status

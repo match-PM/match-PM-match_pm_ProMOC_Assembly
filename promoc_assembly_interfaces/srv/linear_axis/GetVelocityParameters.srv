@@ -1,5 +1,6 @@
 ---
 bool success
+int32 error_code
 string status_message
 float32 min_velocity
 float32 acceleration

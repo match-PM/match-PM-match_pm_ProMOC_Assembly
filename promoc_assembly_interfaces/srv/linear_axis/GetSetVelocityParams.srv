@@ -4,4 +4,5 @@ float64 new_acceleration
 float64 max_velocity
 float64 acceleration
 bool success
+int32 error_code
 string status_message

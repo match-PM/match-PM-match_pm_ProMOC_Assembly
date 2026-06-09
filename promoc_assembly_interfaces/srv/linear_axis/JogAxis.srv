@@ -2,5 +2,6 @@ float64 step_size
 ---
 
 bool success
+int32 error_code
 string status_message
-float64 final_position 
+float64 final_position

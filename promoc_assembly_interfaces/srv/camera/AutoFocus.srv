@@ -32,6 +32,7 @@ string notes
 # Response: Result of the autofocus operation
 
 bool success
+int32 error_code
 string status_message
 float64 best_focus_position
 float64 best_focus_value

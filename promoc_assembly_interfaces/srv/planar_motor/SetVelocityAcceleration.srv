@@ -8,4 +8,5 @@ float64 ry_vel
 float64 rz_vel
 ---
 bool success
+int32 error_code
 string status_message

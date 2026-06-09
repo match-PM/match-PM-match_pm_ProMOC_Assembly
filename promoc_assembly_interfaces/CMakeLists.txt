@@ -12,6 +12,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -23,6 +24,7 @@ if(NOT $ENV{ROS_DISTRO} STREQUAL "humble")
 endif()
 
 set(INTERFACE_FILES
+  "msg/DeviceStatus.msg"
   "msg/planar_motor/XBotInfo.msg"
   "srv/planar_motor/ActivateXbots.srv"
   "srv/planar_motor/ArcMotionSi.srv"
@@ -32,7 +34,6 @@ set(INTERFACE_FILES
   "srv/planar_motor/SixDofMotion.srv"
   "srv/planar_motor/StopMotion.srv"
   "srv/planar_motor/SetVelocityAcceleration.srv"
-  "msg/test/Test.msg"
   "msg/linear_axis/LinearAxisInfo.msg"
   "srv/linear_axis/MoveAbsolute.srv"
   "srv/linear_axis/MoveRelative.srv"
@@ -55,7 +56,7 @@ set(INTERFACE_FILES
 # CRITICAL: Generate the interfaces (this was missing!)
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${INTERFACE_FILES}
-  DEPENDENCIES ${ADDITIONAL_DEPENDENCIES}
+  DEPENDENCIES builtin_interfaces ${ADDITIONAL_DEPENDENCIES}
 )
 
 # Export dependencies for downstream packages

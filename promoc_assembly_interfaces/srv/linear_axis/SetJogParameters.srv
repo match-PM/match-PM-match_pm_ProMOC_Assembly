@@ -3,6 +3,7 @@ float64 speed
 
 ---
 bool success
+int32 error_code
 string status_message
 float64 actual_step_size    
 float64 actual_speed        

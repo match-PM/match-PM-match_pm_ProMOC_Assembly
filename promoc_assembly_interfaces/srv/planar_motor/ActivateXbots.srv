@@ -1,5 +1,6 @@
 bool    activation_status
 ---
 bool    success
+int32   error_code
 bool    activation_status
 string  status_message

@@ -1,4 +1,5 @@
 int32 xbot_id
 ---
 bool success
+int32 error_code
 string status_message

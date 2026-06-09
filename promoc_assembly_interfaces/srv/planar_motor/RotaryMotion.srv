@@ -5,4 +5,5 @@ float64 max_accel_rz       # Maximum RZ acceleration in degrees/s²
 int32   rot_mode           # rotation mode: 0=NO_ANGLE_WRAP (direct), 1=WRAP_TO_2PI_CCW, 2=WRAP_TO_2PI_CW
 ---
 bool success
+int32 error_code
 string status_message

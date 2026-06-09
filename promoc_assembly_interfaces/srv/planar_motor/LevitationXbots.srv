@@ -1,5 +1,6 @@
 bool levitation
 ---
 bool success
+int32 error_code
 bool levitation
 string status_message

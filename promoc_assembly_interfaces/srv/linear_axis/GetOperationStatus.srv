@@ -6,5 +6,6 @@
 ---
 # Response
 bool success               # Whether the status retrieval was successful
+int32 error_code
 string operation_status    # Current operation status (idle, homing, moving, jogging, error, emergency_stop)
 string status_message      # Detailed status message

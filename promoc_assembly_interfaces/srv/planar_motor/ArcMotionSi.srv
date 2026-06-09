@@ -12,4 +12,5 @@ float64 final_speed     # Final speed in mm/s
 float64 angle_degrees   # Angle in degrees (only used for CENTERANGLE mode)
 ---
 bool success
+int32 error_code
 string status_message

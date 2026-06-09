@@ -1,4 +1,5 @@
 float64 exposure_time
 ---
 bool success
+int32 error_code
 string status_message

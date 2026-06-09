@@ -3,5 +3,6 @@ int32 direction    # Direction: positive values = forward, negative = backward (
 
 ---
 bool success
+int32 error_code
 string status_message  
 float64 final_position    # Final position after jog step in mm (-1.0 if error)

@@ -7,4 +7,5 @@ float64 ry_pos     # RY rotation in degrees
 float64 rz_pos     # RZ rotation in degrees 
 ---
 bool success
+int32 error_code
 string status_message

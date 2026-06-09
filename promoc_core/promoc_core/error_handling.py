@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 try:
+    from . import error_codes
     from .promoc_exceptions import (
         ProMocError,
         ConnectionError as ProMocConnectionError,
@@ -32,6 +33,7 @@ try:
     )
 except ImportError:
     # Fallback if module is in the same directory
+    import error_codes
     from promoc_exceptions import (
         ProMocError,
         ConnectionError as ProMocConnectionError,
@@ -124,7 +126,7 @@ class ServiceResponse:
         else:
             return cls(
                 success=False,
-                error_code=9999,  # Unknown error
+                error_code=error_codes.UNKNOWN_ERROR,
                 status_message=f"{type(error).__name__}: {str(error)}",
                 execution_time=execution_time,
                 details=details,
@@ -143,6 +145,8 @@ class ServiceResponse:
         response_obj.success = self.success
         if hasattr(response_obj, "error_code"):
             response_obj.error_code = self.error_code
+        if hasattr(response_obj, "message"):
+            response_obj.message = self.status_message
         if hasattr(response_obj, "status_message"):
             response_obj.status_message = self.status_message
         if hasattr(response_obj, "execution_time"):

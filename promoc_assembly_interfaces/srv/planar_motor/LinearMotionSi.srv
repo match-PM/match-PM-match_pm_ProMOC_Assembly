@@ -3,4 +3,5 @@ float64 x_pos      # Target X position in mm
 float64 y_pos      # Target Y position in mm
 ---
 bool success
+int32 error_code
 string status_message
