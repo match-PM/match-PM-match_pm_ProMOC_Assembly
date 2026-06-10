@@ -27,7 +27,6 @@ import launch
 
 from promoc_bringup.launch_utils import (
     discover_thorlabs_devices as discover_connected_devices,
-    get_config_path,
     load_yaml_config,
     resolve_runtime_mode,
 )
@@ -85,36 +84,27 @@ def launch_setup(context, *args, **kwargs):
     else:
         logger.error(f"Mover config not found: {mover_config}")
 
-    axes_config_path = get_config_path(bringup_pkg, "linear_axes_params.yaml")
-    axes_config_raw, axes_error = load_yaml_config(axes_config_path)
-    if axes_error:
-        logger.error(f"Failed to load linear axes configuration: {axes_error}")
-        return actions
-
-    axes_config = {}
-    for node_name, node_cfg in axes_config_raw.items():
-        if isinstance(node_cfg, dict) and isinstance(
-            node_cfg.get("ros__parameters"), dict
-        ):
-            axes_config[node_name] = node_cfg
-
-    if not axes_config:
-        logger.warn(
-            "No valid linear-axis entries found in linear_axes_params.yaml "
-            "(expected '<node_name>.ros__parameters')."
-        )
-        return actions
+    axis_pkg = get_package_share_directory("linear_axis_nodes")
+    axes = [
+        ("lts300_x_axis", os.path.join(axis_pkg, "config", "x_axis.yaml")),
+        ("lts300_z_axis", os.path.join(axis_pkg, "config", "z_axis.yaml")),
+    ]
 
     if is_sim:
         logger.info("Linear axes mode: SIMULATION")
-        for node_name in axes_config.keys():
-            actions.append(_create_axis_node(node_name, axes_config_path, sim=True))
+        for node_name, config_path in axes:
+            actions.append(_create_axis_node(node_name, config_path, driver_mode="mock"))
         return actions
 
     logger.info("Linear axes mode: HARDWARE")
     connected = discover_connected_devices()
-    for node_name, params in axes_config.items():
-        serial = params.get("ros__parameters", {}).get("serial_number")
+    for node_name, config_path in axes:
+        params, config_error = _load_axis_parameters(config_path)
+        if config_error:
+            logger.error(f"{node_name}: {config_error}")
+            continue
+
+        serial = params.get("serial_number")
         if not serial:
             logger.warn(f"{node_name}: No serial_number configured")
             continue
@@ -124,8 +114,8 @@ def launch_setup(context, *args, **kwargs):
             actions.append(
                 _create_axis_node(
                     node_name,
-                    axes_config_path,
-                    sim=False,
+                    config_path,
+                    driver_mode="hardware",
                     device_path=connected[serial],
                 )
             )
@@ -136,11 +126,14 @@ def launch_setup(context, *args, **kwargs):
 
 
 def _create_axis_node(
-    node_name: str, config_path: str, sim: bool, device_path: str = None
+    node_name: str,
+    config_path: str,
+    driver_mode: str,
+    device_path: str = None,
 ):
     # The launch file owns the public axis namespace so all runtime packages can
     # rely on one stable `/promoc/linear_axis/...` contract.
-    params = [config_path, {"use_sim_time": sim, "namespace": "promoc/linear_axis"}]
+    params = [config_path, {"driver_mode": driver_mode}]
     if device_path:
         params.append({"serial_port": device_path})
 
@@ -153,3 +146,15 @@ def _create_axis_node(
         output="screen",
         arguments=["--ros-args", "--log-level", "INFO"],
     )
+
+
+def _load_axis_parameters(config_path: str):
+    config, error = load_yaml_config(config_path)
+    if error:
+        return {}, error
+
+    for key, value in (config or {}).items():
+        if isinstance(value, dict) and isinstance(value.get("ros__parameters"), dict):
+            return value["ros__parameters"], None
+
+    return {}, f"No ros__parameters block found in {config_path}"

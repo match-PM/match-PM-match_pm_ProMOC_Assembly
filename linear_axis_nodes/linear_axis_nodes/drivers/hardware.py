@@ -41,7 +41,7 @@ LOCK_TIMEOUT_PATIENT_S = 0.5
 
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
-    def __init__(self, logger):
+    def __init__(self, logger, axis_id: str):
         """
         Initialize the Thorlabs LTS300 driver.
 
@@ -52,7 +52,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self.device: Optional[Thorlabs.KinesisMotor] = None  # type: ignore
         self.connected: bool = False
         self.serial_no: Optional[str] = None
-        self.axis_type: Optional[str] = None
+        self.axis_type: Optional[str] = axis_id
         # LTS300 uses 409600 device units per mm
         self.device_units_per_mm: float = 409600.0
         self.x_axis_serial: Optional[str] = None
@@ -256,7 +256,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                          'device_initialized': self.device is not None}
             )
 
-    def move_absolute(self, position: float):
+    def move_absolute(self, position: float, timeout: Optional[float] = None):
         """Move to absolute position in millimeters."""
         self._ensure_connected()
         self.logger.debug(f'Moving to absolute position: {position} mm')
@@ -270,10 +270,13 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 details={'target_position': position, 'error': str(e)}
             )
 
-        self._wait_for_movement_complete(operation_name="Absolute movement")
+        self._wait_for_movement_complete(
+            timeout_s=timeout or 300.0,
+            operation_name="Absolute movement",
+        )
         self._update_position_cache()
 
-    def move_relative(self, distance: float):
+    def move_relative(self, distance: float, timeout: Optional[float] = None):
         """Move relative distance from current position in millimeters."""
         self._ensure_connected()
         self.logger.debug(f'Moving relatively by: {distance} mm')
@@ -289,7 +292,10 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 details={'distance': distance, 'error': str(e)}
             )
 
-        self._wait_for_movement_complete(operation_name="Relative movement")
+        self._wait_for_movement_complete(
+            timeout_s=timeout or 300.0,
+            operation_name="Relative movement",
+        )
         self._update_position_cache()
 
     def home(self, timeout: float = 180.0):
@@ -562,7 +568,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                     f'Error during force stop: {e}')
                 raise
 
-    def jog_positive(self, step_size: float = 1.0):
+    def jog_positive(self, step_size: float = 1.0, timeout: Optional[float] = None):
         """
         Jog the axis in positive direction by the specified step size.
 
@@ -591,7 +597,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 )
 
             # Use relative move for jogging
-            self.move_relative(step_size)
+            self.move_relative(step_size, timeout=timeout)
 
         except SoftLimitViolationError:
             raise
@@ -601,7 +607,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 details={'step_size': step_size, 'error': str(e)}
             )
 
-    def jog_negative(self, step_size: float = 1.0):
+    def jog_negative(self, step_size: float = 1.0, timeout: Optional[float] = None):
         """
         Jog the axis in negative direction by the specified step size.
 
@@ -630,7 +636,7 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 )
 
             # Use relative move for jogging (negative distance)
-            self.move_relative(-step_size)
+            self.move_relative(-step_size, timeout=timeout)
 
         except SoftLimitViolationError:
             raise
