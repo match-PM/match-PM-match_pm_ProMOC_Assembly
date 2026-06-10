@@ -2,246 +2,150 @@
 
 from __future__ import annotations
 
-from promoc_core.error_handling import handle_service_errors
-from promoc_core.motion import MotionStatus
-from promoc_core.motion_interface import compute_motion_timeout
+from promoc_core import error_codes
 
-from .base import PositionOutOfBoundsError, ServiceCallbacksBase
+from ..models import XBotPose
+from .base import PositionOutOfBoundsError, ServiceCallbacksBase, handle_service_errors
 from .motion_input import (
-    MotionInputConverters,
-    MotionInputOptions,
-    process_motion_input,
+    process_arc_request,
+    process_linear_request,
+    process_rotary_request,
+    process_six_dof_request,
 )
-
-LINEAR_TIMEOUT_MULTIPLIER = 1.5
-LINEAR_TIMEOUT_BUFFER_S = 3.0
-LINEAR_TIMEOUT_MIN_S = 5.0
-
-SIX_D_TIMEOUT_MULTIPLIER = 1.5
-SIX_D_TIMEOUT_BUFFER_S = 5.0
-SIX_D_TIMEOUT_MIN_S = 8.0
-SIX_D_TIMEOUT_FALLBACK_S = 10.0
-
-ROTARY_TIMEOUT_MULTIPLIER = 1.5
-ROTARY_TIMEOUT_BUFFER_S = 2.0
-ROTARY_TIMEOUT_MIN_S = 4.0
-
-ARC_TIMEOUT_MULTIPLIER = 1.8
-ARC_TIMEOUT_BUFFER_S = 5.0
-ARC_TIMEOUT_MIN_S = 8.0
 
 
 class MotionCallbacks(ServiceCallbacksBase):
     """Callbacks for motion-related services."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._input_converters = MotionInputConverters(
-            mm_to_m=self.mover_utils.mm_to_m,
-            deg_to_rad=self.mover_utils.deg_to_rad,
-        )
-        self._input_options = MotionInputOptions(no_change=float(self.NO_CHANGE))
-
-    def _process(self, request, *, motion_type: str):
-        return process_motion_input(
-            request,
-            motion_type=motion_type,
-            converters=self._input_converters,
-            options=self._input_options,
-            get_current_position=self.mover_utils.get_current_position,
-        )
-
-    @staticmethod
-    def _timeout(
-        travel_time: float | None,
-        *,
-        multiplier: float,
-        buffer_s: float,
-        min_s: float,
-        fallback_s: float | None = None,
-    ) -> float:
-        return compute_motion_timeout(
-            travel_time,
-            multiplier=multiplier,
-            buffer_s=buffer_s,
-            min_s=min_s,
-            fallback_s=fallback_s,
-        )
-
     @handle_service_errors()
     def callback_linear_motion_si(self, request, response):
-        """Execute a linear XY motion."""
-        xbot_id = int(request.xbot_id)
-        processed = self._process(request, motion_type="linear")
-        target_pos = processed.target_position
-
-        if not self.mover_utils.is_position_in_bounds(
-            target_pos[0], target_pos[1], target_pos[2]
-        ):
+        processed = process_linear_request(request)
+        self.mover_utils.ensure_xbot_active(processed.xbot_id)
+        current = self.mover_utils.get_current_position(processed.xbot_id)
+        target = XBotPose(
+            x=processed.absolute_target.x,
+            y=processed.absolute_target.y,
+            z=current.z,
+            rx=current.rx,
+            ry=current.ry,
+            rz=current.rz,
+        )
+        if not self.mover_utils.is_position_in_bounds(target):
             raise PositionOutOfBoundsError(
-                "Target position outside valid bounds",
-                details={"target": target_pos[:3], "xbot_id": xbot_id},
+                "Target position outside configured bounds",
+                error_code=error_codes.TARGET_OUT_OF_RANGE,
+                details={"xbot_id": processed.xbot_id},
             )
-
-        speed_params = self.mover_utils.get_speed_params(xbot_id)
-        travel_time = self.pmc.bot.linear_motion_si(
-            xbot_id,
-            target_pos[0],
-            target_pos[1],
-            speed_params["xy_vel"],
-            speed_params["xy_max_accel"],
-        )
-
-        timeout = self._timeout(
-            travel_time,
-            multiplier=LINEAR_TIMEOUT_MULTIPLIER,
-            buffer_s=LINEAR_TIMEOUT_BUFFER_S,
-            min_s=LINEAR_TIMEOUT_MIN_S,
-        )
-        motion_status = self.mover_utils.wait_for_motion_completion(
-            xbot_id,
-            target_pos,
-            self.config.xy_tolerance,
-            timeout,
-        )
-
-        response.success = motion_status == MotionStatus.COMPLETED
-        response.status_message = f"Motion status: {motion_status.name.lower()}"
-        return response
+        speed = self.mover_utils.get_speed_profile(processed.xbot_id)
+        with self._operation_guard(processed.xbot_id):
+            travel_time = self.driver.move_linear_absolute(
+                processed.xbot_id,
+                target.x,
+                target.y,
+                speed,
+            )
+            self.mover_utils.wait_for_motion_completion(
+                processed.xbot_id,
+                target,
+                self.config.xy_tolerance,
+                travel_time,
+                buffer_s=3.0,
+                multiplier=1.5,
+                minimum_timeout=5.0,
+            )
+        return self._success(response, f"Linear motion completed for XBot {processed.xbot_id}")
 
     @handle_service_errors()
     def callback_six_d_motion(self, request, response):
-        """Execute a 6-DOF motion (X, Y, Z, Rx, Ry, Rz)."""
         xbot_id = int(request.xbot_id)
-        processed = self._process(request, motion_type="6dof")
-        target_pos = processed.target_position
-
-        if not self.mover_utils.is_position_in_bounds(
-            target_pos[0], target_pos[1], target_pos[2]
-        ):
+        current = self.mover_utils.get_current_position(xbot_id)
+        processed = process_six_dof_request(request, current, self.NO_CHANGE)
+        self.mover_utils.ensure_xbot_active(processed.xbot_id)
+        if not self.mover_utils.is_position_in_bounds(processed.absolute_target):
             raise PositionOutOfBoundsError(
-                "Target position outside valid bounds",
-                details={"target": target_pos, "xbot_id": xbot_id},
+                "Target position outside configured bounds",
+                error_code=error_codes.TARGET_OUT_OF_RANGE,
+                details={"xbot_id": processed.xbot_id},
             )
-
-        speed_params = self.mover_utils.get_speed_params(xbot_id)
-        travel_time = self.pmc.bot.six_d_of_motion_si(
-            xbot_id,
-            target_pos[0],
-            target_pos[1],
-            target_pos[2],
-            target_pos[3],
-            target_pos[4],
-            target_pos[5],
-            speed_params["xy_vel"],
-            speed_params["xy_max_accel"],
-            speed_params["z_vel"],
-            speed_params["rx_vel"],
-            speed_params["ry_vel"],
-            speed_params["rz_vel"],
-        )
-
-        timeout = self._timeout(
-            travel_time,
-            multiplier=SIX_D_TIMEOUT_MULTIPLIER,
-            buffer_s=SIX_D_TIMEOUT_BUFFER_S,
-            min_s=SIX_D_TIMEOUT_MIN_S,
-            fallback_s=SIX_D_TIMEOUT_FALLBACK_S,
-        )
-        motion_status = self.mover_utils.wait_for_motion_completion(
-            xbot_id,
-            target_pos,
-            self.config.six_d_tolerance,
-            timeout,
-        )
-
-        response.success = motion_status == MotionStatus.COMPLETED
-        response.status_message = f"Motion status: {motion_status.name.lower()}"
-        return response
-
-    @handle_service_errors()
-    def callback_rotary_motion(self, request, response):
-        """Execute rotational motion around the Z axis."""
-        xbot_id = int(request.xbot_id)
-        processed = self._process(request, motion_type="rotary")
-        target_pos = processed.target_position
-        rot_mode = int(request.rot_mode)
-
-        travel_time = self.pmc.bot.rotary_motion(
-            xbot_id,
-            target_pos[5],
-            float(request.max_rz_speed),
-            float(request.max_accel_rz),
-            0,
-            rot_mode,
-        )
-
-        timeout = self._timeout(
-            travel_time,
-            multiplier=ROTARY_TIMEOUT_MULTIPLIER,
-            buffer_s=ROTARY_TIMEOUT_BUFFER_S,
-            min_s=ROTARY_TIMEOUT_MIN_S,
-        )
-        motion_status = self.mover_utils.wait_for_motion_completion(
-            xbot_id,
-            target_pos,
-            self.config.six_d_tolerance,
-            timeout,
-        )
-
-        rot_mode_names = {0: "direct", 1: "CCW", 2: "CW"}
-        response.success = motion_status == MotionStatus.COMPLETED
-        response.status_message = (
-            f"Rotary: {motion_status.name.lower()} "
-            f"(mode: {rot_mode_names.get(rot_mode)})"
-        )
-        return response
+        speed = self.mover_utils.get_speed_profile(processed.xbot_id)
+        with self._operation_guard(processed.xbot_id):
+            travel_time = self.driver.move_six_dof_absolute(
+                processed.xbot_id,
+                processed.absolute_target,
+                speed,
+            )
+            self.mover_utils.wait_for_motion_completion(
+                processed.xbot_id,
+                processed.absolute_target,
+                self.config.six_d_tolerance,
+                travel_time,
+                buffer_s=5.0,
+                multiplier=1.5,
+                minimum_timeout=8.0,
+            )
+        return self._success(response, f"6-DOF motion completed for XBot {processed.xbot_id}")
 
     @handle_service_errors()
     def callback_arc_motion_si(self, request, response):
-        """Execute arc motion with SI inputs from ROS service request."""
         xbot_id = int(request.xbot_id)
-        processed = self._process(request, motion_type="arc_si")
-        target_pos = processed.target_position
+        current = self.mover_utils.get_current_position(xbot_id)
+        processed = process_arc_request(request, current)
+        self.mover_utils.ensure_xbot_active(processed.xbot_id)
+        if not self.mover_utils.is_position_in_bounds(processed.absolute_target):
+            raise PositionOutOfBoundsError(
+                "Target position outside configured bounds",
+                error_code=error_codes.TARGET_OUT_OF_RANGE,
+                details={"xbot_id": processed.xbot_id},
+            )
+        with self._operation_guard(processed.xbot_id):
+            travel_time = self.driver.arc_move(
+                processed.xbot_id,
+                processed.absolute_target.x if processed.relative_target is None else processed.relative_target.x,
+                processed.absolute_target.y if processed.relative_target is None else processed.relative_target.y,
+                self._require_finite(request.radius, "radius") / 1000.0,
+                self._require_finite(request.max_speed, "max_speed") / 1000.0,
+                self._require_finite(request.max_accel, "max_accel") / 1000.0,
+                relative=processed.relative_target is not None,
+                final_speed=self._require_finite(request.final_speed, "final_speed") / 1000.0,
+                arc_mode=int(request.arc_mode),
+                arc_type=int(request.arc_type),
+                arc_direction=int(request.arc_direction),
+                angle_rad=self._require_finite(request.angle_degrees, "angle_degrees")
+                * 3.141592653589793
+                / 180.0,
+            )
+            self.mover_utils.wait_for_motion_completion(
+                processed.xbot_id,
+                processed.absolute_target,
+                self.config.xy_tolerance,
+                travel_time,
+                buffer_s=5.0,
+                multiplier=1.8,
+                minimum_timeout=8.0,
+            )
+        mode = "relative" if processed.relative_target is not None else "absolute"
+        return self._success(response, f"Arc motion ({mode}) completed for XBot {processed.xbot_id}")
 
-        target_x_m = self.mover_utils.mm_to_m(request.target_x)
-        target_y_m = self.mover_utils.mm_to_m(request.target_y)
-        radius_m = self.mover_utils.mm_to_m(request.radius)
-        max_speed_ms = self.mover_utils.mm_to_m(request.max_speed)
-        max_accel_ms2 = self.mover_utils.mm_to_m(request.max_accel)
-        final_speed_ms = self.mover_utils.mm_to_m(request.final_speed)
-        angle_rad = self.mover_utils.deg_to_rad(request.angle_degrees)
-
-        travel_time = self.pmc.bot.arc_motion_si(
-            xbot_id,
-            target_x_m,
-            target_y_m,
-            radius_m,
-            max_speed_ms,
-            max_accel_ms2,
-            0,
-            int(request.arc_mode),
-            int(request.arc_type),
-            int(request.arc_direction),
-            int(request.pos_mode),
-            final_speed_ms,
-            angle_rad,
-        )
-
-        timeout = self._timeout(
-            travel_time,
-            multiplier=ARC_TIMEOUT_MULTIPLIER,
-            buffer_s=ARC_TIMEOUT_BUFFER_S,
-            min_s=ARC_TIMEOUT_MIN_S,
-        )
-        motion_status = self.mover_utils.wait_for_motion_completion(
-            xbot_id,
-            target_pos,
-            self.config.xy_tolerance,
-            timeout,
-        )
-
-        response.success = motion_status == MotionStatus.COMPLETED
-        response.status_message = f"Arc motion: {motion_status.name.lower()}"
-        return response
-
+    @handle_service_errors()
+    def callback_rotary_motion(self, request, response):
+        current = self.mover_utils.get_current_position(int(request.xbot_id))
+        processed = process_rotary_request(request, current)
+        self.mover_utils.ensure_xbot_active(processed.xbot_id)
+        with self._operation_guard(processed.xbot_id):
+            travel_time = self.driver.rotate(
+                processed.xbot_id,
+                processed.absolute_target.rz,
+                self._require_finite(request.max_rz_speed, "max_rz_speed") * 3.141592653589793 / 180.0,
+                self._require_finite(request.max_accel_rz, "max_accel_rz") * 3.141592653589793 / 180.0,
+                int(request.rot_mode),
+            )
+            self.mover_utils.wait_for_motion_completion(
+                processed.xbot_id,
+                processed.absolute_target,
+                self.config.six_d_tolerance,
+                travel_time,
+                buffer_s=2.0,
+                multiplier=1.5,
+                minimum_timeout=4.0,
+            )
+        return self._success(response, f"Rotary motion completed for XBot {processed.xbot_id}")

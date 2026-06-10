@@ -1,15 +1,10 @@
-"""
-Control Callbacks for Planar Motor Node.
+"""Control callbacks for planar motor services."""
 
-Contains callbacks for control-related services:
-- Activate/Deactivate XBots
-- Levitation control
-- Stop motion
-- Velocity/acceleration parameters
-"""
+from __future__ import annotations
 
-from .base import InvalidParameterError, ServiceCallbacksBase
-from promoc_core.error_handling import handle_service_errors
+from promoc_core import error_codes
+
+from .base import InvalidParameterError, ServiceCallbacksBase, handle_service_errors
 
 
 class ControlCallbacks(ServiceCallbacksBase):
@@ -17,101 +12,56 @@ class ControlCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_activate_xbot(self, request, response):
-        """
-        Activate or deactivate the XBots.
-
-        Service: /promoc/mover/activate_xbots
-
-        Args:
-            request.activation_status: True to activate, False to deactivate.
-        """
+        self.mover_utils.ensure_selected_xbot(self.config.xbot_id)
         if request.activation_status:
-            self.pmc.bot.activate_xbots()
-            response.status_message = "XBots successfully activated"
+            self.driver.activate_xbots([self.config.xbot_id])
+            message = f"Activated XBot {self.config.xbot_id}"
         else:
-            self.pmc.bot.deactivate_xbots()
-            response.status_message = "XBots successfully deactivated"
-        response.success = True
-        return response
+            self.driver.deactivate_xbots([self.config.xbot_id])
+            message = f"Deactivated XBot {self.config.xbot_id}"
+        if hasattr(response, "activation_status"):
+            response.activation_status = bool(request.activation_status)
+        return self._success(response, message)
 
     @handle_service_errors()
     def callback_levitation_xbot(self, request, response):
-        """
-        Start or stop levitation (floating above the stator).
-
-        Service: /promoc/mover/levitation_xbots
-
-        IMPORTANT: XBot must be activated first.
-
-        Args:
-            request.levitation: True to start, False to stop.
-        """
-        command = 1 if request.levitation else 0
-        self.pmc.bot.levitation_command(0, command)  # 0 = all XBots
-
+        self.mover_utils.ensure_selected_xbot(self.config.xbot_id)
+        self.driver.set_levitation([self.config.xbot_id], enabled=bool(request.levitation))
+        if hasattr(response, "levitation"):
+            response.levitation = bool(request.levitation)
         action = "enabled" if request.levitation else "disabled"
-        response.status_message = f"Levitation {action} globally"
-        response.success = True
-        self.logger.info(response.status_message)
-        return response
+        return self._success(
+            response,
+            f"Levitation {action} for XBot {self.config.xbot_id}",
+        )
 
     @handle_service_errors()
     def callback_stop_motion(self, request, response):
-        """
-        Stop the current motion of an XBot immediately.
-
-        Service: /promoc/mover/stop_motion
-
-        EMERGENCY FUNCTION: Stops motion instantly.
-
-        Args:
-            request.xbot_id: ID of the XBot to stop.
-        """
-        self.pmc.bot.stop_motion(request.xbot_id)
+        self.mover_utils.stop_xbot(int(request.xbot_id))
         response.success = True
-        response.status_message = f"Stop command sent to XBot {request.xbot_id}"
+        response.error_code = error_codes.STOP_REQUESTED
+        response.status_message = f"Stop requested for XBot {request.xbot_id}"
         return response
 
     @handle_service_errors()
     def callback_set_velocity_acceleration(self, request, response):
-        """
-        Set velocity and acceleration parameters for an XBot.
-
-        Service: /promoc/mover/set_velocity_acceleration
-        """
-        # Validate XBot ID
-        if request.xbot_id < 0:
-            raise InvalidParameterError(
-                f"XBot ID must be non-negative, got: {request.xbot_id}",
-                details={"parameter": "xbot_id", "value": request.xbot_id},
-            )
-
-        # Validate all parameters are positive
-        params = {
-            "xy_vel": request.xy_vel,
-            "z_vel": request.z_vel,
-            "rx_vel": request.rx_vel,
-            "ry_vel": request.ry_vel,
-            "rz_vel": request.rz_vel,
-            "xy_max_accel": request.xy_max_accel,
-            "z_max_accel": request.z_max_accel,
+        xbot_id = int(request.xbot_id)
+        self.mover_utils.ensure_selected_xbot(xbot_id)
+        values = {
+            "xy_vel": self._require_finite(request.xy_vel, "xy_vel"),
+            "xy_max_accel": self._require_finite(request.xy_max_accel, "xy_max_accel"),
+            "z_vel": self._require_finite(request.z_vel, "z_vel"),
+            "z_max_accel": self._require_finite(request.z_max_accel, "z_max_accel"),
+            "rx_vel": self._require_finite(request.rx_vel, "rx_vel"),
+            "ry_vel": self._require_finite(request.ry_vel, "ry_vel"),
+            "rz_vel": self._require_finite(request.rz_vel, "rz_vel"),
         }
-
-        for name, value in params.items():
-            if value <= 0:
+        for name, value in values.items():
+            if value <= 0.0:
                 raise InvalidParameterError(
-                    f"{name} must be positive, got: {value}",
+                    f"{name} must be positive",
+                    error_code=error_codes.INVALID_COMMAND,
                     details={"parameter": name, "value": value},
                 )
-
-        # Set parameters
-        self.mover_utils.set_speed_params(request.xbot_id, params)
-
-        self.logger.info(
-            f"Velocity params set for XBot {request.xbot_id}: "
-            f"xy_vel={request.xy_vel:.3f}m/s, xy_accel={request.xy_max_accel:.3f}m/s²"
-        )
-        response.success = True
-        response.status_message = "Parameters set successfully"
-        return response
-
+        self.mover_utils.set_speed_profile(xbot_id, **values)
+        return self._success(response, f"Updated speed parameters for XBot {xbot_id}")

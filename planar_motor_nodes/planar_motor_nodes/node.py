@@ -1,11 +1,9 @@
-"""ROS2 node for planar motor control.
+"""Single ROS 2 entry point for planar-motor control."""
 
-Canonical entry point for the `planar_motor_nodes` runtime package.
-"""
+from __future__ import annotations
 
-import rclpy
 from dataclasses import asdict
-from rclpy.node import Node
+
 from promoc_assembly_interfaces.msg import XBotInfo
 from promoc_assembly_interfaces.srv import (
     ActivateXbots,
@@ -17,81 +15,82 @@ from promoc_assembly_interfaces.srv import (
     SixDofMotion,
     StopMotion,
 )
+from promoc_core.logging import LogTags, TaggedLogger
+import rclpy
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
 
-from .drivers.hardware import PmcInterface
-from .services import MoverUtils, ServiceHandlers
 from .config import MoverNodeConfig
-from promoc_core.conversions import m_to_mm, rad_to_deg
-from promoc_core.logging import TaggedLogger, LogTags
+from .drivers import create_planar_motor_driver
+from .services import ServiceHandlers, MoverUtils
 
 
 class MoverServiceNode(Node):
-    """ROS2 node for planar motor control."""
+    """ROS node that wires a small driver boundary to the existing ROS API."""
 
     def __init__(self):
         super().__init__("mover_node")
         self.log = TaggedLogger(self.get_logger(), LogTags.PMC)
         self.config = self._load_config()
-        self.is_connected = False
-
-        self.pmc = PmcInterface(
-            TaggedLogger(self.get_logger(), LogTags.PMC_CONN),
-            use_mock=self.config.use_mock,
-        )
-        self.mover_utils = MoverUtils(self.log, self.pmc, self.config)
+        self.driver = create_planar_motor_driver(self.log, self.config)
+        self.runtime = MoverUtils(self.get_logger(), self.driver, self.config)
         self.callbacks = ServiceHandlers(
-            self.get_logger(), self.pmc, self.mover_utils, self.config
+            self.get_logger(), self.driver, self.runtime, self.config
         )
-
-        self.xbot_pos_publisher = self.create_publisher(
+        self._motion_group = ReentrantCallbackGroup()
+        self._control_group = ReentrantCallbackGroup()
+        self._publisher_group = ReentrantCallbackGroup()
+        self.xbot_info_publisher = self.create_publisher(
             XBotInfo, "/promoc/mover/xbot_info", 10
         )
-
-        self._setup_services()
-        self.log.info(f"Connecting to PMC at {self.config.pmc_ip}...")
-        self.connection_timer = self.create_timer(0.1, self._try_connect)
-        self.log.info("Mover service node initialized. Waiting for PMC connection...")
-
-    def _try_connect(self):
-        if self.is_connected:
-            return
+        self._create_services()
         try:
-            self.is_connected = self.pmc.connect(self.config.pmc_ip)
+            self.runtime.connect_and_prepare()
         except Exception as exc:
-            self.log.debug(f"Connection attempt failed: {exc}")
-            return
-        if self.is_connected:
-            self.log.info("PMC connected. Activating system.")
-            self.connection_timer.cancel()
-            self._activate_system()
-
-    def _activate_system(self):
-        try:
-            self.pmc.bot.activate_xbots()
-            self.log.info("XBot activated")
-            self._start_publisher_timer()
-        except Exception as exc:
-            self.log.error(f"Failed to activate XBots after connection: {exc}")
+            self.log.error(f"Startup connection failed: {exc}")
+        self.create_timer(
+            1.0 / self.config.publish_rate,
+            self._publish_xbot_info,
+            callback_group=self._publisher_group,
+        )
+        self.log.info(f"Planar motor configuration: {asdict(self.config)}")
 
     def _load_config(self) -> MoverNodeConfig:
-        self.declare_parameter("use_mock", False)
-        self.declare_parameter("xbot_id", 0)
-        self.declare_parameter("publish_rate", 10.0)
-        self.declare_parameter("pmc_ip", "192.168.10.100")
-        self.declare_parameter("xy_tolerance", 0.001)
-        self.declare_parameter("six_d_tolerance", 0.001)
-        self.declare_parameter("x_min", 0.055)
-        self.declare_parameter("x_max", 0.420)
-        self.declare_parameter("y_min", 0.055)
-        self.declare_parameter("y_max", 0.180)
-        self.declare_parameter("z_min", 0.000)
-        self.declare_parameter("z_max", 0.004)
-
-        config = MoverNodeConfig(
+        defaults = {
+            "use_mock": False,
+            "xbot_id": 0,
+            "publish_rate": 10.0,
+            "pmc_ip": "192.168.10.100",
+            "auto_activate": True,
+            "movement_timeout": 10.0,
+            "mock_xbot_count": 1,
+            "xy_tolerance": 0.001,
+            "six_d_tolerance": 0.001,
+            "x_min": 0.055,
+            "x_max": 0.420,
+            "y_min": 0.055,
+            "y_max": 0.180,
+            "z_min": 0.0,
+            "z_max": 0.004,
+            "default_xy_vel": 0.05,
+            "default_xy_max_accel": 0.2,
+            "default_z_vel": 0.01,
+            "default_z_max_accel": 0.05,
+            "default_rx_vel": 0.17453292519943295,
+            "default_ry_vel": 0.17453292519943295,
+            "default_rz_vel": 0.2617993877991494,
+        }
+        for name, value in defaults.items():
+            self.declare_parameter(name, value)
+        return MoverNodeConfig(
             use_mock=bool(self.get_parameter("use_mock").value),
             xbot_id=int(self.get_parameter("xbot_id").value),
             publish_rate=float(self.get_parameter("publish_rate").value),
             pmc_ip=str(self.get_parameter("pmc_ip").value),
+            auto_activate=bool(self.get_parameter("auto_activate").value),
+            movement_timeout=float(self.get_parameter("movement_timeout").value),
+            mock_xbot_count=int(self.get_parameter("mock_xbot_count").value),
             xy_tolerance=float(self.get_parameter("xy_tolerance").value),
             six_d_tolerance=float(self.get_parameter("six_d_tolerance").value),
             x_min=float(self.get_parameter("x_min").value),
@@ -100,77 +99,69 @@ class MoverServiceNode(Node):
             y_max=float(self.get_parameter("y_max").value),
             z_min=float(self.get_parameter("z_min").value),
             z_max=float(self.get_parameter("z_max").value),
+            default_xy_vel=float(self.get_parameter("default_xy_vel").value),
+            default_xy_max_accel=float(
+                self.get_parameter("default_xy_max_accel").value
+            ),
+            default_z_vel=float(self.get_parameter("default_z_vel").value),
+            default_z_max_accel=float(
+                self.get_parameter("default_z_max_accel").value
+            ),
+            default_rx_vel=float(self.get_parameter("default_rx_vel").value),
+            default_ry_vel=float(self.get_parameter("default_ry_vel").value),
+            default_rz_vel=float(self.get_parameter("default_rz_vel").value),
         )
-        self.log.info(f"Configuration loaded: {asdict(config)}")
-        return config
 
-    def _setup_services(self):
-        services = [
-            ("linear_motion_si", LinearMotionSi),
-            ("six_dof_motion", SixDofMotion),
-            ("activate_xbots", ActivateXbots),
-            ("levitation_xbots", LevitationXbots),
-            ("arc_motion_si", ArcMotionSi),
-            ("stop_motion", StopMotion),
-            ("rotary_motion", RotaryMotion),
-            ("set_velocity_acceleration", SetVelocityAcceleration),
-        ]
-        for name, srv_type in services:
-            callback = self.callbacks.get_callback(name)
-            self.create_service(srv_type, f"/promoc/mover/{name}", callback)
-        self.log.info("All services are created.")
-
-    def _start_publisher_timer(self):
-        publish_interval = 1.0 / self.config.publish_rate
-        self.xbot_position_timer = self.create_timer(
-            publish_interval, self._publish_xbot_position
-        )
-        if not self.pmc.status["is_mock"]:
-            self.xbot_diagnosis_timer = self.create_timer(
-                5.0, self.mover_utils.diagnose_xbot_availability
+    def _create_services(self) -> None:
+        service_types = {
+            "linear_motion_si": LinearMotionSi,
+            "six_dof_motion": SixDofMotion,
+            "activate_xbots": ActivateXbots,
+            "levitation_xbots": LevitationXbots,
+            "arc_motion_si": ArcMotionSi,
+            "stop_motion": StopMotion,
+            "rotary_motion": RotaryMotion,
+            "set_velocity_acceleration": SetVelocityAcceleration,
+        }
+        for registration in self.callbacks.iter_service_registry():
+            group = (
+                self._motion_group
+                if self.callbacks.get_group(registration.service_name) == "motion"
+                else self._control_group
             )
-        self.log.info("Timers started.")
+            self.create_service(
+                service_types[registration.service_name],
+                f"/promoc/mover/{registration.service_name}",
+                self.callbacks.get_callback(registration.service_name),
+                callback_group=group,
+            )
 
-    def _publish_xbot_position(self):
-        if not self.is_connected:
-            return
-
-        msg = XBotInfo()
-        xbot_id = self.config.xbot_id
+    def _publish_xbot_info(self) -> None:
         try:
-            current_pos = self.mover_utils.get_current_position(xbot_id)
-            if current_pos:
-                msg.x_pos = m_to_mm(current_pos[0])
-                msg.y_pos = m_to_mm(current_pos[1])
-                msg.z_pos = m_to_mm(current_pos[2])
-                msg.rx_pos = rad_to_deg(current_pos[3])
-                msg.ry_pos = rad_to_deg(current_pos[4])
-                msg.rz_pos = rad_to_deg(current_pos[5])
-
-            msg.xbot_state = self.mover_utils.get_xbot_state_string(xbot_id)
-            self.xbot_pos_publisher.publish(msg)
+            message = self.runtime.build_info_message(self.config.xbot_id)
         except Exception as exc:
-            self.log.error(f"Position publishing error: {exc}")
+            self.log.debug(f"Skipping XBot info publish: {exc}")
+            return
+        if message is not None:
+            message.device_status.stamp = self.get_clock().now().to_msg()
+            self.xbot_info_publisher.publish(message)
 
     def destroy_node(self):
-        self.log.info("Shutting down MoverServiceNode...")
-        if self.is_connected:
-            try:
-                self.pmc.bot.deactivate_xbots()
-                self.log.info("XBots deactivated.")
-            except Exception as exc:
-                self.log.error(f"Error during deactivation: {exc}")
+        self.runtime.shutdown()
         super().destroy_node()
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = MoverServiceNode()
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

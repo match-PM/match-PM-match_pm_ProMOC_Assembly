@@ -1,10 +1,12 @@
 # ruff: noqa: E402
-"""Unit tests for planar motion/control callbacks without adapter indirection."""
+"""Focused behavioral tests for the simplified planar-motor runtime."""
 
 from __future__ import annotations
 
 from pathlib import Path
 import sys
+import threading
+import time
 from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,9 +15,12 @@ for rel in ("planar_motor_nodes", "promoc_core"):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
+from planar_motor_nodes.config import MoverNodeConfig
+from planar_motor_nodes.drivers.mock import MockPlanarMotorDriver
 from planar_motor_nodes.services.control import ControlCallbacks
 from planar_motor_nodes.services.motion import MotionCallbacks
-from promoc_core.motion import MotionStatus
+from planar_motor_nodes.services.status import MoverUtils
+from promoc_core import error_codes
 
 
 class _DummyLogger:
@@ -35,156 +40,15 @@ class _DummyLogger:
         _ = args, kwargs
 
 
-class _FakeBot:
-    def __init__(self):
-        self.stopped_actor = None
-
-    def linear_motion_si(self, xbot_id, x, y, xy_vel, xy_accel):
-        _ = xbot_id, x, y, xy_vel, xy_accel
-        return 0.01
-
-    def six_d_of_motion_si(
-        self,
-        xbot_id,
-        x,
-        y,
-        z,
-        rx,
-        ry,
-        rz,
-        xy_vel,
-        xy_accel,
-        z_vel,
-        rx_vel,
-        ry_vel,
-        rz_vel,
-    ):
-        _ = (
-            xbot_id,
-            x,
-            y,
-            z,
-            rx,
-            ry,
-            rz,
-            xy_vel,
-            xy_accel,
-            z_vel,
-            rx_vel,
-            ry_vel,
-            rz_vel,
-        )
-        return 0.01
-
-    def rotary_motion(self, xbot_id, target_rz, max_speed, max_accel, cmd_lb, rot_mode):
-        _ = xbot_id, target_rz, max_speed, max_accel, cmd_lb, rot_mode
-        return 0.01
-
-    def arc_motion_si(
-        self,
-        xbot_id,
-        target_x,
-        target_y,
-        radius_m,
-        max_speed,
-        max_accel,
-        cmd_lb,
-        arc_mode,
-        arc_type,
-        arc_direction,
-        pos_mode,
-        final_speed,
-        angle_rad,
-    ):
-        _ = (
-            xbot_id,
-            target_x,
-            target_y,
-            radius_m,
-            max_speed,
-            max_accel,
-            cmd_lb,
-            arc_mode,
-            arc_type,
-            arc_direction,
-            pos_mode,
-            final_speed,
-            angle_rad,
-        )
-        return 0.01
-
-    def stop_motion(self, xbot_id):
-        self.stopped_actor = xbot_id
-
-    def activate_xbots(self):
-        return None
-
-    def deactivate_xbots(self):
-        return None
-
-    def levitation_command(self, xbot_id, command):
-        _ = xbot_id, command
-
-
-class _FakePMC:
-    def __init__(self):
-        self.bot = _FakeBot()
-        self.status = {"source": "test", "is_mock": True}
-
-
-class _FakeMoverUtils:
-    def __init__(self):
-        self.speed_params = {
-            "xy_vel": 0.05,
-            "xy_max_accel": 0.2,
-            "z_vel": 0.01,
-            "z_max_accel": 0.05,
-            "rx_vel": 0.1,
-            "ry_vel": 0.1,
-            "rz_vel": 0.1,
-        }
-
-    def get_current_position(self, xbot_id=0):
-        _ = xbot_id
-        return [0.12, 0.12, 0.001, 0.0, 0.0, 0.0]
-
-    def get_xbot_state_string(self, xbot_id=0):
-        _ = xbot_id
-        return "XBOT_IDLE"
-
-    def mm_to_m(self, value):
-        return float(value) / 1000.0
-
-    def deg_to_rad(self, value):
-        import math
-
-        return math.radians(float(value))
-
-    def get_speed_params(self, xbot_id=0):
-        _ = xbot_id
-        return dict(self.speed_params)
-
-    def set_speed_params(self, xbot_id, params):
-        _ = xbot_id
-        self.speed_params = dict(params)
-
-    def is_position_in_bounds(self, x, y, z):
-        _ = x, y, z
-        return True
-
-    def wait_for_motion_completion(
-        self,
-        xbot_id,
-        target_position,
-        position_tolerance,
-        max_wait_time,
-    ):
-        _ = xbot_id, target_position, position_tolerance, max_wait_time
-        return MotionStatus.COMPLETED
-
-
-def _config():
-    return SimpleNamespace(
+def _config() -> MoverNodeConfig:
+    return MoverNodeConfig(
+        use_mock=True,
+        xbot_id=0,
+        publish_rate=10.0,
+        pmc_ip="mock://controller",
+        auto_activate=True,
+        movement_timeout=1.0,
+        mock_xbot_count=1,
         xy_tolerance=0.001,
         six_d_tolerance=0.001,
         x_min=0.055,
@@ -193,65 +57,158 @@ def _config():
         y_max=0.180,
         z_min=0.0,
         z_max=0.004,
+        default_xy_vel=0.05,
+        default_xy_max_accel=0.2,
+        default_z_vel=0.01,
+        default_z_max_accel=0.05,
+        default_rx_vel=0.1,
+        default_ry_vel=0.1,
+        default_rz_vel=0.2,
     )
 
 
-def test_planar_motion_callbacks_regression_paths():
+def _runtime():
     logger = _DummyLogger()
-    pmc = _FakePMC()
-    mover_utils = _FakeMoverUtils()
-    config = _config()
+    driver = MockPlanarMotorDriver(logger, mock_xbot_count=1)
+    runtime = MoverUtils(logger, driver, _config())
+    runtime.connect_and_prepare()
+    return logger, driver, runtime
 
-    motion = MotionCallbacks(logger, pmc, mover_utils, config)
 
-    linear_req = SimpleNamespace(xbot_id=0, x_pos=100.0, y_pos=120.0)
-    linear_res = SimpleNamespace(success=False, status_message="")
-    linear_result = motion.callback_linear_motion_si(linear_req, linear_res)
-    assert linear_result.success is True
+def test_absolute_relative_and_rotary_motion_update_mock_state():
+    logger, driver, runtime = _runtime()
+    motion = MotionCallbacks(logger, driver, runtime, _config())
 
-    sixd_req = SimpleNamespace(
-        xbot_id=0,
-        x_pos=100.0,
-        y_pos=120.0,
-        z_pos=1.0,
-        rx_pos=0.0,
-        ry_pos=0.0,
-        rz_pos=0.0,
-    )
-    sixd_res = SimpleNamespace(success=False, status_message="")
-    sixd_result = motion.callback_six_d_motion(sixd_req, sixd_res)
-    assert sixd_result.success is True
+    linear_res = SimpleNamespace(success=False, error_code=0, status_message="")
+    linear_req = SimpleNamespace(xbot_id=0, x_pos=150.0, y_pos=130.0)
+    linear = motion.callback_linear_motion_si(linear_req, linear_res)
+    assert linear.success is True
+    pose = runtime.get_current_position(0)
+    assert round(pose.x, 3) == 0.150
+    assert round(pose.y, 3) == 0.130
 
+    arc_res = SimpleNamespace(success=False, error_code=0, status_message="")
     arc_req = SimpleNamespace(
         xbot_id=0,
-        target_x=110.0,
-        target_y=130.0,
+        target_x=10.0,
+        target_y=-5.0,
         radius=20.0,
         max_speed=50.0,
         max_accel=100.0,
         arc_mode=0,
         arc_type=0,
         arc_direction=1,
-        pos_mode=0,
+        pos_mode=1,
         final_speed=0.0,
         angle_degrees=90.0,
     )
-    arc_res = SimpleNamespace(success=False, status_message="")
-    arc_result = motion.callback_arc_motion_si(arc_req, arc_res)
-    assert arc_result.success is True
+    arc = motion.callback_arc_motion_si(arc_req, arc_res)
+    assert arc.success is True
+    pose = runtime.get_current_position(0)
+    assert round(pose.x, 3) == 0.160
+    assert round(pose.y, 3) == 0.125
+
+    rotary_res = SimpleNamespace(success=False, error_code=0, status_message="")
+    rotary_req = SimpleNamespace(
+        xbot_id=0,
+        target_rz=90.0,
+        max_rz_speed=90.0,
+        max_accel_rz=180.0,
+        rot_mode=0,
+    )
+    rotary = motion.callback_rotary_motion(rotary_req, rotary_res)
+    assert rotary.success is True
+    pose = runtime.get_current_position(0)
+    assert round(pose.rz, 3) == 1.571
 
 
-def test_planar_control_stop_motion_calls_pmc_directly():
-    logger = _DummyLogger()
-    pmc = _FakePMC()
-    mover_utils = _FakeMoverUtils()
-    config = _config()
+def test_unknown_xbot_is_rejected():
+    logger, driver, runtime = _runtime()
+    motion = MotionCallbacks(logger, driver, runtime, _config())
+    response = SimpleNamespace(success=False, error_code=0, status_message="")
+    request = SimpleNamespace(xbot_id=9, x_pos=150.0, y_pos=130.0)
 
-    control = ControlCallbacks(logger, pmc, mover_utils, config)
-    stop_req = SimpleNamespace(xbot_id=2)
-    stop_res = SimpleNamespace(success=False, status_message="")
+    result = motion.callback_linear_motion_si(request, response)
 
-    stop_result = control.callback_stop_motion(stop_req, stop_res)
+    assert result.success is False
+    assert result.error_code == error_codes.XBOT_NOT_FOUND
 
-    assert stop_result.success is True
-    assert pmc.bot.stopped_actor == 2
+
+def test_unavailable_position_is_rejected_instead_of_fabricated():
+    logger, driver, runtime = _runtime()
+    motion = MotionCallbacks(logger, driver, runtime, _config())
+    original_get_snapshot = driver.get_snapshot
+
+    def _without_pose(xbot_id):
+        snapshot = original_get_snapshot(xbot_id)
+        return snapshot.__class__(
+            xbot_id=snapshot.xbot_id,
+            pose=None,
+            raw_state=snapshot.raw_state,
+            device_state=snapshot.device_state,
+            active=snapshot.active,
+            levitated=snapshot.levitated,
+            busy=snapshot.busy,
+            error_code=snapshot.error_code,
+            message=snapshot.message,
+        )
+
+    driver.get_snapshot = _without_pose
+    response = SimpleNamespace(success=False, error_code=0, status_message="")
+    request = SimpleNamespace(
+        xbot_id=0,
+        x_pos=150.0,
+        y_pos=130.0,
+        z_pos=-999999.0,
+        rx_pos=-999999.0,
+        ry_pos=-999999.0,
+        rz_pos=-999999.0,
+    )
+
+    result = motion.callback_six_d_motion(request, response)
+
+    assert result.success is False
+    assert result.error_code == error_codes.POSITION_UNAVAILABLE
+
+
+def test_busy_rejection_and_stop_during_motion():
+    logger, driver, runtime = _runtime()
+    motion = MotionCallbacks(logger, driver, runtime, _config())
+    control = ControlCallbacks(logger, driver, runtime, _config())
+
+    first_request = SimpleNamespace(xbot_id=0, x_pos=250.0, y_pos=160.0)
+    first_response = SimpleNamespace(success=False, error_code=0, status_message="")
+    holder: dict[str, object] = {}
+
+    def _run_motion():
+        holder["move"] = motion.callback_linear_motion_si(first_request, first_response)
+
+    worker = threading.Thread(target=_run_motion, daemon=True)
+    worker.start()
+    time.sleep(0.05)
+
+    second_request = SimpleNamespace(xbot_id=0, x_pos=260.0, y_pos=165.0)
+    second_response = SimpleNamespace(success=False, error_code=0, status_message="")
+    second = motion.callback_linear_motion_si(second_request, second_response)
+    assert second.success is False
+    assert second.error_code == error_codes.DEVICE_BUSY
+
+    stop_request = SimpleNamespace(xbot_id=0)
+    stop_response = SimpleNamespace(success=False, error_code=0, status_message="")
+    stop = control.callback_stop_motion(stop_request, stop_response)
+    assert stop.success is True
+    assert stop.error_code == error_codes.STOP_REQUESTED
+
+    worker.join(timeout=2.0)
+    move_result = holder["move"]
+    assert move_result.success is False
+    assert move_result.error_code == error_codes.MOVEMENT_STOPPED
+
+
+def test_status_message_populates_shared_device_status():
+    logger, _, runtime = _runtime()
+    message = runtime.build_info_message(0)
+    assert message is not None
+    assert message.device_status.state == int(message.device_status.state)
+    assert message.device_status.error_code == error_codes.SUCCESS
+    assert message.xbot_state == "XBOT_IDLE"

@@ -1,474 +1,319 @@
-"""
-Mover Utilities - Helper functions for XBot position management.
+"""Runtime state and status helpers for the planar-motor node."""
 
-This module contains the MoverUtils class, which provides helper functions
-for position queries, motion monitoring, and unit conversion.
+from __future__ import annotations
 
-Function Overview:
-==================
-
-Position & Status:
-------------------
-- get_current_position(xbot_id) → [x, y, z, rx, ry, rz] in SI units
-- get_xbot_status_info(xbot_id) → dict with position and state
-- get_xbot_state_string(xbot_id) → "IDLE", "MOVING", etc.
-
-Motion Monitoring:
---------------------
-- wait_for_motion_completion() → MotionStatus (COMPLETED, TIMEOUT, ERROR)
-- is_position_in_bounds(x, y, z) → True/False
-
-Unit Conversion:
-----------------------
-- mm_to_m(value) → value / 1000
-- m_to_mm(value) → value * 1000
-- deg_to_rad(value) → value * π/180
-- rad_to_deg(value) → value * 180/π
-
-Configuration:
---------------
-- get_speed_params(xbot_id) → dict with velocities/accelerations
-
-Usage Example:
-==================
-    utils = MoverUtils(logger, pmc_interface, config)
-
-    # Get position
-    pos = utils.get_current_position(0)
-    print(f"XBot is at x={pos[0]*1000:.1f}mm, y={pos[1]*1000:.1f}mm")
-
-    # Monitor motion
-    result = utils.wait_for_motion_completion(
-        xbot_id=0,
-        target_pos=[0.1, 0.05, 0.001, 0, 0, 0],
-        tolerance=0.001,
-        timeout=10.0
-    )
-    if result == MotionStatus.COMPLETED:
-        print("Target reached!")
-"""
-
+from contextlib import contextmanager
 import math
-from typing import Dict, List, Optional
+import threading
+import time
 
-# Explicit imports for a clean architecture
-from ..drivers.hardware import PmcInterface
+from promoc_assembly_interfaces.msg import DeviceStatus, XBotInfo
+from promoc_core import error_codes
+from promoc_core.logging import LogTags, TaggedLogger
+from promoc_core.motion_interface import compute_motion_timeout
+from promoc_core.promoc_exceptions import ConfigurationError, ConnectionError, MotionError
+from promoc_core.status import DeviceState
+
 from ..config import MoverNodeConfig
-
-# XbotState from Mock (guaranteed to be available)
-from ..drivers.mock import XbotState
-
-# Common utilities from promoc_core
-from promoc_core.motion import MotionStatus
-from promoc_core.motion_interface import wait_for_idle_state
-from promoc_core.validation import is_in_range, validate_id_range
-from promoc_core.conversions import rad_to_deg, mm_to_m, m_to_mm
-
-
-class _MoverStatusPort:
-    """Minimal MotionPort-compatible view for status polling via mover utils."""
-
-    def __init__(self, mover_utils: "MoverUtils"):
-        self._mover_utils = mover_utils
-
-    def read_position(self, actor_id=None):
-        xbot_id = 0 if actor_id is None else int(actor_id)
-        return self._mover_utils.get_current_position(xbot_id)
-
-    def read_status(self, actor_id=None):
-        xbot_id = 0 if actor_id is None else int(actor_id)
-        return self._mover_utils.get_xbot_state_string(xbot_id)
-
-    def command(self, command, actor_id=None):  # pragma: no cover - not used here
-        raise NotImplementedError
-
-    def stop(self, actor_id=None):  # pragma: no cover - not used here
-        raise NotImplementedError
+from ..drivers.base import PlanarMotorDriver
+from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
 class MoverUtils:
-    """
-    Helper functions for XBot position management and motion monitoring.
+    """Node-local runtime state shared by the service handlers."""
 
-    This class is decoupled from ROS2 and can be tested independently.
-    It is used by the MoverServiceNode and ServiceCallbacks.
-
-    Main Functions:
-    ---------------
-    1. Get position: get_current_position()
-    2. Monitor motion: wait_for_motion_completion()
-    3. Check boundaries: is_position_in_bounds()
-    4. Convert units: mm_to_m(), deg_to_rad(), etc.
-
-    Attributes:
-        logger: ROS2 logger for output.
-        pmc (PmcInterface): Hardware interface.
-        config (MoverNodeConfig): Typed node configuration with bounds.
-        is_mock (bool): True if mock mode is active.
-        velocity_params (dict): Velocity parameters per XBot.
-    """
-
-    def __init__(self, logger, pmc_interface: PmcInterface, config: MoverNodeConfig):
-        """
-        Initializes the utilities with dependencies.
-
-        Args:
-            logger: ROS2 logger.
-            pmc_interface: Hardware interface.
-            config: Configuration with bounds and tolerances.
-        """
-        self.logger = logger
-        self.pmc = pmc_interface
+    def __init__(self, logger, driver: PlanarMotorDriver, config: MoverNodeConfig):
+        self.logger = TaggedLogger(logger, LogTags.PMC)
+        self.driver = driver
         self.config = config
-        self.is_mock = self.pmc.status["is_mock"]
-        self._logged_no_data = False
-        self._logged_warnings = set()
+        self._state_lock = threading.Lock()
+        self._operation_locks: dict[int, threading.Lock] = {}
+        self._connected = False
+        self._known_xbot_ids: list[int] = []
+        self._device_state = DeviceState.DISCONNECTED
+        self._error_code = error_codes.SUCCESS
+        self._status_message = "Planar motor disconnected"
+        self._speed_profiles: dict[int, SpeedProfile] = {}
 
-        # Velocity/acceleration parameters per XBot.
-        #
-        # Why this lives here:
-        # - Callbacks should not own mutable runtime tuning state.
-        # - We want a single place that defines defaults and validation.
-        #
-        # Units:
-        # - velocities: m/s (rotational: rad/s)
-        # - accelerations: m/s²
-        self.velocity_params: Dict[int, Dict[str, float]] = {}
+    def connect_and_prepare(self) -> None:
+        with self._state_lock:
+            self._device_state = DeviceState.CONNECTING
+            self._error_code = error_codes.SUCCESS
+            self._status_message = "Connecting to planar motor controller"
+        self.driver.connect(self.config.pmc_ip)
+        self._known_xbot_ids = self.driver.list_xbot_ids()
+        self._connected = True
+        self._require_known_xbot(self.config.xbot_id)
+        if self.config.auto_activate:
+            self.driver.activate_xbots([self.config.xbot_id])
+            self._set_state(
+                DeviceState.READY,
+                error_codes.SUCCESS,
+                f"Connected and activated XBot {self.config.xbot_id}",
+            )
+        else:
+            self._set_state(
+                DeviceState.NOT_READY,
+                error_codes.SUCCESS,
+                f"Connected. XBot {self.config.xbot_id} not activated",
+            )
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # UNIT CONVERSION
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def mm_to_m(self, value_mm: float) -> float:
-        """Converts millimeters to meters."""
-        return mm_to_m(value_mm)
-
-    def m_to_mm(self, value_m: float) -> float:
-        """Converts meters to millimeters."""
-        return m_to_mm(value_m)
-
-    def deg_to_rad(self, value_deg: float) -> float:
-        """Converts degrees to radians."""
-        return math.radians(value_deg)
-
-    def rad_to_deg(self, value_rad: float) -> float:
-        """Converts radians to degrees."""
-        return rad_to_deg(value_rad)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # SPEED / ACCELERATION PARAMETERS
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def get_speed_params(self, xbot_id: int = 0) -> Dict[str, float]:
-        """Return velocity/acceleration parameters for an XBot.
-
-        The ServiceCallbacks expect these keys:
-        - xy_vel
-        - xy_max_accel
-        - z_vel
-        - z_max_accel
-        - rx_vel
-        - ry_vel
-        - rz_vel
-
-        If no parameters were set via service calls, sensible defaults are
-        returned.
-
-        Args:
-            xbot_id: XBot ID
-
-        Returns:
-            Dict[str, float]: Parameters in SI units.
-        """
-        # Don't hard-fail here; callbacks already validate and we want robust
-        # defaults even in mock.
-        if xbot_id not in self.velocity_params:
-            # Defaults are conservative. They can be tuned via
-            # callback_set_velocity_acceleration.
-            self.velocity_params[xbot_id] = {
-                "xy_vel": 0.05,
-                "xy_max_accel": 0.2,
-                "z_vel": 0.01,
-                "z_max_accel": 0.05,
-                "rx_vel": self.deg_to_rad(10.0),
-                "ry_vel": self.deg_to_rad(10.0),
-                "rz_vel": self.deg_to_rad(15.0),
-            }
-
-        # Return a copy to avoid accidental external mutation.
-        return dict(self.velocity_params[xbot_id])
-
-    def set_speed_params(self, xbot_id: int, params: Dict[str, float]) -> None:
-        """Set velocity/acceleration parameters for an XBot.
-
-        Args:
-            xbot_id: XBot ID
-            params: Dict with same keys as get_speed_params()
-        """
-        self.velocity_params[xbot_id] = dict(params)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # POSITION QUERIES
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def get_current_position(self, xbot_id: int = 0) -> Optional[List[float]]:
-        """
-        Queries the current XBot position from the PMC controller.
-
-        Args:
-            xbot_id: ID of the XBot (default: 0).
-
-        Returns:
-            A list [x, y, z, rx, ry, rz] in SI units (m, rad), or
-            None if no data is available.
-
-        Flow:
-        -----
-        1. Fetch XBot data from the PMC.
-        2. Check if the requested ID is available.
-        3. Return the position as a list.
-        """
+    def shutdown(self) -> None:
+        if not self._connected:
+            return
         try:
-            get_xbot_data = getattr(self.pmc.bot, "get_xbot_data", None)
-            if callable(get_xbot_data):
-                xbot_data_list = get_xbot_data()
-            else:
-                # Compatibility path for drivers exposing only get_all_xbot_info.
-                get_all_xbot_info = getattr(self.pmc.bot, "get_all_xbot_info", None)
-                if not callable(get_all_xbot_info):
-                    raise AttributeError(
-                        "PMCLib backend exposes neither get_xbot_data nor get_all_xbot_info"
-                    )
-                xbot_data_list = get_all_xbot_info(0)
-
-            if not xbot_data_list:
-                if not self._logged_no_data:
-                    self.logger.error("No XBot data returned from PMCLib")
-                    self._logged_no_data = True
-                return None
-
-            # Reset once valid data is available again.
-            self._logged_no_data = False
-
-            if xbot_id >= len(xbot_data_list):
-                warning_key = f"xbot_{xbot_id}_unavailable"
-                if warning_key not in self._logged_warnings:
-                    self.logger.warning(
-                        f"XBot {xbot_id} not available. Available: {len(xbot_data_list)}. "
-                        f"Using XBot 0 as fallback."
-                    )
-                    self._logged_warnings.add(warning_key)
-                xbot_id = 0
-
-            xbot_data = xbot_data_list[xbot_id]
-            position = [
-                float(xbot_data.x_pos),
-                float(xbot_data.y_pos),
-                float(xbot_data.z_pos),
-                float(xbot_data.rx_pos),
-                float(xbot_data.ry_pos),
-                float(xbot_data.rz_pos),
-            ]
-            return position
-
-        except Exception as e:
-            if not self.is_mock:
-                self.logger.error(
-                    f"Error in get_current_position for XBot {xbot_id}: {e}",
-                    exc_info=True,
-                )
-            return None
-
-    def get_xbot_status_info(self, xbot_id: int = 0) -> Optional[dict]:
-        """
-        Fetches comprehensive status information for an XBot.
-
-        Args:
-            xbot_id: ID of the XBot.
-
-        Returns:
-            A dictionary containing:
-            - 'position': [x, y, z, rx, ry, rz]
-            - 'xbot_state': XbotState Enum
-            - 'xbot_state_string': "IDLE", "MOVING", etc.
-        """
+            self.driver.stop_all()
+        except Exception as exc:  # pragma: no cover - best effort
+            self.logger.warning(f"Stop-all during shutdown failed: {exc}")
         try:
-            current_pos = self.get_current_position(xbot_id)
-            if not current_pos:
-                current_pos = [0.0] * 6  # Fallback
+            self.driver.disconnect()
+        finally:
+            self._connected = False
+            self._set_state(
+                DeviceState.DISCONNECTED,
+                error_codes.SUCCESS,
+                "Planar motor disconnected",
+            )
 
-            try:
-                xbot_status = self.pmc.bot.get_xbot_status(xbot_id)
-                xbot_state_enum = xbot_status.xbot_state
-                xbot_state_str = self._xbot_state_to_string(xbot_state_enum)
-            except Exception as e:
-                if not self.is_mock:
-                    self.logger.warning(f"Could not get status for XBot {xbot_id}: {e}")
-                xbot_state_enum = XbotState.XBOT_UNKNOWN
-                xbot_state_str = "UNKNOWN"
+    def ensure_connected(self) -> None:
+        if not self._connected:
+            raise ConnectionError(
+                "Planar motor controller is not connected",
+                error_code=error_codes.CONTROLLER_NOT_CONNECTED,
+            )
 
-            return {
-                "position": current_pos,
-                "xbot_state": xbot_state_enum,
-                "xbot_state_string": xbot_state_str,
-            }
-        except Exception as e:
-            if not self.is_mock:
-                self.logger.error(f"Error getting XBot status info: {e}", exc_info=True)
-            return None
+    def ensure_selected_xbot(self, xbot_id: int) -> None:
+        self.ensure_connected()
+        self._require_known_xbot(xbot_id)
 
-    def get_xbot_state_string(self, xbot_id: int = 0) -> str:
-        """
-        Returns the XBot status as a human-readable string.
+    def ensure_xbot_active(self, xbot_id: int) -> None:
+        snapshot = self.get_snapshot(xbot_id)
+        if not snapshot.active:
+            raise MotionError(
+                f"XBot {xbot_id} is not active",
+                error_code=error_codes.XBOT_NOT_ACTIVE,
+                details={"xbot_id": xbot_id},
+            )
 
-        Possible return values:
-        - "IDLE": Ready for commands.
-        - "MOVING": In motion.
-        - "ERROR": An error has occurred.
-        - "STOPPED": Halted.
-        - "UNKNOWN": Status cannot be determined.
-        """
+    def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
+        self.ensure_selected_xbot(xbot_id)
+        snapshot = self.driver.get_snapshot(xbot_id)
+        if snapshot.device_state == DeviceState.BUSY:
+            self._set_state(DeviceState.BUSY, snapshot.error_code, snapshot.message or "Busy")
+        elif snapshot.device_state == DeviceState.STOPPED:
+            self._set_state(
+                DeviceState.STOPPED,
+                snapshot.error_code or error_codes.MOVEMENT_STOPPED,
+                snapshot.message or "Stopped",
+            )
+        elif snapshot.device_state == DeviceState.ERROR:
+            self._set_state(
+                DeviceState.ERROR,
+                snapshot.error_code or error_codes.DRIVER_FAILURE,
+                snapshot.message or "Driver error",
+            )
+        return snapshot
+
+    def get_current_position(self, xbot_id: int) -> XBotPose:
+        snapshot = self.get_snapshot(xbot_id)
+        if snapshot.pose is None:
+            raise MotionError(
+                f"Current position for XBot {xbot_id} is unavailable",
+                error_code=error_codes.POSITION_UNAVAILABLE,
+                details={"xbot_id": xbot_id},
+            )
+        return snapshot.pose
+
+    def get_speed_profile(self, xbot_id: int) -> SpeedProfile:
+        profile = self._speed_profiles.get(int(xbot_id))
+        if profile is not None:
+            return profile
+        profile = SpeedProfile(
+            xy_vel=self.config.default_xy_vel,
+            xy_max_accel=self.config.default_xy_max_accel,
+            z_vel=self.config.default_z_vel,
+            z_max_accel=self.config.default_z_max_accel,
+            rx_vel=self.config.default_rx_vel,
+            ry_vel=self.config.default_ry_vel,
+            rz_vel=self.config.default_rz_vel,
+        )
+        self._speed_profiles[int(xbot_id)] = profile
+        return profile
+
+    def set_speed_profile(
+        self,
+        xbot_id: int,
+        *,
+        xy_vel: float,
+        xy_max_accel: float,
+        z_vel: float,
+        z_max_accel: float,
+        rx_vel: float,
+        ry_vel: float,
+        rz_vel: float,
+    ) -> SpeedProfile:
+        profile = SpeedProfile(
+            xy_vel=xy_vel,
+            xy_max_accel=xy_max_accel,
+            z_vel=z_vel,
+            z_max_accel=z_max_accel,
+            rx_vel=rx_vel,
+            ry_vel=ry_vel,
+            rz_vel=rz_vel,
+        )
+        self._speed_profiles[int(xbot_id)] = profile
+        return profile
+
+    def is_position_in_bounds(self, pose: XBotPose) -> bool:
+        return (
+            self.config.x_min <= pose.x <= self.config.x_max
+            and self.config.y_min <= pose.y <= self.config.y_max
+            and self.config.z_min <= pose.z <= self.config.z_max
+        )
+
+    @contextmanager
+    def claim_operation(self, xbot_id: int):
+        lock = self._operation_locks.setdefault(int(xbot_id), threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise MotionError(
+                f"XBot {xbot_id} is already busy",
+                error_code=error_codes.DEVICE_BUSY,
+                details={"xbot_id": xbot_id},
+            )
         try:
-            xbot_status = self.pmc.bot.get_xbot_status(xbot_id)
-            return self._xbot_state_to_string(xbot_status.xbot_state)
-        except Exception:
-            return "UNKNOWN"
-
-    def _xbot_state_to_string(self, xbot_state) -> str:
-        """Converts an XbotState enum to a readable string."""
-        try:
-            if hasattr(xbot_state, "name"):
-                return xbot_state.name
-            else:
-                state_map = {v.value: v.name for v in XbotState}
-                return state_map.get(int(xbot_state), "UNKNOWN")
-        except Exception:
-            return "UNKNOWN"
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # MOTION MONITORING
-    # ══════════════════════════════════════════════════════════════════════════
+            self._set_state(DeviceState.BUSY, error_codes.SUCCESS, f"XBot {xbot_id} busy")
+            yield
+        finally:
+            lock.release()
 
     def wait_for_motion_completion(
         self,
         xbot_id: int,
-        target_position: List[float],
-        position_tolerance: float,
-        max_wait_time: float = 10.0,
-    ) -> MotionStatus:
-        """
-        Waits for a motion to complete.
-
-        This is a polling loop that checks the XBot status every 100ms.
-
-        Args:
-            xbot_id: ID of the XBot to monitor.
-            target_position: Target position [x, y, z, rx, ry, rz] (currently for logging only).
-            position_tolerance: Tolerance in meters (currently not used).
-            max_wait_time: Maximum wait time in seconds.
-
-        Returns:
-            MotionStatus:
-            - COMPLETED: Motion finished successfully (State = IDLE).
-            - TIMEOUT: `max_wait_time` was exceeded.
-            - ERROR: An error occurred during motion (State = ERROR).
-
-        Flow:
-        -----
-        1. Poll the status at 100ms intervals.
-        2. If IDLE → return COMPLETED.
-        3. If ERROR → return ERROR.
-        4. If timeout → return TIMEOUT.
-        """
-        del target_position, position_tolerance  # kept for compatibility
-
-        result = wait_for_idle_state(
-            _MoverStatusPort(self),
-            actor_id=xbot_id,
-            timeout_s=max_wait_time,
-            poll_interval_s=0.1,
+        expected_pose: XBotPose,
+        tolerance: float,
+        travel_time: float | None,
+        *,
+        buffer_s: float,
+        multiplier: float,
+        minimum_timeout: float,
+    ) -> XBotSnapshot:
+        timeout_s = compute_motion_timeout(
+            travel_time,
+            multiplier=multiplier,
+            buffer_s=buffer_s,
+            min_s=minimum_timeout,
+            fallback_s=self.config.movement_timeout,
         )
+        deadline = time.monotonic() + max(timeout_s, self.config.movement_timeout)
+        last_snapshot: XBotSnapshot | None = None
+        while time.monotonic() < deadline:
+            snapshot = self.get_snapshot(xbot_id)
+            last_snapshot = snapshot
+            if not snapshot.busy:
+                if snapshot.device_state == DeviceState.STOPPED:
+                    raise MotionError(
+                        f"Motion stopped for XBot {xbot_id}",
+                        error_code=error_codes.MOVEMENT_STOPPED,
+                        details={"xbot_id": xbot_id},
+                    )
+                if snapshot.device_state == DeviceState.ERROR:
+                    raise MotionError(
+                        f"Driver reported an error for XBot {xbot_id}",
+                        error_code=error_codes.DRIVER_FAILURE,
+                        details={"xbot_id": xbot_id},
+                    )
+                if snapshot.pose is None:
+                    raise MotionError(
+                        f"Current position for XBot {xbot_id} is unavailable",
+                        error_code=error_codes.POSITION_UNAVAILABLE,
+                        details={"xbot_id": xbot_id},
+                    )
+                if self._pose_matches(snapshot.pose, expected_pose, tolerance):
+                    self._set_state(
+                        DeviceState.READY,
+                        error_codes.SUCCESS,
+                        f"Motion completed for XBot {xbot_id}",
+                    )
+                    return snapshot
+                raise MotionError(
+                    f"XBot {xbot_id} did not reach the requested target",
+                    error_code=error_codes.MOVEMENT_FAILED,
+                    details={"xbot_id": xbot_id},
+                )
+            time.sleep(0.05)
 
-        if result.status == MotionStatus.COMPLETED:
-            self.logger.info(f"Motion completed for XBot {xbot_id}.")
-            return MotionStatus.COMPLETED
-
-        if result.status == MotionStatus.TIMEOUT:
-            self.logger.warning(
-                f"Motion timeout for XBot {xbot_id} after {max_wait_time:.1f}s"
-            )
-            return MotionStatus.TIMEOUT
-
-        # Keep legacy behavior: aborted/unknown are treated as error.
-        self.logger.error(
-            f"Motion error for XBot {xbot_id} - State: {result.status.name}"
-        )
-        return MotionStatus.ERROR
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # BOUNDS AND VALIDATION
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def is_position_in_bounds(self, x: float, y: float, z: float) -> bool:
-        """
-        Checks if a position is within the configured software limits.
-
-        Args:
-            x, y, z: Position in meters.
-
-        Returns:
-            True if all coordinates are within bounds, False otherwise.
-
-        Bounds from config:
-            x: [x_min, x_max] (Default: 0.055 - 0.420 m)
-            y: [y_min, y_max] (Default: 0.055 - 0.180 m)
-            z: [z_min, z_max] (Default: 0.000 - 0.004 m)
-        """
-        return (
-            is_in_range(x, self.config.x_min, self.config.x_max)
-            and is_in_range(y, self.config.y_min, self.config.y_max)
-            and is_in_range(z, self.config.z_min, self.config.z_max)
-        )
-
-    def validate_xbot_id(self, xbot_id: int) -> bool:
-        """
-        Validates the XBot ID (must be between 0 and 15).
-
-        Args:
-            xbot_id: The ID to check.
-
-        Returns:
-            True if valid, False otherwise.
-        """
-        valid, error_msg = validate_id_range(
-            xbot_id, min_id=0, max_id=15, name="XBot ID"
-        )
-        if not valid:
-            self.logger.error(error_msg)
-        return valid
-
-    def diagnose_xbot_availability(self) -> dict:
-        """Diagnoses which XBots are available and responding."""
-        diagnosis = {"available_xbots": [], "total_from_get_all": 0}
         try:
-            data_list = self.pmc.bot.get_all_xbot_info(0)
-            diagnosis["total_from_get_all"] = len(data_list) if data_list else 0
+            self.driver.stop(xbot_id)
+        except Exception as exc:  # pragma: no cover - best effort cleanup
+            self.logger.warning(f"Timeout stop for XBot {xbot_id} failed: {exc}")
+        raise MotionError(
+            f"Motion timeout for XBot {xbot_id}",
+            error_code=error_codes.MOVEMENT_TIMEOUT,
+            details={"xbot_id": xbot_id},
+        )
 
-            for xbot_id in range(4):  # Test the first 4 IDs
-                try:
-                    status = self.pmc.bot.get_xbot_status(xbot_id)
-                    diagnosis["available_xbots"].append(
-                        {
-                            "id": xbot_id,
-                            "status": "available",
-                            "state": self._xbot_state_to_string(status.xbot_state),
-                        }
-                    )
-                except Exception as e:
-                    diagnosis["available_xbots"].append(
-                        {"id": xbot_id, "status": "error", "error": str(e)}
-                    )
-        except Exception as e:
-            self.logger.error(f"General diagnosis error: {e}")
-        return diagnosis
+    def stop_xbot(self, xbot_id: int) -> None:
+        self.ensure_selected_xbot(xbot_id)
+        self.driver.stop(xbot_id)
+        self._set_state(
+            DeviceState.STOPPED,
+            error_codes.STOP_REQUESTED,
+            f"Stop requested for XBot {xbot_id}",
+        )
 
+    def list_xbots(self) -> list[int]:
+        self.ensure_connected()
+        self._known_xbot_ids = self.driver.list_xbot_ids()
+        return list(self._known_xbot_ids)
+
+    def build_info_message(self, xbot_id: int) -> XBotInfo | None:
+        snapshot = self.get_snapshot(xbot_id)
+        if snapshot.pose is None:
+            return None
+        message = XBotInfo()
+        message.x_pos = snapshot.pose.x * 1000.0
+        message.y_pos = snapshot.pose.y * 1000.0
+        message.z_pos = snapshot.pose.z * 1000.0
+        message.rx_pos = math.degrees(snapshot.pose.rx)
+        message.ry_pos = math.degrees(snapshot.pose.ry)
+        message.rz_pos = math.degrees(snapshot.pose.rz)
+        message.xbot_state = snapshot.raw_state
+        message.device_status = self._device_status_message(snapshot)
+        return message
+
+    def current_status(self) -> tuple[DeviceState, int, str]:
+        with self._state_lock:
+            return self._device_state, self._error_code, self._status_message
+
+    def _require_known_xbot(self, xbot_id: int) -> None:
+        if int(xbot_id) not in self._known_xbot_ids:
+            raise ConfigurationError(
+                f"XBot {xbot_id} was not found",
+                error_code=error_codes.XBOT_NOT_FOUND,
+                details={"xbot_id": xbot_id, "known_xbots": self._known_xbot_ids},
+            )
+
+    def _set_state(self, state: DeviceState, error_code: int, message: str) -> None:
+        with self._state_lock:
+            self._device_state = state
+            self._error_code = error_code
+            self._status_message = message
+
+    def _device_status_message(self, snapshot: XBotSnapshot) -> DeviceStatus:
+        state, error_code, message = self.current_status()
+        status = DeviceStatus()
+        status.state = int(snapshot.device_state or state)
+        status.error_code = snapshot.error_code or error_code
+        status.message = snapshot.message or message
+        return status
+
+    @staticmethod
+    def _pose_matches(current: XBotPose, expected: XBotPose, tolerance: float) -> bool:
+        return (
+            abs(current.x - expected.x) <= tolerance
+            and abs(current.y - expected.y) <= tolerance
+            and abs(current.z - expected.z) <= tolerance
+            and abs(current.rx - expected.rx) <= tolerance
+            and abs(current.ry - expected.ry) <= tolerance
+            and abs(current.rz - expected.rz) <= tolerance
+        )

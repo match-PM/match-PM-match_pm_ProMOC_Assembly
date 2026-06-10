@@ -1,4 +1,4 @@
-"""Typed configuration model for the planar mover node stack."""
+"""Typed configuration model for the planar motor node."""
 
 from dataclasses import dataclass
 
@@ -9,6 +9,9 @@ class MoverNodeConfig:
     xbot_id: int
     publish_rate: float
     pmc_ip: str
+    auto_activate: bool
+    movement_timeout: float
+    mock_xbot_count: int
     xy_tolerance: float
     six_d_tolerance: float
     x_min: float
@@ -17,3 +20,10 @@ class MoverNodeConfig:
     y_max: float
     z_min: float
     z_max: float
+    default_xy_vel: float
+    default_xy_max_accel: float
+    default_z_vel: float
+    default_z_max_accel: float
+    default_rx_vel: float
+    default_ry_vel: float
+    default_rz_vel: float

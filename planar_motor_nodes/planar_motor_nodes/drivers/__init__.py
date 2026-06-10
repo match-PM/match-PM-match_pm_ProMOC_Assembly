@@ -1,6 +1,20 @@
-"""Planar-motor driver integrations."""
+"""Tracked planar-motor driver boundary and implementations."""
 
-from .hardware import PmcInterface
+from .base import PlanarMotorDriver
+from .hardware import HardwarePlanarMotorDriver
+from .mock import MockPlanarMotorDriver
 
 
-__all__ = ["PmcInterface"]
+def create_planar_motor_driver(logger, config) -> PlanarMotorDriver:
+    """Create either the mock or hardware driver for the node."""
+    if config.use_mock:
+        return MockPlanarMotorDriver(logger, mock_xbot_count=config.mock_xbot_count)
+    return HardwarePlanarMotorDriver(logger)
+
+
+__all__ = [
+    "PlanarMotorDriver",
+    "HardwarePlanarMotorDriver",
+    "MockPlanarMotorDriver",
+    "create_planar_motor_driver",
+]

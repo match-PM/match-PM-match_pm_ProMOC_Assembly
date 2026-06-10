@@ -1,0 +1,38 @@
+# ruff: noqa: E402
+"""Import-safety tests for vendor-free mock operation."""
+
+from __future__ import annotations
+
+import importlib
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+for rel in ("planar_motor_nodes", "promoc_core"):
+    package_root = REPO_ROOT / rel
+    if str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+
+
+def _clear_vendor_modules() -> None:
+    for name in list(sys.modules):
+        if name == "pmclib" or name.startswith("planar_motor_nodes.drivers.match_pm_xBot"):
+            sys.modules.pop(name, None)
+
+
+def test_package_import_succeeds_without_vendor_modules():
+    _clear_vendor_modules()
+    module = importlib.import_module("planar_motor_nodes.node")
+    assert hasattr(module, "MoverServiceNode")
+    assert "pmclib" not in sys.modules
+
+
+def test_hardware_driver_import_is_lazy():
+    _clear_vendor_modules()
+    module = importlib.import_module("planar_motor_nodes.drivers.hardware")
+    assert hasattr(module, "HardwarePlanarMotorDriver")
+    assert "pmclib" not in sys.modules
+    assert not any(
+        name.startswith("planar_motor_nodes.drivers.match_pm_xBot")
+        for name in sys.modules
+    )
