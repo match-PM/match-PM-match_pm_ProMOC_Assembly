@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="my_planar_robot">
+
+  <link name="world"/>
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://promoc_simulation/meshes/M3-06-XBOT.stl"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://promoc_simulation/meshes/M3-06-XBOT.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
+  <link name="x_axis_link">
+    ...
+  </link>
+  <joint name="base_to_x_axis" type="prismatic">
+    <parent link="base_link"/>
+    <child link="x_axis_link"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-1.0" upper="1.0" effort="100" velocity="1.0"/>
+  </joint>
+
+  </robot>
