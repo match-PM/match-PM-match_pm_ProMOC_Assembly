@@ -3,26 +3,17 @@
 <package format="3">
   <name>camera_nodes</name>
   <version>0.1.0</version>
-  <description>Camera integration for ProMOC Assembly system using IDS cameras</description>
+  <description>Camera integration for raw IDS image acquisition, publication, and status reporting</description>
   <maintainer email="promoc@match.uni-hannover.de">ProMOC Team</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-  <!-- Python dependencies -->
   <depend>rclpy</depend>
-  <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>std_srvs</depend>
-  <depend>cv_bridge</depend>
-  <depend>image_transport</depend>
-  <depend>camera_info_manager</depend>
   <depend>promoc_core</depend>
-  
-  <!-- External camera driver -->
-  <depend>camera_aravis2</depend>
-  
-  <!-- Test dependencies -->
+  <depend>promoc_assembly_interfaces</depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>python3-pytest</test_depend>
 

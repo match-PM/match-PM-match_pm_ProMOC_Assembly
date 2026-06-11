@@ -1,4 +1,4 @@
-"""Helper builders for camera.launch.py parameter mapping."""
+"""Helper builders for the reduced camera launch stack."""
 
 from __future__ import annotations
 
@@ -54,10 +54,33 @@ def build_camera_node_parameters(
     *,
     use_simulator: bool,
 ) -> dict:
-    """Build camera_node parameter mapping from launch/runtime context."""
+    """Build reduced camera-node parameters from launch/runtime context."""
     if use_simulator:
-        return {"use_simulator": True}
+        return {
+            "driver_mode": "mock",
+            "use_simulator": True,
+            "camera_name": "mock_camera",
+            "image_topic": "/promoc/camera/image_raw",
+            "status_topic": "/promoc/camera/status",
+            "frame_id": "assembly_camera_frame",
+        }
+
+    source_topic = "/promoc/assembly_camera/stream0/image_raw"
+    frame_id = "assembly_camera_frame"
+    camera_name = "assembly_camera"
+    if camera_params:
+        source_topic = camera_params.get("subscription_topic", source_topic)
+        frame_id = camera_params.get("cameraname", frame_id)
+        camera_name = camera_params.get("cameraname", camera_name)
+    if camera_config:
+        frame_id = camera_config.get("camera_info", {}).get("camera_name", frame_id)
 
     return {
+        "driver_mode": "hardware",
         "use_simulator": False,
+        "camera_name": camera_name,
+        "source_image_topic": source_topic,
+        "image_topic": "/promoc/camera/image_raw",
+        "status_topic": "/promoc/camera/status",
+        "frame_id": frame_id,
     }

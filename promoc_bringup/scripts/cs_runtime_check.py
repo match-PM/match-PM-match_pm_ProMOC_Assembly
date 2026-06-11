@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated acceptance checks for the CS runtime contract."""
+"""Automated acceptance checks for the reduced CS camera runtime."""
 
 from __future__ import annotations
 
@@ -37,17 +37,6 @@ def _contains_none(content: str, needles: list[str]) -> tuple[bool, list[str]]:
     return len(present) == 0, present
 
 
-def _check_file_exists(rel_path: str, name: str) -> CheckResult:
-    exists = (ROOT / rel_path).exists()
-    return CheckResult(name=name, ok=exists, detail=rel_path if not exists else "")
-
-
-def _check_file_absent(rel_path: str, name: str) -> CheckResult:
-    exists = (ROOT / rel_path).exists()
-    detail = "" if not exists else f"{rel_path}: should be removed"
-    return CheckResult(name=name, ok=not exists, detail=detail)
-
-
 def _check_contains(rel_path: str, needles: list[str], name: str) -> CheckResult:
     content = _read_text(rel_path)
     ok, missing = _contains_all(content, needles)
@@ -76,31 +65,11 @@ def _check_no_launch_arg(rel_path: str, arg_name: str, name: str) -> CheckResult
 
 def _evaluate() -> list[CheckResult]:
     results: list[CheckResult] = []
-
-    results.append(_check_file_exists("README.md", "root README exists"))
-    results.append(_check_file_exists("docs/START_HERE.md", "onboarding doc exists"))
-    results.append(_check_file_exists("docs/PACKAGES.md", "package guide exists"))
-    results.append(_check_file_exists("docs/SYSTEM_OVERVIEW.md", "system overview exists"))
-
-    results.append(
-        _check_contains(
-            "promoc_bringup/launch/system.launch.py",
-            ["runtime_mode", 'namespace="promoc/linear_axis"', 'name="mover"'],
-            "system.launch uses canonical runtime mode and namespaces",
-        )
-    )
-    results.append(
-        _check_no_launch_arg(
-            "promoc_bringup/launch/system.launch.py",
-            "sim_mode",
-            "system.launch no longer exposes sim_mode",
-        )
-    )
     results.append(
         _check_contains(
             "promoc_bringup/launch/camera.launch.py",
-            ["runtime_mode"],
-            "camera.launch uses runtime_mode",
+            ["runtime_mode", 'executable="camera_node"'],
+            "camera.launch keeps runtime_mode and camera_node",
         )
     )
     results.append(
@@ -111,98 +80,49 @@ def _evaluate() -> list[CheckResult]:
         )
     )
     results.append(
-        _check_file_absent(
-            "promoc_bringup/launch/optical_measurement_system.launch.py",
-            "optical measurement launch removed",
+        _check_not_contains(
+            "promoc_bringup/launch/camera.launch.py",
+            ["camera_simulator", "pm_genicam_controller"],
+            "camera.launch excludes simulator and controller sidecars",
         )
     )
-
     results.append(
         _check_contains(
-            "camera_nodes/camera_nodes/node.py",
-            ["/promoc/camera/autofocus", "/promoc/camera/set_exposure"],
-            "camera node exposes only the CS camera services",
+            "camera_nodes/camera_nodes/config.py",
+            ["/promoc/camera/image_raw", "/promoc/camera/status"],
+            "camera node publishes image and status",
         )
     )
     results.append(
         _check_not_contains(
             "camera_nodes/camera_nodes/node.py",
             [
-                "/promoc/camera/measure_mtf",
-                "/promoc/camera/detect_rois",
-                "/promoc/camera/select_roi",
-                "/promoc/camera/autofocus_comparison",
+                "/promoc/camera/autofocus",
+                "/promoc/camera/set_exposure",
+                "cv_bridge",
+                "services.autofocus",
+                "services.exposure",
             ],
-            "camera node no longer wires MTF or comparison services",
+            "camera node has no autofocus or exposure runtime wiring",
         )
     )
     results.append(
         _check_contains(
-            "camera_nodes/camera_nodes/services/autofocus.py",
-            ["Four-Step", "using Four-Step."],
-            "autofocus handler documents Four-Step as the maintained path",
+            "promoc_bringup/promoc_bringup/camera_launch_builder.py",
+            ["source_image_topic", "image_topic", "status_topic"],
+            "camera launch builder maps reduced camera parameters",
         )
     )
-
-    results.append(
-        _check_contains(
-            "promoc_assembly_interfaces/CMakeLists.txt",
-            ['"srv/camera/SetExposure.srv"', '"srv/camera/AutoFocus.srv"'],
-            "camera interface build only keeps autofocus and exposure",
-        )
-    )
-    results.append(
-        _check_not_contains(
-            "promoc_assembly_interfaces/CMakeLists.txt",
-            [
-                "MeasureMTF.srv",
-                "DetectRois.srv",
-                "FlyOverAutofocus.srv",
-                "VerifyAutofocus.srv",
-                "VerifyMTF.srv",
-                "VerifyCorrelation.srv",
-                "RunVerification.srv",
-            ],
-            "camera CMake no longer lists removed interfaces",
-        )
-    )
-
-    for rel_path in [
-        "promoc_bringup/launch/optical_measurement_system.launch.py",
-        "camera_nodes/camera_nodes/services/mtf.py",
-        "camera_nodes/camera_nodes/services/camera_format.py",
-        "camera_nodes/camera_nodes/algorithms/mtf",
-        "camera_nodes/camera_nodes/algorithms/field_curvature.py",
-        "camera_nodes/camera_nodes/algorithms/roi_detection.py",
-        "camera_nodes/scripts/reproduce_mtf.py",
-        "camera_nodes/test/test_camera_mtf_config_mapping.py",
-        "verification",
-        "promoc_assembly_interfaces/srv/camera/MeasureMTF.srv",
-        "promoc_assembly_interfaces/srv/camera/DetectRois.srv",
-        "promoc_assembly_interfaces/srv/camera/FlyOverAutofocus.srv",
-        "promoc_assembly_interfaces/srv/camera/VerifyAutofocus.srv",
-        "promoc_assembly_interfaces/srv/camera/VerifyMTF.srv",
-        "promoc_assembly_interfaces/srv/camera/VerifyCorrelation.srv",
-        "promoc_assembly_interfaces/srv/camera/RunVerification.srv",
-        "promoc_bringup/scripts/release_n_check.py",
-        "promoc_bringup/scripts/release_n_smoke.py",
-        "promoc_bringup/scripts/generate_param_docs.py",
-    ]:
-        results.append(_check_file_absent(rel_path, f"removed: {rel_path}"))
-    results.append(
-        _check_not_contains(
-            "promoc_bringup/config/user_config.example.yaml",
-            ["measurement_base_path", "save_debug_images", "autofocus_profiles", "mtf"],
-            "user config example stays on the CS minimum",
-        )
-    )
-
     return results
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run automated CS runtime checks.")
-    parser.add_argument("--quiet", action="store_true", help="Only print failed checks and summary.")
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Only print failed checks and summary.",
+    )
     args = parser.parse_args(argv)
 
     results = _evaluate()

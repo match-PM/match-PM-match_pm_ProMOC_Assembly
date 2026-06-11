@@ -1,227 +1,195 @@
 #!/usr/bin/env python3
-"""ROS2 runtime node for the CS camera package.
+"""Single camera node for raw image acquisition and status publication."""
 
-The node has a narrow responsibility:
-- connect the selected camera driver
-- subscribe to the image stream and axis position
-- keep the latest frame/state available to handlers
-- expose the maintained camera services
+from __future__ import annotations
 
-It deliberately does not contain autofocus business logic itself. That logic
-lives in `services/`, which keeps this file readable as the package entry point.
-"""
-
-import time
-
-from cv_bridge import CvBridge
-from promoc_assembly_interfaces.msg import LinearAxisInfo
-from promoc_assembly_interfaces.srv import AutoFocus, SetExposure
-from promoc_core.logging import LogTags, TaggedLogger
+from promoc_assembly_interfaces.msg import DeviceStatus
+from promoc_core import error_codes
+from promoc_core.promoc_exceptions import ProMocError
+from promoc_core.status import DeviceState
 import rclpy
-from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from sensor_msgs.msg import CameraInfo, Image
-from .config import declare_camera_parameters, get_camera_param
-from .drivers import AravisCameraDriver, CameraDriver, SimulatedCameraDriver
-from .services import AutofocusHandler, ExposureHandler
-from .services.image_processing import CameraImageProcessing
+from sensor_msgs.msg import Image
+
+from .config import CameraNodeConfig, declare_camera_parameters, load_camera_config
+from .drivers import CameraDriver, HardwareCameraDriver, MockCameraDriver
 
 
 class CameraNode(Node):
-    """Wire camera driver, subscriptions, and service handlers together."""
+    """Connect a camera driver, publish raw images, and publish camera status."""
 
-    def __init__(self):
-        super().__init__("camera_node")
-
-        self.log = TaggedLogger(self.get_logger(), LogTags.CAM)
+    def __init__(self, *, parameter_overrides=None):
+        super().__init__("camera_node", parameter_overrides=parameter_overrides)
         declare_camera_parameters(self)
+        self.config = load_camera_config(self)
 
-        self.bridge = CvBridge()
-        self.use_simulator = self._param_bool("use_simulator", False)
-        self.pixel_size_um = self._param_float("pixel_size_um", 2.40)
-        self.x_axis_name = self._param_str("x_axis_node_name", "lts300_x_axis")
-        self.enable_debug_overlay = self._param_bool("enable_debug_overlay", False)
-
-        mode = "SIMULATOR" if self.use_simulator else "REAL"
-        self.log.info(f"Camera node starting in {mode} mode")
-
-        # Driver selection is the only hardware choice made here. Once the
-        # driver is connected, the rest of the node behaves the same for both
-        # hardware and simulator mode.
-        self.camera_driver: CameraDriver = self._create_driver()
-        self.camera_driver.connect()
-
-        self.image_processor = CameraImageProcessing(
-            self.log,
-            pixel_size_um=self.pixel_size_um,
+        self.image_publisher = self.create_publisher(Image, self.config.image_topic, 10)
+        self.status_publisher = self.create_publisher(
+            DeviceStatus, self.config.status_topic, 10
         )
-        self.autofocus_handler = AutofocusHandler(self, self.camera_driver)
-        self.exposure_handler = ExposureHandler(self, self.camera_driver)
 
-        self.latest_image_msg = None
-        self.latest_camera_info = None
-        self.current_axis_position = -1.0
-        self._image_count = 0
-        self._stream_start_time = time.time()
-        self._last_stream_log_time = 0.0
+        self._device_state = DeviceState.DISCONNECTED
+        self._error_code = error_codes.SUCCESS
+        self._status_message = "camera node created"
+        self._last_published_stamp: tuple[int, int] | None = None
+        self._frame_timer = None
 
-        self.cb_group = ReentrantCallbackGroup()
+        self.driver: CameraDriver = self._create_driver()
+        self.status_timer = self.create_timer(
+            1.0 / self.config.status_publish_rate_hz,
+            self.publish_status,
+        )
 
-        # Keep ROS wiring grouped at the end of initialization so the startup
-        # order is easy to explain: params -> driver -> handlers -> ROS API.
-        self._create_subscriptions()
-        self._create_publishers()
-        self._create_services()
-
-        self.log.info("Camera node initialized")
-
-    def _param_bool(self, name: str, default: bool) -> bool:
-        return bool(get_camera_param(self, name, default))
-
-    def _param_float(self, name: str, default: float) -> float:
-        try:
-            return float(get_camera_param(self, name, default))
-        except (TypeError, ValueError):
-            return float(default)
-
-    def _param_str(self, name: str, default: str = "") -> str:
-        return str(get_camera_param(self, name, default))
+        self._set_status(
+            DeviceState.CONNECTING,
+            error_codes.SUCCESS,
+            f"connecting {self.config.camera_name}",
+        )
+        self._start_runtime()
 
     def _create_driver(self) -> CameraDriver:
-        if self.use_simulator:
-            self.log.info("Using simulated camera driver")
-            return SimulatedCameraDriver(TaggedLogger(self.get_logger(), LogTags.MOCK))
+        if self.config.use_mock:
+            return MockCameraDriver(self, self.config, self.get_logger())
+        return HardwareCameraDriver(self, self.config, self.get_logger())
 
-        self.log.info("Using Aravis camera driver")
-        return AravisCameraDriver(self, self.log)
-
-    def _create_subscriptions(self):
-        # The camera node listens to the shared image stream and the current axis
-        # position. Handlers then read that cached state instead of creating
-        # their own subscriptions.
-        self.assembly_image_sub = self.create_subscription(
-            Image,
-            "/promoc/assembly_camera/stream0/image_raw",
-            self.assembly_image_callback,
-            10,
-        )
-        self.axis_pos_sub = self.create_subscription(
-            LinearAxisInfo,
-            f"/promoc/linear_axis/{self.x_axis_name}/position",
-            self.axis_position_callback,
-            10,
-        )
-        self.camera_info_sub = self.create_subscription(
-            CameraInfo,
-            "/promoc/assembly_camera/stream0/camera_info",
-            self.camera_info_callback,
-            10,
-        )
-
-    def _create_publishers(self):
-        self.processed_assembly_pub = self.create_publisher(
-            Image,
-            "/camera/assembly/processed",
-            10,
-        )
-        self.debug_image_pub = self.create_publisher(Image, "/camera/image_debug", 10)
-
-    def _create_services(self):
-        # The CS runtime keeps exactly two maintained camera services. Anything
-        # more specialized belongs in a different branch or package.
-        self.autofocus_service = self.create_service(
-            AutoFocus,
-            "/promoc/camera/autofocus",
-            self.autofocus_handler.autofocus_callback,
-            callback_group=self.cb_group,
-        )
-
-        if not self.use_simulator and self.camera_driver.is_connected:
-            self.set_exposure_service = self.create_service(
-                SetExposure,
-                "/promoc/camera/set_exposure",
-                self.exposure_handler.manual_set_exposure_callback,
-                callback_group=self.cb_group,
+    def _start_runtime(self) -> None:
+        try:
+            self.driver.connect()
+            self._set_status(
+                DeviceState.CONNECTED,
+                error_codes.SUCCESS,
+                f"connected {self.config.camera_name}",
             )
+            self.driver.start_acquisition()
+            wait_message = (
+                f"publishing mock stream on {self.config.image_topic}"
+                if self.config.use_mock
+                else f"waiting for frames on {self.config.source_image_topic}"
+            )
+            self._set_status(DeviceState.CONNECTED, error_codes.SUCCESS, wait_message)
+            self._frame_timer = self.create_timer(
+                1.0 / self.config.publish_rate_hz,
+                self._publish_next_frame,
+            )
+        except ProMocError as exc:
+            self._set_status(DeviceState.ERROR, exc.error_code, str(exc))
+            self.get_logger().error(str(exc))
+        except Exception as exc:  # pragma: no cover - defensive
+            self._set_status(
+                DeviceState.ERROR,
+                error_codes.UNKNOWN_ERROR,
+                f"startup failure: {exc}",
+            )
+            self.get_logger().error(f"startup failure: {exc}")
 
-    def _log_stream_health(self, msg: Image):
-        self._image_count += 1
-        now = time.time()
-        should_log = (
-            self._image_count % 50 == 0
-            or now - self._last_stream_log_time > 10.0
-        )
-        if not should_log:
+    def _publish_next_frame(self) -> None:
+        try:
+            frame = self.driver.read_frame(self.config.frame_timeout_s)
+        except ProMocError as exc:
+            self._set_status(DeviceState.ERROR, exc.error_code, str(exc))
+            return
+        except Exception as exc:  # pragma: no cover - defensive
+            self._set_status(
+                DeviceState.ERROR,
+                error_codes.UNKNOWN_ERROR,
+                f"frame read failure: {exc}",
+            )
             return
 
-        runtime = now - self._stream_start_time
-        fps = self._image_count / runtime if runtime > 0 else 0.0
-        self.log.debug(
-            f"Camera active: {self._image_count} images, "
-            f"{fps:.1f} FPS, size={msg.width}x{msg.height}"
-        )
-        self._last_stream_log_time = now
+        message = Image()
+        message.header.stamp = frame.stamp or self.get_clock().now().to_msg()
+        message.header.frame_id = frame.frame_id or self.config.frame_id
+        message.height = int(frame.height)
+        message.width = int(frame.width)
+        message.encoding = str(frame.encoding)
+        message.is_bigendian = 0
+        message.step = int(frame.step)
+        message.data = frame.data
 
-    def _cache_driver_image(self, msg: Image):
-        if not hasattr(self.camera_driver, "set_latest_image"):
+        stamp_key = (message.header.stamp.sec, message.header.stamp.nanosec)
+        if not self.config.use_mock and stamp_key == self._last_published_stamp:
+            return
+
+        self.image_publisher.publish(message)
+        self._last_published_stamp = stamp_key
+        self._set_status(
+            DeviceState.READY,
+            error_codes.SUCCESS,
+            (
+                f"streaming {self.config.camera_name} "
+                f"{message.width}x{message.height} {message.encoding}"
+            ),
+        )
+
+    def publish_status(self) -> None:
+        try:
+            self.status_publisher.publish(self._device_status_message())
+        except Exception:  # pragma: no cover - ROS shutdown edge case
             return None
 
+    def _device_status_message(self) -> DeviceStatus:
+        message = DeviceStatus()
+        message.stamp = self.get_clock().now().to_msg()
+        message.state = int(self._device_state)
+        message.error_code = int(self._error_code)
+        message.message = self._status_message
+        return message
+
+    def _set_status(self, state: DeviceState, error_code: int, message: str) -> None:
+        changed = (
+            state != self._device_state
+            or int(error_code) != int(self._error_code)
+            or message != self._status_message
+        )
+        self._device_state = state
+        self._error_code = int(error_code)
+        self._status_message = str(message)
+        if changed:
+            self.publish_status()
+
+    def destroy_node(self) -> bool:
+        self._device_state = DeviceState.STOPPED
+        self._error_code = error_codes.SUCCESS
+        self._status_message = "stopping camera node"
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-        except Exception as exc:
-            self.get_logger().warning(f"Image conversion failed: {exc}")
-            return None
-
-        self.camera_driver.set_latest_image(cv_image)
-        return cv_image
-
-    def _publish_debug_image(self, msg: Image, cv_image=None):
-        if not self.enable_debug_overlay:
-            return
-
+            self.driver.stop_acquisition()
+        except ProMocError as exc:
+            self._device_state = DeviceState.ERROR
+            self._error_code = int(exc.error_code)
+            self._status_message = str(exc)
+            self.get_logger().error(str(exc))
+        except Exception as exc:  # pragma: no cover - defensive
+            self._device_state = DeviceState.ERROR
+            self._error_code = error_codes.UNKNOWN_ERROR
+            self._status_message = f"shutdown failure: {exc}"
+            self.get_logger().error(f"shutdown failure: {exc}")
         try:
-            if cv_image is None:
-                cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-            overlay = self.image_processor.draw_crosshair(cv_image)
-            debug_msg = self.bridge.cv2_to_imgmsg(overlay, encoding="bgr8")
-            debug_msg.header = msg.header
-            self.debug_image_pub.publish(debug_msg)
-        except Exception as exc:
-            self.log.warning(f"Failed to publish debug image: {exc}")
-
-    def assembly_image_callback(self, msg: Image):
-        """Cache the latest image and publish optional debug overlay."""
-        self._log_stream_health(msg)
-        self.latest_image_msg = msg
-        cv_image = self._cache_driver_image(msg)
-        self._publish_debug_image(msg, cv_image=cv_image)
-
-    def axis_position_callback(self, msg):
-        """Receive and cache axis position from LinearAxisInfo."""
-        if hasattr(msg, "axis_position"):
-            self.current_axis_position = msg.axis_position
-            return
-        self.log.warning(f"Unknown axis position message type: {type(msg)}")
-
-    def camera_info_callback(self, msg: CameraInfo):
-        """Receive and cache camera calibration info."""
-        self.latest_camera_info = msg
+            self.driver.disconnect()
+        except ProMocError as exc:
+            self._device_state = DeviceState.ERROR
+            self._error_code = int(exc.error_code)
+            self._status_message = str(exc)
+            self.get_logger().error(str(exc))
+        except Exception as exc:  # pragma: no cover - defensive
+            self._device_state = DeviceState.ERROR
+            self._error_code = error_codes.UNKNOWN_ERROR
+            self._status_message = f"shutdown failure: {exc}"
+            self.get_logger().error(f"shutdown failure: {exc}")
+        return super().destroy_node()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    camera_node = CameraNode()
-    executor = MultiThreadedExecutor()
-    executor.add_node(camera_node)
-
+    node = CameraNode()
     try:
-        executor.spin()
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        camera_node.camera_driver.disconnect()
-        camera_node.destroy_node()
+        try:
+            node.destroy_node()
+        except KeyboardInterrupt:
+            pass
         try:
             rclpy.shutdown()
         except Exception:

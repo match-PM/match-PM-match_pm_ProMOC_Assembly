@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print or execute reproducible CS runtime smoke paths."""
+"""Print or execute reproducible reduced camera smoke paths."""
 
 from __future__ import annotations
 
@@ -10,16 +10,17 @@ import sys
 
 SMOKE_PATHS = {
     "sim": [
-        "ros2 launch promoc_bringup system.launch.py runtime_mode:=sim",
-        'ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"',
-        'ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"',
+        "ros2 launch promoc_bringup camera.launch.py runtime_mode:=sim",
+        "ros2 topic list | grep /promoc/camera/image_raw",
+        "ros2 topic echo /promoc/camera/image_raw --once",
+        "ros2 topic echo /promoc/camera/status --once",
     ],
     "hardware": [
         "make doctor-hw",
-        "ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware",
-        'ros2 service call /promoc/mover/activate_xbots promoc_assembly_interfaces/srv/ActivateXbots "{activation_status: true}"',
-        'ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"',
-        'ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"',
+        "ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware",
+        "ros2 topic list | grep /promoc/camera/image_raw",
+        "ros2 topic echo /promoc/camera/image_raw --once",
+        "ros2 topic echo /promoc/camera/status --once",
     ],
 }
 

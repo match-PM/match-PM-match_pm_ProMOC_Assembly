@@ -1,24 +1,23 @@
-"""Camera stack launch file with canonical runtime mode support."""
+"""Camera launch file for raw image streaming."""
 
 from __future__ import annotations
 
 import os
-import subprocess
 import tempfile
-import yaml
+
 from ament_index_python.packages import get_package_share_directory
+import launch
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-import launch
-
-from promoc_bringup.launch_utils import resolve_runtime_mode
 from promoc_bringup.camera_launch_builder import (
     build_camera_node_parameters,
     build_driver_node_parameters,
     resolve_binning_factor,
 )
+from promoc_bringup.launch_utils import resolve_runtime_mode
+import yaml
 
 
 def generate_launch_description():
@@ -54,37 +53,7 @@ def launch_setup(context, *args, **kwargs):
     logger.info(f"Camera launch runtime_mode={runtime_mode}")
     actions = []
 
-    bringup_pkg_share = get_package_share_directory("promoc_bringup")
-    camera_config_file = os.path.join(
-        bringup_pkg_share, "config", "cameras", f"{camera_type}.yaml"
-    )
-
-    if not os.path.exists(camera_config_file):
-        legacy_config = os.path.join(
-            bringup_pkg_share, "config", "ids_camera_params.yaml"
-        )
-        if os.path.exists(legacy_config):
-            logger.warn(
-                f"Camera config not found at {camera_config_file}. Using legacy config {legacy_config}."
-            )
-            camera_config_file = legacy_config
-        else:
-            logger.error(f"Camera configuration file not found: {camera_config_file}")
-            return []
-
-    if not is_sim:
-        _run_prelaunch_reset(bringup_pkg_share)
-
     if is_sim:
-        actions.append(
-            Node(
-                package="camera_nodes",
-                executable="camera_simulator",
-                name="camera_simulator",
-                output="screen",
-                arguments=["--ros-args", "--log-level", "INFO"],
-            )
-        )
         actions.append(
             Node(
                 package="camera_nodes",
@@ -103,6 +72,24 @@ def launch_setup(context, *args, **kwargs):
             )
         )
         return actions
+
+    bringup_pkg_share = get_package_share_directory("promoc_bringup")
+    camera_config_file = os.path.join(
+        bringup_pkg_share, "config", "cameras", f"{camera_type}.yaml"
+    )
+
+    if not os.path.exists(camera_config_file):
+        legacy_config = os.path.join(
+            bringup_pkg_share, "config", "ids_camera_params.yaml"
+        )
+        if os.path.exists(legacy_config):
+            logger.warn(
+                f"Camera config not found at {camera_config_file}. Using legacy config {legacy_config}."
+            )
+            camera_config_file = legacy_config
+        else:
+            logger.error(f"Camera configuration file not found: {camera_config_file}")
+            return []
 
     try:
         with open(camera_config_file, "r", encoding="utf-8") as file_handle:
@@ -152,19 +139,6 @@ def launch_setup(context, *args, **kwargs):
 
         actions.append(
             Node(
-                name=f"{driver_node_name}_controller",
-                namespace="promoc",
-                package="pm_genicam_controller",
-                executable="controller",
-                output="screen",
-                emulate_tty=True,
-                arguments=["--ros-args", "--log-level", "INFO"],
-                parameters=[{"driver_node": f"/promoc/{driver_node_name}"}],
-            )
-        )
-
-        actions.append(
-            Node(
                 package="camera_nodes",
                 executable="camera_node",
                 name="camera_node",
@@ -185,49 +159,3 @@ def launch_setup(context, *args, **kwargs):
         logger.error(f"Failed to load camera configuration: {exc}")
 
     return actions
-
-
-def _run_prelaunch_reset(bringup_pkg_share: str) -> None:
-    logger = launch.logging.get_logger()
-    reset_script_locations = [
-        os.path.join(
-            os.path.dirname(__file__), "..", "promoc_bringup", "camera_reset_hook.py"
-        ),
-        os.path.join(
-            bringup_pkg_share,
-            "..",
-            "..",
-            "..",
-            "src",
-            "match-PM-match_pm_ProMOC_Assembly",
-            "promoc_bringup",
-            "promoc_bringup",
-            "camera_reset_hook.py",
-        ),
-    ]
-
-    reset_script = None
-    for location in reset_script_locations:
-        if os.path.exists(location):
-            reset_script = location
-            break
-
-    if not reset_script:
-        logger.warn("Pre-launch reset script not found, skipping automatic reset.")
-        return
-
-    logger.info(f"Executing pre-launch camera reset from {reset_script}.")
-    try:
-        result = subprocess.run(
-            ["python3", reset_script],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
-        if result.stdout:
-            for line in result.stdout.splitlines():
-                if line.strip():
-                    logger.info(f"reset: {line}")
-    except Exception as exc:
-        logger.warn(f"Pre-launch reset failed ({exc}), continuing.")

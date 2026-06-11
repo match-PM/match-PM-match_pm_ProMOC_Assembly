@@ -1,4 +1,4 @@
-"""Unit tests for camera config."""
+"""Unit tests for reduced camera config loading."""
 
 from __future__ import annotations
 
@@ -11,10 +11,7 @@ path_str = str(ROOT / "camera_nodes")
 if path_str not in sys.path:
     sys.path.insert(0, path_str)
 
-from camera_nodes.config import (  # noqa: E402
-    declare_camera_parameters,
-    load_camera_runtime_config,
-)
+from camera_nodes.config import declare_camera_parameters, load_camera_config  # noqa: E402
 
 
 class _Param:
@@ -22,10 +19,18 @@ class _Param:
         self.value = value
 
 
+class _Logger:
+    def __init__(self):
+        self.warnings = []
+
+    def warn(self, message):
+        self.warnings.append(str(message))
+
+
 class _Node:
     def __init__(self):
         self._params = {}
-        self.warnings = []
+        self._logger = _Logger()
 
     def declare_parameter(self, name, default):
         self._params.setdefault(name, default)
@@ -37,29 +42,43 @@ class _Node:
         return _Param(self._params[name])
 
     def get_logger(self):
-        return self
-
-    def warning(self, message):
-        self.warnings.append(message)
+        return self._logger
 
 
-def test_declare_and_load_runtime_config():
+def test_declare_and_load_camera_config():
     node = _Node()
     declare_camera_parameters(node)
 
-    # Override a couple of values to verify typed parsing.
+    node._params["driver_mode"] = "mock"
+    node._params["camera_name"] = "mock_cam"
+    node._params["mock.width"] = 320
+    node._params["mock.height"] = 240
+    node._params["publish_rate_hz"] = 12.5
+
+    cfg = load_camera_config(node)
+    assert cfg.use_mock is True
+    assert cfg.camera_name == "mock_cam"
+    assert cfg.mock_width == 320
+    assert cfg.mock_height == 240
+    assert cfg.publish_rate_hz == 12.5
+
+
+def test_use_simulator_alias_forces_mock_mode():
+    node = _Node()
+    declare_camera_parameters(node)
+
+    node._params["driver_mode"] = "hardware"
     node._params["use_simulator"] = True
-    node._params["x_axis_node_name"] = "lts300_z_axis"
-    node._params["pixel_size_um"] = 3.45
 
-    cfg = load_camera_runtime_config(node)
-    assert cfg.core.use_simulator is True
-    assert cfg.core.x_axis_node_name == "lts300_z_axis"
-    assert cfg.core.pixel_size_um == 3.45
-    assert cfg.exposure.frame_timeout_s == 1.0
+    cfg = load_camera_config(node)
+    assert cfg.use_mock is True
 
 
-def test_mtf_parameters_removed():
+def test_invalid_driver_mode_falls_back_to_hardware():
     node = _Node()
     declare_camera_parameters(node)
-    assert "mtf.profile" not in node._params
+    node._params["driver_mode"] = "broken"
+
+    cfg = load_camera_config(node)
+    assert cfg.use_mock is False
+    assert node.get_logger().warnings

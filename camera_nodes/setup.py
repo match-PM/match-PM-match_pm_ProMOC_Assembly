@@ -14,14 +14,12 @@ setup(
     zip_safe=True,
     maintainer="ProMOC Team",
     maintainer_email="promoc@match.uni-hannover.de",
-    description="Camera services for Four-Step autofocus and exposure control",
+    description="Camera runtime for raw image publishing and status reporting",
     license="MIT",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "camera_node = camera_nodes.node:main",
-            "camera_simulator = camera_nodes.sim_node:main",
         ],
     },
 )
-
