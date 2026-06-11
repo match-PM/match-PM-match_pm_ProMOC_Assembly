@@ -42,7 +42,7 @@ class _DummyLogger:
 
 def _config() -> MoverNodeConfig:
     return MoverNodeConfig(
-        use_mock=True,
+        driver_mode="mock",
         xbot_id=0,
         publish_rate=10.0,
         pmc_ip="mock://controller",

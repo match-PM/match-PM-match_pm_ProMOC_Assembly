@@ -1,0 +1,14 @@
+/**:
+  ros__parameters:
+    driver_mode: "hardware"
+    camera_name: "assembly_camera"
+    source_image_topic: "/promoc/assembly_camera/stream0/image_raw"
+    image_topic: "/promoc/camera/image_raw"
+    status_topic: "/promoc/camera/status"
+    frame_id: "assembly_camera_frame"
+    publish_rate_hz: 15.0
+    frame_timeout_s: 1.0
+    status_publish_rate_hz: 1.0
+    mock.width: 640
+    mock.height: 480
+    mock.encoding: "mono8"

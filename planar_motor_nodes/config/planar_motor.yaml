@@ -1,8 +1,6 @@
-
-mover_node:
+/**:
   ros__parameters:
-    # General settings
-    use_mock: false
+    driver_mode: "hardware"
     xbot_id: 0
     publish_rate: 10.0 # Hz
     pmc_ip: '192.168.10.100'

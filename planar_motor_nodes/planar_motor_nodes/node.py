@@ -58,7 +58,7 @@ class MoverServiceNode(Node):
 
     def _load_config(self) -> MoverNodeConfig:
         defaults = {
-            "use_mock": False,
+            "driver_mode": "hardware",
             "xbot_id": 0,
             "publish_rate": 10.0,
             "pmc_ip": "192.168.10.100",
@@ -84,7 +84,7 @@ class MoverServiceNode(Node):
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         return MoverNodeConfig(
-            use_mock=bool(self.get_parameter("use_mock").value),
+            driver_mode=str(self.get_parameter("driver_mode").value),
             xbot_id=int(self.get_parameter("xbot_id").value),
             publish_rate=float(self.get_parameter("publish_rate").value),
             pmc_ip=str(self.get_parameter("pmc_ip").value),

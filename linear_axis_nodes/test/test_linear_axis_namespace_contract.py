@@ -61,7 +61,7 @@ def test_system_launch_uses_package_owned_axis_configs():
         REPO_ROOT / "promoc_bringup" / "launch" / "system.launch.py"
     ).read_text(encoding="utf-8")
 
-    assert '("lts300_x_axis", os.path.join(axis_pkg, "config", "x_axis.yaml"))' in content
-    assert '("lts300_z_axis", os.path.join(axis_pkg, "config", "z_axis.yaml"))' in content
+    assert '"linear_axis_nodes"), "config", "x_axis.yaml"' in content
+    assert '"linear_axis_nodes"), "config", "z_axis.yaml"' in content
     assert 'executable="lts300_node"' in content
     assert 'namespace="promoc/linear_axis"' in content

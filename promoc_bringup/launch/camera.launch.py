@@ -11,12 +11,6 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from promoc_bringup.camera_launch_builder import (
-    build_camera_node_parameters,
-    build_driver_node_parameters,
-    resolve_binning_factor,
-)
-from promoc_bringup.launch_utils import resolve_runtime_mode
 import yaml
 
 
@@ -24,19 +18,14 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "runtime_mode",
+                "driver_mode",
                 default_value="hardware",
-                description="Canonical runtime mode: hardware|sim",
+                description="Canonical driver mode: hardware|mock",
             ),
             DeclareLaunchArgument(
                 "camera_type",
                 default_value="ids_u3_3800cp_hq",
                 description="Camera config filename in config/cameras without extension.",
-            ),
-            DeclareLaunchArgument(
-                "binning_factor",
-                default_value="",
-                description="Optional camera binning override (e.g. 1 or 2).",
             ),
             OpaqueFunction(function=launch_setup),
         ]
@@ -44,14 +33,17 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
-    runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
-    is_sim = runtime_mode == "sim"
+    driver_mode = LaunchConfiguration("driver_mode").perform(context).strip().lower()
+    is_sim = driver_mode == "mock"
     camera_type = LaunchConfiguration("camera_type").perform(context).strip()
-    binning_override = LaunchConfiguration("binning_factor").perform(context).strip()
     logger = launch.logging.get_logger()
 
-    logger.info(f"Camera launch runtime_mode={runtime_mode}")
+    logger.info(f"Camera launch driver_mode={driver_mode}")
     actions = []
+
+    camera_config = os.path.join(
+        get_package_share_directory("camera_nodes"), "config", "camera.yaml"
+    )
 
     if is_sim:
         actions.append(
@@ -61,60 +53,48 @@ def launch_setup(context, *args, **kwargs):
                 name="camera_node",
                 namespace="promoc",
                 output="screen",
-                parameters=[
-                    build_camera_node_parameters(
-                        None,
-                        None,
-                        use_simulator=True,
-                    )
-                ],
+                parameters=[camera_config, {"driver_mode": "mock"}],
                 arguments=["--ros-args", "--log-level", "INFO"],
             )
         )
         return actions
 
     bringup_pkg_share = get_package_share_directory("promoc_bringup")
-    camera_config_file = os.path.join(
+    camera_hardware_config_file = os.path.join(
         bringup_pkg_share, "config", "cameras", f"{camera_type}.yaml"
     )
 
-    if not os.path.exists(camera_config_file):
-        legacy_config = os.path.join(
-            bringup_pkg_share, "config", "ids_camera_params.yaml"
-        )
-        if os.path.exists(legacy_config):
-            logger.warn(
-                f"Camera config not found at {camera_config_file}. Using legacy config {legacy_config}."
-            )
-            camera_config_file = legacy_config
-        else:
-            logger.error(f"Camera configuration file not found: {camera_config_file}")
-            return []
+    if not os.path.exists(camera_hardware_config_file):
+        logger.error(f"Camera hardware configuration file not found: {camera_hardware_config_file}")
+        return []
 
     try:
-        with open(camera_config_file, "r", encoding="utf-8") as file_handle:
-            camera_config = yaml.safe_load(file_handle)
+        with open(camera_hardware_config_file, "r", encoding="utf-8") as file_handle:
+            hw_config = yaml.safe_load(file_handle)
 
-        camera_params = camera_config["camera_params"]
-        driver = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}[
-            camera_params["driver"]
-        ]
-        driver_node_name = camera_params["cameraname"]
+        camera_params = hw_config.get("camera_params", {})
+        driver = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}.get(
+            camera_params.get("driver", "usb3vision")
+        )
+        driver_node_name = camera_params.get("cameraname", "assembly_camera")
 
         tmp_dir = tempfile.mkdtemp()
         camera_info_yaml = os.path.join(tmp_dir, "camera_info.yaml")
         with open(camera_info_yaml, "w", encoding="utf-8") as file_handle:
-            file_handle.write(yaml.dump(camera_config["camera_info"]))
+            file_handle.write(yaml.dump(hw_config.get("camera_info", {})))
 
         dynamic_parameters_yaml = os.path.join(tmp_dir, "dynamic_parameters.yaml")
         with open(dynamic_parameters_yaml, "w", encoding="utf-8") as file_handle:
-            file_handle.write(yaml.dump(camera_config["dynamic_parameters"]))
+            file_handle.write(yaml.dump(hw_config.get("dynamic_parameters", [])))
 
-        binning_factor = resolve_binning_factor(
-            camera_params,
-            binning_override,
-            logger,
-        )
+        # Build basic parameters for the hardware driver
+        # We removed complex build_driver_node_parameters to simplify
+        driver_params = [
+            {"camera_info_url": f"file://{camera_info_yaml}"},
+            {"dynamic_parameters_url": f"file://{dynamic_parameters_yaml}"},
+            {"guid": camera_params.get("guid", "")},
+            {"frame_id": "assembly_camera_frame"},
+        ]
 
         actions.append(
             Node(
@@ -125,15 +105,7 @@ def launch_setup(context, *args, **kwargs):
                 output="screen",
                 emulate_tty=True,
                 arguments=["--ros-args", "--log-level", "INFO"],
-                parameters=[
-                    build_driver_node_parameters(
-                        camera_params,
-                        camera_config,
-                        camera_info_yaml,
-                        dynamic_parameters_yaml,
-                        binning_factor,
-                    )
-                ],
+                parameters=driver_params,
             )
         )
 
@@ -145,13 +117,7 @@ def launch_setup(context, *args, **kwargs):
                 namespace="promoc",
                 output="screen",
                 arguments=["--ros-args", "--log-level", "INFO"],
-                parameters=[
-                    build_camera_node_parameters(
-                        camera_params,
-                        camera_config,
-                        use_simulator=False,
-                    )
-                ],
+                parameters=[camera_config, {"driver_mode": "hardware"}],
             )
         )
 

@@ -7,7 +7,7 @@ from .mock import MockPlanarMotorDriver
 
 def create_planar_motor_driver(logger, config) -> PlanarMotorDriver:
     """Create either the mock or hardware driver for the node."""
-    if config.use_mock:
+    if config.driver_mode in ("mock", "sim", "simulator"):
         return MockPlanarMotorDriver(logger, mock_xbot_count=config.mock_xbot_count)
     return HardwarePlanarMotorDriver(logger)
 

@@ -63,15 +63,6 @@ def test_declare_and_load_camera_config():
     assert cfg.publish_rate_hz == 12.5
 
 
-def test_use_simulator_alias_forces_mock_mode():
-    node = _Node()
-    declare_camera_parameters(node)
-
-    node._params["driver_mode"] = "hardware"
-    node._params["use_simulator"] = True
-
-    cfg = load_camera_config(node)
-    assert cfg.use_mock is True
 
 
 def test_invalid_driver_mode_falls_back_to_hardware():

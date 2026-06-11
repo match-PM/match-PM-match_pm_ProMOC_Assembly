@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 PARAMETER_DEFAULTS: tuple[tuple[str, object], ...] = (
     ("driver_mode", "hardware"),
-    ("use_simulator", False),
     ("camera_name", "assembly_camera"),
     ("source_image_topic", "/promoc/assembly_camera/stream0/image_raw"),
     ("image_topic", "/promoc/camera/image_raw"),
@@ -57,8 +56,6 @@ def get_camera_param(node, name: str, default=None):
 def load_camera_config(node) -> CameraNodeConfig:
     """Load and normalize the reduced camera runtime configuration."""
     driver_mode = str(get_camera_param(node, "driver_mode", "hardware")).strip().lower()
-    if bool(get_camera_param(node, "use_simulator", False)):
-        driver_mode = "mock"
 
     if driver_mode not in {"hardware", "mock", "sim", "simulator"}:
         node.get_logger().warn(

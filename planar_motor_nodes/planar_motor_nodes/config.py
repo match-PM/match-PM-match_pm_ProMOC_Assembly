@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class MoverNodeConfig:
-    use_mock: bool
+    driver_mode: str
     xbot_id: int
     publish_rate: float
     pmc_ip: str
