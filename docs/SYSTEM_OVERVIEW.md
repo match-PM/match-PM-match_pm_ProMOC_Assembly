@@ -11,7 +11,6 @@ The repository is hardware-first.
 - `promoc_assembly_interfaces` contains contracts only
 - `promoc_core` contains reusable helper code only
 
-<<<<<<< HEAD
 There is no big central orchestrator node by default. The maintained CS runtime
 is built around one main launch path:
 
@@ -23,21 +22,12 @@ ownership, and ROS services under stable `/promoc/...` namespaces.
 
 ## Package Boundaries
 
-- `camera_nodes`: camera-facing behavior such as Four-Step autofocus and exposure
-=======
-There is no big central orchestrator node by default.
-
-## Package Boundaries
-
-- `camera_nodes`: camera-facing behavior such as autofocus, MTF, ROI detection, exposure
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-- `linear_axis_nodes`: LTS300 axis runtime behavior
+- `camera_nodes`: camera-facing behavior such as Four-Step autofocus and exposure- `linear_axis_nodes`: LTS300 axis runtime behavior
 - `planar_motor_nodes`: mover motion and control runtime behavior
 - `promoc_bringup`: launch composition, runtime mode, user config wiring
 - `promoc_assembly_interfaces`: ROS messages and services only
 - `promoc_core`: shared helpers with no runtime ownership of hardware
 
-<<<<<<< HEAD
 The branch is shaped this way on purpose:
 
 - bringup explains how the system starts
@@ -47,36 +37,6 @@ The branch is shaped this way on purpose:
 
 That separation keeps the branch small enough to explain quickly and reduces the
 chance that new behavior gets hidden in the wrong layer.
-
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-## Runtime Conventions
-
-Across runtime packages, keep this structure in mind:
-
-- `node.py` wires ROS interfaces
-- `services/` contains feature behavior
-- `drivers/` talks to hardware, sim, or mocks
-- `config.py` loads and shapes parameters
-- `models.py` stores small shared state or typed containers
-- `algorithms/` exists only where the package really needs it
-
-## Stable Contracts
-
-These should stay stable unless there is a very strong reason to change them:
-
-- `/promoc/camera/*`
-- `/promoc/linear_axis/<axis_name>/*`
-- `/promoc/mover/*`
-- `runtime_mode:=hardware|sim`
-
-<<<<<<< HEAD
-These contracts matter because they are the public surface of the branch. We
-can refactor internal code, but we should avoid casually changing the names that
-other nodes, tools, or operators depend on.
-
-=======
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 ## Working Rules
 
 - keep business logic out of launch files
@@ -99,19 +59,12 @@ The usual flow is:
 
 1. build the workspace
 2. source `install/setup.bash`
-<<<<<<< HEAD
 3. start the system with `ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware`
 4. interact through ROS services under `/promoc/...`
 
 In other words:
 
 `system.launch.py -> bringup wiring -> runtime nodes -> ROS services -> hardware`
-
-=======
-3. start the system with `make hw`, `make camera-hw`, or `make sim`
-4. interact through ROS services under `/promoc/...`
-
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 ## Read Next
 
 - onboarding: [`START_HERE.md`](START_HERE.md)

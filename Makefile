@@ -16,17 +16,11 @@ LINT_DIRS := \
 	promoc_bringup/scripts \
 	promoc_bringup/test
 
-<<<<<<< HEAD
 .PHONY: all build clean sim hardware hw camera-hw doctor-hw test lint format test-unit cs-runtime-check cs-runtime-smoke-sim cs-runtime-smoke-hw check install-dev help
-=======
-.PHONY: all build clean sim hardware hw camera-hw doctor-hw test lint format test-unit release-n1-check release-n-check smoke-sim smoke-hw check install-dev help
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 all: build
 
 help:
 	@echo "Available commands:"
-<<<<<<< HEAD
 	@echo "  make build              - Build the workspace (colcon build --symlink-install)"
 	@echo "  make clean              - Remove build, install, and log directories"
 	@echo "  make doctor-hw          - Hardware readiness checks"
@@ -42,25 +36,6 @@ help:
 	@echo "  make cs-runtime-smoke-sim - Print simulation smoke commands"
 	@echo "  make cs-runtime-smoke-hw  - Print hardware smoke commands"
 	@echo "  make check              - Run lint + test-unit + cs-runtime-check"
-=======
-	@echo "  make build     - Build the workspace (colcon build --symlink-install)"
-	@echo "  make clean     - Remove build, install, and log directories"
-	@echo "  make doctor-hw - Hardware readiness checks"
-	@echo "  make hw        - Run full system in hardware mode (official path)"
-	@echo "  make camera-hw - Run camera stack in hardware mode"
-	@echo "  make sim       - Optional/experimental simulation path"
-	@echo "  make install-dev - Install development dependencies"
-	@echo "  make format    - Auto-format Python source with ruff format"
-	@echo "  make test      - Run tests"
-	@echo "  make lint      - Lint/type/syntax checks for Python"
-	@echo "  make test-unit - Run hardware-independent unit tests"
-	@echo "  make release-n1-check - Run automated Release N+1 acceptance checks"
-	@echo "  make release-n-check  - Alias for release-n1-check"
-	@echo "  make smoke-sim - Print simulation smoke commands"
-	@echo "  make smoke-hw  - Print hardware smoke commands"
-	@echo "  make check     - Run lint + test-unit + release-n1-check"
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 build:
 	colcon build --symlink-install
 
@@ -108,10 +83,6 @@ test-unit:
 		promoc_core/test/test_conversions.py \
 		camera_nodes/test/test_config.py \
 		camera_nodes/test/test_handlers_exposure.py \
-<<<<<<< HEAD
-=======
-		camera_nodes/test/test_handlers_mtf.py \
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 		camera_nodes/test/test_handlers_autofocus.py \
 		camera_nodes/test/test_autofocus_refactor_contract.py \
 		camera_nodes/test/test_camera_namespace_contract.py \
@@ -119,7 +90,6 @@ test-unit:
 		planar_motor_nodes/test/test_mover_namespace_contract.py \
 		promoc_bringup/test/test_system_launch.py \
 		promoc_bringup/test/test_launch_runtime_mode.py \
-<<<<<<< HEAD
 		promoc_bringup/test/test_hardware_first_cleanup.py \
 		promoc_bringup/test/test_cs_runtime_check.py -q
 
@@ -133,20 +103,3 @@ cs-runtime-smoke-hw:
 	$(DEV_PYTHON) promoc_bringup/scripts/cs_runtime_smoke.py --mode hardware
 
 check: lint test-unit cs-runtime-check
-=======
-		promoc_bringup/test/test_release_n_check.py \
-		camera_nodes/test/test_autofocus_benchmark.py -q
-
-release-n1-check:
-	$(DEV_PYTHON) promoc_bringup/scripts/release_n_check.py
-
-release-n-check: release-n1-check
-
-smoke-sim:
-	$(DEV_PYTHON) promoc_bringup/scripts/release_n_smoke.py --mode sim
-
-smoke-hw:
-	$(DEV_PYTHON) promoc_bringup/scripts/release_n_smoke.py --mode hardware
-
-check: lint test-unit release-n1-check
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0

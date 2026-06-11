@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # ProMOC CS Runtime
 
 Specialized ROS2 runtime branch for the CS setup.
@@ -34,29 +33,11 @@ messstand branch.
 ## Start Here
 
 If you are new to this branch, open these pages in order:
-=======
-# ProMOC Assembly ROS2 System
-
-Hardware-first ROS2 repository for precision assembly with camera services, linear axes, planar motor control, and shared bringup wiring.
-
-## Start Here
-
-If you are completely new to the repository, read only these two pages first:
-
-1. [`docs/START_HERE.md`](docs/START_HERE.md)
-2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
-
-That is enough for initial orientation.
-
-If you want the fuller order after that, use this:
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 1. [`docs/START_HERE.md`](docs/START_HERE.md)
 2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
 3. the README of the package you want to change
 4. [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md)
 
-<<<<<<< HEAD
 ## Official Runtime Path
 
 - hardware is the official runtime path
@@ -67,37 +48,11 @@ If you want the fuller order after that, use this:
 ## Quick Start
 
 Build once from the repository root:
-=======
-If you want the full docs map first, open [`docs/README.md`](docs/README.md).
-
-## Official Runtime Stance
-
-- hardware is the official release path
-- simulation exists for learning, debugging, and isolated development
-- canonical launch argument: `runtime_mode:=hardware|sim`
-
-## Quick Start
-
-```bash
-cd ~/ros2_ws/src
-git clone <repository-url> promoc_assembly
-cd promoc_assembly/setup
-./install_all.sh
-cd ..
-source ../install/setup.bash
-make doctor-hw
-make hw
-```
-
-Daily repo-local workflow from the repository root:
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 ```bash
 make build
 source install/setup.bash
 ```
 
-<<<<<<< HEAD
 Official hardware startup:
 
 ```bash
@@ -131,26 +86,6 @@ ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFo
 This split is deliberate: launch files compose the system, runtime packages own
 hardware behavior, interfaces stay contract-only, and shared Python helpers stay
 out of the hardware packages unless they are reusable across packages.
-=======
-## Core Commands
-
-```bash
-make doctor-hw
-make hw
-make camera-hw
-make sim
-```
-
-## Package Overview
-
-- `promoc_bringup`: launch files and runtime wiring
-- `camera_nodes`: autofocus, MTF, exposure, ROI services
-- `linear_axis_nodes`: LTS300 axis motion and status
-- `planar_motor_nodes`: mover motion and control services
-- `promoc_assembly_interfaces`: ROS contracts only
-- `promoc_core`: shared reusable Python logic
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 ## Key Docs
 
 - Docs index: [`docs/README.md`](docs/README.md)

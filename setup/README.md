@@ -63,7 +63,6 @@ What this does:
 If you are back in the repository root after running `./install_all.sh`, source the parent workspace:
 
 ```bash
-<<<<<<< HEAD
 # 1. Obtain PMCLib wheel from Match/IEMCA (version 117.1.1 or newer)
 # 2. Install PMCLib wheel (recommended: create/use the venv created by install_all.sh)
 pip install /path/to/pmclib-*.whl
@@ -136,11 +135,7 @@ ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
 
 # Test individual components
 ros2 run planar_motor_nodes mover_node --ros-args -p use_mock:=true
-ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true
-=======
-source ../install/setup.bash
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-```
+ros2 run linear_axis_nodes lts300_node --ros-args -p use_sim_time:=true```
 
 Recommended first checks:
 
@@ -267,7 +262,6 @@ cd setup
 
 ## What To Read Next
 
-<<<<<<< HEAD
 **5. Build failures:**
 ```bash
 # Clean and rebuild
@@ -316,10 +310,3 @@ ls -la /dev/serial/by-id/usb-Thorlabs*
 - The master installer (`install_all.sh`) handles most edge cases automatically
 - For development without hardware, mock implementations are used automatically
 - PMCLib is proprietary and must be obtained separately from Match/IEMCA
-
-=======
-- root overview: [`../README.md`](../README.md)
-- docs index: [`../docs/README.md`](../docs/README.md)
-- onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- bringup and runtime behavior: [`../promoc_bringup/README.md`](../promoc_bringup/README.md)
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0

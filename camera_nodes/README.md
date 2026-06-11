@@ -1,23 +1,13 @@
 # camera_nodes
 
-<<<<<<< HEAD
 ROS2 camera runtime package for Four-Step autofocus, exposure control, and the
 camera simulator.
-=======
-ROS2 camera runtime package for autofocus, MTF measurement, exposure control, and the camera simulator.
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-
 ## Start Here
 
 Open these files in this order:
 
 1. `camera_nodes/camera_nodes/node.py`
-<<<<<<< HEAD
-2. `camera_nodes/camera_nodes/services/autofocus.py`
-=======
-2. `camera_nodes/camera_nodes/services/autofocus.py` or `services/mtf.py`
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-3. `camera_nodes/camera_nodes/algorithms/`
+2. `camera_nodes/camera_nodes/services/autofocus.py`3. `camera_nodes/camera_nodes/algorithms/`
 4. `camera_nodes/camera_nodes/drivers/`
 
 ## What To Edit
@@ -26,10 +16,6 @@ Open these files in this order:
 | --- | --- |
 | Node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
 | Autofocus behavior | `camera_nodes/camera_nodes/services/autofocus.py` |
-<<<<<<< HEAD
-=======
-| MTF behavior | `camera_nodes/camera_nodes/services/mtf.py` |
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
 | Exposure behavior | `camera_nodes/camera_nodes/services/exposure.py` |
 | Camera algorithms | `camera_nodes/camera_nodes/algorithms/` |
 | Camera hardware or sim backend | `camera_nodes/camera_nodes/drivers/` |
@@ -48,14 +34,6 @@ Open these files in this order:
 ## Stable Public ROS APIs
 
 - `/promoc/camera/autofocus`
-<<<<<<< HEAD
-=======
-- `/promoc/camera/autofocus_comparison`
-- `/promoc/camera/measure_mtf`
-- `/promoc/camera/detect_rois`
-- `/promoc/camera/select_roi`
->>>>>>> d07c2ebef4de684c5999a52116404a2727fe38b0
-- `/promoc/camera/set_exposure`
 
 ## Related Docs
 
