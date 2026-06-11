@@ -1,0 +1,14 @@
+/**:
+  ros__parameters:
+    required_devices: ["camera", "x_axis", "z_axis", "planar_motor"]
+    camera_status_topic: "/promoc/camera/status"
+    x_axis_status_topic: "/promoc/linear_axis/lts300_x_axis/status"
+    z_axis_status_topic: "/promoc/linear_axis/lts300_z_axis/status"
+    planar_motor_status_topic: "/promoc/mover/xbot_info"
+    x_axis_stop_service: "/promoc/linear_axis/lts300_x_axis/stop"
+    z_axis_stop_service: "/promoc/linear_axis/lts300_z_axis/stop"
+    planar_motor_stop_service: "/promoc/mover/stop_motion"
+    planar_motor_xbot_id: 0
+    status_timeout_sec: 2.0
+    service_call_timeout_sec: 1.0
+    status_publication_rate_hz: 10.0

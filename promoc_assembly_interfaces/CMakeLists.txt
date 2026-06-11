@@ -25,6 +25,7 @@ endif()
 
 set(INTERFACE_FILES
   "msg/DeviceStatus.msg"
+  "msg/SystemStatus.msg"
   "msg/planar_motor/XBotInfo.msg"
   "srv/planar_motor/ActivateXbots.srv"
   "srv/planar_motor/ArcMotionSi.srv"
