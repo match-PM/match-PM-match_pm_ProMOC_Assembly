@@ -22,4 +22,13 @@ def test_system_launch_includes_camera_mover_and_axis_namespaces():
     assert 'name="mover"' in content
     assert 'namespace="promoc"' in content
     assert 'namespace="promoc/linear_axis"' in content
-    assert "runtime_mode" in content
+
+
+def test_system_launch_uses_driver_mode_and_component_flags():
+    content = (ROOT / "promoc_bringup" / "launch" / "system.launch.py").read_text(
+        encoding="utf-8", errors="ignore"
+    )
+    assert 'DeclareLaunchArgument("driver_mode"' in content
+    for argument in ("camera", "x_axis", "z_axis", "planar_motor", "system_controller"):
+        assert f'DeclareLaunchArgument("{argument}"' in content
+    assert "runtime_mode" not in content

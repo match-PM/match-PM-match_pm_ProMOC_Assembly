@@ -17,7 +17,6 @@ setup(
     maintainer_email="promoc@match.uni-hannover.de",
     description="Camera runtime for raw image publishing and status reporting",
     license="MIT",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "camera_node = camera_nodes.node:main",

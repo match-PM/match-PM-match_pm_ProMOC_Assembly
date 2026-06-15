@@ -29,7 +29,6 @@ setup(
     maintainer_email='promoc@match.uni-hannover.de',
     description='ProMOC Assembly launch files and utilities',
     license='MIT',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             # Optional demo controller. Not a canonical startup path.

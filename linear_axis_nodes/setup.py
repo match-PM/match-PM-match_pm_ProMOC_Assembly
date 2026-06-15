@@ -19,7 +19,6 @@ setup(
     maintainer_email="promoc@match.uni-hannover.de",
     description="ROS2 nodes for Thorlabs LTS300 linear axis control",
     license="MIT",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "lts300_node = linear_axis_nodes.node:main",

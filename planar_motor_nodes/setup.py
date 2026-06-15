@@ -18,7 +18,6 @@ setup(
     maintainer_email="promoc@match.uni-hannover.de",
     description="ROS2 nodes for planar motor control with PMCLib integration",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "mover_node = planar_motor_nodes.node:main",

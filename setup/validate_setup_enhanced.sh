@@ -369,8 +369,8 @@ fi)
 # Source workspace
 source $PROJECT_ROOT/install/setup.bash
 
-# Test simulation
-ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
+# Test mock bringup
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 
 # Test basic functionality
 python3 $SCRIPT_DIR/test_basic_functionality.py

@@ -534,7 +534,7 @@ ros2 run linear_axis_nodes lts300_node --ros-args \\
     -p serial_port:=/dev/ttyUSB0
 
 # Start camera stack (hardware mode, requires camera_aravis2)
-ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware
+ros2 launch promoc_bringup camera.launch.py driver_mode:=hardware
 \`\`\`
 
 ## Troubleshooting
@@ -666,7 +666,7 @@ main() {
     echo "   ros2 run linear_axis_nodes lts300_node"
     echo ""
     echo "   # Test camera stack (if installed)"
-    echo "   ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware"
+    echo "   ros2 launch promoc_bringup camera.launch.py driver_mode:=hardware"
     echo ""
 }
 

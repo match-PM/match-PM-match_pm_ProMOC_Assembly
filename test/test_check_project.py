@@ -542,16 +542,6 @@ def test_stale_reference_in_test_file_is_detected(tmp_path):
     assert module.check_stale_references(repository_root, module.TimeoutConfig.from_env()) is False
 
 
-def test_stale_reference_in_cs_runtime_check_is_detected(tmp_path):
-    module = load_module()
-    repository_root = fake_repo_with_file(
-        tmp_path,
-        "promoc_bringup/scripts/cs_runtime_check.py",
-        f'NEEDLE = "{STALE_AUTOFOCUS}"\n',
-    )
-    assert module.check_stale_references(repository_root, module.TimeoutConfig.from_env()) is False
-
-
 def test_placeholder_in_test_check_project_is_detected(tmp_path):
     module = load_module()
     repository_root = fake_repo_with_file(

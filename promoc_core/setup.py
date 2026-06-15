@@ -22,7 +22,6 @@ setup(
     maintainer_email="promoc@match.uni-hannover.de",
     description="Core functionality for ProMOC Assembly",
     license="MIT",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "promoc_system_controller = promoc_core.system_controller:main",

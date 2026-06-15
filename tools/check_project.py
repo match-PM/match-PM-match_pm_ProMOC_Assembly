@@ -30,15 +30,6 @@ REQUIRED_CONFIGS = (
     "promoc_bringup/config/system.yaml",
     "promoc_core/config/system_controller.yaml",
 )
-STALE_REFERENCE_NEEDLES = (
-    "/promoc/camera/autofocus",
-    "/promoc/camera/set_exposure",
-    "services.autofocus",
-    "services.exposure",
-    "camera_simulator",
-    "pm_genicam_controller",
-    "sim_mode",
-)
 AUTOFOCUS_REFERENCE = "/promoc/camera/" "autofocus"
 EXPOSURE_REFERENCE = "/promoc/camera/" "set_exposure"
 AUTOFOCUS_SERVICE_REFERENCE = "services." "autofocus"
@@ -80,15 +71,6 @@ CAMERA_NODE_SERVICE_AUTOFOCUS_ASSERT_LINE = (
 CAMERA_NODE_SERVICE_EXPOSURE_ASSERT_LINE = (
     f'assert "{EXPOSURE_SERVICE_REFERENCE}" not in node_content'
 )
-SIM_MODE_ASSERT_LINE = (
-    f'assert not _declares_launch_argument(content, "{SIM_MODE_REFERENCE}")'
-)
-CS_RUNTIME_PAIR_LINE = (
-    f'["{CAMERA_SIMULATOR_REFERENCE}", "{PM_GENICAM_REFERENCE}"],'
-)
-CS_RUNTIME_SIM_MODE_DETAIL_LINE = (
-    f'"camera.launch no longer exposes {SIM_MODE_REFERENCE}",'
-)
 CAMERA_IMPORT_ALLOWLIST_SET = {
     CAMERA_IMPORT_ALLOWLIST_LINE,
     CAMERA_IMPORT_ASSERT_LINE,
@@ -105,7 +87,6 @@ CAMERA_NAMESPACE_AUTOFOCUS_SERVICE_SET = {
 CAMERA_NAMESPACE_EXPOSURE_SERVICE_SET = {
     CAMERA_NODE_SERVICE_EXPOSURE_ASSERT_LINE,
 }
-SIM_MODE_ASSERT_SET = {SIM_MODE_ASSERT_LINE}
 
 STALE_REFERENCE_LINE_ALLOWLIST: dict[str, dict[str, set[str]]] = {
     "camera_nodes/test/test_camera_imports.py": {
@@ -118,21 +99,6 @@ STALE_REFERENCE_LINE_ALLOWLIST: dict[str, dict[str, set[str]]] = {
         AUTOFOCUS_SERVICE_REFERENCE: CAMERA_NAMESPACE_AUTOFOCUS_SERVICE_SET,
         EXPOSURE_SERVICE_REFERENCE: CAMERA_NAMESPACE_EXPOSURE_SERVICE_SET,
     },
-    "promoc_bringup/scripts/cs_runtime_check.py": {
-        AUTOFOCUS_REFERENCE: {SELF_AUTOFOCUS_LIST_LINE},
-        EXPOSURE_REFERENCE: {SELF_EXPOSURE_LIST_LINE},
-        AUTOFOCUS_SERVICE_REFERENCE: {SELF_AUTOFOCUS_SERVICE_LIST_LINE},
-        EXPOSURE_SERVICE_REFERENCE: {SELF_EXPOSURE_SERVICE_LIST_LINE},
-        CAMERA_SIMULATOR_REFERENCE: {CS_RUNTIME_PAIR_LINE},
-        PM_GENICAM_REFERENCE: {CS_RUNTIME_PAIR_LINE},
-        SIM_MODE_REFERENCE: {
-            SELF_SIM_MODE_LIST_LINE,
-            CS_RUNTIME_SIM_MODE_DETAIL_LINE,
-        },
-    },
-    "promoc_bringup/test/test_launch_runtime_mode.py": {
-        SIM_MODE_REFERENCE: SIM_MODE_ASSERT_SET
-    },
     "tools/check_project.py": {
         AUTOFOCUS_REFERENCE: {SELF_AUTOFOCUS_LIST_LINE},
         EXPOSURE_REFERENCE: {SELF_EXPOSURE_LIST_LINE},
@@ -141,41 +107,6 @@ STALE_REFERENCE_LINE_ALLOWLIST: dict[str, dict[str, set[str]]] = {
         CAMERA_SIMULATOR_REFERENCE: {SELF_CAMERA_SIMULATOR_LIST_LINE},
         PM_GENICAM_REFERENCE: {SELF_PM_GENICAM_LIST_LINE},
         SIM_MODE_REFERENCE: {SELF_SIM_MODE_LIST_LINE},
-    },
-    "tools/check_project.py": {
-        AUTOFOCUS_REFERENCE: {
-            SELF_AUTOFOCUS_LIST_LINE,
-            CAMERA_NODE_AUTOFOCUS_ASSERT_LINE,
-        },
-        EXPOSURE_REFERENCE: {
-            SELF_EXPOSURE_LIST_LINE,
-            CAMERA_NODE_EXPOSURE_ASSERT_LINE,
-        },
-        AUTOFOCUS_SERVICE_REFERENCE: {
-            SELF_AUTOFOCUS_SERVICE_LIST_LINE,
-            CAMERA_NODE_SERVICE_AUTOFOCUS_ASSERT_LINE,
-        },
-        EXPOSURE_SERVICE_REFERENCE: {
-            SELF_EXPOSURE_SERVICE_LIST_LINE,
-            CAMERA_NODE_SERVICE_EXPOSURE_ASSERT_LINE,
-        },
-        CAMERA_SIMULATOR_REFERENCE: {
-            SELF_CAMERA_SIMULATOR_LIST_LINE,
-            CS_RUNTIME_PAIR_LINE,
-            CAMERA_SIMULATOR_ASSERT_SETUP_LINE,
-            CAMERA_SIMULATOR_ASSERT_LAUNCH_LINE,
-        },
-        PM_GENICAM_REFERENCE: {
-            SELF_PM_GENICAM_LIST_LINE,
-            CS_RUNTIME_PAIR_LINE,
-            CAMERA_IMPORT_ALLOWLIST_LINE,
-            CAMERA_IMPORT_ASSERT_LINE,
-        },
-        SIM_MODE_REFERENCE: {
-            SELF_SIM_MODE_LIST_LINE,
-            CS_RUNTIME_SIM_MODE_DETAIL_LINE,
-            SIM_MODE_ASSERT_LINE,
-        },
     },
 }
 
