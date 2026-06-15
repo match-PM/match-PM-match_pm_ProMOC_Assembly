@@ -38,7 +38,8 @@ CAMERA_SIMULATOR_REFERENCE = "camera_" "simulator"
 PM_GENICAM_REFERENCE = "pm_" "genicam_controller"
 SIM_MODE_REFERENCE = "sim_" "mode"
 PLACEHOLDER_MODEL = "MODEL_" "PLACEHOLDER"
-ROS_SETUP_SCRIPT = Path("/opt/ros/lyrical/setup.bash")
+PRIMARY_ROS_DISTRO = "humble"
+PRIMARY_ROS_SETUP_SCRIPT = Path("/opt/ros/humble/setup.bash")
 DEFAULT_REQUIRED_BRANCH = "cs_development"
 SELF_AUTOFOCUS_LIST_LINE = f'"{AUTOFOCUS_REFERENCE}",'
 SELF_EXPOSURE_LIST_LINE = f'"{EXPOSURE_REFERENCE}",'
@@ -373,14 +374,14 @@ def resolve_workspace_root(
 
 def load_ros_environment(timeouts: TimeoutConfig) -> dict[str, str] | None:
     current = dict(os.environ)
-    if current.get("ROS_DISTRO") == "lyrical" and shutil.which("colcon"):
+    if current.get("ROS_DISTRO") and shutil.which("colcon"):
         return current
-    if not ROS_SETUP_SCRIPT.exists():
+    if not PRIMARY_ROS_SETUP_SCRIPT.exists():
         return None
     try:
         return capture_sourced_environment(
             cwd=SCRIPT_REPOSITORY_ROOT,
-            source_scripts=(ROS_SETUP_SCRIPT,),
+            source_scripts=(PRIMARY_ROS_SETUP_SCRIPT,),
             timeout=timeouts.static_command,
             base_env=current,
         )
@@ -398,7 +399,7 @@ def ensure_workspace_environment(
         raise CheckFailure(f"Missing workspace setup script: {install_setup}")
     return capture_sourced_environment(
         cwd=workspace_root,
-        source_scripts=(ROS_SETUP_SCRIPT, install_setup),
+        source_scripts=(PRIMARY_ROS_SETUP_SCRIPT, install_setup),
         timeout=timeouts.static_command,
         base_env=base_env,
     )
@@ -678,7 +679,10 @@ def check_placeholder_models(repository_root: Path, timeouts: TimeoutConfig) -> 
 def check_optional_ros_environment(timeouts: TimeoutConfig) -> bool | str:
     ros_env = load_ros_environment(timeouts)
     if ros_env is None:
-        print("  ROS Lyrical environment unavailable; ROS-dependent checks skipped in quick mode.")
+        print(
+            "  ROS environment unavailable; ROS-dependent checks skipped in quick mode. "
+            f"Preferred target: ROS 2 {PRIMARY_ROS_DISTRO}."
+        )
         return "SKIP"
     return True
 
@@ -932,7 +936,10 @@ def preflight_full_mode(
 
     ros_env = load_ros_environment(timeouts)
     if ros_env is None:
-        print("  ROS Lyrical environment or colcon is unavailable.")
+        print(
+            "  ROS environment or colcon is unavailable. "
+            f"Preferred target: ROS 2 {PRIMARY_ROS_DISTRO}."
+        )
         return None
 
     if shutil.which("colcon", path=ros_env.get("PATH")) is None:
@@ -997,7 +1004,7 @@ def run_quick_checks(
         lambda: check_placeholder_models(repository_root, timeouts),
     )
     checker.run_check(
-        "ROS Lyrical environment available",
+        "ROS environment available",
         lambda: check_optional_ros_environment(timeouts),
     )
 

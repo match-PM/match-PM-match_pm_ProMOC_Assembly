@@ -229,7 +229,7 @@ def test_colcon_commands_use_workspace_root(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "clean_workspace_outputs", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module, "verify_workspace_outputs", lambda *_args, **_kwargs: None)
     timeouts = module.TimeoutConfig.from_env()
-    ros_env = {"ROS_DISTRO": "lyrical", "PATH": os.environ["PATH"]}
+    ros_env = {"ROS_DISTRO": "humble", "PATH": os.environ["PATH"]}
 
     assert module.check_colcon_build(workspace_root, ros_env, timeouts) is True
     assert module.check_colcon_test(workspace_root, ros_env, timeouts) is True
