@@ -1,41 +1,39 @@
-# Docs Index
+# Documentation Index
 
-This folder intentionally stays small.
+Use this folder for the detailed handover material. The root
+[`README.md`](../README.md) is intentionally short.
 
-The central docs should answer three questions quickly:
-
-- how do I get the repo running
-- which package should I open
-- what architectural rules should I not accidentally break
-
-If a topic needs package-specific depth, the detailed README should live in the package itself, not as another top-level doc here.
-
-## Read Order
-
-Read these in order:
+Recommended reading order for a new student:
 
 1. [`START_HERE.md`](START_HERE.md)
-2. [`PACKAGES.md`](PACKAGES.md)
-3. the README of the package you want to change
-4. [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
+2. [`INSTALLATION.md`](INSTALLATION.md)
+3. [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
+4. [`PACKAGES.md`](PACKAGES.md)
+5. [`INTERFACES.md`](INTERFACES.md)
+6. [`SAFETY.md`](SAFETY.md)
+7. [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
+8. [`HANDOVER_STATUS.md`](HANDOVER_STATUS.md)
 
-## Central Docs
+Detailed guides:
 
-- [`START_HERE.md`](START_HERE.md): first build, first launch, first service calls
-- [`PACKAGES.md`](PACKAGES.md): what each package does and where to edit first
-- [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md): architecture, boundaries, conventions, and common mistakes
+- [`START_HERE.md`](START_HERE.md)
+- [`INSTALLATION.md`](INSTALLATION.md)
+- [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
+- [`PACKAGES.md`](PACKAGES.md)
+- [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`INTERFACES.md`](INTERFACES.md)
+- [`SAFETY.md`](SAFETY.md)
+- [`MOCK_MODE.md`](MOCK_MODE.md)
+- [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
+- [`EXTENDING_THE_SYSTEM.md`](EXTENDING_THE_SYSTEM.md)
+- [`HANDOVER_STATUS.md`](HANDOVER_STATUS.md)
 
-## Package Guides
+Package entry pages:
 
 - [`../promoc_bringup/README.md`](../promoc_bringup/README.md)
 - [`../camera_nodes/README.md`](../camera_nodes/README.md)
 - [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md)
 - [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md)
-- [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md)
 - [`../promoc_core/README.md`](../promoc_core/README.md)
-
-## Setup And Operations
-
+- [`../promoc_simulation/README.md`](../promoc_simulation/README.md)
 - [`../setup/README.md`](../setup/README.md)
-- [`../promoc_bringup/config/README.md`](../promoc_bringup/config/README.md)
-

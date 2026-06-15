@@ -1,41 +1,34 @@
-# Camera Configuration Directory
+# Camera Profiles
 
-This directory contains the small camera configuration files used by the CS runtime.
+This directory holds hardware camera profile files used by:
 
-## Runtime Focus
+```bash
+ros2 launch promoc_bringup camera.launch.py \
+  driver_mode:=hardware \
+  camera_type:=<profile-name>
+```
 
-The maintained runtime only needs a few camera facts:
+## Current Files
+
+- `ids_u3_3800cp_hq.yaml`
+- `camera_template.yaml`
+
+## What A Profile Owns
+
+A profile may define:
 
 - camera identity and driver type
-- pixel size and native resolution
-- active pixel format and binning default
-- exposure and frame-rate defaults
-- camera calibration info
-- dynamic GenICam parameters that the driver should expose
+- GUID or connection details
+- resolution and pixel-format information
+- calibration data
+- dynamic parameters exposed to the hardware driver
 
-This directory is intentionally not an MTF or optical-analysis configuration area.
+## What It Does Not Do
 
-## Files
+This directory is not the main runtime selector. Driver selection still happens
+through `driver_mode:=mock|hardware`.
 
-- `ids_u3_3800cp_hq.yaml`: default runtime camera
-- `camera_template.yaml`: starting point for a new camera profile
-- `README.md`: this overview
+## See Also
 
-## Typical Workflow
-
-1. Copy `camera_template.yaml` to a new `<camera_name>.yaml`
-2. Fill in GUID, driver, camera name, pixel size, and resolution
-3. Add calibration data to `camera_info`
-4. List the dynamic camera parameters your hardware supports
-5. Launch with:
-   `ros2 launch promoc_bringup camera.launch.py runtime_mode:=hardware camera_type:=<camera_name>`
-
-## Keep It Simple
-
-When adding a new camera config, prefer only the keys the runtime actually uses:
-
-- `camera_params`
-- `exposure_time`
-- `frame_rate`
-- `camera_info`
-- `dynamic_parameters`
+- [`../../../docs/CONFIGURATION.md`](../../../docs/CONFIGURATION.md)
+- [`../../../promoc_bringup/README.md`](../../../promoc_bringup/README.md)

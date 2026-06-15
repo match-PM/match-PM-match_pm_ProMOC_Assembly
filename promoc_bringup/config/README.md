@@ -1,31 +1,43 @@
-# ProMOC User Configuration
+# Bringup Configuration
 
-## Quick Start
+This directory contains tracked bringup-level configuration artifacts.
 
-1. Copy a template:
+## Files
+
+- `system.yaml`
+- `demo_controller_params.yaml`
+- `cameras/*.yaml`
+
+## Current Source Behavior
+
+`system.yaml` records the intended top-level composition:
+
+- `driver_mode`
+- component enable flags
+- config paths for package-owned YAML files
+
+Current `system.launch.py` behavior is simpler:
+
+- it declares launch arguments directly
+- it loads package-owned YAML files directly
+- it does not currently parse `system.yaml`
+
+## Camera Profiles
+
+Hardware camera profile files under `cameras/` are used by:
+
 ```bash
-cd promoc_bringup/config
-cp user_config.v2.example.yaml user_config.yaml
+ros2 launch promoc_bringup camera.launch.py \
+  driver_mode:=hardware \
+  camera_type:=ids_u3_3800cp_hq
 ```
 
-2. Edit values:
-```bash
-nano user_config.yaml
-```
+## Demo Parameters
 
-3. Use the system with your config:
-```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
-```
+`demo_controller_params.yaml` belongs to the optional `unified_demo` flow, not
+to the canonical startup path.
 
-## Canonical v2 Keys
+## See Also
 
-- `runtime.mode`: `hardware` or `sim`
-- `measurement.operator`: operator or user name
-- `measurement.base_path`: output base path
-- `camera.pixel_size_um`
-- `autofocus.*`- `measurement_conditions.*`
-
-## Note
-
-`user_config.yaml` is git-ignored and remains local to each workstation.
+- [`../../docs/CONFIGURATION.md`](../../docs/CONFIGURATION.md)
+- [`../../promoc_bringup/README.md`](../../promoc_bringup/README.md)

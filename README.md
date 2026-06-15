@@ -1,95 +1,109 @@
-# ProMOC CS Runtime
+# ProMOC Assembly
 
-Specialized ROS2 runtime branch for the CS setup.
+ROS 2 workspace repository for the ProMOC CS setup. The current maintained path
+is a small hardware-control stack with:
 
-The official runtime core is:
-
-- `system.launch.py`
-- camera
-- two linear axes
-- planar motor
-- future runtime nodes that plug into the same bringup structure
-
-This branch deliberately does **not** carry the optical measurement stack from the
-messstand branch. MTF services, ROI-driven MTF helpers, and the old autofocus
-comparison path are not part of the maintained CS runtime.
-
-## Explain It In Two Minutes
-
-If you need to explain the branch quickly to a supervisor or teammate, this is
-the short version:
-
-- `promoc_bringup` starts and wires the runtime
-- `camera_nodes` owns exposure control and Four-Step autofocus
-- `linear_axis_nodes` owns the two Thorlabs linear axes
-- `planar_motor_nodes` owns the mover and its motion services
-- `promoc_assembly_interfaces` contains ROS contracts only
-- `promoc_core` contains shared helper logic only
-
-The branch is intentionally specialized. It keeps the runtime pieces needed for
-the CS setup and removes the optical-measurement stack that belongs to the
-messstand branch.
-
-## Start Here
-
-If you are new to this branch, open these pages in order:
-1. [`docs/START_HERE.md`](docs/START_HERE.md)
-2. [`docs/PACKAGES.md`](docs/PACKAGES.md)
-3. the README of the package you want to change
-4. [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md)
-
-## Official Runtime Path
-
-- hardware is the official runtime path
-- simulation stays available as a secondary development path
-- canonical launch argument: `runtime_mode:=hardware|sim`
-- single official main start: `ros2 launch promoc_bringup system.launch.py`
+- one camera node that republishes raw images and status
+- two linear-axis nodes for the X and Z axes
+- one planar-motor node
+- one system controller that monitors device status and exposes `stop_all` and
+  guarded `reset_stop`
 
 ## Quick Start
 
-Build once from the repository root:
+Expected layout:
+
+```text
+<ros-workspace>/
+  src/
+    match-PM-match_pm_ProMOC_Assembly/
+```
+
+Build from the ROS workspace root:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd <ros-workspace>
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Repo-level build (from this repository root):
+
 ```bash
 make build
 source install/setup.bash
 ```
 
-Official hardware startup:
+## Start The Complete System
+
+Mock bringup (no hardware needed):
 
 ```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-Optional simulation startup:
+Hardware-oriented bringup:
 
 ```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
+ros2 launch promoc_bringup system.launch.py driver_mode:=hardware
 ```
 
-Common camera commands:
+Launch arguments:
+
+- `camera`
+- `x_axis`
+- `z_axis`
+- `planar_motor`
+- `system_controller`
+- `driver_mode`
+
+When the camera component is enabled, the built launch interface also exposes
+`camera_type` from `camera.launch.py`.
+
+Partial example:
 
 ```bash
-ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"
-ros2 service call /promoc/camera/autofocus promoc_assembly_interfaces/srv/AutoFocus "{start_position: 260.0, end_position: 290.0, focus_mode: 0, skip_flyover: false}"
+ros2 launch promoc_bringup system.launch.py \
+  driver_mode:=mock \
+  camera:=false \
+  planar_motor:=false
 ```
 
-## Runtime Architecture
+## Start Individual Subsystems
 
-`system.launch.py -> runtime nodes -> services under /promoc/...`
+Camera-only launch:
 
-- `promoc_bringup` starts the runtime composition
-- `camera_nodes` owns Four-Step autofocus and exposure
-- `linear_axis_nodes` owns both linear axes
-- `planar_motor_nodes` owns mover control and motion services
-- `promoc_assembly_interfaces` contains ROS contracts only
-- `promoc_core` contains shared helpers with no hardware ownership
+```bash
+ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
+```
 
-This split is deliberate: launch files compose the system, runtime packages own
-hardware behavior, interfaces stay contract-only, and shared Python helpers stay
-out of the hardware packages unless they are reusable across packages.
-## Key Docs
+Single-device work is usually done by disabling the other components in
+`system.launch.py` rather than by inventing new launch files. See
+[`docs/START_HERE.md`](docs/START_HERE.md) for examples.
 
-- Docs index: [`docs/README.md`](docs/README.md)
-- Onboarding: [`docs/START_HERE.md`](docs/START_HERE.md)
-- Package guide: [`docs/PACKAGES.md`](docs/PACKAGES.md)
-- System overview: [`docs/SYSTEM_OVERVIEW.md`](docs/SYSTEM_OVERVIEW.md)
-- Setup: [`setup/README.md`](setup/README.md)
+## Important Interfaces
+
+- Camera topics:
+  `/promoc/camera/image_raw`, `/promoc/camera/status`
+- System controller:
+  `/promoc/system/status`, `/promoc/system/stop_all`, `/promoc/system/reset_stop`
+- Linear axes:
+  `/promoc/linear_axis/lts300_x_axis/...`,
+  `/promoc/linear_axis/lts300_z_axis/...`
+- Planar motor:
+  `/promoc/mover/xbot_info`, `/promoc/mover/...`
+
+## Safety Note
+
+`stop_all` and `reset_stop` are software coordination features. They are not a
+hardware-certified emergency stop, do not guarantee collision avoidance, and do
+not replace operator knowledge of the real setup.
+
+## Documentation Index
+
+- [docs/README.md](docs/README.md) -- docs index and read order
+- [docs/START_HERE.md](docs/START_HERE.md) -- first build, first launch
+- [docs/PACKAGES.md](docs/PACKAGES.md) -- package ownership and where to edit
+- [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md) -- architecture and conventions
+- [setup/README.md](setup/README.md) -- installation and hardware setup

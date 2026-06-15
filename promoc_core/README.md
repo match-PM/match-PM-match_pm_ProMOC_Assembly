@@ -1,49 +1,61 @@
-# ProMOC Core
+# promoc_core
 
 ## Purpose
 
-`promoc_core` owns reusable Python logic that should be shared across packages without depending on runtime nodes.
+`promoc_core` holds shared helpers and the system controller. It should not
+become a generic dump for hardware-specific runtime logic.
 
-## What Belongs Here
+## Executable
 
-Good fits for `promoc_core`:
+- `ros2 run promoc_core promoc_system_controller`
 
-- validation helpers
-- conversions
-- logging helpers
-- shared error models
-- reusable motion or math helpers that are not package-specific
-
-Do not move runtime-node-specific behavior into `promoc_core`.
-
-## How To Verify
+This node is normally started by:
 
 ```bash
-make lint
-make test-unit
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-Package-only check:
+or hardware mode.
 
-```bash
-colcon test --packages-select promoc_core
-colcon test-result --verbose
-```
+## Configuration
 
-## Where To Edit Common Changes
+- `config/system_controller.yaml`
 
-| Goal | Open this first |
-|---|---|
-| Add shared validation logic | `promoc_core/promoc_core/validation.py` |
-| Add shared conversion logic | `promoc_core/promoc_core/conversions.py` |
-| Extend shared motion helpers | `promoc_core/promoc_core/motion.py` |
-| Extend logging helpers | `promoc_core/promoc_core/logging.py` |
-| Extend error handling | `promoc_core/promoc_core/promoc_exceptions.py`, `promoc_core/promoc_core/error_handling.py` |
+Important keys:
+
+- `required_devices`
+- status topic names
+- stop service names
+- `planar_motor_xbot_id`
+- `status_timeout_sec`
+- `service_call_timeout_sec`
+- `status_publication_rate_hz`
+
+## Primary Topic
+
+- `/promoc/system/status`
+
+## Primary Services
+
+- `/promoc/system/stop_all`
+- `/promoc/system/reset_stop`
+
+Service response fields:
+
+- `success`
+- `error_code`
+- `status_message`
+
+## Current Limitations
+
+- this is a software coordination layer, not certified functional safety
+- it does not implement complete cross-device collision prevention
+- it does not implement automatic safe parking
 
 ## Related Docs
 
-- onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- package guide: [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
-- system overview: [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)
-- error handling guide: [`ERROR_HANDLING.md`](ERROR_HANDLING.md)
-- quick reference: [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md)
+- [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)
+- [`../docs/INTERFACES.md`](../docs/INTERFACES.md)
+- [`../docs/SAFETY.md`](../docs/SAFETY.md)
+- [`ERROR_HANDLING.md`](ERROR_HANDLING.md)
+- [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md)

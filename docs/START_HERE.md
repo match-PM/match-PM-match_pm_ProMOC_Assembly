@@ -1,89 +1,169 @@
-# START_HERE
+# Quick Start
 
-Primary onboarding page for the CS runtime branch.
+This page is the fastest accurate path from a fresh checkout to a running mock
+system.
 
-## What This Branch Is
+## 1. Understand The Layout
 
-This branch is a specialized ROS2 runtime for the CS setup:
+Expected workspace layout:
 
-- camera with Four-Step autofocus and exposure control
-- two Thorlabs linear axes
-- planar motor mover control
-- shared bringup wiring for the runtime stack
-- room for additional runtime nodes without changing the overall structure
+```text
+<ros-workspace>/
+  src/
+    match-PM-match_pm_ProMOC_Assembly/
+```
 
-This branch is **not** the MTF measurement branch. If you are looking for
-optical sharpness measurement, ROI-based edge selection, or MTF export flows,
-that belongs elsewhere.
-## Build Once
+Repository root:
+
+```text
+<ros-workspace>/src/match-PM-match_pm_ProMOC_Assembly
+```
+
+ROS workspace root:
+
+```text
+<ros-workspace>
+```
+
+The full project check needs the real ROS workspace root, not just the Git
+repository root.
+
+## 2. Build The Workspace
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd <ros-workspace>
+colcon build --symlink-install
+source install/setup.bash
+```
+
+## 3. Run Project Checks
 
 From the repository root:
 
 ```bash
-make build
-source install/setup.bash
+python3 tools/check_project.py --quick
 ```
-
-If you installed the workspace from a parent ROS workspace, source the parent
-workspace instead:
-```bash
-source ../install/setup.bash
-```
-
-## Start The System
-
-Official hardware runtime:
 
 ```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
+python3 tools/check_project.py \
+  --full \
+  --workspace-root <ros-workspace>
 ```
 
-Secondary simulation path:
+Quick mode is source and repository validation only. Full mode also:
+
+- cleans `build/`, `install/`, and `log/` in the validated workspace
+- rebuilds the workspace
+- runs `colcon test`
+- runs `colcon test-result --verbose`
+- starts full and partial mock-system smoke checks
+- verifies that those mock processes terminate
+
+Full mode uses mock ROS processes. It does not command verified real hardware
+motion during the smoke checks.
+
+## 4. Start The Full Mock System
 
 ```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=sim
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-Convenience wrappers still exist:
+Available launch arguments:
+
+- `driver_mode:=hardware|mock`
+- `camera:=true|false`
+- `x_axis:=true|false`
+- `z_axis:=true|false`
+- `planar_motor:=true|false`
+- `system_controller:=true|false`
+
+The built launch interface also exposes `camera_type` through the included
+camera launch when the camera component is enabled.
+
+## 5. Start Partial Systems
+
+Camera-only stack:
+
 ```bash
-make doctor-hw
-make hw
-make sim
+ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
 ```
 
-Canonical launch argument:
-
-- `runtime_mode:=hardware|sim`
-
-## First Things To Try
-
-Camera exposure:
+Only X axis plus system controller:
 
 ```bash
-ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure \
-"{exposure_time: 12000.0}"
+ros2 launch promoc_bringup system.launch.py \
+  driver_mode:=mock \
+  camera:=false \
+  z_axis:=false \
+  planar_motor:=false
 ```
 
-## Choose Your Goal
+Only planar motor plus system controller:
 
-| If you want to... | Open this first |
-|---|---|
-| change launch behavior or startup composition | [`../promoc_bringup/README.md`](../promoc_bringup/README.md) |
-| change camera autofocus, exposure, or node wiring | [`../camera_nodes/README.md`](../camera_nodes/README.md) || change linear-axis motion behavior or axis services | [`../linear_axis_nodes/README.md`](../linear_axis_nodes/README.md) |
-| change planar-motor mover behavior or motion services | [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md) |
-| add or change ROS messages or services | [`../promoc_assembly_interfaces/README.md`](../promoc_assembly_interfaces/README.md) |
-| add shared validation, conversions, or reusable Python logic | [`../promoc_core/README.md`](../promoc_core/README.md) |
+```bash
+ros2 launch promoc_bringup system.launch.py \
+  driver_mode:=mock \
+  camera:=false \
+  x_axis:=false \
+  z_axis:=false
+```
 
-## Keep This Mental Model
+## 6. Inspect Topics, Services, And Status
 
-- `promoc_bringup` starts the runtime
-- runtime packages expose ROS services and topics
-- `promoc_assembly_interfaces` defines the ROS contracts
-- `promoc_core` contains shared helper code
-- package READMEs explain the area you actually want to change
-## Read Next
+```bash
+ros2 topic list
+ros2 service list
+ros2 topic echo /promoc/system/status --once
+ros2 topic echo /promoc/camera/status --once
+ros2 topic echo /promoc/camera/image_raw --once
+```
 
-- docs map: [`README.md`](README.md)
-- Package guide: [`PACKAGES.md`](PACKAGES.md)
-- System overview: [`SYSTEM_OVERVIEW.md`](SYSTEM_OVERVIEW.md)
-- package README for the area you want to change
+Useful status topics:
+
+- `/promoc/system/status`
+- `/promoc/camera/status`
+- `/promoc/linear_axis/lts300_x_axis/status`
+- `/promoc/linear_axis/lts300_z_axis/status`
+- `/promoc/mover/xbot_info`
+
+## 7. Use `stop_all` And `reset_stop`
+
+```bash
+ros2 service call /promoc/system/stop_all \
+  promoc_assembly_interfaces/srv/Stop \
+  "{}"
+```
+
+```bash
+ros2 service call /promoc/system/reset_stop \
+  promoc_assembly_interfaces/srv/Stop \
+  "{}"
+```
+
+Both services return:
+
+- `success`
+- `error_code`
+- `status_message`
+
+`reset_stop` is guarded. It is rejected if required device status is missing,
+stale, busy, in an error state, or otherwise not considered safe for reset.
+
+## 8. Switch To Hardware Carefully
+
+```bash
+ros2 launch promoc_bringup system.launch.py driver_mode:=hardware
+```
+
+Hardware mode requires real device connectivity, vendor dependencies, and valid
+configuration. It may start even if one device later reports an error. Use it
+only if you know the setup and the risks.
+
+## 9. Read Next
+
+- [`INSTALLATION.md`](INSTALLATION.md)
+- [`INTERFACES.md`](INTERFACES.md)
+- [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`SAFETY.md`](SAFETY.md)
+- [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)

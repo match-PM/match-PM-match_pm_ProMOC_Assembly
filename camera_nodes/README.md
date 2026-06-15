@@ -1,42 +1,72 @@
 # camera_nodes
 
-ROS2 camera runtime package for Four-Step autofocus, exposure control, and the
-camera simulator.
-## Start Here
+## Purpose
 
-Open these files in this order:
+`camera_nodes` owns the current reduced camera runtime:
 
-1. `camera_nodes/camera_nodes/node.py`
-2. `camera_nodes/camera_nodes/services/autofocus.py`3. `camera_nodes/camera_nodes/algorithms/`
-4. `camera_nodes/camera_nodes/drivers/`
+- raw image republishing
+- camera status publication
+- mock and hardware driver selection behind one node
 
-## What To Edit
+The maintained runtime path does not currently wire autofocus or exposure
+services into `camera_node`.
 
-| Change | Start here |
-| --- | --- |
-| Node wiring or service registration | `camera_nodes/camera_nodes/node.py` |
-| Autofocus behavior | `camera_nodes/camera_nodes/services/autofocus.py` |
-| Exposure behavior | `camera_nodes/camera_nodes/services/exposure.py` |
-| Camera algorithms | `camera_nodes/camera_nodes/algorithms/` |
-| Camera hardware or sim backend | `camera_nodes/camera_nodes/drivers/` |
-| Shared camera models | `camera_nodes/camera_nodes/models.py` |
+## Executable
 
-## Canonical Runtime Files
+- `ros2 run camera_nodes camera_node`
 
-- `camera_nodes/camera_nodes/node.py`
-- `camera_nodes/camera_nodes/config.py`
-- `camera_nodes/camera_nodes/models.py`
-- `camera_nodes/camera_nodes/services/`
-- `camera_nodes/camera_nodes/drivers/`
-- `camera_nodes/camera_nodes/algorithms/`
-- `camera_nodes/camera_nodes/sim_node.py`
+The usual startup path is through:
 
-## Stable Public ROS APIs
+```bash
+ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
+```
 
-- `/promoc/camera/autofocus`
+or the full system bringup.
+
+## Configuration
+
+Main config:
+
+- `config/camera.yaml`
+
+Important keys:
+
+- `driver_mode`
+- `source_image_topic`
+- `image_topic`
+- `status_topic`
+- `publish_rate_hz`
+- `frame_timeout_s`
+- `status_publish_rate_hz`
+- `mock.width`
+- `mock.height`
+- `mock.encoding`
+
+Hardware camera profiles are selected through:
+
+- `promoc_bringup/config/cameras/*.yaml`
+
+## Primary Topics
+
+- `/promoc/camera/image_raw`
+- `/promoc/camera/status`
+
+## Hardware And Mock Behavior
+
+- `driver_mode:=mock`
+  publishes a synthetic image stream and status without vendor drivers
+- `driver_mode:=hardware`
+  expects the hardware driver chain from `camera.launch.py`
+
+## Current Limitations
+
+- the current reduced runtime does not expose autofocus or exposure services
+- mock mode validates wiring, not optical behavior
+- real hardware verification is not yet complete for this handover
 
 ## Related Docs
 
 - [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
-- [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)
+- [`../docs/CONFIGURATION.md`](../docs/CONFIGURATION.md)
+- [`../docs/INTERFACES.md`](../docs/INTERFACES.md)
+- [`../docs/MOCK_MODE.md`](../docs/MOCK_MODE.md)

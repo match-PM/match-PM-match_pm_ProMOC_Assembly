@@ -1,72 +1,75 @@
-# ProMOC Bringup
+# promoc_bringup
 
 ## Purpose
 
-`promoc_bringup` owns launch files, runtime selection, and parameter wiring for
-the CS runtime.
+`promoc_bringup` owns launch composition and configuration wiring for the
+current maintained startup paths.
 
-If you need to explain the package briefly: this package decides which runtime
-nodes start, which config they receive, and which launch path is the official
-one for the branch. It should not contain hardware business logic.
+## Main Launch Files
 
-## Official Launch
+Maintained runtime entry points:
 
 - `launch/system.launch.py`
-
-This is the maintained main entry point for the branch:
-
-```bash
-ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware
-```
-
-Secondary paths that may still be useful for development:
-
 - `launch/camera.launch.py`
-- `launch/optical_measurement_system.launch.py`
+
+Optional helper launch files:
+
 - `launch/promoc_assembly_demo.launch.py`
 - `launch/planar_motor_demo.launch.py`
-- `launch/assembly_camera.launch.py`
 
-They are not equal alternatives to `system.launch.py`.
+`system.launch.py` is the canonical full-system entry point.
 
-Canonical launch argument:
+## `system.launch.py` Arguments
 
-- `runtime_mode:=hardware|sim`
+- `driver_mode:=hardware|mock`
+- `camera:=true|false`
+- `x_axis:=true|false`
+- `z_axis:=true|false`
+- `planar_motor:=true|false`
+- `system_controller:=true|false`
 
-## How To Run
+Because `system.launch.py` includes `camera.launch.py`, the built launch
+interface also exposes `camera_type` when the camera component is enabled.
 
-```bash
-make doctor-hw
-make hw
-make sim
-```
+## Common Commands
 
-For management-style explanations, the important point is that there is one
-official runtime entry and a few clearly secondary helper launches.
-
-## Where To Edit Common Changes
-
-| Goal | Open this first |
-|---|---|
-| Change which nodes start | `promoc_bringup/launch/system.launch.py` |
-| Change a secondary camera-only start | `promoc_bringup/launch/camera.launch.py` |
-| Change a secondary optical-measurement start | `promoc_bringup/launch/optical_measurement_system.launch.py` |
-| Change runtime-mode handling | `promoc_bringup/promoc_bringup/launch_utils.py` |
-| Change camera parameter mapping | `promoc_bringup/promoc_bringup/camera_launch_builder.py` |
-| Change user config loading or defaults | `promoc_bringup/promoc_bringup/launch_utils.py`, `promoc_bringup/config/` |
-
-Keep business logic out of launch files. Launch code should compose nodes and map configuration, not implement runtime behavior.
-
-## Verify Changes
+Full mock system:
 
 ```bash
-make lint
-make test-unit
-make cs-runtime-check
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
+
+Camera-only stack:
+
+```bash
+ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
+```
+
+## Configuration Ownership
+
+This package owns:
+
+- `config/system.yaml`
+- `config/cameras/*.yaml`
+- `config/demo_controller_params.yaml`
+
+Current source state:
+
+- `system.launch.py` loads package-specific YAML directly
+- `config/system.yaml` is a tracked central summary, but the main launch does
+  not currently read it automatically
+
+## Current Limitations
+
+- optional demo launches are not the canonical startup path
+- `planar_motor_demo.launch.py` is not part of the verified handover path and
+  still depends on additional demo-only maintenance
+- hardware mode depends on vendor/device availability
+- real hardware verification is not yet complete for the current refactor
 
 ## Related Docs
-- onboarding: [`../docs/START_HERE.md`](../docs/START_HERE.md)
-- package guide: [`../docs/PACKAGES.md`](../docs/PACKAGES.md)
-- system overview: [`../docs/SYSTEM_OVERVIEW.md`](../docs/SYSTEM_OVERVIEW.md)
-- bringup config docs: [`config/README.md`](config/README.md)
+
+- [`../docs/START_HERE.md`](../docs/START_HERE.md)
+- [`../docs/CONFIGURATION.md`](../docs/CONFIGURATION.md)
+- [`../docs/INTERFACES.md`](../docs/INTERFACES.md)
+- [`config/README.md`](config/README.md)

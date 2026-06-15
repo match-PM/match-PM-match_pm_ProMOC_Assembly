@@ -1,72 +1,96 @@
 # System Overview
 
-This page explains how the repository is organized and which rules should stay stable while you work on it.
+## Purpose
 
-## Main Idea
+This repository is the current ROS 2 control stack for the ProMOC CS setup. It
+focuses on a camera, two linear axes, a planar motor, and a small system
+controller.
 
-The repository is hardware-first.
+The maintained startup path is:
 
-- `promoc_bringup` starts and wires the system
-- runtime behavior lives inside the package that owns the hardware or feature
-- `promoc_assembly_interfaces` contains contracts only
-- `promoc_core` contains reusable helper code only
+```text
+promoc_bringup/launch/system.launch.py
+```
 
-There is no big central orchestrator node by default. The maintained CS runtime
-is built around one main launch path:
+## Main Components
 
-`system.launch.py -> camera + linear axes + planar motor + future runtime nodes`
+- `camera_nodes`
+  republishes raw images and camera status
+- `linear_axis_nodes`
+  runs one `lts300_node` per axis with axis-specific configuration
+- `planar_motor_nodes`
+  exposes planar-motor motion and control services
+- `promoc_core`
+  provides reusable helpers and the system controller
+- `promoc_bringup`
+  owns launch composition and package-to-config wiring
+- `promoc_assembly_interfaces`
+  contains only message and service definitions
+- `promoc_simulation`
+  currently contains RViz/URDF assets, not the mock drivers used by the checked
+  mock bringup
 
-For explanations to management or new maintainers, that launch path is the main
-story of the branch: one bringup entry point, a few runtime packages with clear
-ownership, and ROS services under stable `/promoc/...` namespaces.
+## Runtime Modes
+
+Current launch files use:
+
+- `driver_mode:=mock`
+- `driver_mode:=hardware`
+
+`mock` means software-only device substitutes behind the same public ROS
+interfaces. `hardware` means the node will try to connect to real devices or
+vendor drivers.
 
 ## Package Boundaries
 
-- `camera_nodes`: camera-facing behavior such as Four-Step autofocus and exposure- `linear_axis_nodes`: LTS300 axis runtime behavior
-- `planar_motor_nodes`: mover motion and control runtime behavior
-- `promoc_bringup`: launch composition, runtime mode, user config wiring
-- `promoc_assembly_interfaces`: ROS messages and services only
-- `promoc_core`: shared helpers with no runtime ownership of hardware
+Keep these boundaries intact:
 
-The branch is shaped this way on purpose:
+- hardware-facing runtime logic stays in the package that owns the device
+- launch files compose nodes and parameters but do not implement device logic
+- `promoc_core` holds shared helpers and system-level coordination only
+- `promoc_assembly_interfaces` stays contract-only
+- future process logic belongs in dedicated higher-level nodes, not in device
+  drivers
 
-- bringup explains how the system starts
-- runtime packages explain how a hardware area behaves
-- interfaces explain what can be called from ROS
-- core explains reusable logic that should not own hardware
+## System Controller
 
-That separation keeps the branch small enough to explain quickly and reduces the
-chance that new behavior gets hidden in the wrong layer.
-## Working Rules
+`promoc_system_controller` lives in `promoc_core` and:
 
-- keep business logic out of launch files
-- do not turn `promoc_core` into a catch-all runtime package
-- keep `promoc_assembly_interfaces` contract-only
-- prefer changing canonical files instead of adding wrappers
-- keep service and topic names under the documented `/promoc/...` namespaces
+- subscribes to camera, X-axis, Z-axis, and planar-motor status
+- publishes `/promoc/system/status`
+- exposes `/promoc/system/stop_all`
+- exposes `/promoc/system/reset_stop`
+- latches a stop condition until a guarded reset succeeds
 
-## Common Mistakes
+## Configuration Ownership
 
-- putting feature logic directly into `node.py`
-- mixing SDK code into service callback files
-- adding new compatibility wrappers instead of fixing the canonical path
-- changing public service names casually
-- hiding behavior in extra abstraction layers that make onboarding harder
+Main package-owned configuration files:
 
-## Build And Run Mental Model
+- `camera_nodes/config/camera.yaml`
+- `linear_axis_nodes/config/x_axis.yaml`
+- `linear_axis_nodes/config/z_axis.yaml`
+- `planar_motor_nodes/config/planar_motor.yaml`
+- `promoc_core/config/system_controller.yaml`
+- `promoc_bringup/config/system.yaml`
 
-The usual flow is:
+The current `system.launch.py` loads the package-specific config files directly.
+`promoc_bringup/config/system.yaml` is tracked as a central composition summary,
+but the current main launch does not read it automatically.
 
-1. build the workspace
-2. source `install/setup.bash`
-3. start the system with `ros2 launch promoc_bringup system.launch.py runtime_mode:=hardware`
-4. interact through ROS services under `/promoc/...`
+## What This Repository Does Not Yet Claim
 
-In other words:
+It does not currently claim:
 
-`system.launch.py -> bringup wiring -> runtime nodes -> ROS services -> hardware`
+- hardware-certified emergency-stop behavior
+- complete collision prevention across devices
+- workspace-zone approval
+- automatic safe parking
+- full real-hardware verification for the current refactor
+- verified ROS 2 Humble compatibility
+
 ## Read Next
 
-- onboarding: [`START_HERE.md`](START_HERE.md)
-- package guide: [`PACKAGES.md`](PACKAGES.md)
-- package README for the concrete area you want to change
+- [`PACKAGES.md`](PACKAGES.md)
+- [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`INTERFACES.md`](INTERFACES.md)
+- [`SAFETY.md`](SAFETY.md)
