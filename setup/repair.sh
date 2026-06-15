@@ -366,7 +366,7 @@ install_dependencies() {
     
     log_info "Installing dependencies (this may take a few minutes)..."
     
-    # Core dependencies with version pins for Python 3.12 compatibility
+    # Core dependencies with pins used on the Humble target and secondary Python 3.12 environments
     local packages=(
         # Core scientific
         "numpy>=1.26.0"
@@ -387,7 +387,7 @@ install_dependencies() {
         # Thorlabs LTS300 driver
         "pylablib>=1.4.0"
         
-        # CRITICAL: Version pins for Python 3.12 compatibility
+        # CRITICAL: Version pins for pylablib compatibility across supported environments
         # numba 0.59.1 and llvmlite 0.42.0 are required for pylablib
         "numba==0.59.1"
         "llvmlite==0.42.0"

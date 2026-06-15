@@ -19,11 +19,11 @@ manual ROS workspace build documented in:
 
 ## Current Recommendation
 
-Use these scripts as secondary machine-setup helpers only. The verified build
-and test path for the current repository state is:
+Use these scripts as secondary machine-setup helpers only. The recommended
+build and test path for the authoritative target platform is:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
@@ -33,6 +33,6 @@ colcon test-result --verbose
 
 ## Notes
 
-- the checked baseline is ROS 2 Jazzy
-- ROS 2 Humble is a target, not a completed verification result
+- the authoritative target is ROS 2 Humble on Ubuntu 22.04 with Python 3.10
+- completed Humble verification is still pending
 - hardware-specific setup remains operator- and device-dependent

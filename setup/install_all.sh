@@ -7,8 +7,9 @@
 # This script orchestrates the complete installation of all dependencies
 # for the ProMOC Assembly ROS2 system.
 #
-# Supports:
+# Authoritative target platform:
 #   - Ubuntu 22.04 (Jammy) with ROS2 Humble
+# Secondary convenience environment:
 #   - Ubuntu 24.04 (Noble) with ROS2 Jazzy
 #
 # Components installed:
@@ -232,20 +233,20 @@ check_prerequisites() {
     # Check if ROS2 is installed
     if ! command -v ros2 &> /dev/null; then
         # Try to source ROS2 automatically
-        if [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
-            source /opt/ros/jazzy/setup.bash
-            log_info "Sourced ROS2 Jazzy"
-        elif [[ -f "/opt/ros/humble/setup.bash" ]]; then
+        if [[ -f "/opt/ros/humble/setup.bash" ]]; then
             source /opt/ros/humble/setup.bash
-            log_info "Sourced ROS2 Humble"
+            log_info "Sourced ROS2 Humble (authoritative target)"
+        elif [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
+            source /opt/ros/jazzy/setup.bash
+            log_info "Sourced ROS2 Jazzy (secondary local environment)"
         else
             log_error "ROS2 not found! Please install ROS2 first:"
             echo ""
+            echo "  Authoritative target: Ubuntu 22.04 (Humble):"
+            echo "    https://docs.ros.org/en/humble/Installation.html"
+            echo ""
             echo "  For Ubuntu 24.04 (Jazzy):"
             echo "    https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html"
-            echo ""
-            echo "  For Ubuntu 22.04 (Humble):"
-            echo "    https://docs.ros.org/en/humble/Installation.html"
             exit 1
         fi
     fi

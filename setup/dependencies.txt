@@ -34,7 +34,7 @@ pyserial>=3.4                # Serial communication for Thorlabs devices
 pyusb>=1.0.0                 # USB communication support
 numpy>=1.20.0,<2.0.0         # Required by pylablib and scientific computing
 
-# --- pylablib Compatibility (CRITICAL for Ubuntu 24.04 / Python 3.12) ---
+# --- pylablib Compatibility (targeted for Ubuntu 22.04 / Python 3.10, also used in secondary local environments) ---
 # These version pins are REQUIRED to avoid numba/coverage conflicts
 numba==0.59.1               # PINNED: Required for pylablib, newer versions conflict with coverage
 llvmlite==0.42.0            # PINNED: Must match numba 0.59.1 requirements
@@ -79,6 +79,6 @@ pandas>=1.0.0               # Data manipulation and analysis
 #    - Install with: ./install_system_deps.sh
 #    - Includes .NET SDK/Mono, build tools, Python dev headers
 #
-# 4. Ubuntu 24.04 PEP 668:
+# 4. Ubuntu 24.04 PEP 668 (secondary local environment):
 #    - Requires virtual environment or --break-system-packages
 #    - Handled automatically by install_python_deps.sh

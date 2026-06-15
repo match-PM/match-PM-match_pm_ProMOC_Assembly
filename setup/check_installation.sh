@@ -52,14 +52,15 @@ check_installed() {
 echo -e "${BLUE}[ROS2]${NC}"
 
 # Check if ROS2 is installed
-if [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
-    check_installed "ROS2 Jazzy" "true"
-    ROS_DISTRO="jazzy"
-elif [[ -f "/opt/ros/humble/setup.bash" ]]; then
-    check_installed "ROS2 Humble" "true"
+if [[ -f "/opt/ros/humble/setup.bash" ]]; then
+    check_installed "ROS2 Humble (authoritative target)" "true"
     ROS_DISTRO="humble"
+elif [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
+    check_installed "ROS2 Humble (authoritative target)" "false"
+    check_installed "ROS2 Jazzy (secondary local environment)" "true"
+    ROS_DISTRO="jazzy"
 else
-    check_installed "ROS2 (Jazzy/Humble)" "false"
+    check_installed "ROS2 Humble (authoritative target)" "false"
     ROS_DISTRO=""
 fi
 

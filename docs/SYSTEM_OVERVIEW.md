@@ -12,6 +12,16 @@ The maintained startup path is:
 promoc_bringup/launch/system.launch.py
 ```
 
+## Target Platform
+
+This repository is maintained against:
+
+- Ubuntu 22.04
+- ROS 2 Humble
+- Python 3.10
+
+Completed Humble verification is still pending.
+
 ## Main Components
 
 - `camera_nodes`
@@ -86,7 +96,6 @@ It does not currently claim:
 - workspace-zone approval
 - automatic safe parking
 - full real-hardware verification for the current refactor
-- verified ROS 2 Humble compatibility
 
 ## Read Next
 

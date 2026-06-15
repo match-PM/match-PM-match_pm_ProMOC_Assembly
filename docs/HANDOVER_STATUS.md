@@ -16,18 +16,21 @@
 - `stop_all`
 - guarded `reset_stop`
 
-## Not Verified
+## Not Yet Verified On The Authoritative Target Platform
 
 - real IDS camera on the current refactor
 - real Thorlabs axes on the current refactor
 - real planar motor on the current refactor
-- ROS 2 Humble
+- ROS 2 Humble workspace build
+- ROS 2 Humble workspace tests
 - complete mechanical collision safety
 - gripper and pneumatics
 - controlled parking
 
 ## Interpretation
 
-This means the current handover supports source-level work, mock bringup, and
-Jazzy-based development with bounded checks. It does not yet certify or prove
-the real machine behavior.
+The authoritative target platform is Ubuntu 22.04, ROS 2 Humble, and Python
+3.10. The currently recorded verification evidence in this repository is still
+Jazzy-based for workspace build and test execution, plus source-level and mock
+runtime checks. It does not yet certify or prove full Humble compatibility or
+real machine behavior.

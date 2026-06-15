@@ -1,26 +1,22 @@
 # Installation
 
-## Verified Environment
+## Authoritative Target Platform
 
-The currently verified development environment is:
-
-- Ubuntu 24.04
-- ROS 2 Jazzy
-- Linux native
-
-The intended later target is:
+This repository is maintained against:
 
 - Ubuntu 22.04
 - ROS 2 Humble
 - Python 3.10
 
-Humble is a target, not a completed compatibility claim.
+Completed Humble build and test verification is still pending. Some
+contributors may use newer Ubuntu or ROS 2 distributions locally, but those
+are secondary convenience environments, not the authoritative target.
 
 ## Required Prerequisites
 
 Before building this repository, make sure the machine already has:
 
-- ROS 2 Jazzy installed
+- ROS 2 Humble installed
 - `colcon` available
 - `ros2` available
 - Python 3 available
@@ -46,7 +42,7 @@ Use a normal ROS workspace:
 ## Build
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
@@ -71,6 +67,6 @@ python3 tools/check_project.py --full --workspace-root <ros-workspace>
 ## About `setup/`
 
 The [`../setup/`](../setup/) directory still contains helper scripts, but the
-canonical verified path for this milestone is the manual Jazzy workspace build
-shown above. Treat the helper scripts as secondary utilities, not as the
-primary handover path.
+canonical target path for this milestone is the manual Humble workspace build
+shown above. Treat the helper scripts as secondary machine-setup utilities,
+not as the primary handover path.

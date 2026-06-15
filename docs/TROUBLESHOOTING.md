@@ -5,7 +5,7 @@
 Source ROS 2 first:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 ```
 
 ## `colcon` command not found
@@ -27,13 +27,15 @@ source install/setup.bash
 ## Wrong ROS distribution
 
 If you sourced a different ROS installation, clear that shell and source
-Jazzy again:
+Humble again:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 ```
 
-The current checked baseline is Jazzy, not Humble.
+The authoritative target platform is ROS 2 Humble on Ubuntu 22.04. Newer
+distributions may be used for local development, but they are not the primary
+handover target.
 
 ## `check_project --full` cannot find the workspace root
 

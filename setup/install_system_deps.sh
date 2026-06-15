@@ -2,8 +2,8 @@
 
 # ProMOC Assembly System Dependencies Installation Script
 # This script installs all necessary system dependencies for Ubuntu
-# Supports: Ubuntu 22.04 (Jammy), Ubuntu 24.04 (Noble)
-# ROS2 Distros: Humble (22.04), Jazzy (24.04)
+# Authoritative target: Ubuntu 22.04 (Jammy) with ROS2 Humble
+# Secondary convenience environment: Ubuntu 24.04 (Noble) with ROS2 Jazzy
 
 set -e  # Exit on error
 
@@ -16,8 +16,8 @@ if [[ -f /etc/os-release ]]; then
     UBUNTU_VERSION="$VERSION_ID"
     echo "Detected Ubuntu $UBUNTU_VERSION"
 else
-    echo "⚠ Could not detect OS version, assuming Ubuntu 24.04"
-    UBUNTU_VERSION="24.04"
+    echo "⚠ Could not detect OS version, assuming Ubuntu 22.04"
+    UBUNTU_VERSION="22.04"
 fi
 
 # Update package lists

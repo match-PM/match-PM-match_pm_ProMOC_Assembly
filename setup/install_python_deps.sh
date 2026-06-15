@@ -2,7 +2,9 @@
 
 # ProMOC Assembly Python Dependencies Installation Script
 # This script installs Python dependencies for both development and hardware modes
-# Handles Ubuntu 24.04 PEP 668 externally-managed environment
+# Authoritative target platform: Ubuntu 22.04 / ROS 2 Humble / Python 3.10
+# Also handles Ubuntu 24.04 / Python 3.12 PEP 668 restrictions for secondary
+# local environments
 # 
 # CRITICAL: Includes version pins for numba/llvmlite/coverage to fix pylablib compatibility
 
@@ -23,7 +25,7 @@ fi
 PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo "Detected Python $PYTHON_VERSION"
 
-# Check if we're on Ubuntu 24.04 (has PEP 668 restrictions)
+# Secondary local environments on Ubuntu 24.04 / Python 3.12 have PEP 668 restrictions
 if [[ "$UBUNTU_VERSION" == "24.04" ]] || [[ "$PYTHON_VERSION" == "3.12" ]]; then
     echo "⚠ Ubuntu 24.04 / Python 3.12 detected - PEP 668 externally-managed environment"
     PEP668_MODE=true
@@ -34,7 +36,7 @@ if [[ -n "$VIRTUAL_ENV" ]]; then
     echo "✓ Virtual environment detected: $VIRTUAL_ENV"
     USE_VENV=true
 elif [[ "$PEP668_MODE" == "true" ]]; then
-    echo "⚠ Ubuntu 24.04 requires virtual environment or --break-system-packages"
+    echo "⚠ This secondary local environment requires a virtual environment or --break-system-packages"
     echo "Recommendation: Use virtual environment for clean isolation"
     echo ""
     echo "Options:"
@@ -74,7 +76,7 @@ else
     echo "✓ System allows pip installation"
 fi
 
-# Function to install system packages first (for Ubuntu 24.04 option 3)
+# Function to install system packages first for the secondary PEP 668 path
 install_system_packages() {
     echo "Trying system packages first..."
     local packages_installed=false

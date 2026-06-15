@@ -21,15 +21,15 @@ echo ""
 # Detect ROS2 distribution
 if [[ -z "$ROS_DISTRO" ]]; then
     # Try to source ROS2
-    if [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
-        source /opt/ros/jazzy/setup.bash
-        echo "✓ ROS2 Jazzy detected and sourced"
-    elif [[ -f "/opt/ros/humble/setup.bash" ]]; then
+    if [[ -f "/opt/ros/humble/setup.bash" ]]; then
         source /opt/ros/humble/setup.bash
-        echo "✓ ROS2 Humble detected and sourced"
+        echo "✓ ROS2 Humble detected and sourced (authoritative target)"
+    elif [[ -f "/opt/ros/jazzy/setup.bash" ]]; then
+        source /opt/ros/jazzy/setup.bash
+        echo "✓ ROS2 Jazzy detected and sourced (secondary local environment)"
     else
         echo "✗ No ROS2 installation found!"
-        echo "Please install ROS2 Jazzy or Humble first."
+        echo "Please install ROS2 Humble first."
         exit 1
     fi
 else

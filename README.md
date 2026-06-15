@@ -9,6 +9,16 @@ is a small hardware-control stack with:
 - one system controller that monitors device status and exposes `stop_all` and
   guarded `reset_stop`
 
+Authoritative target platform:
+
+- Ubuntu 22.04
+- ROS 2 Humble
+- Python 3.10
+
+Current repository history does not yet claim completed Humble verification.
+See [`docs/HANDOVER_STATUS.md`](docs/HANDOVER_STATUS.md) for the recorded
+verification status.
+
 ## Quick Start
 
 Expected layout:
@@ -22,13 +32,14 @@ Expected layout:
 Build from the ROS workspace root:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-Repo-level build (from this repository root):
+Convenience build from this repository root
+(delegates the actual `colcon build` to the workspace root):
 
 ```bash
 make build

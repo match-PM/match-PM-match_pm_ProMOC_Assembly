@@ -31,11 +31,14 @@ repository root.
 ## 2. Build The Workspace
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+This is the authoritative target workflow for Ubuntu 22.04, ROS 2 Humble, and
+Python 3.10. Completed Humble verification is still pending.
 
 ## 3. Run Project Checks
 
