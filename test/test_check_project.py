@@ -72,6 +72,15 @@ def init_workspace_repo(tmp_path: Path) -> tuple[Path, Path]:
     return workspace_root, repository_root
 
 
+def full_mode_layout(module, repository_root: Path, workspace_root: Path, artifact_root=None):
+    override = None if artifact_root is None else str(artifact_root)
+    return module.resolve_full_mode_layout(
+        repository_root,
+        workspace_root,
+        override,
+    )
+
+
 def stage_all(repository_root: Path) -> None:
     subprocess.run(
         ["git", "add", "."],
@@ -151,6 +160,7 @@ def test_help_output():
     assert "--quick" in res.stdout
     assert "--full" in res.stdout
     assert "--workspace-root" in res.stdout
+    assert "--artifact-root" in res.stdout
 
 
 def test_missing_required_arguments_prints_help():
@@ -212,9 +222,27 @@ def test_invalid_workspace_override_fails(tmp_path):
         )
 
 
+def test_resolve_full_mode_layout_with_external_artifact_root(tmp_path):
+    module = load_module()
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    artifact_root = tmp_path / "artifacts"
+
+    layout = full_mode_layout(module, repository_root, workspace_root, artifact_root)
+
+    assert layout.repository_root == repository_root.resolve()
+    assert layout.workspace_root == workspace_root.resolve()
+    assert layout.artifact_root == artifact_root.resolve()
+    assert layout.build_base == artifact_root.resolve() / "build"
+    assert layout.install_base == artifact_root.resolve() / "install"
+    assert layout.log_build_base == artifact_root.resolve() / "log_build"
+    assert layout.log_test_base == artifact_root.resolve() / "log_test"
+    assert layout.log_test_result_base == artifact_root.resolve() / "log_test_result"
+
+
 def test_colcon_commands_use_workspace_root(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     (workspace_root / "install").mkdir()
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     calls: list[tuple[tuple[str, ...], Path]] = []
@@ -226,25 +254,64 @@ def test_colcon_commands_use_workspace_root(monkeypatch, tmp_path):
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
     monkeypatch.setattr(module, "run_command", fake_run_command)
-    monkeypatch.setattr(module, "clean_workspace_outputs", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(module, "verify_workspace_outputs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "clean_full_mode_outputs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "verify_expected_outputs", lambda *_args, **_kwargs: None)
     timeouts = module.TimeoutConfig.from_env()
     ros_env = {"ROS_DISTRO": "humble", "PATH": os.environ["PATH"]}
 
-    assert module.check_colcon_build(workspace_root, ros_env, timeouts) is True
-    assert module.check_colcon_test(workspace_root, ros_env, timeouts) is True
-    assert module.check_colcon_test_result(workspace_root, ros_env, timeouts) is True
+    assert module.check_colcon_build(layout, ros_env, timeouts) is True
+    assert module.check_colcon_test(layout, ros_env, timeouts) is True
+    assert module.check_colcon_test_result(layout, ros_env, timeouts) is True
 
-    assert calls[0] == (("colcon", "build", "--symlink-install"), workspace_root)
+    assert calls[0] == (
+        (
+            "colcon",
+            "--log-base",
+            str(layout.log_build_base),
+            "build",
+            "--base-paths",
+            str(layout.repository_root),
+            "--build-base",
+            str(layout.build_base),
+            "--install-base",
+            str(layout.install_base),
+            "--symlink-install",
+        ),
+        workspace_root,
+    )
     assert calls[1][1] == workspace_root
-    assert calls[2] == (("colcon", "test"), workspace_root)
+    assert calls[2] == (
+        (
+            "colcon",
+            "--log-base",
+            str(layout.log_test_base),
+            "test",
+            "--build-base",
+            str(layout.build_base),
+            "--install-base",
+            str(layout.install_base),
+        ),
+        workspace_root,
+    )
     assert calls[3][1] == workspace_root
-    assert calls[4] == (("colcon", "test-result", "--verbose"), workspace_root)
+    assert calls[4] == (
+        (
+            "colcon",
+            "--log-base",
+            str(layout.log_test_result_base),
+            "test-result",
+            "--test-result-base",
+            str(layout.build_base),
+            "--verbose",
+        ),
+        workspace_root,
+    )
 
 
 def test_smoke_cleanup_runs_after_success(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     killed: list[tuple[int, int]] = []
     fake_process = FakePopen()
@@ -277,7 +344,7 @@ def test_smoke_cleanup_runs_after_success(monkeypatch, tmp_path):
 
     assert module.run_smoke_check(
         module.FULL_MOCK_SPEC,
-        workspace_root,
+        layout,
         {"PATH": os.environ["PATH"]},
         module.TimeoutConfig.from_env(),
     )
@@ -286,7 +353,8 @@ def test_smoke_cleanup_runs_after_success(monkeypatch, tmp_path):
 
 def test_smoke_cleanup_runs_after_failed_smoke(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     killed: list[tuple[int, int]] = []
     fake_process = FakePopen(exit_immediately=True)
@@ -302,7 +370,7 @@ def test_smoke_cleanup_runs_after_failed_smoke(monkeypatch, tmp_path):
     assert (
         module.run_smoke_check(
             module.FULL_MOCK_SPEC,
-            workspace_root,
+            layout,
             {"PATH": os.environ["PATH"]},
             module.TimeoutConfig.from_env(),
         )
@@ -313,7 +381,8 @@ def test_smoke_cleanup_runs_after_failed_smoke(monkeypatch, tmp_path):
 
 def test_smoke_cleanup_runs_after_command_failure(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     killed: list[tuple[int, int]] = []
     fake_process = FakePopen()
@@ -334,7 +403,7 @@ def test_smoke_cleanup_runs_after_command_failure(monkeypatch, tmp_path):
     with pytest.raises(module.CheckFailure):
         module.run_smoke_check(
             module.FULL_MOCK_SPEC,
-            workspace_root,
+            layout,
             {"PATH": os.environ["PATH"]},
             module.TimeoutConfig.from_env(),
         )
@@ -343,7 +412,8 @@ def test_smoke_cleanup_runs_after_command_failure(monkeypatch, tmp_path):
 
 def test_smoke_cleanup_runs_after_timeout(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     killed: list[tuple[int, int]] = []
     fake_process = FakePopen()
@@ -377,7 +447,7 @@ def test_smoke_cleanup_runs_after_timeout(monkeypatch, tmp_path):
     assert (
         module.run_smoke_check(
             module.FULL_MOCK_SPEC,
-            workspace_root,
+            layout,
             {"PATH": os.environ["PATH"]},
             timeouts,
         )
@@ -388,7 +458,8 @@ def test_smoke_cleanup_runs_after_timeout(monkeypatch, tmp_path):
 
 def test_ctrl_c_cleanup_terminates_process_group(monkeypatch, tmp_path):
     module = load_module()
-    workspace_root, _repository_root = init_workspace_repo(tmp_path)
+    workspace_root, repository_root = init_workspace_repo(tmp_path)
+    layout = full_mode_layout(module, repository_root, workspace_root)
     write_file(workspace_root / "install" / "setup.bash", "true\n")
     killed: list[tuple[int, int]] = []
     fake_process = FakePopen()
@@ -409,7 +480,7 @@ def test_ctrl_c_cleanup_terminates_process_group(monkeypatch, tmp_path):
     with pytest.raises(KeyboardInterrupt):
         module.run_smoke_check(
             module.FULL_MOCK_SPEC,
-            workspace_root,
+            layout,
             {"PATH": os.environ["PATH"]},
             module.TimeoutConfig.from_env(),
         )
