@@ -1,28 +1,10 @@
-"""
-ProMOC Exception Hierarchy
-==========================
-
-Exception Hierarchy:
-    ProMocError (Base)
-    ├── ConnectionError     # Connection, Timeout, Device not found
-    ├── MotionError         # Movement, Position, Collision, Homing
-    ├── SafetyError         # Soft/Hard Limits, Emergency Stop
-    ├── HardwareError       # Driver, Sensor, Initialization
-    ├── ConfigurationError  # Parameters, Validation
-    └── ServiceError        # ROS2 Service errors
-
-"""
+"""Shared exception classes for ProMOC nodes."""
 
 from typing import Optional, Dict, Any
 
 
 class ProMocError(Exception):
-    """Base exception for all ProMOC errors.
-
-    Attributes:
-        message: Description of the error
-        details: Optional additional information (dict)
-    """
+    """Base exception carrying a message, details, and error code."""
 
     def __init__(
         self,
@@ -42,34 +24,20 @@ class ProMocError(Exception):
         return f"[{self.__class__.__name__}] {self.message}"
 
 
-# =============================================================================
-# Connection Errors
-# =============================================================================
-
-
 class ConnectionError(ProMocError):
-    """Connection and communication errors.
-
-    Use for: device not found, disconnection, communication timeout.
-    """
+    """Connection and communication errors."""
 
     pass
 
 
 class CommunicationError(ConnectionError):
-    """Low-level communication errors.
-
-    Use for: device not connected, transport failure, protocol errors.
-    """
+    """Low-level communication errors."""
 
     pass
 
 
 class DeviceNotFoundError(ConnectionError):
-    """Device discovery errors.
-
-    Use for: missing device, invalid port, device not enumerated.
-    """
+    """Device discovery errors."""
 
     pass
 
@@ -80,16 +48,8 @@ class CommunicationTimeoutError(ConnectionError):
     pass
 
 
-# =============================================================================
-# Motion Errors
-# =============================================================================
-
-
 class MotionError(ProMocError):
-    """Errors during motion operations.
-
-    Use for: movement timeout, position out of bounds, collision, homing failure.
-    """
+    """Errors during motion operations."""
 
     pass
 
@@ -106,16 +66,14 @@ class HomingRequiredError(MotionError):
     pass
 
 
-# =============================================================================
-# Safety Errors
-# =============================================================================
+class HomingFailedError(MotionError):
+    """Homing failed."""
+
+    pass
 
 
 class SafetyError(ProMocError):
-    """Safety violations.
-
-    Use for: soft/hard limit violations, emergency stop, safety zone violations.
-    """
+    """Safety violations."""
 
     pass
 
@@ -132,16 +90,14 @@ class CollisionDetectedError(SafetyError):
     pass
 
 
-# =============================================================================
-# Hardware Errors
-# =============================================================================
+class SoftLimitViolationError(SafetyError):
+    """Soft limit was reached."""
+
+    pass
 
 
 class HardwareError(ProMocError):
-    """Hardware-related errors.
-
-    Use for: driver unavailable, initialization failure, sensor read error.
-    """
+    """Hardware-related errors."""
 
     pass
 
@@ -152,30 +108,14 @@ class DriverNotAvailableError(HardwareError):
     pass
 
 
-# =============================================================================
-# Configuration Errors
-# =============================================================================
-
-
 class ConfigurationError(ProMocError):
-    """Configuration and validation errors.
-
-    Use for: invalid parameters, missing configuration, validation failure.
-    """
+    """Configuration and validation errors."""
 
     pass
 
 
-# =============================================================================
-# Service Errors
-# =============================================================================
-
-
 class ServiceError(ProMocError):
-    """ROS2 service-related errors.
-
-    Use for: service call failure, invalid request, service timeout.
-    """
+    """ROS2 service-related errors."""
 
     pass
 
@@ -186,18 +126,7 @@ class ServiceCallFailedError(ServiceError):
     pass
 
 
-# =============================================================================
-# Image Processing Errors (Camera-specific)
-# =============================================================================
-
-
 class ImageProcessingError(ProMocError):
     """Errors during image processing."""
 
     pass
-
-
-# Convenience aliases for common specific errors
-HomingFailedError = MotionError
-SoftLimitViolationError = SafetyError
-PositionError = MotionError

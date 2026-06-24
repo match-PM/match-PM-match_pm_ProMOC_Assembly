@@ -8,7 +8,6 @@ from promoc_core import error_codes
 from promoc_core.status import DeviceState
 from promoc_core.system_controller import (
     KNOWN_DEVICE_NAMES,
-    PARAMETER_DEFAULTS,
     SystemStateStore,
     StopCallResult,
     StopEndpoint,
@@ -436,7 +435,21 @@ def test_system_controller_yaml_parameter_names_match_defaults() -> None:
     config_path = REPO_ROOT / "promoc_core" / "config" / "system_controller.yaml"
     content = config_path.read_text(encoding="utf-8")
 
-    for parameter_name in PARAMETER_DEFAULTS:
+    parameter_names = (
+        "required_devices",
+        "camera_status_topic",
+        "x_axis_status_topic",
+        "z_axis_status_topic",
+        "planar_motor_status_topic",
+        "x_axis_stop_service",
+        "z_axis_stop_service",
+        "planar_motor_stop_service",
+        "planar_motor_xbot_id",
+        "status_timeout_sec",
+        "service_call_timeout_sec",
+        "status_publication_rate_hz",
+    )
+    for parameter_name in parameter_names:
         assert f"{parameter_name}:" in content
 
 

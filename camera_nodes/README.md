@@ -58,6 +58,10 @@ Hardware camera profiles are selected through:
 - `driver_mode:=hardware`
   expects the hardware driver chain from `camera.launch.py`
 
+Driver classes are imported directly from their modules:
+`camera_nodes.drivers.mock` and `camera_nodes.drivers.hardware`. The
+`drivers/__init__.py` file is only a package marker.
+
 ## Current Limitations
 
 - the current reduced runtime does not expose autofocus or exposure services

@@ -3,7 +3,10 @@
     driver_mode: "hardware"
     xbot_id: 0
     publish_rate: 10.0 # Hz
-    pmc_ip: '192.168.10.100'
+    pmc_ip: "192.168.10.100"
+    auto_activate: true
+    movement_timeout: 10.0
+    mock_xbot_count: 1
 
     # Movement boundaries
     x_min: 0.055
@@ -16,12 +19,12 @@
     # Tolerances
     xy_tolerance: 0.001
     six_d_tolerance: 0.001
-    # Standard velocity parameters
-    standard_velocities:
-      xy_vel: 1.00
-      z_vel: 0.10
-      rx_vel: 0.10
-      ry_vel: 0.10
-      rz_vel: 0.10
-      xy_max_accel: 5.00
-      z_max_accel: 1.00
+
+    # Default speed profile in SI units.
+    default_xy_vel: 0.05
+    default_xy_max_accel: 0.2
+    default_z_vel: 0.01
+    default_z_max_accel: 0.05
+    default_rx_vel: 0.17453292519943295
+    default_ry_vel: 0.17453292519943295
+    default_rz_vel: 0.2617993877991494

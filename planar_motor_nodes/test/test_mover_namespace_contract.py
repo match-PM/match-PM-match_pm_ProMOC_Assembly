@@ -9,12 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_mover_node_keeps_canonical_service_namespace():
-    registry = (
-        ROOT
-        / "planar_motor_nodes"
-        / "planar_motor_nodes"
-        / "services"
-        / "registry.py"
+    node = (
+        ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
     for service_name in (
@@ -27,7 +23,7 @@ def test_mover_node_keeps_canonical_service_namespace():
         "rotary_motion",
         "set_velocity_acceleration",
     ):
-        assert service_name in registry
+        assert f'"/promoc/mover/{service_name}"' in node
 
 
 def test_mover_node_publishes_only_canonical_xbot_info_topic():
@@ -44,7 +40,8 @@ def test_runtime_uses_single_entry_point_and_multithreaded_executor():
         ROOT / "planar_motor_nodes" / "planar_motor_nodes" / "node.py"
     ).read_text(encoding="utf-8", errors="ignore")
 
-    assert "create_planar_motor_driver" in content
-    assert "ServiceHandlers" in content
+    assert "MockPlanarMotorDriver" in content
+    assert "HardwarePlanarMotorDriver" in content
     assert "MultiThreadedExecutor" in content
-    assert "callback_group=group" in content
+    assert "callback_group=self._motion_group" in content
+    assert "callback_group=self._control_group" in content

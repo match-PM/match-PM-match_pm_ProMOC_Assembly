@@ -74,22 +74,6 @@ SAFE_RESET_STATES = {
     },
 }
 
-PARAMETER_DEFAULTS: dict[str, object] = {
-    "required_devices": list(KNOWN_DEVICE_NAMES),
-    "camera_status_topic": "/promoc/camera/status",
-    "x_axis_status_topic": "/promoc/linear_axis/lts300_x_axis/status",
-    "z_axis_status_topic": "/promoc/linear_axis/lts300_z_axis/status",
-    "planar_motor_status_topic": "/promoc/mover/xbot_info",
-    "x_axis_stop_service": "/promoc/linear_axis/lts300_x_axis/stop",
-    "z_axis_stop_service": "/promoc/linear_axis/lts300_z_axis/stop",
-    "planar_motor_stop_service": "/promoc/mover/stop_motion",
-    "planar_motor_xbot_id": 0,
-    "status_timeout_sec": 2.0,
-    "service_call_timeout_sec": 1.0,
-    "status_publication_rate_hz": 10.0,
-}
-
-
 @dataclass(frozen=True)
 class DeviceRecord:
     """Latest observed state for one monitored device."""
@@ -161,8 +145,30 @@ class SystemControllerConfig:
     @classmethod
     def from_node(cls, node: "SystemControllerNode") -> "SystemControllerConfig":
         """Declare and load all controller parameters."""
-        for name, default in PARAMETER_DEFAULTS.items():
-            node.declare_parameter(name, default)
+        node.declare_parameter("required_devices", list(KNOWN_DEVICE_NAMES))
+        node.declare_parameter("camera_status_topic", "/promoc/camera/status")
+        node.declare_parameter(
+            "x_axis_status_topic",
+            "/promoc/linear_axis/lts300_x_axis/status",
+        )
+        node.declare_parameter(
+            "z_axis_status_topic",
+            "/promoc/linear_axis/lts300_z_axis/status",
+        )
+        node.declare_parameter("planar_motor_status_topic", "/promoc/mover/xbot_info")
+        node.declare_parameter(
+            "x_axis_stop_service",
+            "/promoc/linear_axis/lts300_x_axis/stop",
+        )
+        node.declare_parameter(
+            "z_axis_stop_service",
+            "/promoc/linear_axis/lts300_z_axis/stop",
+        )
+        node.declare_parameter("planar_motor_stop_service", "/promoc/mover/stop_motion")
+        node.declare_parameter("planar_motor_xbot_id", 0)
+        node.declare_parameter("status_timeout_sec", 2.0)
+        node.declare_parameter("service_call_timeout_sec", 1.0)
+        node.declare_parameter("status_publication_rate_hz", 10.0)
 
         required_devices = tuple(
             str(name) for name in node.get_parameter("required_devices").value
@@ -582,17 +588,13 @@ def execute_stop_requests(
                 )
                 continue
 
-            if bool(getattr(response, "success", False)):
+            if response.success:
                 results.append(
                     StopCallResult(
                         device_name=endpoint.device_name,
                         success=True,
-                        error_code=int(
-                            getattr(response, "error_code", error_codes.SUCCESS)
-                        ),
-                        status_message=str(
-                            getattr(response, "status_message", "stop request accepted")
-                        ),
+                        error_code=int(response.error_code),
+                        status_message=str(response.status_message),
                     )
                 )
                 continue
@@ -612,12 +614,8 @@ def execute_stop_requests(
                 StopCallResult(
                     device_name=endpoint.device_name,
                     success=False,
-                    error_code=int(
-                        getattr(response, "error_code", error_codes.STOP_REQUEST_FAILED)
-                    ),
-                    status_message=str(
-                        getattr(response, "status_message", "stop request failed")
-                    ),
+                    error_code=int(response.error_code),
+                    status_message=str(response.status_message),
                 )
             )
 
@@ -639,17 +637,13 @@ def execute_stop_requests(
                 )
                 continue
 
-            if bool(getattr(response, "success", False)) or endpoint.is_safely_stopped():
+            if response.success or endpoint.is_safely_stopped():
                 results.append(
                     StopCallResult(
                         device_name=endpoint.device_name,
                         success=True,
-                        error_code=int(
-                            getattr(response, "error_code", error_codes.SUCCESS)
-                        ),
-                        status_message=str(
-                            getattr(response, "status_message", "stop request accepted")
-                        ),
+                        error_code=int(response.error_code),
+                        status_message=str(response.status_message),
                     )
                 )
                 continue
@@ -658,12 +652,8 @@ def execute_stop_requests(
                 StopCallResult(
                     device_name=device_name,
                     success=False,
-                    error_code=int(
-                        getattr(response, "error_code", error_codes.STOP_REQUEST_FAILED)
-                    ),
-                    status_message=str(
-                        getattr(response, "status_message", "stop request failed")
-                    ),
+                    error_code=int(response.error_code),
+                    status_message=str(response.status_message),
                 )
             )
             continue

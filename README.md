@@ -15,9 +15,9 @@ Authoritative target platform:
 - ROS 2 Humble
 - Python 3.10
 
-Current repository history does not yet claim completed Humble verification.
-See [`docs/HANDOVER_STATUS.md`](docs/HANDOVER_STATUS.md) for the recorded
-verification status.
+The recorded handover baseline includes Humble and Jazzy build/test checks plus
+mock-runtime checks. See [`docs/HANDOVER_STATUS.md`](docs/HANDOVER_STATUS.md)
+for the exact verification status.
 
 ## Quick Start
 
@@ -38,8 +38,13 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-Convenience build from this repository root
-(delegates the actual `colcon build` to the workspace root):
+Keep this repository as a clean ROS 2 source checkout under `src/`. Local
+virtual environments, IDE folders, agent scratch folders, and ROS build outputs
+do not belong in this repository directory. Normal ROS outputs live at the
+workspace root as `build/`, `install/`, and `log/`.
+
+Convenience build from this repository root delegates the actual `colcon build`
+to the workspace root:
 
 ```bash
 make build

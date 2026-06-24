@@ -6,12 +6,45 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 import sys
+import types
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for rel in ("planar_motor_nodes", "promoc_core"):
     package_root = REPO_ROOT / rel
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
+
+pkg = sys.modules.setdefault(
+    "promoc_assembly_interfaces",
+    types.ModuleType("promoc_assembly_interfaces"),
+)
+msg_mod = sys.modules.setdefault(
+    "promoc_assembly_interfaces.msg",
+    types.ModuleType("promoc_assembly_interfaces.msg"),
+)
+srv_mod = sys.modules.setdefault(
+    "promoc_assembly_interfaces.srv",
+    types.ModuleType("promoc_assembly_interfaces.srv"),
+)
+
+msg_mod.XBotInfo = getattr(msg_mod, "XBotInfo", type("XBotInfo", (), {}))
+for name in (
+    "ActivateXbots",
+    "ArcMotionSi",
+    "GetXBotStatus",
+    "LevitationXbots",
+    "LinearMotionSi",
+    "RotaryMotion",
+    "RotaryMotionSi",
+    "SetVelocityAcceleration",
+    "SixDofMotion",
+    "StopMotion",
+):
+    if not hasattr(srv_mod, name):
+        setattr(srv_mod, name, type(name, (), {}))
+
+pkg.msg = msg_mod
+pkg.srv = srv_mod
 
 
 def _clear_vendor_modules() -> None:

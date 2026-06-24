@@ -170,8 +170,9 @@ def _config(**overrides) -> LinearAxisConfig:
 def _controller(monkeypatch, *, axis_id: str = "x", move_delay_s: float = 0.2, **cfg):
     driver = _FakeDriver(axis_id=axis_id, move_delay_s=move_delay_s)
     monkeypatch.setattr(
-        "linear_axis_nodes.node.create_linear_axis_driver",
-        lambda logger, config: driver,
+        AxisController,
+        "_create_driver",
+        lambda self: driver,
     )
     return AxisController(_DummyLogger(), _config(axis_id=axis_id, **cfg)), driver
 

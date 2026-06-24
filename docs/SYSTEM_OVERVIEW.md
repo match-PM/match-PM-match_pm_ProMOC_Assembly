@@ -20,7 +20,9 @@ This repository is maintained against:
 - ROS 2 Humble
 - Python 3.10
 
-Completed Humble verification is still pending.
+The recorded handover baseline includes Humble and Jazzy build/test checks plus
+mock-runtime checks. Real hardware behavior is still not certified by those
+checks.
 
 ## Main Components
 
@@ -62,6 +64,20 @@ Keep these boundaries intact:
 - future process logic belongs in dedicated higher-level nodes, not in device
   drivers
 
+## Code Style For This Repository
+
+The current runtime intentionally favors a boring, explicit ROS 2 style:
+
+- import drivers and helpers from their real modules, not from package-level
+  barrel exports
+- put ROS publishers, subscriptions, services, and timers visibly in the node
+- use direct `declare_parameter()` calls where that helps a beginner see the
+  ROS parameter API
+- avoid lazy module `__getattr__`, hidden service registries, and magic
+  factories unless they solve a real problem
+- keep generated artifacts, virtual environments, IDE folders, and agent
+  scratch folders outside this source repository
+
 ## System Controller
 
 `promoc_system_controller` lives in `promoc_core` and:
@@ -95,7 +111,7 @@ It does not currently claim:
 - complete collision prevention across devices
 - workspace-zone approval
 - automatic safe parking
-- full real-hardware verification for the current refactor
+- full real-hardware verification for the current simplified runtime
 
 ## Read Next
 

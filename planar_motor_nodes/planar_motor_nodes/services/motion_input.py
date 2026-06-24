@@ -10,9 +10,6 @@ from promoc_core.promoc_exceptions import ConfigurationError
 
 from ..models import XBotPose
 
-InvalidParameterError = ConfigurationError
-ParameterValidationError = ConfigurationError
-
 
 @dataclass(frozen=True)
 class ProcessedMotionInput:
@@ -23,7 +20,11 @@ class ProcessedMotionInput:
     relative_target: XBotPose | None = None
 
 
-def process_six_dof_request(request, current_pose: XBotPose, no_change: float) -> ProcessedMotionInput:
+def process_six_dof_request(
+    request,
+    current_pose: XBotPose,
+    no_change: float,
+) -> ProcessedMotionInput:
     """Normalize the 6-DOF request into an absolute target pose."""
     xbot_id = _validated_xbot_id(request.xbot_id)
     target = XBotPose(
@@ -55,13 +56,13 @@ def process_rotary_request(request, current_pose: XBotPose) -> ProcessedMotionIn
     """Normalize the rotary request."""
     xbot_id = _validated_xbot_id(request.xbot_id)
     if _require_finite(request.max_rz_speed, "max_rz_speed") <= 0.0:
-        raise InvalidParameterError(
+        raise ConfigurationError(
             "max_rz_speed must be positive",
             error_code=error_codes.INVALID_COMMAND,
             details={"parameter": "max_rz_speed", "value": request.max_rz_speed},
         )
     if _require_finite(request.max_accel_rz, "max_accel_rz") <= 0.0:
-        raise InvalidParameterError(
+        raise ConfigurationError(
             "max_accel_rz must be positive",
             error_code=error_codes.INVALID_COMMAND,
             details={"parameter": "max_accel_rz", "value": request.max_accel_rz},
@@ -81,14 +82,30 @@ def process_rotary_request(request, current_pose: XBotPose) -> ProcessedMotionIn
 def process_arc_request(request, current_pose: XBotPose) -> ProcessedMotionInput:
     """Normalize the arc request into absolute and optional relative targets."""
     xbot_id = _validated_xbot_id(request.xbot_id)
-    _validate_arc_mode(request.arc_mode, request.arc_type, request.arc_direction, request.pos_mode)
-    for name in ("radius", "max_speed", "max_accel"):
-        if _require_finite(getattr(request, name), name) <= 0.0:
-            raise InvalidParameterError(
-                f"{name} must be positive",
-                error_code=error_codes.INVALID_COMMAND,
-                details={"parameter": name, "value": getattr(request, name)},
-            )
+    _validate_arc_mode(
+        request.arc_mode,
+        request.arc_type,
+        request.arc_direction,
+        request.pos_mode,
+    )
+    if _require_finite(request.radius, "radius") <= 0.0:
+        raise ConfigurationError(
+            "radius must be positive",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "radius", "value": request.radius},
+        )
+    if _require_finite(request.max_speed, "max_speed") <= 0.0:
+        raise ConfigurationError(
+            "max_speed must be positive",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "max_speed", "value": request.max_speed},
+        )
+    if _require_finite(request.max_accel, "max_accel") <= 0.0:
+        raise ConfigurationError(
+            "max_accel must be positive",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "max_accel", "value": request.max_accel},
+        )
     relative = int(request.pos_mode) == 1
     target_x = _require_finite(request.target_x, "target_x") / 1000.0
     target_y = _require_finite(request.target_y, "target_y") / 1000.0
@@ -114,7 +131,7 @@ def process_arc_request(request, current_pose: XBotPose) -> ProcessedMotionInput
 
 def _validated_xbot_id(xbot_id: int) -> int:
     if int(xbot_id) < 0:
-        raise ParameterValidationError(
+        raise ConfigurationError(
             f"XBot ID must be non-negative, got: {xbot_id}",
             error_code=error_codes.INVALID_COMMAND,
             details={"parameter": "xbot_id", "value": xbot_id},
@@ -125,7 +142,7 @@ def _validated_xbot_id(xbot_id: int) -> int:
 def _require_finite(value: float, name: str) -> float:
     numeric = float(value)
     if not math.isfinite(numeric):
-        raise InvalidParameterError(
+        raise ConfigurationError(
             f"{name} must be finite",
             error_code=error_codes.INVALID_COMMAND,
             details={"parameter": name, "value": value},
@@ -147,17 +164,33 @@ def _optional_deg(value: float, current: float, no_change: float) -> float:
     return math.radians(numeric)
 
 
-def _validate_arc_mode(arc_mode: int, arc_type: int, arc_direction: int, pos_mode: int) -> None:
-    valid_values = {
-        "arc_mode": (arc_mode, {0, 1}),
-        "arc_type": (arc_type, {0, 1}),
-        "arc_direction": (arc_direction, {0, 1}),
-        "pos_mode": (pos_mode, {0, 1}),
-    }
-    for name, (value, allowed) in valid_values.items():
-        if int(value) not in allowed:
-            raise InvalidParameterError(
-                f"Invalid {name}: {value}",
-                error_code=error_codes.INVALID_COMMAND,
-                details={"parameter": name, "value": value},
-            )
+def _validate_arc_mode(
+    arc_mode: int,
+    arc_type: int,
+    arc_direction: int,
+    pos_mode: int,
+) -> None:
+    if int(arc_mode) not in {0, 1}:
+        raise ConfigurationError(
+            f"Invalid arc_mode: {arc_mode}",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "arc_mode", "value": arc_mode},
+        )
+    if int(arc_type) not in {0, 1}:
+        raise ConfigurationError(
+            f"Invalid arc_type: {arc_type}",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "arc_type", "value": arc_type},
+        )
+    if int(arc_direction) not in {0, 1}:
+        raise ConfigurationError(
+            f"Invalid arc_direction: {arc_direction}",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "arc_direction", "value": arc_direction},
+        )
+    if int(pos_mode) not in {0, 1}:
+        raise ConfigurationError(
+            f"Invalid pos_mode: {pos_mode}",
+            error_code=error_codes.INVALID_COMMAND,
+            details={"parameter": "pos_mode", "value": pos_mode},
+        )

@@ -11,8 +11,10 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-from .config import CameraNodeConfig, declare_camera_parameters, load_camera_config
-from .drivers import CameraDriver, HardwareCameraDriver, MockCameraDriver
+from .config import CameraNodeConfig
+from .drivers.base import CameraDriver
+from .drivers.hardware import HardwareCameraDriver
+from .drivers.mock import MockCameraDriver
 
 
 class CameraNode(Node):
@@ -20,8 +22,7 @@ class CameraNode(Node):
 
     def __init__(self, *, parameter_overrides=None):
         super().__init__("camera_node", parameter_overrides=parameter_overrides)
-        declare_camera_parameters(self)
-        self.config = load_camera_config(self)
+        self.config = self._load_config()
 
         self.image_publisher = self.create_publisher(Image, self.config.image_topic, 10)
         self.status_publisher = self.create_publisher(
@@ -46,6 +47,62 @@ class CameraNode(Node):
             f"connecting {self.config.camera_name}",
         )
         self._start_runtime()
+
+    def _load_config(self) -> CameraNodeConfig:
+        self.declare_parameter("driver_mode", "hardware")
+        self.declare_parameter("camera_name", "assembly_camera")
+        self.declare_parameter(
+            "source_image_topic",
+            "/promoc/assembly_camera/stream0/image_raw",
+        )
+        self.declare_parameter("image_topic", "/promoc/camera/image_raw")
+        self.declare_parameter("status_topic", "/promoc/camera/status")
+        self.declare_parameter("frame_id", "assembly_camera_frame")
+        self.declare_parameter("publish_rate_hz", 15.0)
+        self.declare_parameter("frame_timeout_s", 1.0)
+        self.declare_parameter("status_publish_rate_hz", 1.0)
+        self.declare_parameter("mock.width", 640)
+        self.declare_parameter("mock.height", 480)
+        self.declare_parameter("mock.encoding", "mono8")
+
+        driver_mode = str(self.get_parameter("driver_mode").value).strip().lower()
+        if driver_mode not in {"hardware", "mock", "sim", "simulator"}:
+            self.get_logger().warn(
+                f"Invalid driver_mode '{driver_mode}', falling back to hardware."
+            )
+            driver_mode = "hardware"
+
+        publish_rate_hz = self._positive_float_param("publish_rate_hz", 15.0)
+        frame_timeout_s = self._positive_float_param("frame_timeout_s", 1.0)
+        status_rate_hz = self._positive_float_param("status_publish_rate_hz", 1.0)
+
+        return CameraNodeConfig(
+            use_mock=driver_mode in {"mock", "sim", "simulator"},
+            camera_name=str(self.get_parameter("camera_name").value),
+            source_image_topic=str(self.get_parameter("source_image_topic").value),
+            image_topic=str(self.get_parameter("image_topic").value),
+            status_topic=str(self.get_parameter("status_topic").value),
+            frame_id=str(self.get_parameter("frame_id").value),
+            publish_rate_hz=publish_rate_hz,
+            frame_timeout_s=frame_timeout_s,
+            status_publish_rate_hz=status_rate_hz,
+            mock_width=max(1, self._int_param("mock.width", 640)),
+            mock_height=max(1, self._int_param("mock.height", 480)),
+            mock_encoding=str(self.get_parameter("mock.encoding").value),
+        )
+
+    def _positive_float_param(self, name: str, default: float) -> float:
+        try:
+            value = float(self.get_parameter(name).value)
+        except (TypeError, ValueError):
+            return float(default)
+        return value if value > 0.0 else float(default)
+
+    def _int_param(self, name: str, default: int) -> int:
+        try:
+            return int(self.get_parameter(name).value)
+        except (TypeError, ValueError):
+            return int(default)
 
     def _create_driver(self) -> CameraDriver:
         if self.config.use_mock:
@@ -186,14 +243,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        try:
-            node.destroy_node()
-        except KeyboardInterrupt:
-            pass
-        try:
+        node.destroy_node()
+        if rclpy.ok():
             rclpy.shutdown()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

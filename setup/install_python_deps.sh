@@ -103,7 +103,10 @@ install_system_packages() {
         fi
     fi
     
-    return $packages_installed
+    if [[ "$packages_installed" == "true" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 # Function to install via pip with appropriate flags
@@ -163,25 +166,25 @@ pip_install "coverage<7.4" "" || echo "⚠ coverage installation failed"
 pip_install "pylablib>=1.4.0"
 echo "✓ pylablib installed with compatible numba version"
 
-# Run .NET runtime detection and configuration
+# Run .NET runtime detection
 echo "Checking .NET runtime compatibility..."
 if python3 check_dotnet_runtime.py; then
-    echo "✓ .NET runtime configuration successful"
+    echo "✓ .NET runtime check successful"
 else
-    echo "⚠ .NET runtime configuration failed - PMCLib may not work properly"
+    echo "⚠ .NET runtime check failed - PMCLib may not work properly"
 fi
 
 # Check if PMCLib directory exists (optional)
 #
-# PMCLib ist proprietär und wird (optional) direkt in dieses Repo geklont, damit
-# die Nodes die Bibliothek über den lokalen drivers/-Pfad finden können.
-PMCLIB_DIR_REL="../planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
-if [[ -d "$PMCLIB_DIR_REL" ]]; then
-    echo "✓ PMCLib directory found in $PMCLIB_DIR_REL"
+# PMCLib ist proprietär. Installiere sie bevorzugt als Wheel oder lege bewusst
+# einen privaten lokalen Checkout unter drivers/pmclib ab. Der Pfad ist ignoriert.
+PMCLIB_DIR="$SCRIPT_DIR/../planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
+if [[ -d "$PMCLIB_DIR" ]]; then
+    echo "✓ PMCLib directory found in $PMCLIB_DIR"
     echo "  PMCLib kann von den Nodes über den lokalen drivers/-Pfad verwendet werden"
 else
-    echo "⚠ PMCLib directory not found in $PMCLIB_DIR_REL"
-    echo "  Für Planarmotor-Funktionalität: PMCLib Repo klonen/ablegen unter:"
+    echo "⚠ PMCLib directory not found in $PMCLIB_DIR"
+    echo "  Für Planarmotor-Hardware: PMCLib Wheel installieren oder privat ablegen unter:"
     echo "    planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
 fi
 
@@ -192,10 +195,8 @@ echo "Summary:"
 echo "✓ Core Python packages installed"
 echo "✓ pythonnet installed (for .NET interop)"
 echo "✓ pylablib installed (for Thorlabs hardware)"
-if [[ -d "$PMCLIB_DIR_REL" ]]; then
+if [[ -d "$PMCLIB_DIR" ]]; then
     echo "✓ PMCLib directory available (drivers/pmclib)"
-elif [[ -d "local_libs/pmclib" ]]; then
-    echo "✓ PMCLib directory available (legacy local_libs/pmclib)"
 else
     echo "⚠ PMCLib directory not found (optional; expected under planar_motor_nodes/.../drivers/pmclib)"
 fi

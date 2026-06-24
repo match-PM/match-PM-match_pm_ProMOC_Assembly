@@ -32,6 +32,17 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+class _Logger:
+    def info(self, message: str) -> None:
+        del message
+
+    def warn(self, message: str) -> None:
+        del message
+
+    def error(self, message: str) -> None:
+        del message
+
+
 def test_interface_definitions() -> bool:
     """Check that required service definition files exist."""
     _log("INFO", "Checking interface definition files...")
@@ -90,19 +101,19 @@ def test_response_contracts() -> bool:
     return True
 
 
-def test_mock_pmclib_import() -> bool:
-    """Ensure mock PMCLib module can be imported from local source tree."""
-    _log("INFO", "Checking local mock PMCLib import...")
+def test_mock_planar_motor_driver_import() -> bool:
+    """Ensure the planar motor mock driver imports from the local source tree."""
+    _log("INFO", "Checking local mock planar motor driver import...")
 
     try:
         _add_local_source_paths()
-        from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib  # type: ignore
+        from planar_motor_nodes.drivers.mock import MockPlanarMotorDriver
 
-        _ = MockPMCLib()
-        _log("PASS", "MockPMCLib import and instantiation successful.")
+        _ = MockPlanarMotorDriver(_Logger())
+        _log("PASS", "MockPlanarMotorDriver import and instantiation successful.")
         return True
     except Exception as exc:  # pragma: no cover - diagnostic script
-        _log("FAIL", f"MockPMCLib import failed: {exc}")
+        _log("FAIL", f"MockPlanarMotorDriver import failed: {exc}")
         return False
 
 
@@ -134,7 +145,7 @@ def main() -> int:
     checks = [
         test_interface_definitions,
         test_response_contracts,
-        test_mock_pmclib_import,
+        test_mock_planar_motor_driver_import,
         test_camera_checkout,
     ]
 

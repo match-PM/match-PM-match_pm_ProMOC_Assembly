@@ -119,7 +119,11 @@ def patch_quick_success(monkeypatch, module, repository_root: Path) -> None:
     monkeypatch.setattr(
         module, "check_agent_local_not_tracked", lambda *_args, **_kwargs: True
     )
-    monkeypatch.setattr(module, "check_gitlink_not_staged", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        module,
+        "check_private_vendor_not_staged",
+        lambda *_args, **_kwargs: True,
+    )
     monkeypatch.setattr(module, "check_generated_dirs", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(module, "check_python_syntax", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(module, "check_yaml_parsing", lambda *_args, **_kwargs: True)
@@ -633,23 +637,23 @@ def test_exact_self_reference_exclusion_is_allowed(tmp_path):
     assert module.check_stale_references(repository_root, module.TimeoutConfig.from_env()) is True
 
 
-def test_external_gitlink_contents_are_not_traversed(monkeypatch, tmp_path):
+def test_private_vendor_contents_are_not_traversed(monkeypatch, tmp_path):
     module = load_module()
     _, repository_root = init_workspace_repo(tmp_path)
     write_file(
-        repository_root / module.EXTERNAL_GITLINK / "nested.txt",
+        repository_root / module.PRIVATE_VENDOR_PATH / "nested.txt",
         f"{CONFLICT_OPEN_HEAD}\n",
     )
     stage_all(repository_root)
     monkeypatch.setattr(
         module,
         "list_tracked_paths",
-        lambda *_args, **_kwargs: [module.EXTERNAL_GITLINK],
+        lambda *_args, **_kwargs: [module.PRIVATE_VENDOR_PATH],
     )
     assert module.check_merge_markers(repository_root, module.TimeoutConfig.from_env()) is True
 
 
-def test_staged_gitlink_pointer_is_detected(tmp_path):
+def test_staged_private_vendor_pointer_is_detected(tmp_path):
     module = load_module()
     _, repository_root = init_workspace_repo(tmp_path)
     write_file(repository_root / "tracked.txt", "ok\n")
@@ -670,14 +674,14 @@ def test_staged_gitlink_pointer_is_detected(tmp_path):
             "update-index",
             "--add",
             "--cacheinfo",
-            f"160000,{head},{module.EXTERNAL_GITLINK.as_posix()}",
+            f"160000,{head},{module.PRIVATE_VENDOR_PATH.as_posix()}",
         ],
         cwd=repository_root,
         check=True,
         capture_output=True,
         text=True,
     )
-    assert module.check_gitlink_not_staged(repository_root, module.TimeoutConfig.from_env()) is False
+    assert module.check_private_vendor_not_staged(repository_root, module.TimeoutConfig.from_env()) is False
 
 
 def test_dirty_tree_fails_without_allow_dirty(monkeypatch, tmp_path):

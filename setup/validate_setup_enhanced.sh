@@ -8,6 +8,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$PROJECT_ROOT/.." && pwd)"
 
 # Color codes
 RED='\033[0;31m'
@@ -188,7 +189,7 @@ check_python_dependencies() {
 check_workspace_build() {
     log_info "Checking workspace build..."
     
-    cd "$PROJECT_ROOT"
+    cd "$WORKSPACE_ROOT"
     
     check_item
     if [[ -d "install" ]]; then
@@ -234,8 +235,6 @@ check_pmclib() {
     check_item
     if [[ -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" ]]; then
         log_success "PMCLib local checkout found in planar_motor_nodes/.../drivers/pmclib"
-    elif [[ -d "$PROJECT_ROOT/local_libs/pmclib" ]]; then
-        log_warning "Legacy PMCLib location found in local_libs/pmclib (supported, but deprecated)"
     else
         log_warning "No local PMCLib checkout found (optional if pmclib is installed via pip wheel)"
     fi
@@ -246,8 +245,8 @@ test_basic_functionality() {
     log_info "Testing basic functionality..."
     
     # Source workspace if built
-    if [[ -f "$PROJECT_ROOT/install/setup.bash" ]]; then
-        source "$PROJECT_ROOT/install/setup.bash"
+    if [[ -f "$WORKSPACE_ROOT/install/setup.bash" ]]; then
+        source "$WORKSPACE_ROOT/install/setup.bash"
     fi
     
     # Test package imports
@@ -255,7 +254,7 @@ test_basic_functionality() {
     if python3 -c "
 import sys
 sys.path.insert(0, '$PROJECT_ROOT/linear_axis_nodes')
-from linear_axis_nodes.drivers.linear_axis_driver import LinearAxisDriver
+from linear_axis_nodes.drivers.base import LinearAxisDriver
 print('LinearAxisDriver import successful')
 " &> /dev/null; then
         log_success "Linear axis driver imports correctly"
@@ -267,12 +266,12 @@ print('LinearAxisDriver import successful')
     if python3 -c "
 import sys
 sys.path.insert(0, '$PROJECT_ROOT/planar_motor_nodes')
-from planar_motor_nodes.drivers.mock_pmclib import MockPMCLib
-print('MockPMCLib import successful')
+from planar_motor_nodes.drivers.mock import MockPlanarMotorDriver
+print('MockPlanarMotorDriver import successful')
 " &> /dev/null; then
-        log_success "Mock PMCLib imports correctly"
+        log_success "Mock planar motor driver imports correctly"
     else
-        log_warning "Mock PMCLib import failed"
+        log_warning "Mock planar motor driver import failed"
     fi
     
     # Test ROS2 interface generation
@@ -296,7 +295,7 @@ generate_report() {
 **Validation Date:** $(date)
 **System:** $(lsb_release -d | cut -f2 2>/dev/null || echo "Unknown")
 **ROS2 Distro:** ${ROS_DISTRO:-"Not set"}
-**Workspace:** $PROJECT_ROOT
+**Workspace:** $WORKSPACE_ROOT
 
 ## Summary
 
@@ -334,12 +333,12 @@ fi)
 - rclpy: $(python3 -c "import rclpy; print('✅ Available')" 2>/dev/null || echo "❌ Missing")
 
 ### Workspace Build
-- Built: $(test -d "$PROJECT_ROOT/install" && echo "✅ Yes" || echo "❌ No")
-- Setup script: $(test -f "$PROJECT_ROOT/install/setup.bash" && echo "✅ Available" || echo "❌ Missing")
+- Built: $(test -d "$WORKSPACE_ROOT/install" && echo "✅ Yes" || echo "❌ No")
+- Setup script: $(test -f "$WORKSPACE_ROOT/install/setup.bash" && echo "✅ Available" || echo "❌ Missing")
 
 ### PMCLib Status
 - PMCLib: $(python3 -c "import pmclib; print('✅ Available')" 2>/dev/null || echo "⚠️ Using mock")
-- Local checkout: $(test -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" && echo "✅ Found (drivers/pmclib)" || test -d "$PROJECT_ROOT/local_libs/pmclib" && echo "⚠️ Found (legacy local_libs/pmclib)" || echo "❌ Not found")
+- Local checkout: $(test -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" && echo "✅ Found (drivers/pmclib)" || echo "❌ Not found")
 
 ## Recommendations
 
@@ -367,7 +366,7 @@ fi)
 ### Quick Test Commands:
 \`\`\`bash
 # Source workspace
-source $PROJECT_ROOT/install/setup.bash
+source $WORKSPACE_ROOT/install/setup.bash
 
 # Test mock bringup
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock

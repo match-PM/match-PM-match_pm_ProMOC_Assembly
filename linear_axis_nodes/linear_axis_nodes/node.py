@@ -39,7 +39,8 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 
 from .config import LinearAxisConfig
-from .drivers import create_linear_axis_driver
+from .drivers.hardware import ThorlabsLTS300Driver
+from .drivers.sim import MockLinearAxisDriver
 
 
 class AxisOperationError(Exception):
@@ -70,7 +71,7 @@ class AxisController:
     def __init__(self, logger, config: LinearAxisConfig):
         self._logger = logger
         self._config = config
-        self._driver = create_linear_axis_driver(logger, config)
+        self._driver = self._create_driver()
         self._state_lock = threading.Lock()
         self._motion_lock = threading.Lock()
         self._stop_requested = threading.Event()
@@ -82,6 +83,14 @@ class AxisController:
         self._status_message = "Axis not connected"
         self._last_position = config.min_position
         self._connect()
+
+    def _create_driver(self):
+        if self._config.driver_mode == "mock":
+            self._logger.info("Using mock linear-axis driver")
+            return MockLinearAxisDriver(self._logger, self._config)
+
+        self._logger.info("Using Thorlabs LTS300 hardware driver")
+        return ThorlabsLTS300Driver(self._logger, self._config.axis_id)
 
     def snapshot(self) -> AxisSnapshot:
         with self._state_lock:
@@ -499,12 +508,7 @@ class LTS300Node(Node):
         period_s = 1.0 / self.config.state_publish_rate_hz
         self.create_timer(
             period_s,
-            self.publish_state,
-            callback_group=self._state_group,
-        )
-        self.create_timer(
-            period_s,
-            self.publish_position,
+            self.publish_state_and_position,
             callback_group=self._state_group,
         )
 
@@ -580,14 +584,17 @@ class LTS300Node(Node):
             callback_group=self._control_group,
         )
 
+    def publish_state_and_position(self) -> None:
+        self.publish_state()
+        self.publish_position()
+
     def publish_position(self) -> None:
-        snapshot = self.controller.snapshot()
-        msg = Float64()
-        msg.data = snapshot.position_mm
         try:
-            msg.data = self.controller.get_position()
+            position = self.controller.get_position()
         except AxisOperationError:
-            msg.data = snapshot.position_mm
+            position = self.controller.snapshot().position_mm
+        msg = Float64()
+        msg.data = position
         self.position_publisher.publish(msg)
 
     def publish_state(self) -> None:
@@ -610,107 +617,106 @@ class LTS300Node(Node):
 
     def _handle_home(self, request, response):
         _ = request
-        return self._run_simple(response, self.controller.home)
+        try:
+            self.controller.home()
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Operation completed successfully"
+        except AxisOperationError as exc:
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+        return response
 
     def _handle_move_absolute(self, request, response):
-        return self._run_simple(
-            response,
-            lambda: self.controller.move_absolute(request.axis_position),
-        )
+        try:
+            self.controller.move_absolute(request.axis_position)
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Operation completed successfully"
+        except AxisOperationError as exc:
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+        return response
 
     def _handle_move_relative(self, request, response):
-        return self._run_simple(
-            response,
-            lambda: self.controller.move_relative(request.axis_position),
-        )
+        try:
+            self.controller.move_relative(request.axis_position)
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Operation completed successfully"
+        except AxisOperationError as exc:
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+        return response
 
     def _handle_jog_axis(self, request, response):
         try:
             final_position = self.controller.jog(request.step_size)
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Jog complete",
-                final_position=final_position,
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Jog complete"
+            response.final_position = final_position
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-                final_position=self.controller.snapshot().position_mm,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+            response.final_position = self.controller.snapshot().position_mm
+        return response
 
     def _handle_stop(self, request, response):
         _ = request
         try:
             self.controller.stop()
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Stop request accepted",
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Stop request accepted"
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+        return response
 
     def _handle_emergency_stop(self, request, response):
         _ = request
         try:
             was_moving = self.controller.stop()
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Emergency stop request accepted",
-                was_moving=was_moving,
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Emergency stop request accepted"
+            response.was_moving = was_moving
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-                was_moving=False,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+            response.was_moving = False
+        return response
 
     def _handle_get_operation_status(self, request, response):
         _ = request
         snapshot = self.controller.snapshot()
-        return self._set_response(
-            response,
-            success=True,
-            error_code=snapshot.error_code,
-            status_message=snapshot.status_message,
-            operation_status=snapshot.operation_status,
-        )
+        response.success = True
+        response.error_code = snapshot.error_code
+        response.status_message = snapshot.status_message
+        response.operation_status = snapshot.operation_status
+        return response
 
     def _handle_get_position(self, request, response):
         _ = request
         try:
             position = self.controller.get_position()
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Position query succeeded",
-                axis_position=position,
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Position query succeeded"
+            response.axis_position = position
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-                axis_position=self.controller.snapshot().position_mm,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+            response.axis_position = self.controller.snapshot().position_mm
+        return response
 
     def _handle_get_velocity_parameters(self, request, response):
         _ = request
@@ -718,22 +724,17 @@ class LTS300Node(Node):
             min_velocity, acceleration, max_velocity = (
                 self.controller.get_velocity_parameters()
             )
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Velocity query succeeded",
-                min_velocity=min_velocity,
-                acceleration=acceleration,
-                max_velocity=max_velocity,
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Velocity query succeeded"
+            response.min_velocity = min_velocity
+            response.acceleration = acceleration
+            response.max_velocity = max_velocity
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+        return response
 
     def _handle_set_velocity_parameters(self, request, response):
         try:
@@ -744,57 +745,27 @@ class LTS300Node(Node):
                     request.max_velocity,
                 )
             )
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Velocity parameters updated",
-                actual_min_velocity=min_velocity,
-                actual_acceleration=acceleration,
-                actual_max_velocity=max_velocity,
-            )
+            response.success = True
+            response.error_code = error_codes.SUCCESS
+            response.status_message = "Velocity parameters updated"
+            response.actual_min_velocity = min_velocity
+            response.actual_acceleration = acceleration
+            response.actual_max_velocity = max_velocity
         except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-                actual_min_velocity=0.0,
-                actual_acceleration=0.0,
-                actual_max_velocity=0.0,
-            )
+            response.success = False
+            response.error_code = exc.error_code
+            response.status_message = exc.message
+            response.actual_min_velocity = 0.0
+            response.actual_acceleration = 0.0
+            response.actual_max_velocity = 0.0
+        return response
 
     def _handle_shutdown(self, request, response):
         _ = request
         self.controller.shutdown()
-        return self._set_response(
-            response,
-            success=True,
-            error_code=error_codes.SUCCESS,
-            status_message="Axis disconnected",
-        )
-
-    def _run_simple(self, response, operation):
-        try:
-            operation()
-            return self._set_response(
-                response,
-                success=True,
-                error_code=error_codes.SUCCESS,
-                status_message="Operation completed successfully",
-            )
-        except AxisOperationError as exc:
-            return self._set_response(
-                response,
-                success=False,
-                error_code=exc.error_code,
-                status_message=exc.message,
-            )
-
-    def _set_response(self, response, **values):
-        for key, value in values.items():
-            if hasattr(response, key):
-                setattr(response, key, value)
+        response.success = True
+        response.error_code = error_codes.SUCCESS
+        response.status_message = "Axis disconnected"
         return response
 
 

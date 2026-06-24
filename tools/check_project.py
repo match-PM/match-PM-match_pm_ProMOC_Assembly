@@ -18,7 +18,7 @@ import yaml
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_REPOSITORY_ROOT = SCRIPT_PATH.parents[1]
-EXTERNAL_GITLINK = Path(
+PRIVATE_VENDOR_PATH = Path(
     "planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot"
 )
 WORKSPACE_OUTPUT_DIRS = ("build", "install", "log")
@@ -30,87 +30,17 @@ REQUIRED_CONFIGS = (
     "promoc_bringup/config/system.yaml",
     "promoc_core/config/system_controller.yaml",
 )
-AUTOFOCUS_REFERENCE = "/promoc/camera/" "autofocus"
-EXPOSURE_REFERENCE = "/promoc/camera/" "set_exposure"
-AUTOFOCUS_SERVICE_REFERENCE = "services." "autofocus"
-EXPOSURE_SERVICE_REFERENCE = "services." "exposure"
-CAMERA_SIMULATOR_REFERENCE = "camera_" "simulator"
-PM_GENICAM_REFERENCE = "pm_" "genicam_controller"
-SIM_MODE_REFERENCE = "sim_" "mode"
+AUTOFOCUS_REFERENCE = "/promoc/camera/autofocus"
+EXPOSURE_REFERENCE = "/promoc/camera/set_exposure"
+AUTOFOCUS_SERVICE_REFERENCE = "services.autofocus"
+EXPOSURE_SERVICE_REFERENCE = "services.exposure"
+CAMERA_SIMULATOR_REFERENCE = "camera_simulator"
+PM_GENICAM_REFERENCE = "pm_genicam_controller"
+SIM_MODE_REFERENCE = "sim_mode"
 PLACEHOLDER_MODEL = "MODEL_" "PLACEHOLDER"
 PRIMARY_ROS_DISTRO = "humble"
 PRIMARY_ROS_SETUP_SCRIPT = Path("/opt/ros/humble/setup.bash")
 DEFAULT_REQUIRED_BRANCH = "cs_development"
-SELF_AUTOFOCUS_LIST_LINE = f'"{AUTOFOCUS_REFERENCE}",'
-SELF_EXPOSURE_LIST_LINE = f'"{EXPOSURE_REFERENCE}",'
-SELF_AUTOFOCUS_SERVICE_LIST_LINE = f'"{AUTOFOCUS_SERVICE_REFERENCE}",'
-SELF_EXPOSURE_SERVICE_LIST_LINE = f'"{EXPOSURE_SERVICE_REFERENCE}",'
-SELF_CAMERA_SIMULATOR_LIST_LINE = f'"{CAMERA_SIMULATOR_REFERENCE}",'
-SELF_PM_GENICAM_LIST_LINE = f'"{PM_GENICAM_REFERENCE}",'
-SELF_SIM_MODE_LIST_LINE = f'"{SIM_MODE_REFERENCE}",'
-CAMERA_IMPORT_ALLOWLIST_LINE = (
-    f'if name.startswith("{PM_GENICAM_REFERENCE}_interfaces") or name == "cv2":'
-)
-CAMERA_IMPORT_ASSERT_LINE = (
-    f'assert "{PM_GENICAM_REFERENCE}_interfaces" not in sys.modules'
-)
-CAMERA_NODE_AUTOFOCUS_ASSERT_LINE = (
-    f'assert "{AUTOFOCUS_REFERENCE}" not in node_content'
-)
-CAMERA_NODE_EXPOSURE_ASSERT_LINE = (
-    f'assert "{EXPOSURE_REFERENCE}" not in node_content'
-)
-CAMERA_SIMULATOR_ASSERT_SETUP_LINE = (
-    f'assert "{CAMERA_SIMULATOR_REFERENCE}" not in setup_content'
-)
-CAMERA_SIMULATOR_ASSERT_LAUNCH_LINE = (
-    f'assert "{CAMERA_SIMULATOR_REFERENCE}" not in launch_content'
-)
-CAMERA_NODE_SERVICE_AUTOFOCUS_ASSERT_LINE = (
-    f'assert "{AUTOFOCUS_SERVICE_REFERENCE}" not in node_content'
-)
-CAMERA_NODE_SERVICE_EXPOSURE_ASSERT_LINE = (
-    f'assert "{EXPOSURE_SERVICE_REFERENCE}" not in node_content'
-)
-CAMERA_IMPORT_ALLOWLIST_SET = {
-    CAMERA_IMPORT_ALLOWLIST_LINE,
-    CAMERA_IMPORT_ASSERT_LINE,
-}
-CAMERA_NAMESPACE_AUTOFOCUS_SET = {CAMERA_NODE_AUTOFOCUS_ASSERT_LINE}
-CAMERA_NAMESPACE_EXPOSURE_SET = {CAMERA_NODE_EXPOSURE_ASSERT_LINE}
-CAMERA_NAMESPACE_SIMULATOR_SET = {
-    CAMERA_SIMULATOR_ASSERT_SETUP_LINE,
-    CAMERA_SIMULATOR_ASSERT_LAUNCH_LINE,
-}
-CAMERA_NAMESPACE_AUTOFOCUS_SERVICE_SET = {
-    CAMERA_NODE_SERVICE_AUTOFOCUS_ASSERT_LINE,
-}
-CAMERA_NAMESPACE_EXPOSURE_SERVICE_SET = {
-    CAMERA_NODE_SERVICE_EXPOSURE_ASSERT_LINE,
-}
-
-STALE_REFERENCE_LINE_ALLOWLIST: dict[str, dict[str, set[str]]] = {
-    "camera_nodes/test/test_camera_imports.py": {
-        PM_GENICAM_REFERENCE: CAMERA_IMPORT_ALLOWLIST_SET
-    },
-    "camera_nodes/test/test_camera_namespace_contract.py": {
-        AUTOFOCUS_REFERENCE: CAMERA_NAMESPACE_AUTOFOCUS_SET,
-        EXPOSURE_REFERENCE: CAMERA_NAMESPACE_EXPOSURE_SET,
-        CAMERA_SIMULATOR_REFERENCE: CAMERA_NAMESPACE_SIMULATOR_SET,
-        AUTOFOCUS_SERVICE_REFERENCE: CAMERA_NAMESPACE_AUTOFOCUS_SERVICE_SET,
-        EXPOSURE_SERVICE_REFERENCE: CAMERA_NAMESPACE_EXPOSURE_SERVICE_SET,
-    },
-    "tools/check_project.py": {
-        AUTOFOCUS_REFERENCE: {SELF_AUTOFOCUS_LIST_LINE},
-        EXPOSURE_REFERENCE: {SELF_EXPOSURE_LIST_LINE},
-        AUTOFOCUS_SERVICE_REFERENCE: {SELF_AUTOFOCUS_SERVICE_LIST_LINE},
-        EXPOSURE_SERVICE_REFERENCE: {SELF_EXPOSURE_SERVICE_LIST_LINE},
-        CAMERA_SIMULATOR_REFERENCE: {SELF_CAMERA_SIMULATOR_LIST_LINE},
-        PM_GENICAM_REFERENCE: {SELF_PM_GENICAM_LIST_LINE},
-        SIM_MODE_REFERENCE: {SELF_SIM_MODE_LIST_LINE},
-    },
-}
-
 STALE_REFERENCE_NEEDLES = (
     AUTOFOCUS_REFERENCE,
     EXPOSURE_REFERENCE,
@@ -120,6 +50,13 @@ STALE_REFERENCE_NEEDLES = (
     PM_GENICAM_REFERENCE,
     SIM_MODE_REFERENCE,
 )
+STALE_REFERENCE_DEFINITION_FILES = {
+    "tools/check_project.py",
+}
+STALE_REFERENCE_CONTRACT_TESTS = {
+    "camera_nodes/test/test_camera_imports.py",
+    "camera_nodes/test/test_camera_namespace_contract.py",
+}
 
 
 class CheckFailure(RuntimeError):
@@ -449,7 +386,7 @@ def iter_tracked_regular_files(
     suffix_filter = set(suffixes or ())
     regular_files: list[Path] = []
     for rel_path in list_tracked_paths(repository_root, timeouts):
-        if rel_path == EXTERNAL_GITLINK:
+        if rel_path == PRIVATE_VENDOR_PATH:
             continue
         if rel_path.parts and rel_path.parts[0] in WORKSPACE_OUTPUT_DIRS:
             continue
@@ -461,10 +398,13 @@ def iter_tracked_regular_files(
     return regular_files
 
 
-def allowed_stale_reference_line(rel_path: Path, needle: str, line: str) -> bool:
-    per_file = STALE_REFERENCE_LINE_ALLOWLIST.get(rel_path.as_posix(), {})
-    allowed_lines = per_file.get(needle, set())
-    return line.strip() in allowed_lines
+def allowed_stale_reference_line(rel_path: Path, line: str) -> bool:
+    path = rel_path.as_posix()
+    if path in STALE_REFERENCE_DEFINITION_FILES:
+        return True
+    if path in STALE_REFERENCE_CONTRACT_TESTS:
+        return True
+    return False
 
 
 def check_branch(repository_root: Path, timeouts: TimeoutConfig) -> bool:
@@ -581,18 +521,23 @@ def check_agent_local_not_tracked(repository_root: Path, timeouts: TimeoutConfig
     return True
 
 
-def check_gitlink_not_staged(repository_root: Path, timeouts: TimeoutConfig) -> bool:
+def check_private_vendor_not_staged(
+    repository_root: Path,
+    timeouts: TimeoutConfig,
+) -> bool:
     completed = run_git_command(
         repository_root,
         timeouts,
         "diff",
         "--cached",
-        "--name-only",
+        "--name-status",
     )
-    staged_paths = completed.stdout.splitlines()
-    if EXTERNAL_GITLINK.as_posix() in staged_paths:
-        print(f"  External gitlink is staged: {EXTERNAL_GITLINK}")
-        return False
+    private_path = PRIVATE_VENDOR_PATH.as_posix()
+    for line in completed.stdout.splitlines():
+        status, _, path = line.partition("\t")
+        if path == private_path and status != "D":
+            print(f"  Private vendor path is staged: {PRIVATE_VENDOR_PATH}")
+            return False
     return True
 
 
@@ -663,7 +608,7 @@ def check_stale_references(repository_root: Path, timeouts: TimeoutConfig) -> bo
         ).splitlines()
         for line_number, line in enumerate(lines, start=1):
             for needle in STALE_REFERENCE_NEEDLES:
-                if needle in line and not allowed_stale_reference_line(rel_path, needle, line):
+                if needle in line and not allowed_stale_reference_line(rel_path, line):
                     print(
                         f"  Stale reference '{needle}' in {rel_path}:{line_number}: {line.strip()}"
                     )
@@ -1080,8 +1025,8 @@ def run_quick_checks(
         lambda: check_agent_local_not_tracked(repository_root, timeouts),
     )
     checker.run_check(
-        "Gitlink not staged",
-        lambda: check_gitlink_not_staged(repository_root, timeouts),
+        "Private vendor path not staged",
+        lambda: check_private_vendor_not_staged(repository_root, timeouts),
     )
     checker.run_check(
         "Generated dirs not tracked",

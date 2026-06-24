@@ -25,8 +25,8 @@ This page answers two questions:
 - Public runtime surface today: raw image and status only
 - Mock behavior: generates a synthetic image stream with the same public topics
 - Hardware behavior: expects a real camera driver chain via `camera.launch.py`
-- Limitation: old autofocus and exposure services still exist in the interfaces
-  package, but the current reduced `camera_node` does not wire them
+- Limitation: camera autofocus and exposure interfaces are kept as contracts,
+  but the current reduced `camera_node` does not wire those services
 - Start here:
   [`../camera_nodes/README.md`](../camera_nodes/README.md)
 
@@ -50,8 +50,8 @@ This page answers two questions:
   `/promoc/mover/xbot_info` and `/promoc/mover/...`
 - Mock behavior: software-only driver with the same ROS service names
 - Hardware behavior: depends on planar-motor vendor support and connectivity
-- Limitation: the repository contains an external Gitlink dependency that must
-  be available for some hardware-oriented setups
+- Limitation: some hardware-oriented setups need a private Match library
+  checkout under `drivers/match_pm_xBot`; this path is intentionally ignored
 - Start here:
   [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md)
 
@@ -105,6 +105,13 @@ This page answers two questions:
 | planar-motor runtime behavior | `planar_motor_nodes/planar_motor_nodes/node.py` |
 | system stop/reset behavior | `promoc_core/promoc_core/system_controller.py` |
 | message or service contracts | `promoc_assembly_interfaces/msg/` or `promoc_assembly_interfaces/srv/` |
+
+## Current Source Layout Convention
+
+Device packages use direct imports and explicit node wiring. Package
+`__init__.py` files are package markers, not public import hubs. If you are
+looking for behavior, open the concrete module named in the table above rather
+than relying on package-level exports.
 
 ## Read Next
 

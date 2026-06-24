@@ -18,6 +18,10 @@ The difference comes from the loaded parameter file and the launched node name.
 The normal startup path is through `promoc_bringup/system.launch.py`, which
 starts one node with `x_axis.yaml` and one with `z_axis.yaml`.
 
+Driver selection is explicit in `linear_axis_nodes/node.py`: `driver_mode:=mock`
+uses `MockLinearAxisDriver`, otherwise the node uses the Thorlabs hardware
+driver. There is no package-level driver factory.
+
 ## Configuration
 
 - `config/x_axis.yaml`
@@ -75,7 +79,8 @@ See [`../docs/INTERFACES.md`](../docs/INTERFACES.md) for the full namespaces.
 
 - correct homing is still required for safe work
 - local soft limits are configuration-based, not certified machine protection
-- real hardware validation is not yet complete for the current refactor
+- real hardware validation is not yet complete for the current simplified
+  runtime
 
 ## Related Docs
 

@@ -29,7 +29,9 @@ Important keys:
 - `pmc_ip`
 - workspace bounds: `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`
 - tolerances
-- standard velocity parameters
+- default speed profile values:
+  `default_xy_vel`, `default_xy_max_accel`, `default_z_vel`,
+  `default_z_max_accel`, `default_rx_vel`, `default_ry_vel`, `default_rz_vel`
 
 ## Primary Topic
 
@@ -56,9 +58,10 @@ Important keys:
 ## Current Limitations
 
 - mock mode is not a mechanical simulation
-- real hardware verification is not yet complete for the current refactor
-- some hardware-oriented workflows also depend on the external tracked Gitlink
-  under `drivers/match_pm_xBot`
+- real hardware verification is not yet complete for the current simplified
+  runtime
+- some hardware-oriented workflows depend on the private Match library checkout
+  under `drivers/match_pm_xBot`; it is intentionally not tracked in this repo
 
 ## Related Docs
 

@@ -154,6 +154,29 @@ parse_arguments() {
     done
 }
 
+validate_venv_path() {
+    local resolved_venv
+    resolved_venv="$(readlink -m "$VENV_PATH")"
+    local resolved_home
+    resolved_home="$(readlink -m "$HOME")"
+    local resolved_project
+    resolved_project="$(readlink -m "$PROJECT_ROOT")"
+
+    case "$resolved_venv" in
+        "/"|"$resolved_home"|"$resolved_project"|"$SCRIPT_DIR")
+            log_error "Refusing unsafe venv path: $VENV_PATH"
+            exit 1
+            ;;
+    esac
+
+    if [[ "$resolved_venv" == "$resolved_project/"* ]]; then
+        log_error "Refusing venv inside the source repository: $VENV_PATH"
+        exit 1
+    fi
+
+    VENV_PATH="$resolved_venv"
+}
+
 # ================================================================
 # Environment Status Check
 # ================================================================
@@ -538,6 +561,7 @@ quick_reinstall() {
 
 main() {
     parse_arguments "$@"
+    validate_venv_path
     print_header
     
     # Check current status

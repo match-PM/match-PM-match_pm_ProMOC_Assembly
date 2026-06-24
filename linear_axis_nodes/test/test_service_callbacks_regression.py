@@ -42,3 +42,14 @@ def test_shutdown_no_longer_moves_or_homes_axis():
     assert "move_absolute(15.0)" not in content
     assert "driver.home()" not in content
     assert "self.controller.shutdown()" in content
+
+
+def test_service_responses_are_explicit():
+    content = (
+        ROOT / "linear_axis_nodes" / "linear_axis_nodes" / "node.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+
+    assert "_set_response" not in content
+    assert "setattr(response" not in content
+    assert "response.success = True" in content
+    assert "response.status_message" in content

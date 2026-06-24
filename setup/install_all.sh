@@ -42,11 +42,6 @@ INSTALL_CAMERA_ARAVIS2=${INSTALL_CAMERA_ARAVIS2:-true}
 CAMERA_WS="${CAMERA_WS:-$HOME/ros2_ws}"
 SKIP_GROUP_CHECK=${SKIP_GROUP_CHECK:-false}
 
-# Optional: fetch private/third-party repositories into this workspace
-FETCH_OPTIONAL_REPOS=${FETCH_OPTIONAL_REPOS:-true}
-PMCLIB_REPO_URL=${PMCLIB_REPO_URL:-""}
-FRAUNHOFER_CAMERA_REPO_URL=${FRAUNHOFER_CAMERA_REPO_URL:-""}
-
 # ================================================================
 # Logging Functions
 # ================================================================
@@ -104,109 +99,12 @@ print_usage() {
     echo "  --camera-ws PATH  Custom workspace for camera_aravis2"
     echo "  --skip-groups     Skip dialout/plugdev group check"
     echo "  --non-interactive Run without prompts (use defaults)"
-    echo "  --no-fetch-repos  Don't ask for / fetch optional repos (PMCLib, Fraunhofer camera)"
-    echo "  --pmclib-url URL  PMCLib repository URL (cloned into planar_motor_nodes/.../drivers/pmclib)"
-    echo "  --camera-url URL  Fraunhofer camera repository URL (cloned into camera_nodes/.../drivers/camera_aravis2)"
     echo "  -h, --help        Show this help message"
     echo ""
     echo "Environment variables:"
     echo "  INSTALL_CAMERA_ARAVIS2=true/false"
     echo "  CAMERA_WS=/path/to/camera/workspace"
     echo "  SKIP_GROUP_CHECK=true/false"
-    echo "  FETCH_OPTIONAL_REPOS=true/false"
-    echo "  PMCLIB_REPO_URL=https://..."
-    echo "  FRAUNHOFER_CAMERA_REPO_URL=https://..."
-}
-
-# ================================================================
-# Optional Repo Fetch (PMCLib + Fraunhofer camera)
-# ================================================================
-
-_git_clone_or_update() {
-    local repo_url="$1"
-    local target_dir="$2"
-    local default_branch="$3"
-
-    if [[ -z "$repo_url" ]]; then
-        return 0
-    fi
-
-    if ! command -v git &> /dev/null; then
-        log_error "git not found. Please install git (sudo apt-get install git)"
-        return 1
-    fi
-
-    mkdir -p "$(dirname "$target_dir")"
-
-    if [[ -d "$target_dir/.git" ]]; then
-        log_info "Updating existing repo in: $target_dir"
-        (
-            cd "$target_dir"
-            git fetch --all --prune || true
-            git pull --ff-only origin "$default_branch" 2>/dev/null || git pull --ff-only origin main 2>/dev/null || git pull --ff-only origin master 2>/dev/null || true
-        )
-    elif [[ -d "$target_dir" ]] && [[ -n "$(ls -A "$target_dir" 2>/dev/null)" ]]; then
-        log_warning "Target directory exists and is not empty: $target_dir"
-        log_warning "Skipping clone to avoid overwriting local files."
-    else
-        log_info "Cloning $repo_url → $target_dir"
-        git clone "$repo_url" "$target_dir"
-    fi
-}
-
-fetch_optional_repos() {
-    log_step "Optional Step: Fetch external repositories (PMCLib, Fraunhofer camera)"
-
-    if [[ "$FETCH_OPTIONAL_REPOS" != "true" ]]; then
-        log_info "Skipping optional repo fetch (--no-fetch-repos)"
-        return 0
-    fi
-
-    # ---------------------------------------------------------------------
-    # 1) PMCLib
-    # ---------------------------------------------------------------------
-    local pmclib_target="$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
-
-    if [[ -z "$PMCLIB_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
-        echo ""
-        log_info "Optional: PMCLib (Match)"
-        echo "If you have a repo URL, it will be cloned/updated to:"
-        echo "  $pmclib_target"
-        echo "Leave empty to skip this step."
-        read -p "PMCLib Repo-URL: " -r PMCLIB_REPO_URL
-    fi
-
-    if [[ -n "$PMCLIB_REPO_URL" ]]; then
-        _git_clone_or_update "$PMCLIB_REPO_URL" "$pmclib_target" "main" || {
-            log_warning "PMCLib could not be cloned/updated. (Continuing without PMCLib)"
-        }
-        log_success "PMCLib (optional) processed"
-    else
-        log_info "PMCLib repo URL not provided → skipping"
-    fi
-
-    # ---------------------------------------------------------------------
-    # 2) Fraunhofer camera repo (into camera_nodes drivers)
-    # ---------------------------------------------------------------------
-    local camera_target="$PROJECT_ROOT/camera_nodes/camera_nodes/drivers/camera_aravis2"
-
-    if [[ -z "$FRAUNHOFER_CAMERA_REPO_URL" ]] && [[ "$NON_INTERACTIVE" != "true" ]]; then
-        echo ""
-        log_info "Optional: Fraunhofer Camera Repo"
-        echo "If you have a repo URL, it will be cloned/updated to:"
-        echo "  $camera_target"
-        echo "Leave empty to skip this step."
-        read -p "Fraunhofer Camera Repo-URL: " -r FRAUNHOFER_CAMERA_REPO_URL
-    fi
-
-    if [[ -n "$FRAUNHOFER_CAMERA_REPO_URL" ]]; then
-        _git_clone_or_update "$FRAUNHOFER_CAMERA_REPO_URL" "$camera_target" "main" || {
-            log_warning "Fraunhofer camera repo could not be cloned/updated. (Continuing without)"
-        }
-        log_success "Fraunhofer camera repo (optional) processed"
-    else
-        log_info "Fraunhofer camera repo URL not provided → skipping"
-    fi
 }
 
 # ================================================================
@@ -291,30 +189,26 @@ install_colcon() {
     fi
 }
 
+run_setup_script() {
+    local script_path="$1"
+
+    if [[ ! -x "$script_path" ]]; then
+        chmod +x "$script_path"
+    fi
+
+    bash "$script_path"
+}
+
 install_system_deps() {
     log_step "Step 2: Installing System Dependencies"
-    
-    if [[ -x "$SCRIPT_DIR/install_system_deps.sh" ]]; then
-        bash "$SCRIPT_DIR/install_system_deps.sh"
-        log_success "System dependencies installed"
-    else
-        chmod +x "$SCRIPT_DIR/install_system_deps.sh"
-        bash "$SCRIPT_DIR/install_system_deps.sh"
-        log_success "System dependencies installed"
-    fi
+    run_setup_script "$SCRIPT_DIR/install_system_deps.sh"
+    log_success "System dependencies installed"
 }
 
 install_python_deps() {
     log_step "Step 3: Installing Python Dependencies"
-    
-    if [[ -x "$SCRIPT_DIR/install_python_deps.sh" ]]; then
-        bash "$SCRIPT_DIR/install_python_deps.sh"
-        log_success "Python dependencies installed"
-    else
-        chmod +x "$SCRIPT_DIR/install_python_deps.sh"
-        bash "$SCRIPT_DIR/install_python_deps.sh"
-        log_success "Python dependencies installed"
-    fi
+    run_setup_script "$SCRIPT_DIR/install_python_deps.sh"
+    log_success "Python dependencies installed"
 }
 
 install_camera_aravis2() {
@@ -325,14 +219,8 @@ install_camera_aravis2() {
         return 0
     fi
     
-    if [[ -x "$SCRIPT_DIR/install_camera_aravis2.sh" ]]; then
-        CAMERA_WS="$CAMERA_WS" bash "$SCRIPT_DIR/install_camera_aravis2.sh"
-        log_success "camera_aravis2 installed"
-    else
-        chmod +x "$SCRIPT_DIR/install_camera_aravis2.sh"
-        CAMERA_WS="$CAMERA_WS" bash "$SCRIPT_DIR/install_camera_aravis2.sh"
-        log_success "camera_aravis2 installed"
-    fi
+    CAMERA_WS="$CAMERA_WS" run_setup_script "$SCRIPT_DIR/install_camera_aravis2.sh"
+    log_success "camera_aravis2 installed"
 }
 
 install_ros2_deps() {
@@ -355,46 +243,6 @@ install_ros2_deps() {
     }
     
     log_success "ROS2 dependencies installed"
-}
-
-setup_pmclib_directory() {
-    log_info "Setting up PMCLib directory structure..."
-    
-    local local_libs_dir="$PROJECT_ROOT/local_libs"
-    
-    if [[ ! -d "$local_libs_dir" ]]; then
-        mkdir -p "$local_libs_dir"
-        log_info "Created local_libs directory"
-    fi
-    
-    # Create PMCLib directory if it doesn't exist
-    if [[ ! -d "$local_libs_dir/pmclib" ]]; then
-        mkdir -p "$local_libs_dir/pmclib"
-        cat > "$local_libs_dir/pmclib/README.md" << 'EOF'
-# PMCLib Directory
-
-This directory should contain the proprietary PMCLib Python package from Match/IEMCA.
-
-## Installation
-
-1. Obtain PMCLib from Match/IEMCA
-2. Extract the pmclib package here so that the directory structure is:
-   ```
-   local_libs/pmclib/
-   ├── __init__.py
-   ├── system_commands.py
-   └── ... (other modules)
-   ```
-
-3. The ProMOC Assembly system will automatically find PMCLib via Python path.
-
-## Note
-
-For development without hardware, the system uses mock_pmclib.py automatically.
-EOF
-    fi
-    
-    log_success "PMCLib directory structure ready"
 }
 
 build_workspace() {
@@ -592,18 +440,6 @@ main() {
                 NON_INTERACTIVE=true
                 shift
                 ;;
-            --no-fetch-repos)
-                FETCH_OPTIONAL_REPOS=false
-                shift
-                ;;
-            --pmclib-url)
-                PMCLIB_REPO_URL="$2"
-                shift 2
-                ;;
-            --camera-url)
-                FRAUNHOFER_CAMERA_REPO_URL="$2"
-                shift 2
-                ;;
             -h|--help)
                 print_usage
                 exit 0
@@ -642,10 +478,6 @@ main() {
         install_camera_aravis2
     fi
     
-    # Optionally fetch external repos into this workspace
-    fetch_optional_repos
-
-    setup_pmclib_directory
     install_ros2_deps
     build_workspace
     validate_installation

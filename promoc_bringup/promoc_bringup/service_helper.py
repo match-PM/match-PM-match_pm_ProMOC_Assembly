@@ -48,25 +48,16 @@ class ServiceHelper:
                 self.logger.error(f"{error_msg}: No response received")
                 return None
 
-            if self.was_successful(result):
+            if result.success:
                 self.logger.info(success_msg)
             else:
-                status_msg = getattr(result, "status_message", "Unknown error")
-                self.logger.error(f"{error_msg}: {status_msg}")
+                self.logger.error(f"{error_msg}: {result.status_message}")
 
             return result
 
         except Exception as exc:
             self.logger.error(f'Exception calling "{client.srv_name}": {exc}')
             return None
-
-    def was_successful(self, result: Any) -> bool:
-        """Return whether a response object indicates success."""
-        if result is None:
-            return False
-        if hasattr(result, "success"):
-            return bool(result.success)
-        return True
 
     def wait_for_services(
         self,

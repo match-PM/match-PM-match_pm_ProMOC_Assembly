@@ -10,7 +10,7 @@ import time
 from promoc_assembly_interfaces.msg import DeviceStatus, XBotInfo
 from promoc_core import error_codes
 from promoc_core.logging import LogTags, TaggedLogger
-from promoc_core.motion_interface import compute_motion_timeout
+from promoc_core.motion import compute_motion_timeout
 from promoc_core.promoc_exceptions import ConfigurationError, ConnectionError, MotionError
 from promoc_core.status import DeviceState
 

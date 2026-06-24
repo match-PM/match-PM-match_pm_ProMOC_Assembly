@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from promoc_core import error_codes
+from promoc_core.promoc_exceptions import ConfigurationError
 
-from .base import InvalidParameterError, ServiceCallbacksBase, handle_service_errors
+from .base import ServiceCallbacksBase, handle_service_errors
 
 
 class ControlCallbacks(ServiceCallbacksBase):
@@ -58,7 +59,7 @@ class ControlCallbacks(ServiceCallbacksBase):
         }
         for name, value in values.items():
             if value <= 0.0:
-                raise InvalidParameterError(
+                raise ConfigurationError(
                     f"{name} must be positive",
                     error_code=error_codes.INVALID_COMMAND,
                     details={"parameter": name, "value": value},

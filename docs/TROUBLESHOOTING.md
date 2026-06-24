@@ -112,16 +112,17 @@ If you are only trying to validate the stack, switch to:
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-## External `match_pm_xBot` Gitlink is unavailable
+## Private `match_pm_xBot` checkout is unavailable
 
-The planar-motor area depends on the tracked external Gitlink at:
+Some hardware-oriented planar-motor work depends on a private Match library
+checkout at:
 
 ```text
 planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot
 ```
 
-If the Gitlink content is missing, some hardware-oriented planar-motor work will
-not be available. Do not rewrite around that dependency inside this repository.
+This directory is intentionally ignored by git because only authorized users can
+download it. Mock mode and source-level tests should work without it.
 
 ## Mock mode was not actually selected
 
@@ -180,3 +181,18 @@ source install/setup.bash
 
 If you intentionally keep outputs outside the workspace, clean the external
 artifact root you passed to `--artifact-root` instead.
+
+## Agent, IDE, Or Virtualenv Folders Appeared In `src`
+
+The ROS source checkout should not contain local tool folders such as:
+
+- `.agent-local`
+- `.agents`
+- `.codex`
+- `.venv`
+- `.idea`
+- `.vscode`
+
+Remove local folders that are not active tool mountpoints. If `.agents` or
+`.codex` are active mountpoints from an agent session, stop that session first;
+they are not normal repository content.

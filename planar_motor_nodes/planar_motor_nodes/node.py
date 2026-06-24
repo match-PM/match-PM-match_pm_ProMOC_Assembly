@@ -21,9 +21,12 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from .config import MoverNodeConfig
-from .drivers import create_planar_motor_driver
-from .services import ServiceHandlers, MoverUtils
+from .config import DEFAULT_MOVER_NODE_PARAMETERS, MoverNodeConfig
+from .drivers.hardware import HardwarePlanarMotorDriver
+from .drivers.mock import MockPlanarMotorDriver
+from .services.control import ControlCallbacks
+from .services.motion import MotionCallbacks
+from .services.status import MoverUtils
 
 
 class MoverServiceNode(Node):
@@ -33,9 +36,12 @@ class MoverServiceNode(Node):
         super().__init__("mover_node")
         self.log = TaggedLogger(self.get_logger(), LogTags.PMC)
         self.config = self._load_config()
-        self.driver = create_planar_motor_driver(self.log, self.config)
+        self.driver = self._create_driver()
         self.runtime = MoverUtils(self.get_logger(), self.driver, self.config)
-        self.callbacks = ServiceHandlers(
+        self.motion_callbacks = MotionCallbacks(
+            self.get_logger(), self.driver, self.runtime, self.config
+        )
+        self.control_callbacks = ControlCallbacks(
             self.get_logger(), self.driver, self.runtime, self.config
         )
         self._motion_group = ReentrantCallbackGroup()
@@ -57,84 +63,71 @@ class MoverServiceNode(Node):
         self.log.info(f"Planar motor configuration: {asdict(self.config)}")
 
     def _load_config(self) -> MoverNodeConfig:
-        defaults = {
-            "driver_mode": "hardware",
-            "xbot_id": 0,
-            "publish_rate": 10.0,
-            "pmc_ip": "192.168.10.100",
-            "auto_activate": True,
-            "movement_timeout": 10.0,
-            "mock_xbot_count": 1,
-            "xy_tolerance": 0.001,
-            "six_d_tolerance": 0.001,
-            "x_min": 0.055,
-            "x_max": 0.420,
-            "y_min": 0.055,
-            "y_max": 0.180,
-            "z_min": 0.0,
-            "z_max": 0.004,
-            "default_xy_vel": 0.05,
-            "default_xy_max_accel": 0.2,
-            "default_z_vel": 0.01,
-            "default_z_max_accel": 0.05,
-            "default_rx_vel": 0.17453292519943295,
-            "default_ry_vel": 0.17453292519943295,
-            "default_rz_vel": 0.2617993877991494,
-        }
-        for name, value in defaults.items():
+        for name, value in DEFAULT_MOVER_NODE_PARAMETERS.items():
             self.declare_parameter(name, value)
-        return MoverNodeConfig(
-            driver_mode=str(self.get_parameter("driver_mode").value),
-            xbot_id=int(self.get_parameter("xbot_id").value),
-            publish_rate=float(self.get_parameter("publish_rate").value),
-            pmc_ip=str(self.get_parameter("pmc_ip").value),
-            auto_activate=bool(self.get_parameter("auto_activate").value),
-            movement_timeout=float(self.get_parameter("movement_timeout").value),
-            mock_xbot_count=int(self.get_parameter("mock_xbot_count").value),
-            xy_tolerance=float(self.get_parameter("xy_tolerance").value),
-            six_d_tolerance=float(self.get_parameter("six_d_tolerance").value),
-            x_min=float(self.get_parameter("x_min").value),
-            x_max=float(self.get_parameter("x_max").value),
-            y_min=float(self.get_parameter("y_min").value),
-            y_max=float(self.get_parameter("y_max").value),
-            z_min=float(self.get_parameter("z_min").value),
-            z_max=float(self.get_parameter("z_max").value),
-            default_xy_vel=float(self.get_parameter("default_xy_vel").value),
-            default_xy_max_accel=float(
-                self.get_parameter("default_xy_max_accel").value
-            ),
-            default_z_vel=float(self.get_parameter("default_z_vel").value),
-            default_z_max_accel=float(
-                self.get_parameter("default_z_max_accel").value
-            ),
-            default_rx_vel=float(self.get_parameter("default_rx_vel").value),
-            default_ry_vel=float(self.get_parameter("default_ry_vel").value),
-            default_rz_vel=float(self.get_parameter("default_rz_vel").value),
-        )
+        values = {
+            name: self.get_parameter(name).value
+            for name in DEFAULT_MOVER_NODE_PARAMETERS
+        }
+        return MoverNodeConfig.from_mapping(values)
+
+    def _create_driver(self):
+        if self.config.driver_mode in ("mock", "sim", "simulator"):
+            return MockPlanarMotorDriver(
+                self.log,
+                mock_xbot_count=self.config.mock_xbot_count,
+            )
+        return HardwarePlanarMotorDriver(self.log)
 
     def _create_services(self) -> None:
-        service_types = {
-            "linear_motion_si": LinearMotionSi,
-            "six_dof_motion": SixDofMotion,
-            "activate_xbots": ActivateXbots,
-            "levitation_xbots": LevitationXbots,
-            "arc_motion_si": ArcMotionSi,
-            "stop_motion": StopMotion,
-            "rotary_motion": RotaryMotion,
-            "set_velocity_acceleration": SetVelocityAcceleration,
-        }
-        for registration in self.callbacks.iter_service_registry():
-            group = (
-                self._motion_group
-                if self.callbacks.get_group(registration.service_name) == "motion"
-                else self._control_group
-            )
-            self.create_service(
-                service_types[registration.service_name],
-                f"/promoc/mover/{registration.service_name}",
-                self.callbacks.get_callback(registration.service_name),
-                callback_group=group,
-            )
+        self.create_service(
+            LinearMotionSi,
+            "/promoc/mover/linear_motion_si",
+            self.motion_callbacks.callback_linear_motion_si,
+            callback_group=self._motion_group,
+        )
+        self.create_service(
+            SixDofMotion,
+            "/promoc/mover/six_dof_motion",
+            self.motion_callbacks.callback_six_d_motion,
+            callback_group=self._motion_group,
+        )
+        self.create_service(
+            ArcMotionSi,
+            "/promoc/mover/arc_motion_si",
+            self.motion_callbacks.callback_arc_motion_si,
+            callback_group=self._motion_group,
+        )
+        self.create_service(
+            RotaryMotion,
+            "/promoc/mover/rotary_motion",
+            self.motion_callbacks.callback_rotary_motion,
+            callback_group=self._motion_group,
+        )
+        self.create_service(
+            ActivateXbots,
+            "/promoc/mover/activate_xbots",
+            self.control_callbacks.callback_activate_xbot,
+            callback_group=self._control_group,
+        )
+        self.create_service(
+            LevitationXbots,
+            "/promoc/mover/levitation_xbots",
+            self.control_callbacks.callback_levitation_xbot,
+            callback_group=self._control_group,
+        )
+        self.create_service(
+            SetVelocityAcceleration,
+            "/promoc/mover/set_velocity_acceleration",
+            self.control_callbacks.callback_set_velocity_acceleration,
+            callback_group=self._control_group,
+        )
+        self.create_service(
+            StopMotion,
+            "/promoc/mover/stop_motion",
+            self.control_callbacks.callback_stop_motion,
+            callback_group=self._control_group,
+        )
 
     def _publish_xbot_info(self) -> None:
         try:

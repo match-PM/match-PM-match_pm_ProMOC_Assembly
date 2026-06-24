@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from promoc_core import error_codes
+from promoc_core.promoc_exceptions import PositionOutOfBoundsError
 
 from ..models import XBotPose
-from .base import PositionOutOfBoundsError, ServiceCallbacksBase, handle_service_errors
+from .base import ServiceCallbacksBase, handle_service_errors
 from .motion_input import (
     process_arc_request,
     process_linear_request,

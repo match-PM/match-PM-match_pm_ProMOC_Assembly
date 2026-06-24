@@ -202,7 +202,7 @@ class UnifiedDemoController(Node):
                 timeout_sec=3.0,
             )
 
-            if self.helper.was_successful(result):
+            if result is not None and result.success:
                 return True
 
             self.log.info(f"⏳ PMC not ready, retry {attempt + 1}/{max_retries}...")

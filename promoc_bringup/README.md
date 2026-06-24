@@ -19,6 +19,9 @@ Optional helper launch files:
 
 `system.launch.py` is the canonical full-system entry point.
 
+The launch file is intentionally flat: launch arguments and `Node(...)` actions
+are named explicitly instead of being hidden behind helper factories.
+
 ## `system.launch.py` Arguments
 
 - `driver_mode:=hardware|mock`
@@ -65,7 +68,8 @@ Current source state:
 - `planar_motor_demo.launch.py` is not part of the verified handover path and
   still depends on additional demo-only maintenance
 - hardware mode depends on vendor/device availability
-- real hardware verification is not yet complete for the current refactor
+- real hardware verification is not yet complete for the current simplified
+  runtime
 
 ## Related Docs
 

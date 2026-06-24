@@ -31,6 +31,10 @@ Important keys:
 - `service_call_timeout_sec`
 - `status_publication_rate_hz`
 
+The system controller declares these ROS parameters directly in
+`promoc_core/system_controller.py`. There is no separate parameter-defaults
+registry.
+
 ## Primary Topic
 
 - `/promoc/system/status`

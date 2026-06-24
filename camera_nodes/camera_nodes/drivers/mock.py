@@ -22,7 +22,6 @@ class MockCameraDriver(CameraDriver):
         super().__init__(logger)
         self._node = node
         self._config = config
-        self._frame_counter = 0
 
     def connect(self) -> None:
         if self._config.mock_width <= 0 or self._config.mock_height <= 0:
@@ -68,7 +67,6 @@ class MockCameraDriver(CameraDriver):
         channels = _ENCODING_CHANNELS[self._config.mock_encoding]
         step = self._config.mock_width * channels
         data = bytes(step * self._config.mock_height)
-        self._frame_counter += 1
         return CameraFrame(
             width=self._config.mock_width,
             height=self._config.mock_height,

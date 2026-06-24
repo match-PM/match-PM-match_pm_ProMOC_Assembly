@@ -28,6 +28,10 @@ ROS workspace root:
 The full project check needs the real ROS workspace root, not just the Git
 repository root.
 
+The repository directory under `src/` should stay source-only. Do not keep
+local `.venv`, IDE folders, agent scratch folders, or ROS `build/install/log`
+outputs inside it.
+
 ## 2. Build The Workspace
 
 ```bash

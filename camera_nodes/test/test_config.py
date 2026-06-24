@@ -1,4 +1,4 @@
-"""Unit tests for reduced camera config loading."""
+"""Tests for the simplified camera configuration layout."""
 
 from __future__ import annotations
 
@@ -11,65 +11,36 @@ path_str = str(ROOT / "camera_nodes")
 if path_str not in sys.path:
     sys.path.insert(0, path_str)
 
-from camera_nodes.config import declare_camera_parameters, load_camera_config  # noqa: E402
+from camera_nodes.config import CameraNodeConfig  # noqa: E402
 
 
-class _Param:
-    def __init__(self, value):
-        self.value = value
+def test_camera_config_is_plain_dataclass():
+    cfg = CameraNodeConfig(
+        use_mock=True,
+        camera_name="mock_cam",
+        source_image_topic="/source",
+        image_topic="/image",
+        status_topic="/status",
+        frame_id="camera",
+        publish_rate_hz=15.0,
+        frame_timeout_s=1.0,
+        status_publish_rate_hz=1.0,
+        mock_width=320,
+        mock_height=240,
+        mock_encoding="mono8",
+    )
 
-
-class _Logger:
-    def __init__(self):
-        self.warnings = []
-
-    def warn(self, message):
-        self.warnings.append(str(message))
-
-
-class _Node:
-    def __init__(self):
-        self._params = {}
-        self._logger = _Logger()
-
-    def declare_parameter(self, name, default):
-        self._params.setdefault(name, default)
-
-    def has_parameter(self, name):
-        return name in self._params
-
-    def get_parameter(self, name):
-        return _Param(self._params[name])
-
-    def get_logger(self):
-        return self._logger
-
-
-def test_declare_and_load_camera_config():
-    node = _Node()
-    declare_camera_parameters(node)
-
-    node._params["driver_mode"] = "mock"
-    node._params["camera_name"] = "mock_cam"
-    node._params["mock.width"] = 320
-    node._params["mock.height"] = 240
-    node._params["publish_rate_hz"] = 12.5
-
-    cfg = load_camera_config(node)
     assert cfg.use_mock is True
     assert cfg.camera_name == "mock_cam"
     assert cfg.mock_width == 320
     assert cfg.mock_height == 240
-    assert cfg.publish_rate_hz == 12.5
 
 
+def test_camera_parameters_are_declared_in_node():
+    node_content = (ROOT / "camera_nodes" / "camera_nodes" / "node.py").read_text()
+    config_content = (ROOT / "camera_nodes" / "camera_nodes" / "config.py").read_text()
 
-
-def test_invalid_driver_mode_falls_back_to_hardware():
-    node = _Node()
-    declare_camera_parameters(node)
-    node._params["driver_mode"] = "broken"
-
-    cfg = load_camera_config(node)
-    assert cfg.use_mock is False
-    assert node.get_logger().warnings
+    assert 'self.declare_parameter("driver_mode", "hardware")' in node_content
+    assert 'self.declare_parameter("mock.width", 640)' in node_content
+    assert "load_camera_config" not in node_content
+    assert "declare_camera_parameters" not in config_content

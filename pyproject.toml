@@ -6,7 +6,6 @@ exclude = [
   "install",
   "log",
   ".venv",
-  "local_libs",
   # Vendor-heavy and non-runtime areas outside active lint scope
   "camera_nodes/camera_nodes/drivers",
   "linear_axis_nodes/linear_axis_nodes/drivers",

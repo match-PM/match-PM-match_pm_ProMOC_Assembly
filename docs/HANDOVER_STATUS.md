@@ -21,9 +21,9 @@
 
 ## Not Yet Verified On The Authoritative Target Platform
 
-- real IDS camera on the current refactor
-- real Thorlabs axes on the current refactor
-- real planar motor on the current refactor
+- real IDS camera on the current simplified runtime
+- real Thorlabs axes on the current simplified runtime
+- real planar motor on the current simplified runtime
 - complete mechanical collision safety
 - gripper and pneumatics
 - controlled parking

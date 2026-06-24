@@ -3,32 +3,17 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
 import math
 
 from promoc_core import error_codes
 from promoc_core.error_handling import handle_service_errors
 from promoc_core.logging import LogTags, TaggedLogger
-from promoc_core.promoc_exceptions import ConfigurationError, MotionError, SafetyError
+from promoc_core.promoc_exceptions import ConfigurationError
 
 from ..config import MoverNodeConfig
 from ..drivers.base import PlanarMotorDriver
 from ..models import SpeedProfile
 from .status import MoverUtils
-
-
-InvalidParameterError = ConfigurationError
-ParameterValidationError = ConfigurationError
-PositionOutOfBoundsError = SafetyError
-
-
-@dataclass(frozen=True)
-class ServiceRegistration:
-    """Declarative service binding for mover callback wiring."""
-
-    service_name: str
-    callback_name: str
-    group: str
 
 
 class ServiceCallbacksBase:
@@ -51,7 +36,7 @@ class ServiceCallbacksBase:
     @staticmethod
     def _require_finite(value: float, name: str) -> float:
         if not math.isfinite(float(value)):
-            raise InvalidParameterError(
+            raise ConfigurationError(
                 f"{name} must be finite",
                 error_code=error_codes.INVALID_COMMAND,
                 details={"parameter": name, "value": value},

@@ -79,7 +79,9 @@ commands unsafe or unusable.
 - `pmc_ip`
 - workspace bounds: `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`
 - tolerances
-- standard velocity parameters
+- default speed profile values:
+  `default_xy_vel`, `default_xy_max_accel`, `default_z_vel`,
+  `default_z_max_accel`, `default_rx_vel`, `default_ry_vel`, `default_rz_vel`
 
 This package owns its local movement limits and default motion speeds.
 
@@ -98,6 +100,10 @@ This package owns its local movement limits and default motion speeds.
 These values define how the controller decides whether device state is fresh and
 whether `reset_stop` may succeed.
 
+The system-controller node declares these parameters directly in
+`promoc_core/promoc_core/system_controller.py`. There is no separate parameter
+registry or defaults dictionary to keep in sync.
+
 ## `driver_mode`
 
 Current launches use `driver_mode`, not `runtime_mode`, `use_mock`, or
@@ -110,3 +116,18 @@ Current launches use `driver_mode`, not `runtime_mode`, `use_mock`, or
 
 `use_sim_time` is not used to choose driver behavior. Driver selection is an
 application concern, not a ROS time-source concern.
+
+## Clean Workspace Layout
+
+The repository should sit under the ROS workspace `src/` directory:
+
+```text
+<ros-workspace>/
+  src/
+    match-PM-match_pm_ProMOC_Assembly/
+```
+
+Do not keep `.venv`, IDE metadata, agent scratch folders, or `build/`,
+`install/`, `log/` inside the repository directory. ROS build artifacts belong
+at the workspace root or in the explicit `--artifact-root` passed to
+`tools/check_project.py --full`.

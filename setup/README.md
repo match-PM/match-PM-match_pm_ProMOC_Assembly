@@ -34,5 +34,9 @@ colcon test-result --verbose
 ## Notes
 
 - the authoritative target is ROS 2 Humble on Ubuntu 22.04 with Python 3.10
-- completed Humble verification is still pending
+- Humble build/test verification is recorded in the handover baseline
 - hardware-specific setup remains operator- and device-dependent
+- keep this repository as clean ROS 2 source packages; do not create `.venv`,
+  `local_libs`, or external driver checkouts inside this repo
+- install proprietary PMCLib as a wheel or place a deliberate local checkout in
+  `planar_motor_nodes/planar_motor_nodes/drivers/pmclib` outside normal commits
