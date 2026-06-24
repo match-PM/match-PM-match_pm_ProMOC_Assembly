@@ -169,6 +169,18 @@ class SmokeSpec:
     forbidden_nodes: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class FullModeLayout:
+    repository_root: Path
+    workspace_root: Path
+    build_base: Path
+    install_base: Path
+    log_build_base: Path
+    log_test_base: Path
+    log_test_result_base: Path
+    artifact_root: Path | None = None
+
+
 FULL_MOCK_SPEC = SmokeSpec(
     name="Full mock smoke",
     launch_arguments=("driver_mode:=mock",),
@@ -390,15 +402,15 @@ def load_ros_environment(timeouts: TimeoutConfig) -> dict[str, str] | None:
 
 
 def ensure_workspace_environment(
-    workspace_root: Path,
+    layout: FullModeLayout,
     base_env: Mapping[str, str],
     timeouts: TimeoutConfig,
 ) -> dict[str, str]:
-    install_setup = workspace_root / "install" / "setup.bash"
+    install_setup = layout.install_base / "setup.bash"
     if not install_setup.exists():
         raise CheckFailure(f"Missing workspace setup script: {install_setup}")
     return capture_sourced_environment(
-        cwd=workspace_root,
+        cwd=layout.workspace_root,
         source_scripts=(PRIMARY_ROS_SETUP_SCRIPT, install_setup),
         timeout=timeouts.static_command,
         base_env=base_env,
@@ -698,29 +710,91 @@ def clean_workspace_outputs(workspace_root: Path) -> None:
             shutil.rmtree(target)
 
 
-def verify_workspace_outputs(workspace_root: Path) -> None:
-    missing = [name for name in WORKSPACE_OUTPUT_DIRS if not (workspace_root / name).exists()]
+def resolve_full_mode_layout(
+    repository_root: Path,
+    workspace_root: Path,
+    artifact_root_override: str | None,
+) -> FullModeLayout:
+    if artifact_root_override:
+        artifact_root = Path(artifact_root_override).expanduser().resolve()
+        return FullModeLayout(
+            repository_root=repository_root,
+            workspace_root=workspace_root,
+            build_base=artifact_root / "build",
+            install_base=artifact_root / "install",
+            log_build_base=artifact_root / "log_build",
+            log_test_base=artifact_root / "log_test",
+            log_test_result_base=artifact_root / "log_test_result",
+            artifact_root=artifact_root,
+        )
+
+    return FullModeLayout(
+        repository_root=repository_root,
+        workspace_root=workspace_root,
+        build_base=workspace_root / "build",
+        install_base=workspace_root / "install",
+        log_build_base=workspace_root / "log",
+        log_test_base=workspace_root / "log",
+        log_test_result_base=workspace_root / "log",
+    )
+
+
+def clean_full_mode_outputs(layout: FullModeLayout) -> None:
+    targets = {
+        layout.build_base,
+        layout.install_base,
+        layout.log_build_base,
+        layout.log_test_base,
+        layout.log_test_result_base,
+    }
+    for target in targets:
+        if not target.exists():
+            continue
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        else:
+            shutil.rmtree(target)
+
+
+def verify_expected_outputs(*paths: Path) -> None:
+    missing = [str(path) for path in paths if not path.exists()]
     if missing:
         raise CheckFailure(
-            "Expected ROS workspace output directories were not created at the workspace root: "
+            "Expected ROS workspace output directories were not created: "
             + ", ".join(missing)
         )
 
 
 def check_colcon_build(
-    workspace_root: Path,
+    layout: FullModeLayout,
     ros_env: Mapping[str, str],
     timeouts: TimeoutConfig,
 ) -> bool:
     try:
-        clean_workspace_outputs(workspace_root)
+        clean_full_mode_outputs(layout)
         run_command(
-            ["colcon", "build", "--symlink-install"],
-            cwd=workspace_root,
+            [
+                "colcon",
+                "--log-base",
+                str(layout.log_build_base),
+                "build",
+                "--base-paths",
+                str(layout.repository_root),
+                "--build-base",
+                str(layout.build_base),
+                "--install-base",
+                str(layout.install_base),
+                "--symlink-install",
+            ],
+            cwd=layout.workspace_root,
             env=ros_env,
             timeout=timeouts.build,
         )
-        verify_workspace_outputs(workspace_root)
+        verify_expected_outputs(
+            layout.build_base,
+            layout.install_base,
+            layout.log_build_base,
+        )
         return True
     except CheckFailure as exc:
         print(f"  {exc}")
@@ -728,19 +802,32 @@ def check_colcon_build(
 
 
 def check_colcon_test(
-    workspace_root: Path,
+    layout: FullModeLayout,
     ros_env: Mapping[str, str],
     timeouts: TimeoutConfig,
 ) -> bool:
     try:
-        workspace_env = ensure_workspace_environment(workspace_root, ros_env, timeouts)
+        workspace_env = ensure_workspace_environment(layout, ros_env, timeouts)
         run_command(
-            ["colcon", "test"],
-            cwd=workspace_root,
+            [
+                "colcon",
+                "--log-base",
+                str(layout.log_test_base),
+                "test",
+                "--build-base",
+                str(layout.build_base),
+                "--install-base",
+                str(layout.install_base),
+            ],
+            cwd=layout.workspace_root,
             env=workspace_env,
             timeout=timeouts.test,
         )
-        verify_workspace_outputs(workspace_root)
+        verify_expected_outputs(
+            layout.build_base,
+            layout.install_base,
+            layout.log_test_base,
+        )
         return True
     except CheckFailure as exc:
         print(f"  {exc}")
@@ -748,18 +835,27 @@ def check_colcon_test(
 
 
 def check_colcon_test_result(
-    workspace_root: Path,
+    layout: FullModeLayout,
     ros_env: Mapping[str, str],
     timeouts: TimeoutConfig,
 ) -> bool:
     try:
-        workspace_env = ensure_workspace_environment(workspace_root, ros_env, timeouts)
+        workspace_env = ensure_workspace_environment(layout, ros_env, timeouts)
         run_command(
-            ["colcon", "test-result", "--verbose"],
-            cwd=workspace_root,
+            [
+                "colcon",
+                "--log-base",
+                str(layout.log_test_result_base),
+                "test-result",
+                "--test-result-base",
+                str(layout.build_base),
+                "--verbose",
+            ],
+            cwd=layout.workspace_root,
             env=workspace_env,
             timeout=timeouts.test,
         )
+        verify_expected_outputs(layout.log_test_result_base)
         return True
     except CheckFailure as exc:
         print(f"  {exc}")
@@ -834,11 +930,11 @@ def smoke_condition_met(
 
 def run_smoke_check(
     spec: SmokeSpec,
-    workspace_root: Path,
+    layout: FullModeLayout,
     ros_env: Mapping[str, str],
     timeouts: TimeoutConfig,
 ) -> bool:
-    workspace_env = ensure_workspace_environment(workspace_root, ros_env, timeouts)
+    workspace_env = ensure_workspace_environment(layout, ros_env, timeouts)
     launch_args = [
         "ros2",
         "launch",
@@ -848,7 +944,7 @@ def run_smoke_check(
     ]
     process = subprocess.Popen(
         launch_args,
-        cwd=workspace_root,
+        cwd=layout.workspace_root,
         env=workspace_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -872,7 +968,7 @@ def run_smoke_check(
 
             last_nodes = run_ros_listing(
                 workspace_env,
-                workspace_root,
+                layout.workspace_root,
                 timeouts,
                 "ros2",
                 "node",
@@ -880,7 +976,7 @@ def run_smoke_check(
             )
             last_topics = run_ros_listing(
                 workspace_env,
-                workspace_root,
+                layout.workspace_root,
                 timeouts,
                 "ros2",
                 "topic",
@@ -888,7 +984,7 @@ def run_smoke_check(
             )
             last_services = run_ros_listing(
                 workspace_env,
-                workspace_root,
+                layout.workspace_root,
                 timeouts,
                 "ros2",
                 "service",
@@ -922,8 +1018,9 @@ def run_smoke_check(
 def preflight_full_mode(
     repository_root: Path,
     workspace_override: str | None,
+    artifact_root_override: str | None,
     timeouts: TimeoutConfig,
-) -> tuple[Path, dict[str, str]] | None:
+) -> tuple[FullModeLayout, dict[str, str]] | None:
     try:
         workspace_root = resolve_workspace_root(
             repository_root,
@@ -946,9 +1043,16 @@ def preflight_full_mode(
         print("  colcon is unavailable in the resolved ROS environment.")
         return None
 
+    layout = resolve_full_mode_layout(
+        repository_root,
+        workspace_root,
+        artifact_root_override,
+    )
     print(f"  Repository root: {repository_root}")
     print(f"  Resolved ROS workspace root: {workspace_root}")
-    return workspace_root, ros_env
+    if layout.artifact_root is not None:
+        print(f"  Full-mode artifact root: {layout.artifact_root}")
+    return layout, ros_env
 
 
 def run_quick_checks(
@@ -1015,8 +1119,14 @@ def run_full_checks(
     timeouts: TimeoutConfig,
     *,
     workspace_override: str | None,
+    artifact_root_override: str | None,
 ) -> None:
-    preflight = preflight_full_mode(repository_root, workspace_override, timeouts)
+    preflight = preflight_full_mode(
+        repository_root,
+        workspace_override,
+        artifact_root_override,
+        timeouts,
+    )
     if preflight is None:
         checker.run_check(
             "ROS workspace and environment available",
@@ -1025,30 +1135,30 @@ def run_full_checks(
         )
         return
 
-    workspace_root, ros_env = preflight
+    layout, ros_env = preflight
     checker.run_check(
         "colcon build",
-        lambda: check_colcon_build(workspace_root, ros_env, timeouts),
+        lambda: check_colcon_build(layout, ros_env, timeouts),
         required=True,
     )
     checker.run_check(
         "colcon test",
-        lambda: check_colcon_test(workspace_root, ros_env, timeouts),
+        lambda: check_colcon_test(layout, ros_env, timeouts),
         required=True,
     )
     checker.run_check(
         "colcon test-result",
-        lambda: check_colcon_test_result(workspace_root, ros_env, timeouts),
+        lambda: check_colcon_test_result(layout, ros_env, timeouts),
         required=True,
     )
     checker.run_check(
         FULL_MOCK_SPEC.name,
-        lambda: run_smoke_check(FULL_MOCK_SPEC, workspace_root, ros_env, timeouts),
+        lambda: run_smoke_check(FULL_MOCK_SPEC, layout, ros_env, timeouts),
         required=True,
     )
     checker.run_check(
         PARTIAL_MOCK_SPEC.name,
-        lambda: run_smoke_check(PARTIAL_MOCK_SPEC, workspace_root, ros_env, timeouts),
+        lambda: run_smoke_check(PARTIAL_MOCK_SPEC, layout, ros_env, timeouts),
         required=True,
     )
 
@@ -1065,6 +1175,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workspace-root",
         help="Explicit ROS workspace root to validate and use for full mode",
+    )
+    parser.add_argument(
+        "--artifact-root",
+        help=(
+            "Optional external output root for full mode. "
+            "When set, build/install/log artifacts are written there instead of the workspace root."
+        ),
     )
     parser.add_argument(
         "--print-timeout",
@@ -1112,6 +1229,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repository_root,
                 timeouts,
                 workspace_override=args.workspace_root,
+                artifact_root_override=args.artifact_root,
             )
     except KeyboardInterrupt:
         print("\nInterrupted by user.")
