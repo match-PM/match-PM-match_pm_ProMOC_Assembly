@@ -4,8 +4,11 @@
 
 - ROS 2 Jazzy workspace build
 - ROS 2 Jazzy workspace tests
+- ROS 2 Humble workspace build
+- ROS 2 Humble workspace tests
 - `python3 tools/check_project.py --quick`
 - `python3 tools/check_project.py --full`
+- `python3 tools/check_project.py --full --artifact-root <artifact-dir>`
 - mock camera
 - mock X axis
 - mock Z axis
@@ -21,8 +24,6 @@
 - real IDS camera on the current refactor
 - real Thorlabs axes on the current refactor
 - real planar motor on the current refactor
-- ROS 2 Humble workspace build
-- ROS 2 Humble workspace tests
 - complete mechanical collision safety
 - gripper and pneumatics
 - controlled parking
@@ -30,7 +31,9 @@
 ## Interpretation
 
 The authoritative target platform is Ubuntu 22.04, ROS 2 Humble, and Python
-3.10. The currently recorded verification evidence in this repository is still
-Jazzy-based for workspace build and test execution, plus source-level and mock
-runtime checks. It does not yet certify or prove full Humble compatibility or
+3.10. The currently recorded verification evidence in this repository includes
+successful Humble and Jazzy workspace build/test execution, plus source-level
+and mock runtime checks. The full check now also supports an external artifact
+root, so the Humble validation can run with a read-only source checkout and
+persisted build artifacts outside the repository. This still does not certify
 real machine behavior.

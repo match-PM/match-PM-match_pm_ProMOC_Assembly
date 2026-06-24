@@ -8,9 +8,10 @@ This repository is maintained against:
 - ROS 2 Humble
 - Python 3.10
 
-Completed Humble build and test verification is still pending. Some
-contributors may use newer Ubuntu or ROS 2 distributions locally, but those
-are secondary convenience environments, not the authoritative target.
+Humble workspace build and test verification is recorded for this repository's
+current checked path. Some contributors may use newer Ubuntu or ROS 2
+distributions locally, but those are secondary convenience environments, not
+the authoritative target.
 
 ## Required Prerequisites
 
@@ -62,6 +63,15 @@ From the repository root:
 ```bash
 python3 tools/check_project.py --quick
 python3 tools/check_project.py --full --workspace-root <ros-workspace>
+```
+
+Optional external artifact root for read-only source workspaces:
+
+```bash
+python3 tools/check_project.py \
+  --full \
+  --workspace-root <ros-workspace> \
+  --artifact-root <artifact-dir>
 ```
 
 ## About `setup/`

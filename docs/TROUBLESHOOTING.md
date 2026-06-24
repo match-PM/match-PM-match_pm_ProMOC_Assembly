@@ -47,6 +47,20 @@ python3 tools/check_project.py --full --workspace-root <ros-workspace>
 
 The workspace root must contain `src/match-PM-match_pm_ProMOC_Assembly`.
 
+## `check_project --full` should not write `build/`, `install/`, or `log/` into the workspace
+
+Use an external artifact root:
+
+```bash
+python3 tools/check_project.py \
+  --full \
+  --workspace-root <ros-workspace> \
+  --artifact-root <artifact-dir>
+```
+
+This keeps full-mode outputs outside the validated source workspace while still
+running the same build, test, and mock-smoke checks.
+
 ## Quick check fails because the tree is dirty
 
 Review the tracked changes first. Only use:
@@ -163,3 +177,6 @@ Then rebuild and re-source:
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+If you intentionally keep outputs outside the workspace, clean the external
+artifact root you passed to `--artifact-root` instead.

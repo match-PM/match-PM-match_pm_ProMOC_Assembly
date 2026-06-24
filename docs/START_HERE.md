@@ -38,7 +38,8 @@ source install/setup.bash
 ```
 
 This is the authoritative target workflow for Ubuntu 22.04, ROS 2 Humble, and
-Python 3.10. Completed Humble verification is still pending.
+Python 3.10. Humble workspace build and test verification is recorded for the
+current checked path in this repository.
 
 ## 3. Run Project Checks
 
@@ -54,14 +55,27 @@ python3 tools/check_project.py \
   --workspace-root <ros-workspace>
 ```
 
+For a read-only source checkout or to keep `build/`, `install/`, and `log/`
+outside the repository workspace, add:
+
+```bash
+python3 tools/check_project.py \
+  --full \
+  --workspace-root <ros-workspace> \
+  --artifact-root <artifact-dir>
+```
+
 Quick mode is source and repository validation only. Full mode also:
 
-- cleans `build/`, `install/`, and `log/` in the validated workspace
+- cleans prior build/test outputs in the active full-mode artifact layout
 - rebuilds the workspace
 - runs `colcon test`
 - runs `colcon test-result --verbose`
 - starts full and partial mock-system smoke checks
 - verifies that those mock processes terminate
+
+Without `--artifact-root`, the active full-mode artifact layout is the
+workspace-local `build/`, `install/`, and `log/` directories.
 
 Full mode uses mock ROS processes. It does not command verified real hardware
 motion during the smoke checks.
