@@ -20,8 +20,9 @@ install/
 log/
 pmclib/
 
-# Private PMCLib Repository
-src/match-PM-match_pm_ProMOC_Assembly/planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot/
+# Private vendor libraries
+planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot/
+planar_motor_nodes/planar_motor_nodes/drivers/pmclib/
 
 # Environment files
 .env
