@@ -26,7 +26,7 @@ Expected layout:
 ```text
 <ros-workspace>/
   src/
-    match-PM-match_pm_ProMOC_Assembly/
+    <this repository>
 ```
 
 Build from the ROS workspace root:
@@ -48,21 +48,25 @@ to the workspace root:
 
 ```bash
 make build
-source install/setup.bash
+source ../install/setup.bash
+make start-mock
 ```
+
+If your checkout is nested as `<ros-workspace>/src/<repo>`, source
+`../../install/setup.bash` from the repository root instead.
 
 ## Start The Complete System
 
 Mock bringup (no hardware needed):
 
 ```bash
-ros2 launch promoc_bringup system.launch.py driver_mode:=mock
+make start-mock
 ```
 
 Hardware-oriented bringup:
 
 ```bash
-ros2 launch promoc_bringup system.launch.py driver_mode:=hardware
+make start-hardware
 ```
 
 Launch arguments:

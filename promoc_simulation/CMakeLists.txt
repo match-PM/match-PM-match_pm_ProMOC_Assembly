@@ -27,6 +27,8 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   set(ament_cmake_uncrustify_FOUND TRUE)
+  # Avoid network-dependent schema fetches in offline handover environments.
+  set(ament_cmake_xmllint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 

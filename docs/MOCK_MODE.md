@@ -3,6 +3,13 @@
 `driver_mode:=mock` is the checked development path when real hardware is not
 available.
 
+Beginner command after `make build` and `source ../install/setup.bash` from
+the repository root:
+
+```bash
+make start-mock
+```
+
 ## What Mock Mode Is
 
 - a development aid

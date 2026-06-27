@@ -20,12 +20,6 @@ install(DIRECTORY
 # Install Python modules
 ament_python_install_package(${PROJECT_NAME})
 
-# Install Python executables
-install(PROGRAMS
-  promoc_bringup/unified_demo.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # Copyright headers aren't consistently present in launch/util scripts.
@@ -35,6 +29,8 @@ if(BUILD_TESTING)
   set(ament_cmake_uncrustify_FOUND TRUE)
   set(ament_cmake_flake8_FOUND TRUE)
   set(ament_cmake_pep257_FOUND TRUE)
+  # Avoid network-dependent schema fetches in offline handover environments.
+  set(ament_cmake_xmllint_FOUND TRUE)
   # Exclude specific files from copyright linter.
   set(ament_cmake_copyright_CONFIG_FILE
     "${CMAKE_CURRENT_SOURCE_DIR}/.ament_copyright_exclude")

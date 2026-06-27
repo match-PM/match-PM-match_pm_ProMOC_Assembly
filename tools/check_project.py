@@ -19,7 +19,7 @@ import yaml
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_REPOSITORY_ROOT = SCRIPT_PATH.parents[1]
 PRIVATE_VENDOR_PATH = Path(
-    "planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot"
+    "planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib"
 )
 WORKSPACE_OUTPUT_DIRS = ("build", "install", "log")
 REQUIRED_CONFIGS = (
@@ -27,7 +27,7 @@ REQUIRED_CONFIGS = (
     "linear_axis_nodes/config/x_axis.yaml",
     "linear_axis_nodes/config/z_axis.yaml",
     "planar_motor_nodes/config/planar_motor.yaml",
-    "promoc_bringup/config/system.yaml",
+    "promoc_bringup/config/system.reference.yaml",
     "promoc_core/config/system_controller.yaml",
 )
 AUTOFOCUS_REFERENCE = "/promoc/camera/autofocus"
@@ -284,11 +284,13 @@ def determine_repository_root(script_repository_root: Path, timeouts: TimeoutCon
 def validate_workspace_root(workspace_root: Path, repository_root: Path) -> Path:
     candidate = workspace_root.resolve()
     src_dir = candidate / "src"
-    expected_repo = src_dir / repository_root.name
     if not src_dir.is_dir():
         raise WorkspaceResolutionError(
             f"Workspace root is invalid: missing src/ directory under {candidate}"
         )
+    if src_dir.samefile(repository_root):
+        return candidate
+    expected_repo = src_dir / repository_root.name
     if not expected_repo.exists():
         raise WorkspaceResolutionError(
             "Workspace root is invalid: expected package repository "
@@ -880,6 +882,10 @@ def run_smoke_check(
     timeouts: TimeoutConfig,
 ) -> bool:
     workspace_env = ensure_workspace_environment(layout, ros_env, timeouts)
+    smoke_log_dir = layout.log_test_base / "ros"
+    smoke_log_dir.mkdir(parents=True, exist_ok=True)
+    workspace_env["ROS_LOG_DIR"] = str(smoke_log_dir)
+    workspace_env["ROS_LOCALHOST_ONLY"] = "1"
     launch_args = [
         "ros2",
         "launch",

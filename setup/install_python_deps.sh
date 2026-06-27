@@ -177,15 +177,15 @@ fi
 # Check if PMCLib directory exists (optional)
 #
 # PMCLib ist proprietär. Installiere sie bevorzugt als Wheel oder lege bewusst
-# einen privaten lokalen Checkout unter drivers/pmclib ab. Der Pfad ist ignoriert.
-PMCLIB_DIR="$SCRIPT_DIR/../planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
+# einen privaten lokalen Checkout unter drivers/vendor/pmclib ab. Der Pfad ist lokal ignoriert.
+PMCLIB_DIR="$SCRIPT_DIR/../planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib"
 if [[ -d "$PMCLIB_DIR" ]]; then
     echo "✓ PMCLib directory found in $PMCLIB_DIR"
     echo "  PMCLib kann von den Nodes über den lokalen drivers/-Pfad verwendet werden"
 else
     echo "⚠ PMCLib directory not found in $PMCLIB_DIR"
     echo "  Für Planarmotor-Hardware: PMCLib Wheel installieren oder privat ablegen unter:"
-    echo "    planar_motor_nodes/planar_motor_nodes/drivers/pmclib"
+    echo "    planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib"
 fi
 
 echo ""
@@ -196,9 +196,9 @@ echo "✓ Core Python packages installed"
 echo "✓ pythonnet installed (for .NET interop)"
 echo "✓ pylablib installed (for Thorlabs hardware)"
 if [[ -d "$PMCLIB_DIR" ]]; then
-    echo "✓ PMCLib directory available (drivers/pmclib)"
+    echo "✓ PMCLib directory available (drivers/vendor/pmclib)"
 else
-    echo "⚠ PMCLib directory not found (optional; expected under planar_motor_nodes/.../drivers/pmclib)"
+    echo "⚠ PMCLib directory not found (optional; expected under planar_motor_nodes/.../drivers/vendor/pmclib)"
 fi
 echo ""
 echo "Next steps:"

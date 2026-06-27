@@ -6,7 +6,6 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 import sys
-import types
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +14,13 @@ for rel in ("camera_nodes", "promoc_core"):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
-if "promoc_assembly_interfaces" not in sys.modules:
+try:
+    import promoc_assembly_interfaces  # noqa: F401
+    import promoc_assembly_interfaces.msg  # noqa: F401
+    import promoc_assembly_interfaces.srv  # noqa: F401
+except ImportError:
+    import types
+
     pkg = types.ModuleType("promoc_assembly_interfaces")
     msg_mod = types.ModuleType("promoc_assembly_interfaces.msg")
     srv_mod = types.ModuleType("promoc_assembly_interfaces.srv")

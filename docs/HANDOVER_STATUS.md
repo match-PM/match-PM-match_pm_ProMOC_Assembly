@@ -24,6 +24,10 @@
 - real IDS camera on the current simplified runtime
 - real Thorlabs axes on the current simplified runtime
 - real planar motor on the current simplified runtime
+- planar-motor hardware PMCLib connection and mastership on a real controller
+- planar-motor hardware activation sequence with real XBots
+- planar-motor hardware Z-acceleration behavior beyond current PMCLib call
+  coverage
 - complete mechanical collision safety
 - gripper and pneumatics
 - controlled parking
@@ -37,3 +41,10 @@ and mock runtime checks. The full check now also supports an external artifact
 root, so the Humble validation can run with a read-only source checkout and
 persisted build artifacts outside the repository. This still does not certify
 real machine behavior.
+
+Planar-motor PMCLib remains local-only under
+`planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/` and is required
+only for hardware mode.
+
+Hardware planar-motor startup now leaves `auto_activate` disabled by default.
+Real XBot activation must be requested explicitly after status is checked.

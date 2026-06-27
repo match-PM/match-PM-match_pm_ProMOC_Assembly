@@ -16,6 +16,7 @@ from promoc_core.promoc_exceptions import (
 from promoc_core.status import DeviceState
 
 from .base import PlanarMotorDriver
+from .pmclib_loader import load_pmclib
 from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
@@ -44,23 +45,31 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
                 error_code=error_codes.CONNECTION_FAILED,
                 details={"controller_address": controller_address},
             )
+        gain_mastership = getattr(backend.sys_cmd, "gain_mastership", None)
+        if callable(gain_mastership):
+            gain_mastership()
         self._connected = True
 
     def disconnect(self) -> None:
         if not self._backend:
             return
-        disconnect = getattr(self._backend.sys_cmd, "disconnect", None)
-        if callable(disconnect):
-            disconnect()
-        self._connected = False
+        try:
+            release_mastership = getattr(self._backend.sys_cmd, "release_mastership", None)
+            if callable(release_mastership):
+                release_mastership()
+        finally:
+            self._connected = False
 
     def list_xbot_ids(self) -> list[int]:
         xbots = self._read_all_xbots()
-        ids: list[int] = []
-        for index, xbot in enumerate(xbots):
-            raw_id = getattr(xbot, "xbot_id", index)
-            ids.append(int(raw_id))
-        return sorted(set(ids))
+        ids = [self._extract_xbot_id(xbot) for xbot in xbots]
+        if len(ids) != len(set(ids)):
+            raise HardwareError(
+                "Duplicate XBot IDs returned by the planar-motor driver",
+                error_code=error_codes.DRIVER_FAILURE,
+                details={"xbot_ids": ids},
+            )
+        return sorted(ids)
 
     def activate_xbots(self, xbot_ids: Sequence[int] | None = None) -> None:
         self._require_connected()
@@ -248,35 +257,17 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
 
     def _load_backend(self) -> _BackendModules:
         try:
-            from ..drivers.match_pm_xBot import (
-                pmc_types,
-                system_commands,
-                xbot_commands,
-            )
-
+            modules = load_pmclib()
             self._backend = _BackendModules(
-                bot=xbot_commands,
-                sys_cmd=system_commands,
-                pmc_types=pmc_types,
-                source="local_driver",
-            )
-            return self._backend
-        except ImportError:
-            pass
-
-        try:
-            from pmclib import pmc_types, system_commands, xbot_commands
-
-            self._backend = _BackendModules(
-                bot=xbot_commands,
-                sys_cmd=system_commands,
-                pmc_types=pmc_types,
-                source="installed_pmclib",
+                bot=modules.xbot_commands,
+                sys_cmd=modules.system_commands,
+                pmc_types=modules.pmc_types,
+                source=modules.source,
             )
             return self._backend
         except ImportError as exc:
             raise DriverNotAvailableError(
-                "Vendor planar-motor driver is unavailable",
+                f"Vendor planar-motor driver is unavailable: {exc}",
                 error_code=error_codes.DRIVER_FAILURE,
             ) from exc
 
@@ -304,11 +295,9 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
     def _read_xbot(self, xbot_id: int) -> Any:
         xbots = self._read_all_xbots()
         for xbot in xbots:
-            candidate_id = getattr(xbot, "xbot_id", None)
-            if candidate_id is not None and int(candidate_id) == int(xbot_id):
+            candidate_id = self._extract_xbot_id(xbot)
+            if candidate_id == int(xbot_id):
                 return xbot
-        if 0 <= int(xbot_id) < len(xbots):
-            return xbots[int(xbot_id)]
         raise ConfigurationError(
             f"XBot {xbot_id} was not found",
             error_code=error_codes.XBOT_NOT_FOUND,
@@ -317,6 +306,30 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
 
     def _validate_known_xbot(self, xbot_id: int) -> None:
         self._read_xbot(xbot_id)
+
+    @staticmethod
+    def _extract_xbot_id(xbot: Any) -> int:
+        raw_id = getattr(xbot, "xbot_id", None)
+        if raw_id is None:
+            raise HardwareError(
+                "XBot status from the planar-motor driver is missing xbot_id",
+                error_code=error_codes.DRIVER_FAILURE,
+            )
+        try:
+            xbot_id = int(raw_id)
+        except (TypeError, ValueError) as exc:
+            raise HardwareError(
+                f"Invalid XBot ID from the planar-motor driver: {raw_id!r}",
+                error_code=error_codes.DRIVER_FAILURE,
+                details={"xbot_id": raw_id},
+            ) from exc
+        if xbot_id < 0:
+            raise HardwareError(
+                f"Invalid negative XBot ID from the planar-motor driver: {xbot_id}",
+                error_code=error_codes.DRIVER_FAILURE,
+                details={"xbot_id": xbot_id},
+            )
+        return xbot_id
 
     @staticmethod
     def _state_name(raw_state: Any) -> str:

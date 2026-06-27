@@ -29,6 +29,8 @@ class TestPytestBridge(unittest.TestCase):
                 "no:cacheprovider",
                 "--ignore",
                 str(Path(__file__).resolve().relative_to(repo_root)),
+                "--ignore",
+                str((test_dir / "__init__.py").relative_to(repo_root)),
             ],
             cwd=repo_root,
             env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},

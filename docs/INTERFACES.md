@@ -72,6 +72,12 @@ Main services:
 - `/promoc/mover/set_velocity_acceleration`
 - `/promoc/mover/stop_motion`
 
+`/promoc/mover/set_velocity_acceleration` keeps `z_max_accel` for interface
+compatibility. In hardware mode, the current PMCLib backend accepts and stores
+the value but cannot apply a separate Z acceleration if the vendor motion
+function exposes no matching parameter; the service response reports that
+limitation when a non-default value is set.
+
 `/promoc/mover/xbot_info` carries:
 
 - position fields for X, Y, Z, RX, RY, RZ

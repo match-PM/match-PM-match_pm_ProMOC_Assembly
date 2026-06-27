@@ -27,6 +27,8 @@ Important keys:
 - `xbot_id`
 - `publish_rate`
 - `pmc_ip`
+- `auto_activate` defaults to `false`; setting it to `true` is advanced and
+  sends an activation command during startup
 - workspace bounds: `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`
 - tolerances
 - default speed profile values:
@@ -55,13 +57,30 @@ Important keys:
 - `driver_mode:=hardware`
   expects planar-motor dependencies and connectivity
 
+Hardware mode loads PMCLib lazily from the local-only vendor package:
+
+```text
+planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/
+```
+
+Do not commit that proprietary directory. Mock mode works without it. If the
+vendor package uses .NET interop, hardware mode also needs `pythonnet`/`clr`.
+
+Hardware startup does not activate XBots by default. Use the activation service
+explicitly after checking status, or set `auto_activate:=true` only when that
+startup intervention is intentional.
+
+`z_max_accel` is kept in the public speed-profile API for compatibility. The
+current PMCLib hardware backend accepts and stores the value, but does not apply
+a separate Z acceleration when the vendor motion call has no matching argument.
+
 ## Current Limitations
 
 - mock mode is not a mechanical simulation
 - real hardware verification is not yet complete for the current simplified
   runtime
-- some hardware-oriented workflows depend on the private Match library checkout
-  under `drivers/match_pm_xBot`; it is intentionally not tracked in this repo
+- planar-motor hardware PMCLib loading is wired, but real controller behavior
+  still needs hardware validation
 
 ## Related Docs
 

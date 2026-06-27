@@ -65,4 +65,15 @@ class ControlCallbacks(ServiceCallbacksBase):
                     details={"parameter": name, "value": value},
                 )
         self.mover_utils.set_speed_profile(xbot_id, **values)
-        return self._success(response, f"Updated speed parameters for XBot {xbot_id}")
+        message = f"Updated speed parameters for XBot {xbot_id}"
+        if (
+            self.config.driver_mode == "hardware"
+            and values["z_max_accel"] != self.config.default_z_max_accel
+        ):
+            warning = (
+                "z_max_accel is accepted for interface compatibility, but the current "
+                "PMCLib hardware backend does not apply a separate Z acceleration"
+            )
+            self.logger.warning(warning)
+            message = f"{message}; {warning}"
+        return self._success(response, message)

@@ -37,10 +37,24 @@ Use a normal ROS workspace:
 ```text
 <ros-workspace>/
   src/
-    match-PM-match_pm_ProMOC_Assembly/
+    <this repository>
 ```
 
 ## Build
+
+From the repository root:
+
+```bash
+source /opt/ros/humble/setup.bash
+make build
+source ../install/setup.bash
+make start-mock
+```
+
+If your checkout is nested as `<ros-workspace>/src/<repo>`, source
+`../../install/setup.bash` from the repository root instead.
+
+Equivalent commands from the ROS workspace root:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -48,6 +62,30 @@ cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+## Planar-Motor Hardware Vendor Library
+
+Mock mode does not require PMCLib.
+
+Planar-motor hardware mode requires the proprietary vendor package locally at:
+
+```text
+planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/
+```
+
+That folder is local-only and must not be committed. Python must see the parent
+directory `drivers/vendor/` on `sys.path`; the runtime loader handles that when
+hardware mode reaches the planar-motor driver.
+
+If the vendor package uses .NET interop, install `pythonnet` and verify:
+
+```bash
+python3 -c 'import clr'
+```
+
+Hardware planar-motor startup does not activate XBots by default. Keep
+`auto_activate` false for first hardware checks and activate explicitly only
+after the status topic is healthy.
 
 ## Tests
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for rel in ("planar_motor_nodes", "promoc_core"):
@@ -12,11 +13,12 @@ for rel in ("planar_motor_nodes", "promoc_core"):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
-from planar_motor_nodes.config import MoverNodeConfig
+from planar_motor_nodes.config import DEFAULT_MOVER_NODE_PARAMETERS, MoverNodeConfig
 from planar_motor_nodes.models import SpeedProfile, XBotPose, XBotSnapshot
+from planar_motor_nodes.services.control import ControlCallbacks
 from planar_motor_nodes.services.status import MoverUtils
 from promoc_core import error_codes
-from promoc_core.promoc_exceptions import MotionError
+from promoc_core.promoc_exceptions import DriverNotAvailableError, MotionError
 from promoc_core.status import DeviceState
 
 
@@ -108,12 +110,62 @@ class _AlwaysBusyDriver:
         return None
 
 
+class _StartupFailureDriver(_AlwaysBusyDriver):
+    def connect(self, controller_address: str) -> None:
+        _ = controller_address
+        raise DriverNotAvailableError(
+            "local PMCLib is missing",
+            error_code=error_codes.DRIVER_FAILURE,
+        )
+
+
+class _ConnectedDriver(_AlwaysBusyDriver):
+    def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
+        _ = xbot_id
+        return XBotSnapshot(
+            xbot_id=0,
+            pose=XBotPose(0.12, 0.12, 0.0015, 0.0, 0.0, 0.0),
+            raw_state="XBOT_IDLE",
+            device_state=DeviceState.READY,
+            active=True,
+            levitated=True,
+            busy=False,
+        )
+
+
 def _config() -> MoverNodeConfig:
     return MoverNodeConfig(
         driver_mode="mock",
         xbot_id=0,
         publish_rate=10.0,
         pmc_ip="mock://controller",
+        auto_activate=False,
+        movement_timeout=0.1,
+        mock_xbot_count=1,
+        xy_tolerance=0.001,
+        six_d_tolerance=0.001,
+        x_min=0.055,
+        x_max=0.420,
+        y_min=0.055,
+        y_max=0.180,
+        z_min=0.0,
+        z_max=0.004,
+        default_xy_vel=0.05,
+        default_xy_max_accel=0.2,
+        default_z_vel=0.01,
+        default_z_max_accel=0.05,
+        default_rx_vel=0.1,
+        default_ry_vel=0.1,
+        default_rz_vel=0.2,
+    )
+
+
+def _hardware_config() -> MoverNodeConfig:
+    return MoverNodeConfig(
+        driver_mode="hardware",
+        xbot_id=0,
+        publish_rate=10.0,
+        pmc_ip="192.0.2.10",
         auto_activate=False,
         movement_timeout=0.1,
         mock_xbot_count=1,
@@ -152,3 +204,53 @@ def test_wait_for_motion_completion_maps_timeout_to_meaningful_error():
         assert exc.error_code == error_codes.MOVEMENT_TIMEOUT
     else:  # pragma: no cover - defensive
         raise AssertionError("Expected MotionError with MOVEMENT_TIMEOUT")
+
+
+def test_default_auto_activate_is_safe_for_hardware_startup():
+    assert DEFAULT_MOVER_NODE_PARAMETERS["auto_activate"] is False
+
+
+def test_startup_failure_publishes_error_status_message():
+    runtime = MoverUtils(_DummyLogger(), _StartupFailureDriver(), _hardware_config())
+
+    try:
+        runtime.connect_and_prepare()
+    except DriverNotAvailableError:
+        pass
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected startup failure")
+
+    state, error_code, message = runtime.current_status()
+    assert state == DeviceState.ERROR
+    assert error_code == error_codes.DRIVER_FAILURE
+    assert "Planar motor startup failed" in message
+    assert "local PMCLib is missing" in message
+
+    info = runtime.build_info_message(0)
+    assert info.device_status.state == int(DeviceState.ERROR)
+    assert info.device_status.error_code == error_codes.DRIVER_FAILURE
+    assert "local PMCLib is missing" in info.device_status.message
+
+
+def test_hardware_z_max_accel_change_is_reported_as_compatibility_limit():
+    config = _hardware_config()
+    driver = _ConnectedDriver()
+    runtime = MoverUtils(_DummyLogger(), driver, config)
+    runtime.connect_and_prepare()
+    callbacks = ControlCallbacks(_DummyLogger(), driver, runtime, config)
+    request = SimpleNamespace(
+        xbot_id=0,
+        xy_vel=0.05,
+        xy_max_accel=0.2,
+        z_vel=0.01,
+        z_max_accel=0.2,
+        rx_vel=0.1,
+        ry_vel=0.1,
+        rz_vel=0.2,
+    )
+    response = SimpleNamespace()
+
+    result = callbacks.callback_set_velocity_acceleration(request, response)
+
+    assert result.success is True
+    assert "z_max_accel is accepted for interface compatibility" in result.status_message

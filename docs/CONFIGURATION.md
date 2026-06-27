@@ -4,7 +4,6 @@
 
 The current runtime is configured by package-owned YAML files:
 
-- `promoc_bringup/config/system.yaml`
 - `camera_nodes/config/camera.yaml`
 - `linear_axis_nodes/config/x_axis.yaml`
 - `linear_axis_nodes/config/z_axis.yaml`
@@ -17,7 +16,8 @@ Hardware camera profiles live in:
 
 ## Central Versus Package-Specific Settings
 
-`promoc_bringup/config/system.yaml` records the intended top-level composition:
+`promoc_bringup/config/system.reference.yaml` records the intended top-level
+composition for readers only:
 
 - `driver_mode`
 - component enable flags
@@ -25,9 +25,9 @@ Hardware camera profiles live in:
 
 Current state from source:
 
-- `system.launch.py` loads the package-specific YAML files directly
-- `system.yaml` is tracked and useful as a central reference
-- `system.yaml` is not currently consumed automatically by the main launch
+- `system.launch.py` owns top-level start choices through launch arguments
+- device parameters live in package-specific YAML files
+- `system.reference.yaml` is not consumed automatically by the main launch
 
 ## Camera
 
@@ -85,6 +85,15 @@ commands unsafe or unusable.
 
 This package owns its local movement limits and default motion speeds.
 
+Planar-motor hardware mode loads the proprietary PMCLib package from the
+local-only path:
+
+```text
+planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/
+```
+
+Mock mode works without that directory.
+
 ## System Controller
 
 `promoc_core/config/system_controller.yaml` defines:
@@ -124,7 +133,7 @@ The repository should sit under the ROS workspace `src/` directory:
 ```text
 <ros-workspace>/
   src/
-    match-PM-match_pm_ProMOC_Assembly/
+    <this repository>
 ```
 
 Do not keep `.venv`, IDE metadata, agent scratch folders, or `build/`,

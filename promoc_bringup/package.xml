@@ -12,8 +12,10 @@
 
   <depend>rclpy</depend>
   <depend>promoc_assembly_interfaces</depend>
+  <depend>camera_nodes</depend>
   <depend>planar_motor_nodes</depend>
   <depend>linear_axis_nodes</depend>
+  <depend>promoc_core</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

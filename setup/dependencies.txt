@@ -67,8 +67,7 @@ pandas>=1.0.0               # Data manipulation and analysis
 #
 # 1. PMCLib (proprietary):
 #    - Must be obtained separately from Match
-#    - Install with: pip install /path/to/pmclib-*.whl
-#    - Optional local checkout path: planar_motor_nodes/planar_motor_nodes/drivers/pmclib
+#    - Local checkout path: planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib
 #    - For development without hardware: uses MockPlanarMotorDriver
 #
 # 2. ROS2 dependencies:

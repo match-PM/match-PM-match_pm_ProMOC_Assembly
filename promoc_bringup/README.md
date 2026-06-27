@@ -12,11 +12,6 @@ Maintained runtime entry points:
 - `launch/system.launch.py`
 - `launch/camera.launch.py`
 
-Optional helper launch files:
-
-- `launch/promoc_assembly_demo.launch.py`
-- `launch/planar_motor_demo.launch.py`
-
 `system.launch.py` is the canonical full-system entry point.
 
 The launch file is intentionally flat: launch arguments and `Node(...)` actions
@@ -52,21 +47,17 @@ ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
 
 This package owns:
 
-- `config/system.yaml`
+- `config/system.reference.yaml`
 - `config/cameras/*.yaml`
-- `config/demo_controller_params.yaml`
 
 Current source state:
 
 - `system.launch.py` loads package-specific YAML directly
-- `config/system.yaml` is a tracked central summary, but the main launch does
-  not currently read it automatically
+- `config/system.reference.yaml` is documentation only; it is not parsed by the
+  main launch file
 
 ## Current Limitations
 
-- optional demo launches are not the canonical startup path
-- `planar_motor_demo.launch.py` is not part of the verified handover path and
-  still depends on additional demo-only maintenance
 - hardware mode depends on vendor/device availability
 - real hardware verification is not yet complete for the current simplified
   runtime

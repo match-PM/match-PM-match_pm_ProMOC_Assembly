@@ -10,13 +10,13 @@ Expected workspace layout:
 ```text
 <ros-workspace>/
   src/
-    match-PM-match_pm_ProMOC_Assembly/
+    <this repository>
 ```
 
 Repository root:
 
 ```text
-<ros-workspace>/src/match-PM-match_pm_ProMOC_Assembly
+<ros-workspace>/src
 ```
 
 ROS workspace root:
@@ -34,11 +34,30 @@ outputs inside it.
 
 ## 2. Build The Workspace
 
+From the repository root, the beginner path is:
+
+```bash
+source /opt/ros/humble/setup.bash
+make build
+source ../install/setup.bash
+make start-mock
+```
+
+`make build` runs `colcon build --symlink-install` from the ROS workspace root,
+outside this repository. That keeps `build/`, `install/`, and `log/` outside
+the repository.
+
+If your checkout is nested as `<ros-workspace>/src/<repo>`, use
+`source ../../install/setup.bash` from the repository root.
+
+Equivalent commands from the ROS workspace root:
+
 ```bash
 source /opt/ros/humble/setup.bash
 cd <ros-workspace>
 colcon build --symlink-install
 source install/setup.bash
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
 This is the authoritative target workflow for Ubuntu 22.04, ROS 2 Humble, and
@@ -85,6 +104,12 @@ Full mode uses mock ROS processes. It does not command verified real hardware
 motion during the smoke checks.
 
 ## 4. Start The Full Mock System
+
+```bash
+make start-mock
+```
+
+Equivalent ROS command:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
@@ -172,6 +197,12 @@ Both services return:
 stale, busy, in an error state, or otherwise not considered safe for reset.
 
 ## 8. Switch To Hardware Carefully
+
+```bash
+make start-hardware
+```
+
+Equivalent ROS command:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py driver_mode:=hardware

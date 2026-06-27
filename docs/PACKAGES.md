@@ -14,7 +14,7 @@ This page answers two questions:
 | `planar_motor_nodes` | planar-motor runtime and motion services | `mover_node` | `planar_motor_nodes/config/planar_motor.yaml` |
 | `promoc_assembly_interfaces` | ROS messages and services only | none | n/a |
 | `promoc_core` | shared helpers and system controller | `promoc_system_controller` | `promoc_core/config/system_controller.yaml` |
-| `promoc_bringup` | launch composition and package wiring | `unified_demo` | `promoc_bringup/config/system.yaml` and camera profiles |
+| `promoc_bringup` | launch composition and package wiring | none | camera profiles and `system.reference.yaml` |
 | `promoc_simulation` | RViz/URDF assets for future richer simulation | none | `promoc_simulation/launch/display.launch.py` and URDF assets |
 
 ## Package Details
@@ -50,8 +50,8 @@ This page answers two questions:
   `/promoc/mover/xbot_info` and `/promoc/mover/...`
 - Mock behavior: software-only driver with the same ROS service names
 - Hardware behavior: depends on planar-motor vendor support and connectivity
-- Limitation: some hardware-oriented setups need a private Match library
-  checkout under `drivers/match_pm_xBot`; this path is intentionally ignored
+- Limitation: hardware mode needs local PMCLib under
+  `drivers/vendor/pmclib/`; this path is intentionally local-only
 - Start here:
   [`../planar_motor_nodes/README.md`](../planar_motor_nodes/README.md)
 
@@ -81,10 +81,8 @@ This page answers two questions:
 - Purpose: launch the system and connect each package to its config
 - Maintained launch files:
   `system.launch.py`, `camera.launch.py`
-- Optional helper launch files:
-  `promoc_assembly_demo.launch.py`, `planar_motor_demo.launch.py`
-- Limitation: optional demo paths are not the canonical startup path, and they
-  are not part of the verified handover baseline
+- Limitation: old auto-moving demo paths were removed from the maintained
+  beginner startup surface
 - Start here:
   [`../promoc_bringup/README.md`](../promoc_bringup/README.md)
 

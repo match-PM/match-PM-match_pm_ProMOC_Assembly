@@ -97,11 +97,10 @@ Main package-owned configuration files:
 - `linear_axis_nodes/config/z_axis.yaml`
 - `planar_motor_nodes/config/planar_motor.yaml`
 - `promoc_core/config/system_controller.yaml`
-- `promoc_bringup/config/system.yaml`
 
 The current `system.launch.py` loads the package-specific config files directly.
-`promoc_bringup/config/system.yaml` is tracked as a central composition summary,
-but the current main launch does not read it automatically.
+`promoc_bringup/config/system.reference.yaml` is documentation only; the main
+launch does not read it automatically.
 
 ## What This Repository Does Not Yet Claim
 

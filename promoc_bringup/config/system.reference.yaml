@@ -1,3 +1,14 @@
+# Reference-only summary of the intended system composition.
+#
+# Runtime choices are launch arguments in:
+#   promoc_bringup/launch/system.launch.py
+#
+# Device parameters live in package-owned config files:
+#   camera_nodes/config/camera.yaml
+#   linear_axis_nodes/config/x_axis.yaml
+#   linear_axis_nodes/config/z_axis.yaml
+#   planar_motor_nodes/config/planar_motor.yaml
+#   promoc_core/config/system_controller.yaml
 system:
   ros__parameters:
     driver_mode: "hardware"

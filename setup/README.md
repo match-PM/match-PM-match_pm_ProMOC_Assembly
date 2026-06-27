@@ -38,5 +38,6 @@ colcon test-result --verbose
 - hardware-specific setup remains operator- and device-dependent
 - keep this repository as clean ROS 2 source packages; do not create `.venv`,
   `local_libs`, or external driver checkouts inside this repo
-- install proprietary PMCLib as a wheel or place a deliberate local checkout in
-  `planar_motor_nodes/planar_motor_nodes/drivers/pmclib` outside normal commits
+- place the proprietary PMCLib package locally at
+  `planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/` for hardware
+  mode only; do not commit it

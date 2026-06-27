@@ -29,10 +29,5 @@ setup(
     maintainer_email='promoc@match.uni-hannover.de',
     description='ProMOC Assembly launch files and utilities',
     license='MIT',
-    entry_points={
-        'console_scripts': [
-            # Optional demo controller. Not a canonical startup path.
-            'unified_demo = promoc_bringup.unified_demo:main',
-        ],
-    },
+    entry_points={'console_scripts': []},
 )

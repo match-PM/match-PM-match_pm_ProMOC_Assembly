@@ -3,9 +3,15 @@
 SHELL := /bin/bash
 
 REPO_ROOT := $(abspath .)
+ifeq ($(notdir $(REPO_ROOT)),src)
+WORKSPACE_ROOT ?= $(abspath ..)
+WORKSPACE_SETUP ?= ../install/setup.bash
+else
 WORKSPACE_ROOT ?= $(abspath ../..)
+WORKSPACE_SETUP ?= ../../install/setup.bash
+endif
 
-.PHONY: help build clean test check check-quick check-full mock hardware
+.PHONY: help build clean test check check-quick check-full start-mock start-hardware mock hardware
 
 help:
 	@echo "Available commands:"
@@ -15,10 +21,12 @@ help:
 	@echo "  make check        - Run the quick project check"
 	@echo "  make check-quick  - Run python3 tools/check_project.py --quick"
 	@echo "  make check-full   - Run the full project check with WORKSPACE_ROOT"
-	@echo "  make mock         - Launch the full system in mock mode"
-	@echo "  make hardware     - Launch the full system in hardware mode"
+	@echo "  make start-mock     - Launch the full system without hardware"
+	@echo "  make start-hardware - Launch the full system with real hardware"
+	@echo "  make mock           - Compatibility alias for start-mock"
+	@echo "  make hardware       - Compatibility alias for start-hardware"
 	@echo ""
-	@echo "Default WORKSPACE_ROOT assumes this repo lives in <workspace>/src/."
+	@echo "WORKSPACE_ROOT=$(WORKSPACE_ROOT)"
 
 build:
 	cd "$(WORKSPACE_ROOT)" && colcon build --symlink-install
@@ -37,8 +45,12 @@ check-quick:
 check-full:
 	cd "$(REPO_ROOT)" && python3 tools/check_project.py --full --workspace-root "$(WORKSPACE_ROOT)"
 
-mock:
+start-mock:
 	cd "$(WORKSPACE_ROOT)" && source install/setup.bash && ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 
-hardware:
+start-hardware:
 	cd "$(WORKSPACE_ROOT)" && source install/setup.bash && ros2 launch promoc_bringup system.launch.py driver_mode:=hardware
+
+mock: start-mock
+
+hardware: start-hardware

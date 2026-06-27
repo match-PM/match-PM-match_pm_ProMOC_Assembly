@@ -27,6 +27,7 @@ srv_mod = sys.modules.setdefault(
     types.ModuleType("promoc_assembly_interfaces.srv"),
 )
 
+msg_mod.DeviceStatus = getattr(msg_mod, "DeviceStatus", type("DeviceStatus", (), {}))
 msg_mod.XBotInfo = getattr(msg_mod, "XBotInfo", type("XBotInfo", (), {}))
 for name in (
     "ActivateXbots",
@@ -49,7 +50,11 @@ pkg.srv = srv_mod
 
 def _clear_vendor_modules() -> None:
     for name in list(sys.modules):
-        if name == "pmclib" or name.startswith("planar_motor_nodes.drivers.match_pm_xBot"):
+        if (
+            name == "pmclib"
+            or name.startswith("pmclib.")
+            or name.startswith("planar_motor_nodes.drivers.vendor.pmclib")
+        ):
             sys.modules.pop(name, None)
 
 
@@ -65,7 +70,3 @@ def test_hardware_driver_import_is_lazy():
     module = importlib.import_module("planar_motor_nodes.drivers.hardware")
     assert hasattr(module, "HardwarePlanarMotorDriver")
     assert "pmclib" not in sys.modules
-    assert not any(
-        name.startswith("planar_motor_nodes.drivers.match_pm_xBot")
-        for name in sys.modules
-    )

@@ -103,8 +103,8 @@ def main() -> int:
     print("\n" + "=" * 40)
     print("[PASS] .NET runtime check completed")
     print("\nNext steps:")
-    print("  1. Install PMCLib wheel: pip install /path/to/pmclib-*.whl")
-    print("  2. Test PMCLib import: python3 -c 'import pmclib'")
+    print("  1. Place PMCLib at planar_motor_nodes/.../drivers/vendor/pmclib/")
+    print("  2. Test .NET interop if needed: python3 -c 'import clr'")
     return 0
 
 

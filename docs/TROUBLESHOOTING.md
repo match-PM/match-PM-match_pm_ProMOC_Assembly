@@ -45,7 +45,7 @@ Pass the real ROS workspace root explicitly:
 python3 tools/check_project.py --full --workspace-root <ros-workspace>
 ```
 
-The workspace root must contain `src/match-PM-match_pm_ProMOC_Assembly`.
+The workspace root must contain this repository under `src/`.
 
 ## `check_project --full` should not write `build/`, `install/`, or `log/` into the workspace
 
@@ -112,17 +112,41 @@ If you are only trying to validate the stack, switch to:
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-## Private `match_pm_xBot` checkout is unavailable
+## Planar-motor PMCLib checkout is unavailable
 
-Some hardware-oriented planar-motor work depends on a private Match library
-checkout at:
+Planar-motor hardware mode depends on the proprietary PMCLib package at:
 
 ```text
-planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot
+planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/
 ```
 
 This directory is intentionally ignored by git because only authorized users can
-download it. Mock mode and source-level tests should work without it.
+place the vendor package there. Mock mode and source-level tests should work
+without it.
+
+If the error mentions `clr` or `pythonnet`, install `pythonnet` in the active
+ROS environment and verify:
+
+```bash
+python3 -c 'import clr'
+```
+
+Missing PMCLib, missing `clr`, or controller connection failures should appear
+on `/promoc/mover/xbot_info` as an `ERROR` device status while the node remains
+alive.
+
+## Planar motor does not activate after hardware startup
+
+That is the safe default. Hardware startup keeps `auto_activate` false so no
+activation command is sent implicitly. Check `/promoc/mover/xbot_info` first,
+then call `/promoc/mover/activate_xbots` only when activation is intended.
+
+## `z_max_accel` is accepted but not applied in hardware mode
+
+The public service keeps `z_max_accel` for compatibility. The current PMCLib
+hardware call does not expose a separate Z-acceleration parameter, so a
+non-default hardware value is accepted, stored, and reported with a warning
+message, but not applied to the vendor motion call.
 
 ## Mock mode was not actually selected
 

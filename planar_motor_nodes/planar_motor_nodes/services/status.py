@@ -11,7 +11,12 @@ from promoc_assembly_interfaces.msg import DeviceStatus, XBotInfo
 from promoc_core import error_codes
 from promoc_core.logging import LogTags, TaggedLogger
 from promoc_core.motion import compute_motion_timeout
-from promoc_core.promoc_exceptions import ConfigurationError, ConnectionError, MotionError
+from promoc_core.promoc_exceptions import (
+    ConfigurationError,
+    ConnectionError,
+    MotionError,
+    ProMocError,
+)
 from promoc_core.status import DeviceState
 
 from ..config import MoverNodeConfig
@@ -40,23 +45,32 @@ class MoverUtils:
             self._device_state = DeviceState.CONNECTING
             self._error_code = error_codes.SUCCESS
             self._status_message = "Connecting to planar motor controller"
-        self.driver.connect(self.config.pmc_ip)
-        self._known_xbot_ids = self.driver.list_xbot_ids()
-        self._connected = True
-        self._require_known_xbot(self.config.xbot_id)
-        if self.config.auto_activate:
-            self.driver.activate_xbots([self.config.xbot_id])
-            self._set_state(
-                DeviceState.READY,
-                error_codes.SUCCESS,
-                f"Connected and activated XBot {self.config.xbot_id}",
-            )
-        else:
-            self._set_state(
-                DeviceState.NOT_READY,
-                error_codes.SUCCESS,
-                f"Connected. XBot {self.config.xbot_id} not activated",
-            )
+        try:
+            self.driver.connect(self.config.pmc_ip)
+            self._known_xbot_ids = self.driver.list_xbot_ids()
+            self._connected = True
+            self._require_known_xbot(self.config.xbot_id)
+            if self.config.auto_activate:
+                if self.config.driver_mode == "hardware":
+                    self.logger.warning(
+                        "auto_activate is enabled in hardware mode; activating XBots "
+                        "is an active hardware action"
+                    )
+                self.driver.activate_xbots([self.config.xbot_id])
+                self._set_state(
+                    DeviceState.READY,
+                    error_codes.SUCCESS,
+                    f"Connected and activated XBot {self.config.xbot_id}",
+                )
+            else:
+                self._set_state(
+                    DeviceState.NOT_READY,
+                    error_codes.SUCCESS,
+                    f"Connected. XBot {self.config.xbot_id} not activated",
+                )
+        except Exception as exc:
+            self.mark_startup_failed(exc)
+            raise
 
     def shutdown(self) -> None:
         if not self._connected:
@@ -267,6 +281,8 @@ class MoverUtils:
         return list(self._known_xbot_ids)
 
     def build_info_message(self, xbot_id: int) -> XBotInfo | None:
+        if not self._connected:
+            return self._status_only_info_message()
         snapshot = self.get_snapshot(xbot_id)
         if snapshot.pose is None:
             return None
@@ -284,6 +300,19 @@ class MoverUtils:
     def current_status(self) -> tuple[DeviceState, int, str]:
         with self._state_lock:
             return self._device_state, self._error_code, self._status_message
+
+    def mark_startup_failed(self, exc: Exception) -> None:
+        error_code = error_codes.UNKNOWN_ERROR
+        message = str(exc) or exc.__class__.__name__
+        if isinstance(exc, ProMocError):
+            error_code = int(exc.error_code)
+            message = exc.message
+        self._connected = False
+        self._set_state(
+            DeviceState.ERROR,
+            error_code,
+            f"Planar motor startup failed: {message}",
+        )
 
     def _require_known_xbot(self, xbot_id: int) -> None:
         if int(xbot_id) not in self._known_xbot_ids:
@@ -306,6 +335,17 @@ class MoverUtils:
         status.error_code = snapshot.error_code or error_code
         status.message = snapshot.message or message
         return status
+
+    def _status_only_info_message(self) -> XBotInfo:
+        state, error_code, message = self.current_status()
+        status = DeviceStatus()
+        status.state = int(state)
+        status.error_code = error_code
+        status.message = message
+        info = XBotInfo()
+        info.xbot_state = state.name
+        info.device_status = status
+        return info
 
     @staticmethod
     def _pose_matches(current: XBotPose, expected: XBotPose, tolerance: float) -> bool:

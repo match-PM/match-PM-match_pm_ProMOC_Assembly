@@ -231,12 +231,12 @@ check_pmclib() {
         log_warning "PMCLib not available - using mock implementation for development"
     fi
     
-    # Check local PMCLib checkout (current + legacy locations)
+    # Check local PMCLib checkout
     check_item
-    if [[ -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" ]]; then
-        log_success "PMCLib local checkout found in planar_motor_nodes/.../drivers/pmclib"
+    if [[ -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib" ]]; then
+        log_success "PMCLib local checkout found in planar_motor_nodes/.../drivers/vendor/pmclib"
     else
-        log_warning "No local PMCLib checkout found (optional if pmclib is installed via pip wheel)"
+        log_warning "No local PMCLib checkout found (hardware mode expects drivers/vendor/pmclib)"
     fi
 }
 
@@ -338,7 +338,7 @@ fi)
 
 ### PMCLib Status
 - PMCLib: $(python3 -c "import pmclib; print('✅ Available')" 2>/dev/null || echo "⚠️ Using mock")
-- Local checkout: $(test -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/pmclib" && echo "✅ Found (drivers/pmclib)" || echo "❌ Not found")
+- Local checkout: $(test -d "$PROJECT_ROOT/planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib" && echo "Found (drivers/vendor/pmclib)" || echo "Not found")
 
 ## Recommendations
 
@@ -356,7 +356,7 @@ fi)
 $(if [[ $WARNING_CHECKS -gt 0 ]]; then
 cat << 'WARNINGS'
 ### Warnings to Address:
-1. For PMCLib: install wheel (`pip install /path/to/pmclib-*.whl`) or add local checkout to planar_motor_nodes/.../drivers/pmclib
+1. For PMCLib hardware mode: add local checkout to planar_motor_nodes/.../drivers/vendor/pmclib
 2. For hardware: Install pylablib and pythonnet
 3. Update system packages: `sudo apt update && sudo apt upgrade`
 
