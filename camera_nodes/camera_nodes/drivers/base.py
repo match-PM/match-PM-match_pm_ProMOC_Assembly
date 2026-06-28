@@ -24,8 +24,7 @@ class CameraFrame:
 class CameraDriver(ABC):
     """Small internal camera-driver contract."""
 
-    def __init__(self, logger) -> None:
-        self._logger = logger
+    def __init__(self) -> None:
         self._connected = False
         self._acquiring = False
 

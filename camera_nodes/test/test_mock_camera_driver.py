@@ -18,20 +18,6 @@ from camera_nodes.drivers.mock import MockCameraDriver
 from promoc_core.promoc_exceptions import ConfigurationError
 
 
-class _Logger:
-    def info(self, *args, **kwargs):
-        _ = args, kwargs
-
-    def warn(self, *args, **kwargs):
-        _ = args, kwargs
-
-    def warning(self, *args, **kwargs):
-        _ = args, kwargs
-
-    def error(self, *args, **kwargs):
-        _ = args, kwargs
-
-
 class _Clock:
     def now(self):
         return self
@@ -47,7 +33,7 @@ class _Node:
 
 def _config(**overrides) -> CameraNodeConfig:
     values = {
-        "use_mock": True,
+        "driver_mode": "mock",
         "camera_name": "mock_camera",
         "source_image_topic": "/unused",
         "image_topic": "/promoc/camera/image_raw",
@@ -65,7 +51,7 @@ def _config(**overrides) -> CameraNodeConfig:
 
 
 def test_mock_driver_connects_starts_and_stops():
-    driver = MockCameraDriver(_Node(), _config(), _Logger())
+    driver = MockCameraDriver(_Node(), _config())
     driver.connect()
     driver.start_acquisition()
 
@@ -85,7 +71,6 @@ def test_mock_driver_rejects_invalid_configuration():
     driver = MockCameraDriver(
         _Node(),
         _config(mock_width=0),
-        _Logger(),
     )
     try:
         driver.connect()

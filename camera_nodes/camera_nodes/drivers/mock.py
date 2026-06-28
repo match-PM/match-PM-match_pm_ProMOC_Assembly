@@ -18,8 +18,8 @@ _ENCODING_CHANNELS = {
 class MockCameraDriver(CameraDriver):
     """Generate a plain black image stream without hardware dependencies."""
 
-    def __init__(self, node, config, logger) -> None:
-        super().__init__(logger)
+    def __init__(self, node, config) -> None:
+        super().__init__()
         self._node = node
         self._config = config
 

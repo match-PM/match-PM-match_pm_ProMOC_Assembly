@@ -32,6 +32,7 @@ def test_camera_runtime_uses_one_active_entry_point():
     assert "camera_simulator" not in setup_content
     assert 'executable="camera_node"' in launch_content
     assert "camera_simulator" not in launch_content
+    assert "driver_mode != \"hardware\"" in launch_content
 
 
 def test_removed_runtime_paths_are_not_imported():

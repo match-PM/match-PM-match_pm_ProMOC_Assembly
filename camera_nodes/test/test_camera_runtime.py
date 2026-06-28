@@ -8,6 +8,8 @@ from pathlib import Path
 import sys
 import time
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for rel in ("camera_nodes", "promoc_core", "promoc_assembly_interfaces"):
@@ -15,13 +17,26 @@ for rel in ("camera_nodes", "promoc_core", "promoc_assembly_interfaces"):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
-from camera_nodes.node import CameraNode
-from promoc_assembly_interfaces.msg import DeviceStatus
+try:
+    from promoc_assembly_interfaces.msg import DeviceStatus
+except ImportError:
+    pytest.skip(
+        "camera runtime test requires generated promoc_assembly_interfaces messages",
+        allow_module_level=True,
+    )
+if not hasattr(DeviceStatus, "_TYPE_SUPPORT"):
+    pytest.skip(
+        "camera runtime test requires generated promoc_assembly_interfaces messages",
+        allow_module_level=True,
+    )
+
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import Image
+
+from camera_nodes.node import CameraNode
 
 
 def test_mock_node_publishes_repeated_frames_and_status():

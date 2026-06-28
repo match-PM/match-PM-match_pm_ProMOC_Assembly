@@ -66,18 +66,17 @@ class CameraNode(Node):
         self.declare_parameter("mock.encoding", "mono8")
 
         driver_mode = str(self.get_parameter("driver_mode").value).strip().lower()
-        if driver_mode not in {"hardware", "mock", "sim", "simulator"}:
-            self.get_logger().warn(
-                f"Invalid driver_mode '{driver_mode}', falling back to hardware."
+        if driver_mode not in {"hardware", "mock"}:
+            raise ValueError(
+                f"driver_mode must be 'hardware' or 'mock', got '{driver_mode}'"
             )
-            driver_mode = "hardware"
 
         publish_rate_hz = self._positive_float_param("publish_rate_hz", 15.0)
         frame_timeout_s = self._positive_float_param("frame_timeout_s", 1.0)
         status_rate_hz = self._positive_float_param("status_publish_rate_hz", 1.0)
 
         return CameraNodeConfig(
-            use_mock=driver_mode in {"mock", "sim", "simulator"},
+            driver_mode=driver_mode,
             camera_name=str(self.get_parameter("camera_name").value),
             source_image_topic=str(self.get_parameter("source_image_topic").value),
             image_topic=str(self.get_parameter("image_topic").value),
@@ -105,9 +104,13 @@ class CameraNode(Node):
             return int(default)
 
     def _create_driver(self) -> CameraDriver:
-        if self.config.use_mock:
-            return MockCameraDriver(self, self.config, self.get_logger())
-        return HardwareCameraDriver(self, self.config, self.get_logger())
+        if self.config.driver_mode == "mock":
+            return MockCameraDriver(self, self.config)
+        if self.config.driver_mode == "hardware":
+            return HardwareCameraDriver(self, self.config)
+        raise ValueError(
+            f"driver_mode must be 'hardware' or 'mock', got '{self.config.driver_mode}'"
+        )
 
     def _start_runtime(self) -> None:
         try:
@@ -120,7 +123,7 @@ class CameraNode(Node):
             self.driver.start_acquisition()
             wait_message = (
                 f"publishing mock stream on {self.config.image_topic}"
-                if self.config.use_mock
+                if self.config.driver_mode == "mock"
                 else f"waiting for frames on {self.config.source_image_topic}"
             )
             self._set_status(DeviceState.CONNECTED, error_codes.SUCCESS, wait_message)
@@ -164,7 +167,10 @@ class CameraNode(Node):
         message.data = frame.data
 
         stamp_key = (message.header.stamp.sec, message.header.stamp.nanosec)
-        if not self.config.use_mock and stamp_key == self._last_published_stamp:
+        if (
+            self.config.driver_mode == "hardware"
+            and stamp_key == self._last_published_stamp
+        ):
             return
 
         self.image_publisher.publish(message)

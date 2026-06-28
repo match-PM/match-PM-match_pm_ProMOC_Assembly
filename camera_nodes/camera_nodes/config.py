@@ -9,7 +9,7 @@ from dataclasses import dataclass
 class CameraNodeConfig:
     """Resolved runtime settings for the camera node."""
 
-    use_mock: bool
+    driver_mode: str
     camera_name: str
     source_image_topic: str
     image_topic: str

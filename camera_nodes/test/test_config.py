@@ -16,7 +16,7 @@ from camera_nodes.config import CameraNodeConfig  # noqa: E402
 
 def test_camera_config_is_plain_dataclass():
     cfg = CameraNodeConfig(
-        use_mock=True,
+        driver_mode="mock",
         camera_name="mock_cam",
         source_image_topic="/source",
         image_topic="/image",
@@ -30,7 +30,7 @@ def test_camera_config_is_plain_dataclass():
         mock_encoding="mono8",
     )
 
-    assert cfg.use_mock is True
+    assert cfg.driver_mode == "mock"
     assert cfg.camera_name == "mock_cam"
     assert cfg.mock_width == 320
     assert cfg.mock_height == 240
@@ -42,5 +42,7 @@ def test_camera_parameters_are_declared_in_node():
 
     assert 'self.declare_parameter("driver_mode", "hardware")' in node_content
     assert 'self.declare_parameter("mock.width", 640)' in node_content
+    assert '{"hardware", "mock"}' in node_content
+    assert "simulator" not in node_content
     assert "load_camera_config" not in node_content
     assert "declare_camera_parameters" not in config_content

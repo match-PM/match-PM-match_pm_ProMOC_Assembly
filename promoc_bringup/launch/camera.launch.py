@@ -42,6 +42,11 @@ def launch_setup(context, *args, **kwargs):
 
     if driver_mode == "mock":
         return [_camera_node("mock")]
+    if driver_mode != "hardware":
+        logger.error(
+            f"Invalid camera driver_mode '{driver_mode}'. Use 'hardware' or 'mock'."
+        )
+        return []
 
     hardware_config_file = _camera_hardware_config_path(camera_type)
     if not os.path.exists(hardware_config_file):

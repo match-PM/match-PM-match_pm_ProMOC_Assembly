@@ -19,8 +19,8 @@ from .base import CameraDriver, CameraFrame
 class HardwareCameraDriver(CameraDriver):
     """Read frames from the existing camera ROS topic without vendor imports."""
 
-    def __init__(self, node, config, logger) -> None:
-        super().__init__(logger)
+    def __init__(self, node, config) -> None:
+        super().__init__()
         self._node = node
         self._config = config
         self._subscription = None

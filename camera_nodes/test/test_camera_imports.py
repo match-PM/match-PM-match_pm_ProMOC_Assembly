@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 import sys
+import types
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -14,13 +15,7 @@ for rel in ("camera_nodes", "promoc_core"):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
 
-try:
-    import promoc_assembly_interfaces  # noqa: F401
-    import promoc_assembly_interfaces.msg  # noqa: F401
-    import promoc_assembly_interfaces.srv  # noqa: F401
-except ImportError:
-    import types
-
+def _install_interface_stubs(monkeypatch) -> None:
     pkg = types.ModuleType("promoc_assembly_interfaces")
     msg_mod = types.ModuleType("promoc_assembly_interfaces.msg")
     srv_mod = types.ModuleType("promoc_assembly_interfaces.srv")
@@ -29,26 +24,11 @@ except ImportError:
         pass
 
     msg_mod.DeviceStatus = _DeviceStatus
-    for name in (
-        "EmergencyStop",
-        "GetOperationStatus",
-        "GetPosition",
-        "GetVelocityParameters",
-        "Home",
-        "JogAxis",
-        "MoveAbsolute",
-        "MoveRelative",
-        "SetVelocityParameters",
-        "ShutdownLinearAxis",
-        "Stop",
-    ):
-        setattr(srv_mod, name, type(name, (), {}))
-
     pkg.msg = msg_mod
     pkg.srv = srv_mod
-    sys.modules["promoc_assembly_interfaces"] = pkg
-    sys.modules["promoc_assembly_interfaces.msg"] = msg_mod
-    sys.modules["promoc_assembly_interfaces.srv"] = srv_mod
+    monkeypatch.setitem(sys.modules, "promoc_assembly_interfaces", pkg)
+    monkeypatch.setitem(sys.modules, "promoc_assembly_interfaces.msg", msg_mod)
+    monkeypatch.setitem(sys.modules, "promoc_assembly_interfaces.srv", srv_mod)
 
 
 def _clear_optional_modules() -> None:
@@ -57,7 +37,9 @@ def _clear_optional_modules() -> None:
             sys.modules.pop(name, None)
 
 
-def test_package_import_succeeds_without_optional_camera_modules():
+def test_package_import_succeeds_without_optional_camera_modules(monkeypatch):
+    _install_interface_stubs(monkeypatch)
+    sys.modules.pop("camera_nodes.node", None)
     _clear_optional_modules()
     module = importlib.import_module("camera_nodes.node")
     assert hasattr(module, "CameraNode")

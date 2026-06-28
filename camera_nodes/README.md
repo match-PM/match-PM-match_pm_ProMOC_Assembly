@@ -57,6 +57,8 @@ Hardware camera profiles are selected through:
   publishes a synthetic image stream and status without vendor drivers
 - `driver_mode:=hardware`
   expects the hardware driver chain from `camera.launch.py`
+- any other `driver_mode`
+  is rejected instead of silently starting the wrong backend
 
 Driver classes are imported directly from their modules:
 `camera_nodes.drivers.mock` and `camera_nodes.drivers.hardware`. The
