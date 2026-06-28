@@ -286,10 +286,42 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self._update_position_cache()
 
     def jog(self, step_size: float, timeout: Optional[float] = None):
-        """Jog by a signed step size in millimeters."""
+        """Jog by a signed step size in millimeters using the Kinesis jog command."""
         self._ensure_connected()
-        self.logger.debug(f'Jogging by: {step_size} mm')
-        self.move_relative(float(step_size), timeout=timeout)
+        step_mm = float(step_size)
+        direction = "+" if step_mm >= 0.0 else "-"
+        step_device = int(abs(step_mm) * self.device_units_per_mm)
+
+        if step_device == 0:
+            self.logger.debug("Ignoring zero-length jog command")
+            return
+
+        self.logger.debug(f'Jogging {direction} by: {abs(step_mm)} mm')
+
+        try:
+            with self._comm_lock:
+                self.device.setup_jog(
+                    mode="step",
+                    step_size=step_device,
+                    stop_mode="profiled",
+                    scale=False,
+                )
+                self.device.jog(direction, kind="builtin")
+        except Exception as e:
+            raise HardwareError(
+                f"Failed to start jog: {str(e)}",
+                details={
+                    'step_size': step_mm,
+                    'direction': direction,
+                    'error': str(e),
+                },
+            )
+
+        self._wait_for_movement_complete(
+            timeout_s=timeout or 300.0,
+            operation_name="Jog",
+        )
+        self._update_position_cache()
 
     def home(self, timeout: float = 180.0):
         """

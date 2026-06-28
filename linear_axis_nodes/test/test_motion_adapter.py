@@ -49,6 +49,7 @@ if "promoc_assembly_interfaces" not in sys.modules:
     sys.modules["promoc_assembly_interfaces.srv"] = srv_mod
 
 from linear_axis_nodes.config import LinearAxisConfig
+from linear_axis_nodes.drivers.hardware import ThorlabsLTS300Driver
 from linear_axis_nodes.node import AxisController, AxisOperationError
 from promoc_core import error_codes
 from promoc_core.promoc_exceptions import MovementTimeoutError
@@ -56,7 +57,13 @@ from promoc_core.status import AxisState
 
 
 class _DummyLogger:
+    def debug(self, *args, **kwargs):
+        _ = args, kwargs
+
     def info(self, *args, **kwargs):
+        _ = args, kwargs
+
+    def warn(self, *args, **kwargs):
         _ = args, kwargs
 
     def warning(self, *args, **kwargs):
@@ -142,6 +149,25 @@ class _FakeDriver:
             time.sleep(0.01)
         self.position = target
         self.moving = False
+
+
+class _FakeThorlabsDevice:
+    def __init__(self):
+        self.setup_jog_calls = []
+        self.jog_calls = []
+        self.position = 0
+
+    def setup_jog(self, **kwargs):
+        self.setup_jog_calls.append(kwargs)
+
+    def jog(self, direction, kind):
+        self.jog_calls.append((direction, kind))
+
+    def is_moving(self):
+        return False
+
+    def get_position(self):
+        return self.position
 
 
 def _config(**overrides) -> LinearAxisConfig:
@@ -291,6 +317,25 @@ def test_jog_uses_driver_jog_not_relative_move(monkeypatch):
     assert final_position == pytest.approx(2.5)
     assert driver.jog_calls == [2.5]
     assert driver.move_relative_calls == []
+
+
+def test_hardware_jog_uses_builtin_kinesis_jog():
+    device = _FakeThorlabsDevice()
+    driver = ThorlabsLTS300Driver(_DummyLogger())
+    driver.connected = True
+    driver.device = device
+
+    driver.jog(-2.5, timeout=0.1)
+
+    assert device.setup_jog_calls == [
+        {
+            "mode": "step",
+            "step_size": 1024000,
+            "stop_mode": "profiled",
+            "scale": False,
+        }
+    ]
+    assert device.jog_calls == [("-", "builtin")]
 
 
 def test_movement_timeout_returns_correct_error(monkeypatch):
