@@ -11,7 +11,6 @@ from promoc_core.logging import LogTags, TaggedLogger
 from promoc_core.promoc_exceptions import ConfigurationError
 
 from ..config import MoverNodeConfig
-from ..drivers.base import PlanarMotorDriver
 from ..models import SpeedProfile
 from .status import MoverUtils
 
@@ -24,7 +23,7 @@ class ServiceCallbacksBase:
     def __init__(
         self,
         logger,
-        driver: PlanarMotorDriver,
+        driver,
         mover_utils: MoverUtils,
         config: MoverNodeConfig,
     ):

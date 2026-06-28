@@ -20,14 +20,13 @@ from promoc_core.promoc_exceptions import (
 from promoc_core.status import DeviceState
 
 from ..config import MoverNodeConfig
-from ..drivers.base import PlanarMotorDriver
 from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
 class MoverUtils:
     """Node-local runtime state shared by the service handlers."""
 
-    def __init__(self, logger, driver: PlanarMotorDriver, config: MoverNodeConfig):
+    def __init__(self, logger, driver, config: MoverNodeConfig):
         self.logger = TaggedLogger(logger, LogTags.PMC)
         self.driver = driver
         self.config = config

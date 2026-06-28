@@ -30,7 +30,7 @@ from .services.status import MoverUtils
 
 
 class MoverServiceNode(Node):
-    """ROS node that wires a small driver boundary to the existing ROS API."""
+    """ROS node that wires services, status publishing, and the selected driver."""
 
     def __init__(self):
         super().__init__("mover_node")
