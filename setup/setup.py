@@ -57,10 +57,12 @@ PYTHON_PACKAGES = [
     "pyserial",
     "pyusb",
     "pythonnet",
+    "pylablib>=1.4.0",
+]
+
+NUMBA_PACKAGES = [
     "llvmlite==0.42.0",
     "numba==0.59.1",
-    "coverage<7.4",
-    "pylablib>=1.4.0",
 ]
 
 
@@ -116,6 +118,26 @@ def python_import(module: str, python: str = sys.executable) -> bool:
         stderr=subprocess.DEVNULL,
         check=False,
     ).returncode == 0
+
+
+def python_version(python: str) -> tuple[int, int]:
+    code = "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    returncode, output = capture([python, "-c", code])
+    if returncode != 0:
+        return sys.version_info[:2]
+    major, minor = output.split(".", 1)
+    return int(major), int(minor)
+
+
+def python_packages_for(python: str) -> list[str]:
+    packages = list(PYTHON_PACKAGES)
+    if python_version(python) < (3, 13):
+        packages.append("coverage<7.4")
+        packages.extend(NUMBA_PACKAGES)
+    else:
+        packages.append("coverage")
+        print("Skipping numba/llvmlite pins on Python 3.13+.")
+    return packages
 
 
 def ros_setup_path() -> Path | None:
@@ -216,7 +238,7 @@ def command_install(args: argparse.Namespace) -> int:
 
 
 def install_python_packages(python: str, dry_run: bool) -> int:
-    for spec in PYTHON_PACKAGES:
+    for spec in python_packages_for(python):
         package_args = spec.split()
         command = [python, "-m", "pip", "install", *package_args]
         if run(command, dry_run=dry_run) != 0:
