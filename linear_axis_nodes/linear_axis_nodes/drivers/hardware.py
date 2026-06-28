@@ -285,6 +285,12 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         )
         self._update_position_cache()
 
+    def jog(self, step_size: float, timeout: Optional[float] = None):
+        """Jog by a signed step size in millimeters."""
+        self._ensure_connected()
+        self.logger.debug(f'Jogging by: {step_size} mm')
+        self.move_relative(float(step_size), timeout=timeout)
+
     def home(self, timeout: float = 180.0):
         """
         Home the device with configurable timeout.

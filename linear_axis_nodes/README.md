@@ -75,6 +75,8 @@ See [`../docs/INTERFACES.md`](../docs/INTERFACES.md) for the full namespaces.
   uses a software-only axis backend with the same ROS surface
 - `driver_mode:=hardware`
   uses the real axis connection settings from the config file
+- `jog_axis`
+  is kept as its own driver operation, separate from `move_relative`
 
 ## Current Limitations
 

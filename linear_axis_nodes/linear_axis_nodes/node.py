@@ -202,7 +202,7 @@ class AxisController:
             busy_message=f"Jogging by {step_size:.3f} mm",
             success_message="Jog complete",
             success_axis_state=AxisState.HOMED,
-            operation=lambda: self._driver.move_relative(
+            operation=lambda: self._driver.jog(
                 step_size,
                 timeout=self._config.movement_timeout,
             ),

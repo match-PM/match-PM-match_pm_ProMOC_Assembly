@@ -75,6 +75,8 @@ class _FakeDriver:
         self.stop_requested = False
         self.velocity = (0.0, 1.0, 5.0)
         self.moving = False
+        self.jog_calls = []
+        self.move_relative_calls = []
 
     def connect(self, port: str = None) -> bool:
         _ = port
@@ -89,7 +91,12 @@ class _FakeDriver:
         self._run_move(position, timeout)
 
     def move_relative(self, distance: float, timeout: float | None = None) -> None:
+        self.move_relative_calls.append(distance)
         self._run_move(self.position + distance, timeout)
+
+    def jog(self, step_size: float, timeout: float | None = None) -> None:
+        self.jog_calls.append(step_size)
+        self._run_move(self.position + step_size, timeout)
 
     def home(self, timeout: float = 180.0) -> None:
         self._run_move(0.0, timeout)
@@ -273,6 +280,17 @@ def test_mock_movement_reaches_requested_target(monkeypatch):
 
     assert final_position == pytest.approx(42.5)
     assert controller.snapshot().axis_state == AxisState.HOMED
+
+
+def test_jog_uses_driver_jog_not_relative_move(monkeypatch):
+    controller, driver = _controller(monkeypatch)
+    controller.home()
+
+    final_position = controller.jog(2.5)
+
+    assert final_position == pytest.approx(2.5)
+    assert driver.jog_calls == [2.5]
+    assert driver.move_relative_calls == []
 
 
 def test_movement_timeout_returns_correct_error(monkeypatch):

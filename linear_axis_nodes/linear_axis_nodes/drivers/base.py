@@ -26,6 +26,10 @@ class LinearAxisDriver(ABC):
         """Move by a relative distance in millimeters."""
 
     @abstractmethod
+    def jog(self, step_size: float, timeout: Optional[float] = None) -> None:
+        """Jog by a signed step size in millimeters."""
+
+    @abstractmethod
     def home(self, timeout: float = 180.0) -> None:
         """Home the axis."""
 

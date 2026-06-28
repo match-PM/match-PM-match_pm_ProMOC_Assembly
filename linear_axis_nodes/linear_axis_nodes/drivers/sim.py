@@ -48,6 +48,9 @@ class MockLinearAxisDriver(LinearAxisDriver):
     def move_relative(self, distance: float, timeout: Optional[float] = None) -> None:
         self._run_move(self.get_position() + float(distance), timeout)
 
+    def jog(self, step_size: float, timeout: Optional[float] = None) -> None:
+        self._run_move(self.get_position() + float(step_size), timeout)
+
     def home(self, timeout: float = 180.0) -> None:
         self._run_move(self.config.min_position, timeout)
 
