@@ -6,6 +6,10 @@
 controller. It should not become a generic dump for hardware-specific runtime
 logic.
 
+You do not need the system controller for single-device tests. Use it when one
+place should answer: are all required devices alive, is the system stopped, and
+can a shared reset be accepted safely?
+
 ## Executable
 
 - `ros2 run promoc_core promoc_system_controller`
@@ -33,9 +37,8 @@ Important keys:
 - `service_call_timeout_sec`
 - `status_publication_rate_hz`
 
-The system controller declares these ROS parameters directly in
-`promoc_core/system_controller.py`. There is no separate parameter-defaults
-registry.
+The system controller keeps its ROS parameter defaults in the small
+`PARAMETER_DEFAULTS` table inside `promoc_core/system_controller.py`.
 
 ## Primary Topic
 

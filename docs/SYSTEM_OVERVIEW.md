@@ -86,6 +86,10 @@ started by the default `system.launch.py` path. Enable it with
 `system_controller:=true` when shared system status or coordinated stop/reset
 behavior is needed.
 
+Leave it off for direct camera, axis, or planar-motor bringup. Turn it on when
+one ROS interface should summarize the whole setup and coordinate a software
+stop across all motion devices.
+
 When enabled, it:
 
 - subscribes to camera, X-axis, Z-axis, and planar-motor status

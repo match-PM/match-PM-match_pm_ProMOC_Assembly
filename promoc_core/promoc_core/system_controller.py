@@ -1,4 +1,9 @@
-"""System-level monitoring and stop coordination for the ProMOC runtime."""
+"""Optional system monitor and shared stop/reset coordinator.
+
+The normal device nodes work without this node. Start the system controller only
+when one process should publish the combined system state and offer one common
+`stop_all` / guarded `reset_stop` service for the motion devices.
+"""
 
 from __future__ import annotations
 
@@ -10,13 +15,13 @@ import time
 from . import error_codes
 from .status import DeviceState
 
-try:  # pragma: no cover - exercised in integration tests after ROS setup.
+try:  # pragma: no cover - exercised after ROS setup.
     import rclpy
     from rclpy.callback_groups import ReentrantCallbackGroup
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-except ImportError:  # pragma: no cover - allows source-only unit tests.
+except ImportError:  # pragma: no cover - source-only unit tests.
     rclpy = None
     ReentrantCallbackGroup = None
     MultiThreadedExecutor = None
@@ -25,10 +30,10 @@ except ImportError:  # pragma: no cover - allows source-only unit tests.
     QoSProfile = None
     ReliabilityPolicy = None
 
-try:  # pragma: no cover - exercised in integration tests after interface build.
+try:  # pragma: no cover - exercised after interface build.
     from promoc_assembly_interfaces.msg import DeviceStatus, SystemStatus, XBotInfo
     from promoc_assembly_interfaces.srv import Stop, StopMotion
-except ImportError:  # pragma: no cover - allows source-only unit tests.
+except ImportError:  # pragma: no cover - source-only unit tests.
     DeviceStatus = None
     SystemStatus = None
     XBotInfo = None
@@ -46,46 +51,43 @@ READY_STATE = int(DeviceState.READY)
 BUSY_STATE = int(DeviceState.BUSY)
 STOPPED_STATE = int(DeviceState.STOPPED)
 ERROR_STATE = int(DeviceState.ERROR)
+NOT_READY_STATE = int(DeviceState.NOT_READY)
+SUCCESS = int(error_codes.SUCCESS)
 
 SAFE_RESET_STATES = {
-    "camera": {
-        int(DeviceState.CONNECTED),
-        int(DeviceState.NOT_READY),
-        int(DeviceState.READY),
-        int(DeviceState.STOPPED),
-    },
-    "x_axis": {
-        int(DeviceState.CONNECTED),
-        int(DeviceState.NOT_READY),
-        int(DeviceState.READY),
-        int(DeviceState.STOPPED),
-    },
-    "z_axis": {
-        int(DeviceState.CONNECTED),
-        int(DeviceState.NOT_READY),
-        int(DeviceState.READY),
-        int(DeviceState.STOPPED),
-    },
-    "planar_motor": {
-        int(DeviceState.CONNECTED),
-        int(DeviceState.NOT_READY),
-        int(DeviceState.READY),
-        int(DeviceState.STOPPED),
-    },
+    int(DeviceState.CONNECTED),
+    NOT_READY_STATE,
+    READY_STATE,
+    STOPPED_STATE,
 }
+
+PARAMETER_DEFAULTS = {
+    "required_devices": list(KNOWN_DEVICE_NAMES),
+    "camera_status_topic": "/promoc/camera/status",
+    "x_axis_status_topic": "/promoc/linear_axis/lts300_x_axis/status",
+    "z_axis_status_topic": "/promoc/linear_axis/lts300_z_axis/status",
+    "planar_motor_status_topic": "/promoc/mover/xbot_info",
+    "x_axis_stop_service": "/promoc/linear_axis/lts300_x_axis/stop",
+    "z_axis_stop_service": "/promoc/linear_axis/lts300_z_axis/stop",
+    "planar_motor_stop_service": "/promoc/mover/stop_motion",
+    "planar_motor_xbot_id": 0,
+    "status_timeout_sec": 2.0,
+    "service_call_timeout_sec": 1.0,
+    "status_publication_rate_hz": 10.0,
+}
+
 
 @dataclass(frozen=True)
 class DeviceRecord:
-    """Letzte bekannte Zustandsinformation eines ueberwachten Geraets."""
+    """Last status received from one monitored device."""
 
     state: int = int(DeviceState.DISCONNECTED)
-    error_code: int = int(error_codes.SUCCESS)
+    error_code: int = SUCCESS
     message: str = "no status received"
-    has_message: bool = False  # True sobald mindestens ein Status empfangen wurde
-    received_at: float | None = None  # Zeitstempel der letzten Aktualisierung
+    has_message: bool = False
+    received_at: float | None = None
 
     def is_fresh(self, now: float, timeout_sec: float) -> bool:
-        """Prueft ob der letzte Status innerhalb des Timeout-Fensters liegt."""
         if not self.has_message or self.received_at is None:
             return False
         return (now - self.received_at) <= timeout_sec
@@ -93,12 +95,7 @@ class DeviceRecord:
 
 @dataclass(frozen=True)
 class SystemStatusSnapshot:
-    """Kombinierter Systemstatus, der vom Controller publiziert wird.
-
-    stop_latched: True wenn das Sicherheitssystem einen Stop ausgeloest hat
-    all_required_present: Alle erforderlichen Geraete haben jemals Status gesendet
-    all_required_fresh: Alle Status sind aktuell (innerhalb timeout_sec)
-    """
+    """Small value object published as `SystemStatus` by the ROS node."""
 
     state: int
     stop_latched: bool
@@ -110,7 +107,7 @@ class SystemStatusSnapshot:
 
 @dataclass(frozen=True)
 class StopCallResult:
-    """Ergebnis eines Stop-Requests an ein Bewegungsgeraet."""
+    """Result of one stop request to one motion device."""
 
     device_name: str
     success: bool
@@ -120,7 +117,7 @@ class StopCallResult:
 
 @dataclass(frozen=True)
 class StopEndpoint:
-    """Callbacks, die einen Stop-Service fuer ein Geraet kapseln."""
+    """Tiny adapter around a ROS stop client, kept pure for unit tests."""
 
     device_name: str
     wait_for_service: Callable[[float], bool]
@@ -132,7 +129,7 @@ class StopEndpoint:
 
 @dataclass(frozen=True)
 class SystemControllerConfig:
-    """Typed runtime configuration for the system controller."""
+    """Runtime configuration loaded from ROS parameters."""
 
     required_devices: tuple[str, ...]
     camera_status_topic: str
@@ -149,35 +146,11 @@ class SystemControllerConfig:
 
     @classmethod
     def from_node(cls, node: "SystemControllerNode") -> "SystemControllerConfig":
-        """Declare and load all controller parameters."""
-        node.declare_parameter("required_devices", list(KNOWN_DEVICE_NAMES))
-        node.declare_parameter("camera_status_topic", "/promoc/camera/status")
-        node.declare_parameter(
-            "x_axis_status_topic",
-            "/promoc/linear_axis/lts300_x_axis/status",
-        )
-        node.declare_parameter(
-            "z_axis_status_topic",
-            "/promoc/linear_axis/lts300_z_axis/status",
-        )
-        node.declare_parameter("planar_motor_status_topic", "/promoc/mover/xbot_info")
-        node.declare_parameter(
-            "x_axis_stop_service",
-            "/promoc/linear_axis/lts300_x_axis/stop",
-        )
-        node.declare_parameter(
-            "z_axis_stop_service",
-            "/promoc/linear_axis/lts300_z_axis/stop",
-        )
-        node.declare_parameter("planar_motor_stop_service", "/promoc/mover/stop_motion")
-        node.declare_parameter("planar_motor_xbot_id", 0)
-        node.declare_parameter("status_timeout_sec", 2.0)
-        node.declare_parameter("service_call_timeout_sec", 1.0)
-        node.declare_parameter("status_publication_rate_hz", 10.0)
+        for name, default in PARAMETER_DEFAULTS.items():
+            node.declare_parameter(name, default)
 
-        required_devices = tuple(
-            str(name) for name in node.get_parameter("required_devices").value
-        )
+        values = {name: node.get_parameter(name).value for name in PARAMETER_DEFAULTS}
+        required_devices = tuple(str(name) for name in values["required_devices"])
         invalid_devices = sorted(set(required_devices) - set(KNOWN_DEVICE_NAMES))
         if invalid_devices:
             raise ValueError(
@@ -186,38 +159,30 @@ class SystemControllerConfig:
 
         return cls(
             required_devices=required_devices or KNOWN_DEVICE_NAMES,
-            camera_status_topic=str(node.get_parameter("camera_status_topic").value),
-            x_axis_status_topic=str(node.get_parameter("x_axis_status_topic").value),
-            z_axis_status_topic=str(node.get_parameter("z_axis_status_topic").value),
-            planar_motor_status_topic=str(
-                node.get_parameter("planar_motor_status_topic").value
-            ),
-            x_axis_stop_service=str(node.get_parameter("x_axis_stop_service").value),
-            z_axis_stop_service=str(node.get_parameter("z_axis_stop_service").value),
-            planar_motor_stop_service=str(
-                node.get_parameter("planar_motor_stop_service").value
-            ),
-            planar_motor_xbot_id=int(node.get_parameter("planar_motor_xbot_id").value),
-            status_timeout_sec=max(
-                0.1, float(node.get_parameter("status_timeout_sec").value)
-            ),
+            camera_status_topic=str(values["camera_status_topic"]),
+            x_axis_status_topic=str(values["x_axis_status_topic"]),
+            z_axis_status_topic=str(values["z_axis_status_topic"]),
+            planar_motor_status_topic=str(values["planar_motor_status_topic"]),
+            x_axis_stop_service=str(values["x_axis_stop_service"]),
+            z_axis_stop_service=str(values["z_axis_stop_service"]),
+            planar_motor_stop_service=str(values["planar_motor_stop_service"]),
+            planar_motor_xbot_id=int(values["planar_motor_xbot_id"]),
+            status_timeout_sec=max(0.1, float(values["status_timeout_sec"])),
             service_call_timeout_sec=max(
-                0.1, float(node.get_parameter("service_call_timeout_sec").value)
+                0.1, float(values["service_call_timeout_sec"])
             ),
             status_publication_rate_hz=max(
-                0.1, float(node.get_parameter("status_publication_rate_hz").value)
+                0.1, float(values["status_publication_rate_hz"])
             ),
         )
 
 
 class SystemStateStore:
-    """Zustandsspeicher fuer das System-Monitoring (reines Python, keine ROS-Abhaengigkeit).
+    """Thread-safe, ROS-free state machine for combined system status.
 
-    Verwaltet:
-    - DeviceRecords fuer alle bekannten Geraete (camera, x_axis, z_axis, planar_motor)
-    - Stop-Latch (bleibt aktiv bis reset_stop aufgerufen wird)
-    - Frische-Pruefung (is_fresh) fuer Timeout-Erkennung
-    - Berechnung des kombinierten Systemstatus (compute_status)
+    It tracks the latest status per required device, latches `stop_all` until
+    `reset_stop`, and rejects reset when the current device state is missing,
+    stale, busy, in error, or otherwise not known safe.
     """
 
     def __init__(
@@ -229,14 +194,13 @@ class SystemStateStore:
         self.required_devices = tuple(required_devices)
         self.status_timeout_sec = float(status_timeout_sec)
         self._records = {name: DeviceRecord() for name in KNOWN_DEVICE_NAMES}
-        self._lock = threading.RLock()  # ReentrantLock fuer verschachtelte Aufrufe
+        self._lock = threading.RLock()
         self._stop_latched = False
-        self._latched_error_code = int(error_codes.SUCCESS)
+        self._latched_error_code = SUCCESS
         self._latched_message = "system not stopped"
 
     @property
     def stop_latched(self) -> bool:
-        """Return whether system stop is currently latched."""
         with self._lock:
             return self._stop_latched
 
@@ -249,7 +213,6 @@ class SystemStateStore:
         message: str,
         received_at: float,
     ) -> None:
-        """Update the latest observation for one monitored device."""
         with self._lock:
             self._records[device_name] = DeviceRecord(
                 state=int(state),
@@ -260,247 +223,183 @@ class SystemStateStore:
             )
 
     def record_for(self, device_name: str) -> DeviceRecord:
-        """Return the latest stored record for the given device."""
         with self._lock:
             return self._records[device_name]
 
     def missing_devices(self) -> list[str]:
-        """List required devices that have never published status."""
         with self._lock:
-            return [
-                name
-                for name in self.required_devices
-                if not self._records[name].has_message
-            ]
+            return self._missing_devices()
 
     def stale_devices(self, now: float) -> list[str]:
-        """List required devices whose statuses are missing or stale."""
         with self._lock:
-            return [
-                name
-                for name in self.required_devices
-                if self._records[name].has_message
-                and not self._records[name].is_fresh(now, self.status_timeout_sec)
-            ]
+            return self._stale_devices(now)
 
     def device_is_safely_stopped(self, device_name: str, now: float) -> bool:
-        """Return whether a motion-capable device is confirmed STOPPED and fresh."""
         with self._lock:
             record = self._records[device_name]
             return (
-                record.is_fresh(now, self.status_timeout_sec)
-                and record.state == STOPPED_STATE
+                record.state == STOPPED_STATE
+                and record.is_fresh(now, self.status_timeout_sec)
             )
 
     def latch_stop(self, *, error_code: int, message: str) -> None:
-        """Latch the system-wide stop state with the latest stop summary."""
         with self._lock:
             self._stop_latched = True
             self._latched_error_code = int(error_code)
             self._latched_message = str(message)
 
     def update_latched_message(self, *, error_code: int, message: str) -> None:
-        """Keep the stop latch active while updating its visible reason."""
         with self._lock:
             self._latched_error_code = int(error_code)
             self._latched_message = str(message)
 
     def clear_stop_latch(self) -> None:
-        """Clear the latched stop state after a successful reset."""
         with self._lock:
             self._stop_latched = False
-            self._latched_error_code = int(error_codes.SUCCESS)
+            self._latched_error_code = SUCCESS
             self._latched_message = "system stop cleared"
 
     def compute_status(self, now: float) -> SystemStatusSnapshot:
-        """Berechnet den kombinierten Systemstatus basierend auf allen Geraete-Records.
-
-        Prioritaet (erste zutreffende Bedingung):
-        1. stop_latched -> STOPPED
-        2. Fehlende Geraete -> NOT_READY (REQUIRED_DEVICE_MISSING)
-        3. Veraltete Status -> NOT_READY (DEVICE_STATUS_STALE)
-        4. Geraet im ERROR -> ERROR
-        5. Geraete BUSY -> BUSY
-        6. Alle READY -> READY
-        7. Sonst -> NOT_READY
-        """
         with self._lock:
-            missing = [
-                name
-                for name in self.required_devices
-                if not self._records[name].has_message
-            ]
-            stale = [
-                name
-                for name in self.required_devices
-                if self._records[name].has_message
-                and not self._records[name].is_fresh(now, self.status_timeout_sec)
-            ]
+            missing = self._missing_devices()
+            stale = self._stale_devices(now)
             all_present = not missing
-            all_fresh = not missing and not stale
+            all_fresh = all_present and not stale
 
             if self._stop_latched:
-                return SystemStatusSnapshot(
-                    state=STOPPED_STATE,
+                return self._snapshot(
+                    STOPPED_STATE,
+                    self._latched_error_code,
+                    self._latched_message,
                     stop_latched=True,
-                    all_required_present=all_present,
-                    all_required_fresh=all_fresh,
-                    error_code=self._latched_error_code,
-                    message=self._latched_message,
+                    all_present=all_present,
+                    all_fresh=all_fresh,
                 )
-
             if missing:
-                return SystemStatusSnapshot(
-                    state=int(DeviceState.NOT_READY),
-                    stop_latched=False,
-                    all_required_present=False,
-                    all_required_fresh=False,
-                    error_code=int(error_codes.REQUIRED_DEVICE_MISSING),
-                    message=f"missing status from: {', '.join(missing)}",
+                return self._snapshot(
+                    NOT_READY_STATE,
+                    int(error_codes.REQUIRED_DEVICE_MISSING),
+                    f"missing status from: {', '.join(missing)}",
+                    all_present=False,
+                    all_fresh=False,
                 )
-
             if stale:
-                return SystemStatusSnapshot(
-                    state=int(DeviceState.NOT_READY),
-                    stop_latched=False,
-                    all_required_present=True,
-                    all_required_fresh=False,
-                    error_code=int(error_codes.DEVICE_STATUS_STALE),
-                    message=f"stale status from: {', '.join(stale)}",
+                return self._snapshot(
+                    NOT_READY_STATE,
+                    int(error_codes.DEVICE_STATUS_STALE),
+                    f"stale status from: {', '.join(stale)}",
+                    all_fresh=False,
                 )
 
-            # Pruefe auf ERROR-Geraete
-            error_devices = [
-                name
-                for name in self.required_devices
-                if self._records[name].state == ERROR_STATE
-            ]
+            error_devices = self._devices_with_state(ERROR_STATE)
             if error_devices:
                 first = self._records[error_devices[0]]
-                return SystemStatusSnapshot(
-                    state=ERROR_STATE,
-                    stop_latched=False,
-                    all_required_present=True,
-                    all_required_fresh=True,
-                    error_code=first.error_code or int(error_codes.RESET_REJECTED_ERROR),
-                    message=f"device error: {error_devices[0]} ({first.message})",
+                return self._snapshot(
+                    ERROR_STATE,
+                    first.error_code or int(error_codes.RESET_REJECTED_ERROR),
+                    f"device error: {error_devices[0]} ({first.message})",
                 )
 
-            # Pruefe auf BUSY-Geraete
-            busy_devices = [
-                name
-                for name in self.required_devices
-                if self._records[name].state == BUSY_STATE
-            ]
+            busy_devices = self._devices_with_state(BUSY_STATE)
             if busy_devices:
-                return SystemStatusSnapshot(
-                    state=BUSY_STATE,
-                    stop_latched=False,
-                    all_required_present=True,
-                    all_required_fresh=True,
-                    error_code=int(error_codes.SUCCESS),
-                    message=f"busy device: {', '.join(busy_devices)}",
+                return self._snapshot(
+                    BUSY_STATE,
+                    SUCCESS,
+                    f"busy device: {', '.join(busy_devices)}",
                 )
 
-            if all(
-                self._records[name].state == READY_STATE
-                for name in self.required_devices
-            ):
-                return SystemStatusSnapshot(
-                    state=READY_STATE,
-                    stop_latched=False,
-                    all_required_present=True,
-                    all_required_fresh=True,
-                    error_code=int(error_codes.SUCCESS),
-                    message="all required device statuses are fresh and ready",
+            if all(self._records[name].state == READY_STATE for name in self.required_devices):
+                return self._snapshot(
+                    READY_STATE,
+                    SUCCESS,
+                    "all required device statuses are fresh and ready",
                 )
 
-            return SystemStatusSnapshot(
-                state=int(DeviceState.NOT_READY),
-                stop_latched=False,
-                all_required_present=True,
-                all_required_fresh=True,
-                error_code=int(error_codes.DEVICE_NOT_READY),
-                message="all required statuses are present, but at least one device is not ready",
+            return self._snapshot(
+                NOT_READY_STATE,
+                int(error_codes.DEVICE_NOT_READY),
+                "all required statuses are present, but at least one device is not ready",
             )
 
     def can_reset(self, now: float) -> tuple[bool, int, str]:
-        """Prueft ob das System-Stop-Latch sicher zurueckgesetzt werden kann.
-
-        Bedingungen fuer Reset:
-        - Alle Geraete haben Status gesendet (nicht missing)
-        - Alle Status sind aktuell (nicht stale)
-        - Kein Geraet ist BUSY
-        - Kein Geraet ist im ERROR
-        - Alle Geraete sind in einem sicheren Zustand (SAFE_RESET_STATES)
-        """
         with self._lock:
-            missing = [
-                name
-                for name in self.required_devices
-                if not self._records[name].has_message
-            ]
-            if missing:
-                return (
-                    False,
+            checks = (
+                (
+                    self._missing_devices(),
                     int(error_codes.REQUIRED_DEVICE_MISSING),
-                    f"reset rejected: missing status from {', '.join(missing)}",
-                )
-
-            stale = [
-                name
-                for name in self.required_devices
-                if self._records[name].has_message
-                and not self._records[name].is_fresh(now, self.status_timeout_sec)
-            ]
-            if stale:
-                return (
-                    False,
+                    "missing status from",
+                ),
+                (
+                    self._stale_devices(now),
                     int(error_codes.DEVICE_STATUS_STALE),
-                    f"reset rejected: stale status from {', '.join(stale)}",
-                )
-
-            busy_devices = [
-                name
-                for name in self.required_devices
-                if self._records[name].state == BUSY_STATE
-            ]
-            if busy_devices:
-                return (
-                    False,
+                    "stale status from",
+                ),
+                (
+                    self._devices_with_state(BUSY_STATE),
                     int(error_codes.RESET_REJECTED_BUSY),
-                    f"reset rejected: busy device {', '.join(busy_devices)}",
-                )
-
-            error_devices = [
-                name
-                for name in self.required_devices
-                if self._records[name].state == ERROR_STATE
-            ]
-            if error_devices:
-                return (
-                    False,
+                    "busy device",
+                ),
+                (
+                    self._devices_with_state(ERROR_STATE),
                     int(error_codes.RESET_REJECTED_ERROR),
-                    f"reset rejected: device error {', '.join(error_devices)}",
-                )
-
-            unsafe_devices = [
-                name
-                for name in self.required_devices
-                if self._records[name].state not in SAFE_RESET_STATES[name]
-            ]
-            if unsafe_devices:
-                return (
-                    False,
+                    "device error",
+                ),
+                (
+                    [
+                        name
+                        for name in self.required_devices
+                        if self._records[name].state not in SAFE_RESET_STATES
+                    ],
                     int(error_codes.RESET_REJECTED_SAFETY_UNKNOWN),
-                    f"reset rejected: safety state unknown for {', '.join(unsafe_devices)}",
-                )
-
-            return (
-                True,
-                int(error_codes.SUCCESS),
-                "all required devices are fresh and in safe states",
+                    "safety state unknown for",
+                ),
             )
+            for devices, error_code, reason in checks:
+                if devices:
+                    return False, error_code, f"reset rejected: {reason} {', '.join(devices)}"
+
+            return True, SUCCESS, "all required devices are fresh and in safe states"
+
+    def _missing_devices(self) -> list[str]:
+        return [
+            name
+            for name in self.required_devices
+            if not self._records[name].has_message
+        ]
+
+    def _stale_devices(self, now: float) -> list[str]:
+        return [
+            name
+            for name in self.required_devices
+            if self._records[name].has_message
+            and not self._records[name].is_fresh(now, self.status_timeout_sec)
+        ]
+
+    def _devices_with_state(self, state: int) -> list[str]:
+        return [
+            name
+            for name in self.required_devices
+            if self._records[name].state == state
+        ]
+
+    def _snapshot(
+        self,
+        state: int,
+        error_code: int,
+        message: str,
+        *,
+        stop_latched: bool = False,
+        all_present: bool = True,
+        all_fresh: bool = True,
+    ) -> SystemStatusSnapshot:
+        return SystemStatusSnapshot(
+            state=int(state),
+            stop_latched=bool(stop_latched),
+            all_required_present=bool(all_present),
+            all_required_fresh=bool(all_fresh),
+            error_code=int(error_code),
+            message=str(message),
+        )
 
 
 def execute_stop_requests(
@@ -510,232 +409,192 @@ def execute_stop_requests(
     monotonic_fn: Callable[[], float] = time.monotonic,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> list[StopCallResult]:
-    """Verteilt Stop-Requests parallel an alle Bewegungsgeraete.
-
-    Ablauf:
-    1. Geraete, die bereits sicher gestoppt sind, werden uebersprungen
-    2. Auf verfuegbare Services warten (mit Timeout)
-    3. Async Stop-Requests an alle bereiten Services senden
-    4. Auf Antworten warten (mit Timeout)
-    5. Timeout fuer nicht geantwortete Requests -> STOP_REQUEST_TIMED_OUT
-
-    Reine Funktion ohne ROS-Abhaengigkeit (testbar).
-    """
+    """Send stop requests to all motion devices and collect one result per device."""
     results: list[StopCallResult] = []
-    pending_endpoints: list[StopEndpoint] = []
-    # Schritt 1: Bereits gestoppte Geraete ueberspringen
-    for endpoint in endpoints:
-        if endpoint.is_safely_stopped():
-            results.append(
-                StopCallResult(
-                    device_name=endpoint.device_name,
-                    success=True,
-                    error_code=int(error_codes.SUCCESS),
-                    status_message="already safely stopped",
-                )
-            )
-            continue
-        pending_endpoints.append(endpoint)
-
-    if not pending_endpoints:
+    endpoints = _skip_already_stopped(endpoints, results)
+    if not endpoints:
         return results
 
-    readiness_deadline = monotonic_fn() + timeout_sec
-    ready_endpoints: list[StopEndpoint] = []
-    waiting_endpoints = list(pending_endpoints)
-    # Schritt 2: Auf Service-Verfuegbarkeit warten
-    while waiting_endpoints and monotonic_fn() < readiness_deadline:
-        still_waiting: list[StopEndpoint] = []
-        for endpoint in waiting_endpoints:
-            try:
-                if endpoint.is_service_ready is not None:
-                    service_ready = endpoint.is_service_ready()
-                else:
-                    service_ready = endpoint.wait_for_service(0.0)
-            except Exception as exc:  # pragma: no cover - defensive
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=False,
-                        error_code=int(error_codes.STOP_SERVICE_UNAVAILABLE),
-                        status_message=f"service availability check failed: {exc}",
-                    )
-                )
-                continue
+    ready, unavailable = _wait_for_ready_services(
+        endpoints,
+        timeout_sec=timeout_sec,
+        monotonic_fn=monotonic_fn,
+        sleep_fn=sleep_fn,
+    )
+    results.extend(unavailable)
 
-            if service_ready:
-                ready_endpoints.append(endpoint)
-            else:
-                still_waiting.append(endpoint)
-
-        waiting_endpoints = still_waiting
-        if waiting_endpoints:
-            sleep_fn(0.01)
-
-    for endpoint in waiting_endpoints:
-        if endpoint.is_safely_stopped():
-            results.append(
-                StopCallResult(
-                    device_name=endpoint.device_name,
-                    success=True,
-                    error_code=int(error_codes.SUCCESS),
-                    status_message="already safely stopped",
-                )
-            )
-        else:
-            results.append(
-                StopCallResult(
-                    device_name=endpoint.device_name,
-                    success=False,
-                    error_code=int(error_codes.STOP_SERVICE_UNAVAILABLE),
-                    status_message="stop service unavailable",
-                )
-            )
-
-    # Schritt 3: Async Stop-Requests senden
-    pending_futures: dict[str, tuple[StopEndpoint, Any]] = {}
-    for endpoint in ready_endpoints:
+    pending: dict[str, tuple[StopEndpoint, Any]] = {}
+    for endpoint in ready:
         try:
-            pending_futures[endpoint.device_name] = (
+            pending[endpoint.device_name] = (
                 endpoint,
                 endpoint.call_async(endpoint.make_request()),
             )
         except Exception as exc:
             results.append(
                 StopCallResult(
-                    device_name=endpoint.device_name,
-                    success=False,
-                    error_code=int(error_codes.STOP_REQUEST_FAILED),
-                    status_message=f"stop request raised exception: {exc}",
+                    endpoint.device_name,
+                    False,
+                    int(error_codes.STOP_REQUEST_FAILED),
+                    f"stop request raised exception: {exc}",
                 )
             )
 
-    # Schritt 4: Auf Antworten aller Futures warten
-    response_deadline = monotonic_fn() + timeout_sec
-    while pending_futures and monotonic_fn() < response_deadline:
-        completed = [
-            device_name
-            for device_name, (_endpoint, future) in pending_futures.items()
-            if future.done()
-        ]
-        for device_name in completed:
-            endpoint, future = pending_futures.pop(device_name)
-            try:
-                response = future.result()
-            except Exception as exc:
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=False,
-                        error_code=int(error_codes.STOP_REQUEST_FAILED),
-                        status_message=f"stop request failed: {exc}",
-                    )
-                )
-                continue
-
-            if response.success:
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=True,
-                        error_code=int(response.error_code),
-                        status_message=str(response.status_message),
-                    )
-                )
-                continue
-
-            if endpoint.is_safely_stopped():
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=True,
-                        error_code=int(error_codes.SUCCESS),
-                        status_message="already safely stopped",
-                    )
-                )
-                continue
-
-            results.append(
-                StopCallResult(
-                    device_name=endpoint.device_name,
-                    success=False,
-                    error_code=int(response.error_code),
-                    status_message=str(response.status_message),
-                )
-            )
-
-        if pending_futures:
+    deadline = monotonic_fn() + timeout_sec
+    while pending and monotonic_fn() < deadline:
+        for device_name in [
+            name for name, (_endpoint, future) in pending.items() if future.done()
+        ]:
+            endpoint, future = pending.pop(device_name)
+            results.append(_result_from_future(endpoint, future))
+        if pending:
             sleep_fn(0.01)
 
-    # Schritt 5: Timeout-Behandlung fuer uebrige Futures
-    for device_name, (endpoint, future) in pending_futures.items():
+    for device_name, (endpoint, future) in pending.items():
         if future.done():
-            try:
-                response = future.result()
-            except Exception as exc:
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=False,
-                        error_code=int(error_codes.STOP_REQUEST_FAILED),
-                        status_message=f"stop request failed: {exc}",
-                    )
-                )
-                continue
-
-            if response.success or endpoint.is_safely_stopped():
-                results.append(
-                    StopCallResult(
-                        device_name=endpoint.device_name,
-                        success=True,
-                        error_code=int(response.error_code),
-                        status_message=str(response.status_message),
-                    )
-                )
-                continue
-
+            results.append(_result_from_future(endpoint, future))
+        else:
             results.append(
                 StopCallResult(
-                    device_name=device_name,
-                    success=False,
-                    error_code=int(response.error_code),
-                    status_message=str(response.status_message),
+                    device_name,
+                    False,
+                    int(error_codes.STOP_REQUEST_TIMED_OUT),
+                    "stop request timed out",
                 )
             )
-            continue
-
-        results.append(
-            StopCallResult(
-                device_name=device_name,
-                success=False,
-                error_code=int(error_codes.STOP_REQUEST_TIMED_OUT),
-                status_message="stop request timed out",
-            )
-        )
 
     return results
 
 
+def _skip_already_stopped(
+    endpoints: list[StopEndpoint],
+    results: list[StopCallResult],
+) -> list[StopEndpoint]:
+    pending: list[StopEndpoint] = []
+    for endpoint in endpoints:
+        if endpoint.is_safely_stopped():
+            results.append(_already_stopped_result(endpoint.device_name))
+        else:
+            pending.append(endpoint)
+    return pending
+
+
+def _wait_for_ready_services(
+    endpoints: list[StopEndpoint],
+    *,
+    timeout_sec: float,
+    monotonic_fn: Callable[[], float],
+    sleep_fn: Callable[[float], None],
+) -> tuple[list[StopEndpoint], list[StopCallResult]]:
+    ready: list[StopEndpoint] = []
+    unavailable: list[StopCallResult] = []
+    waiting = list(endpoints)
+    deadline = monotonic_fn() + timeout_sec
+
+    while waiting and monotonic_fn() < deadline:
+        still_waiting: list[StopEndpoint] = []
+        for endpoint in waiting:
+            try:
+                service_ready = (
+                    endpoint.is_service_ready()
+                    if endpoint.is_service_ready is not None
+                    else endpoint.wait_for_service(0.0)
+                )
+            except Exception as exc:
+                unavailable.append(
+                    StopCallResult(
+                        endpoint.device_name,
+                        False,
+                        int(error_codes.STOP_SERVICE_UNAVAILABLE),
+                        f"service availability check failed: {exc}",
+                    )
+                )
+                continue
+
+            if service_ready:
+                ready.append(endpoint)
+            else:
+                still_waiting.append(endpoint)
+
+        waiting = still_waiting
+        if waiting:
+            sleep_fn(0.01)
+
+    for endpoint in waiting:
+        if endpoint.is_safely_stopped():
+            unavailable.append(_already_stopped_result(endpoint.device_name))
+        else:
+            unavailable.append(
+                StopCallResult(
+                    endpoint.device_name,
+                    False,
+                    int(error_codes.STOP_SERVICE_UNAVAILABLE),
+                    "stop service unavailable",
+                )
+            )
+
+    return ready, unavailable
+
+
+def _result_from_future(endpoint: StopEndpoint, future: Any) -> StopCallResult:
+    try:
+        response = future.result()
+    except Exception as exc:
+        return StopCallResult(
+            endpoint.device_name,
+            False,
+            int(error_codes.STOP_REQUEST_FAILED),
+            f"stop request failed: {exc}",
+        )
+
+    if response.success:
+        return StopCallResult(
+            endpoint.device_name,
+            True,
+            int(response.error_code),
+            str(response.status_message),
+        )
+
+    if endpoint.is_safely_stopped():
+        return _already_stopped_result(endpoint.device_name)
+
+    return StopCallResult(
+        endpoint.device_name,
+        False,
+        int(response.error_code),
+        str(response.status_message),
+    )
+
+
+def _already_stopped_result(device_name: str) -> StopCallResult:
+    return StopCallResult(
+        device_name,
+        True,
+        SUCCESS,
+        "already safely stopped",
+    )
+
+
 def summarize_stop_results(results: list[StopCallResult]) -> tuple[bool, int, str]:
-    """Fasst einzelne Stop-Ergebnisse zu einer Service-Antwort zusammen."""
+    """Create the `Stop` service response from all individual stop results."""
     if not results:
         return True, int(error_codes.STOP_REQUESTED), "stop_all succeeded (no motion devices configured)"
 
     failures = [result for result in results if not result.success]
-    if not failures:
-        summary = ", ".join(
-            f"{result.device_name}: {result.status_message}" for result in results
+    if failures:
+        failure_summary = "; ".join(
+            f"{result.device_name}: {result.status_message}" for result in failures
         )
-        return True, int(error_codes.STOP_REQUESTED), f"stop_all succeeded ({summary})"
+        return (
+            False,
+            int(failures[0].error_code),
+            f"stop_all partial failure ({failure_summary})",
+        )
 
-    failure_summary = "; ".join(
-        f"{result.device_name}: {result.status_message}" for result in failures
+    summary = ", ".join(
+        f"{result.device_name}: {result.status_message}" for result in results
     )
-    return (
-        False,
-        int(failures[0].error_code),
-        f"stop_all partial failure ({failure_summary})",
-    )
+    return True, int(error_codes.STOP_REQUESTED), f"stop_all succeeded ({summary})"
 
 
 def device_state_name(state: int) -> str:
@@ -747,7 +606,6 @@ def device_state_name(state: int) -> str:
 
 
 def _ensure_ros_runtime() -> None:
-    """Raise a clear error when the ROS runtime is unavailable."""
     if (
         rclpy is None
         or ReentrantCallbackGroup is None
@@ -768,13 +626,11 @@ def _ensure_ros_runtime() -> None:
 
 
 class SystemControllerNode(Node):
-    """ROS-Knoten zur Ueberwachung aller Geraete-Status und Stop-Koordination.
+    """ROS wrapper around `SystemStateStore`.
 
-    Aufgaben:
-    - Abonniert Status-Topics aller Geraete (Camera, X-Achse, Z-Achse, Planarmotor)
-    - Berechnet und publiziert kombinierten SystemStatus
-    - Bietet stop_all Service (latch STOPPED, sende Stop an alle Bewegungsgeraete)
-    - Bietet reset_stop Service (loese Stop-Latch nur bei sicheren Zustaenden)
+    The node subscribes to device status topics, publishes `/promoc/system/status`,
+    forwards `stop_all` to all configured motion devices, and clears the stop
+    latch only when fresh safe device states are known.
     """
 
     def __init__(self) -> None:
@@ -790,7 +646,6 @@ class SystemControllerNode(Node):
         self._service_group = ReentrantCallbackGroup()
         self._client_group = ReentrantCallbackGroup()
 
-        # Publisher mit TRANSIENT_LOCAL: neue Subscriber erhalten sofort den letzten Status
         self._status_publisher = self.create_publisher(
             SystemStatus,
             "status",
@@ -800,28 +655,45 @@ class SystemControllerNode(Node):
                 reliability=ReliabilityPolicy.RELIABLE,
             ),
         )
+        self._create_status_subscriptions()
+        self._create_stop_clients()
 
-        self.create_subscription(
-            DeviceStatus,
-            self._config.camera_status_topic,
-            self._handle_camera_status,
-            10,
+        self.create_service(
+            Stop,
+            "stop_all",
+            self._handle_stop_all,
+            callback_group=self._service_group,
+        )
+        self.create_service(
+            Stop,
+            "reset_stop",
+            self._handle_reset_stop,
+            callback_group=self._service_group,
+        )
+        self.create_timer(
+            1.0 / self._config.status_publication_rate_hz,
+            self.publish_status,
             callback_group=self._subscription_group,
         )
-        self.create_subscription(
-            DeviceStatus,
-            self._config.x_axis_status_topic,
-            self._make_status_handler("x_axis"),
-            10,
-            callback_group=self._subscription_group,
-        )
-        self.create_subscription(
-            DeviceStatus,
-            self._config.z_axis_status_topic,
-            self._make_status_handler("z_axis"),
-            10,
-            callback_group=self._subscription_group,
-        )
+        self.publish_status()
+
+    def _now(self) -> float:
+        return time.monotonic()
+
+    def _create_status_subscriptions(self) -> None:
+        plain_status_topics = {
+            "camera": self._config.camera_status_topic,
+            "x_axis": self._config.x_axis_status_topic,
+            "z_axis": self._config.z_axis_status_topic,
+        }
+        for device_name, topic in plain_status_topics.items():
+            self.create_subscription(
+                DeviceStatus,
+                topic,
+                self._make_status_handler(device_name),
+                10,
+                callback_group=self._subscription_group,
+            )
         self.create_subscription(
             XBotInfo,
             self._config.planar_motor_status_topic,
@@ -830,6 +702,7 @@ class SystemControllerNode(Node):
             callback_group=self._subscription_group,
         )
 
+    def _create_stop_clients(self) -> None:
         self._x_axis_stop_client = self.create_client(
             Stop,
             self._config.x_axis_stop_service,
@@ -846,128 +719,94 @@ class SystemControllerNode(Node):
             callback_group=self._client_group,
         )
 
-        self.create_service(
-            Stop,
-            "stop_all",
-            self._handle_stop_all,
-            callback_group=self._service_group,
-        )
-        self.create_service(
-            Stop,
-            "reset_stop",
-            self._handle_reset_stop,
-            callback_group=self._service_group,
-        )
-
-        self.create_timer(
-            1.0 / self._config.status_publication_rate_hz,
-            self.publish_status,
-            callback_group=self._subscription_group,
-        )
-        self.publish_status()
-
-    def _now(self) -> float:
-        """Return the monotonic time source used for freshness checks."""
-        return time.monotonic()
-
     def _make_status_handler(self, device_name: str) -> Callable[[Any], None]:
-        """Build a status callback for one plain `DeviceStatus` topic."""
-
         def handler(message: Any) -> None:
-            self._store.observe(
+            self._observe_device(
                 device_name,
                 state=message.state,
                 error_code=message.error_code,
                 message=message.message,
-                received_at=self._now(),
             )
-            self.publish_status()
 
         return handler
 
-    def _handle_camera_status(self, message: Any) -> None:
-        """Store the latest camera status."""
-        self._store.observe(
-            "camera",
-            state=message.state,
-            error_code=message.error_code,
-            message=message.message,
-            received_at=self._now(),
-        )
-        self.publish_status()
-
     def _handle_planar_motor_status(self, message: Any) -> None:
-        """Store the latest planar-motor status from `XBotInfo`."""
-        self._store.observe(
+        self._observe_device(
             "planar_motor",
             state=message.device_status.state,
             error_code=message.device_status.error_code,
             message=message.device_status.message,
+        )
+
+    def _observe_device(
+        self,
+        device_name: str,
+        *,
+        state: int,
+        error_code: int,
+        message: str,
+    ) -> None:
+        self._store.observe(
+            device_name,
+            state=state,
+            error_code=error_code,
+            message=message,
             received_at=self._now(),
         )
         self.publish_status()
 
     def publish_status(self) -> None:
-        """Publish the current combined system status."""
         snapshot = self._store.compute_status(self._now())
-        status_message = SystemStatus()
-        status_message.stamp = self.get_clock().now().to_msg()
-        status_message.state = snapshot.state
-        status_message.stop_latched = snapshot.stop_latched
-        status_message.all_required_present = snapshot.all_required_present
-        status_message.all_required_fresh = snapshot.all_required_fresh
-        status_message.error_code = snapshot.error_code
-        status_message.message = snapshot.message
-        self._status_publisher.publish(status_message)
+        message = SystemStatus()
+        message.stamp = self.get_clock().now().to_msg()
+        message.state = snapshot.state
+        message.stop_latched = snapshot.stop_latched
+        message.all_required_present = snapshot.all_required_present
+        message.all_required_fresh = snapshot.all_required_fresh
+        message.error_code = snapshot.error_code
+        message.message = snapshot.message
+        self._status_publisher.publish(message)
 
     def _build_stop_endpoints(self) -> list[StopEndpoint]:
-        """Create pure stop-call endpoints around the configured ROS clients."""
-        endpoints = {
-            "x_axis": StopEndpoint(
-                device_name="x_axis",
-                wait_for_service=self._x_axis_stop_client.wait_for_service,
-                call_async=self._x_axis_stop_client.call_async,
-                make_request=Stop.Request,
-                is_safely_stopped=lambda: self._store.device_is_safely_stopped(
-                    "x_axis", self._now()
-                ),
-                is_service_ready=self._x_axis_stop_client.service_is_ready,
+        clients = {
+            "x_axis": (
+                self._x_axis_stop_client,
+                Stop.Request,
             ),
-            "z_axis": StopEndpoint(
-                device_name="z_axis",
-                wait_for_service=self._z_axis_stop_client.wait_for_service,
-                call_async=self._z_axis_stop_client.call_async,
-                make_request=Stop.Request,
-                is_safely_stopped=lambda: self._store.device_is_safely_stopped(
-                    "z_axis", self._now()
-                ),
-                is_service_ready=self._z_axis_stop_client.service_is_ready,
+            "z_axis": (
+                self._z_axis_stop_client,
+                Stop.Request,
             ),
-            "planar_motor": StopEndpoint(
-                device_name="planar_motor",
-                wait_for_service=self._planar_motor_stop_client.wait_for_service,
-                call_async=self._planar_motor_stop_client.call_async,
-                make_request=self._make_planar_motor_stop_request,
-                is_safely_stopped=lambda: self._store.device_is_safely_stopped(
-                    "planar_motor", self._now()
-                ),
-                is_service_ready=self._planar_motor_stop_client.service_is_ready,
+            "planar_motor": (
+                self._planar_motor_stop_client,
+                self._make_planar_motor_stop_request,
             ),
         }
-        return [
-            endpoints[device_name]
-            for device_name in MOTION_DEVICE_NAMES
-            if device_name in self._config.required_devices
-        ]
+        endpoints: list[StopEndpoint] = []
+        for device_name in MOTION_DEVICE_NAMES:
+            if device_name not in self._config.required_devices:
+                continue
+            client, make_request = clients[device_name]
+            endpoints.append(
+                StopEndpoint(
+                    device_name=device_name,
+                    wait_for_service=client.wait_for_service,
+                    call_async=client.call_async,
+                    make_request=make_request,
+                    is_safely_stopped=lambda name=device_name: (
+                        self._store.device_is_safely_stopped(name, self._now())
+                    ),
+                    is_service_ready=client.service_is_ready,
+                )
+            )
+        return endpoints
 
     def _make_planar_motor_stop_request(self) -> object:
-        """Create a `StopMotion` request for the configured XBot."""
         request = StopMotion.Request()
         request.xbot_id = int(self._config.planar_motor_xbot_id)
         return request
 
     def _handle_stop_all(self, request: Any, response: Any) -> Any:
-        """Latch STOPPED and forward stop requests to all motion devices."""
         del request
         self._store.latch_stop(
             error_code=int(error_codes.STOP_REQUESTED),
@@ -989,30 +828,26 @@ class SystemControllerNode(Node):
         return response
 
     def _handle_reset_stop(self, request: Any, response: Any) -> Any:
-        """Clear the system stop latch only when safe fresh device state is known."""
         del request
         can_reset, error_code, message = self._store.can_reset(self._now())
-        if not can_reset:
+        if can_reset:
+            self._store.clear_stop_latch()
+            snapshot = self._store.compute_status(self._now())
+            message = (
+                f"system stop cleared; current state "
+                f"{device_state_name(snapshot.state)}"
+            )
+        else:
             self._store.update_latched_message(error_code=error_code, message=message)
-            self.publish_status()
-            response.success = False
-            response.error_code = int(error_code)
-            response.status_message = message
-            return response
 
-        self._store.clear_stop_latch()
-        snapshot = self._store.compute_status(self._now())
         self.publish_status()
-        response.success = True
-        response.error_code = int(error_codes.SUCCESS)
-        response.status_message = (
-            f"system stop cleared; current state {device_state_name(snapshot.state)}"
-        )
+        response.success = bool(can_reset)
+        response.error_code = int(error_code)
+        response.status_message = message
         return response
 
 
 def main(args: list[str] | None = None) -> None:
-    """Run the system controller node with a small multithreaded executor."""
     _ensure_ros_runtime()
     rclpy.init(args=args)
     node = SystemControllerNode()

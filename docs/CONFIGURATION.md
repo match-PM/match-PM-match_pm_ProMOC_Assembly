@@ -116,9 +116,10 @@ does not start it unless `system_controller:=true` is passed.
 These values define how the controller decides whether device state is fresh and
 whether `reset_stop` may succeed.
 
-The system-controller node declares these parameters directly in
-`promoc_core/promoc_core/system_controller.py`. There is no separate parameter
-registry or defaults dictionary to keep in sync.
+The system-controller node keeps these defaults in the small
+`PARAMETER_DEFAULTS` table inside
+`promoc_core/promoc_core/system_controller.py`, so the YAML and code stay easy
+to compare.
 
 ## `driver_mode`
 
