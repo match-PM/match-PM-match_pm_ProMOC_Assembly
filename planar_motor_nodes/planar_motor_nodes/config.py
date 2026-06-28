@@ -6,6 +6,8 @@ from typing import Any, Mapping
 
 @dataclass(frozen=True)
 class MoverNodeConfig:
+    # Typkonfiguration fuer den Planarmotor-Knoten.
+
     driver_mode: str
     xbot_id: int
     publish_rate: float
@@ -31,7 +33,11 @@ class MoverNodeConfig:
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "MoverNodeConfig":
-        """Build typed config from ROS parameter values."""
+        """Build typed config from ROS parameter values.
+
+        Wandelt die flachen ROS-Parameter (alle als String/Any) in die
+        typisierten Felder des Dataclasses um (str, int, float, bool).
+        """
         return cls(
             driver_mode=str(values["driver_mode"]).strip().lower(),
             xbot_id=int(values["xbot_id"]),

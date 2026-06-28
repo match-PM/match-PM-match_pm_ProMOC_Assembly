@@ -1,6 +1,18 @@
 # Minimal camera configuration template for the CS runtime.
 
 camera_params:
+  article_number: REPLACE-WITH-ARTICLE-NUMBER
+  model: REPLACE-WITH-CAMERA-MODEL
+  family: REPLACE-WITH-CAMERA-FAMILY
+  interface: USB 3
+  interface_speed_gbps: 5.0
+  sensor_type: CMOS
+  sensor_manufacturer: REPLACE-WITH-SENSOR-MANUFACTURER
+  sensor_model: REPLACE-WITH-SENSOR-MODEL
+  shutter: REPLACE-WITH-SHUTTER-TYPE
+  optical_class: REPLACE-WITH-OPTICAL-CLASS
+  protection_class: REPLACE-WITH-PROTECTION-CLASS
+  lifecycle: REPLACE-WITH-LIFECYCLE
   guid: REPLACE-WITH-YOUR-CAMERA-GUID
   driver: usb3vision
   cameraname: assembly_camera
@@ -30,6 +42,7 @@ frame_rate:
   trigger_max: 20.0
 
 camera_info:
+  # Calibration/runtime CameraInfo, not necessarily the full sensor resolution.
   image_width: 2448
   image_height: 2048
   camera_name: assembly_camera_stream0

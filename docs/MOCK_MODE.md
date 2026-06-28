@@ -13,7 +13,7 @@ make start-mock
 ## What Mock Mode Is
 
 - a development aid
-- a software-only stand-in for the public ROS interfaces
+- a simple software-only stand-in for the public ROS interfaces
 - a way to test build, launch, status publication, and control wiring
 
 ## What Mock Mode Is Not
@@ -26,9 +26,13 @@ make start-mock
 ## What Uses Mock Mode
 
 - `camera_node` can publish a synthetic image stream
-- `lts300_node` can run with mock drivers
-- `mover_node` can run with a mock planar-motor backend
+- `lts300_node` can run with tiny in-memory dummy drivers
+- `mover_node` can run with a tiny in-memory planar-motor dummy backend
 - `tools/check_project.py --full` uses mock-mode smoke checks
+
+The axis and planar-motor dummy drivers update stored positions immediately
+when commands are accepted. They intentionally do not model travel time,
+mechanics, collisions, controller firmware, or real stop distance.
 
 ## Relationship To `promoc_simulation`
 

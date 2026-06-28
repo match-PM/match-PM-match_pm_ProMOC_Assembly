@@ -24,22 +24,38 @@ from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
 class MoverUtils:
-    """Node-local runtime state shared by the service handlers."""
+    """Node-local runtime state shared by the service handlers.
+
+    Zentrale Klasse fuer den Laufzeitzustand des Planarmotor-Knotens:
+    - Verbindungsmanagement (connect/disconnect, Reconnect-Logik)
+    - XBot-Validierung (known_xbots, active-check)
+    - Positionsabfrage und Snapshot-Caching
+    - Geschwindigkeitsprofile (SpeedProfile) pro XBot
+    - Motion-Lock (claim_operation) zur Serialisierung von Bewegungen
+    - Motion-Completion-Polling (wait_for_motion_completion)
+    - Status-Publishing (build_info_message)
+    """
 
     def __init__(self, logger, driver, config: MoverNodeConfig):
         self.logger = TaggedLogger(logger, LogTags.PMC)
         self.driver = driver
         self.config = config
+        # Lock schuetzt _device_state, _error_code, _status_message
         self._state_lock = threading.Lock()
-        self._operation_locks: dict[int, threading.Lock] = {}
+        # Ein einfaches Lock: Es darf immer nur eine Planar-Bewegung laufen.
+        self._motion_lock = threading.Lock()
         self._connected = False
         self._known_xbot_ids: list[int] = []
         self._device_state = DeviceState.DISCONNECTED
         self._error_code = error_codes.SUCCESS
         self._status_message = "Planar motor disconnected"
+        # SpeedProfile-Cache: XBot-ID -> Profile. Fallback auf config-Defaults.
         self._speed_profiles: dict[int, SpeedProfile] = {}
 
     def connect_and_prepare(self) -> None:
+        # Verbindungsaufbau: Status auf CONNECTING setzen, dann Treiber verbinden.
+        # Liste der bekannten XBots vom Controller abrufen und den konfigurierten
+        # XBot darin suchen. Bei auto_activate wird der XBot sofort aktiviert.
         with self._state_lock:
             self._device_state = DeviceState.CONNECTING
             self._error_code = error_codes.SUCCESS
@@ -55,7 +71,7 @@ class MoverUtils:
                         "auto_activate is enabled in hardware mode; activating XBots "
                         "is an active hardware action"
                     )
-                self.driver.activate_xbots([self.config.xbot_id])
+                self.driver.activate_xbots()
                 self._set_state(
                     DeviceState.READY,
                     error_codes.SUCCESS,
@@ -72,6 +88,7 @@ class MoverUtils:
             raise
 
     def shutdown(self) -> None:
+        # Sauberes Herunterfahren: Alle XBots stoppen, dann Verbindung trennen.
         if not self._connected:
             return
         try:
@@ -109,6 +126,8 @@ class MoverUtils:
             )
 
     def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
+        # Holt den aktuellen Snapshot eines XBots vom Treiber und aktualisiert
+        # bei BUSY/STOPPED/ERROR den globalen Knoten-Status entsprechend.
         self.ensure_selected_xbot(xbot_id)
         snapshot = self.driver.get_snapshot(xbot_id)
         if snapshot.device_state == DeviceState.BUSY:
@@ -128,6 +147,8 @@ class MoverUtils:
         return snapshot
 
     def get_current_position(self, xbot_id: int) -> XBotPose:
+        # Aktuelle Pose eines XBots abrufen. Wirft MotionError, wenn keine
+        # Position verfuegbar ist (z.B. XBot nicht erkannt/levitiert).
         snapshot = self.get_snapshot(xbot_id)
         if snapshot.pose is None:
             raise MotionError(
@@ -138,6 +159,8 @@ class MoverUtils:
         return snapshot.pose
 
     def get_speed_profile(self, xbot_id: int) -> SpeedProfile:
+        # Gibt das gespeicherte SpeedProfile zurueck, oder erstellt ein
+        # Default-Profil aus den Config-Werten und cached es.
         profile = self._speed_profiles.get(int(xbot_id))
         if profile is not None:
             return profile
@@ -178,6 +201,7 @@ class MoverUtils:
         return profile
 
     def is_position_in_bounds(self, pose: XBotPose) -> bool:
+        # Prueft ob eine Pose innerhalb der konfigurierten X/Y/Z-Grenzen liegt.
         return (
             self.config.x_min <= pose.x <= self.config.x_max
             and self.config.y_min <= pose.y <= self.config.y_max
@@ -186,10 +210,13 @@ class MoverUtils:
 
     @contextmanager
     def claim_operation(self, xbot_id: int):
-        lock = self._operation_locks.setdefault(int(xbot_id), threading.Lock())
-        if not lock.acquire(blocking=False):
+        # Context-Manager fuer exklusive Planar-Bewegungen.
+        # Schlaegt fehl -> der Motor ist bereits busy (DEVICE_BUSY).
+        # Setzt bei Erfolg den Status auf BUSY und gibt nach Verlassen
+        # des with-Blocks das Lock wieder frei.
+        if not self._motion_lock.acquire(blocking=False):
             raise MotionError(
-                f"XBot {xbot_id} is already busy",
+                "Planar motor is already busy",
                 error_code=error_codes.DEVICE_BUSY,
                 details={"xbot_id": xbot_id},
             )
@@ -197,7 +224,7 @@ class MoverUtils:
             self._set_state(DeviceState.BUSY, error_codes.SUCCESS, f"XBot {xbot_id} busy")
             yield
         finally:
-            lock.release()
+            self._motion_lock.release()
 
     def wait_for_motion_completion(
         self,
@@ -210,6 +237,13 @@ class MoverUtils:
         multiplier: float,
         minimum_timeout: float,
     ) -> XBotSnapshot:
+        # Polling-Loop: Wartet aktiv darauf, dass der XBot seine Zielpose erreicht.
+        # Timeout-Berechnung: travel_time * multiplier + buffer_s, mindestens minimum_timeout.
+        # Waehrend des Wartens wird alle 50ms der Snapshot geprueft.
+        # - XBot nicht mehr busy + Pose passt -> Erfolg
+        # - XBot nicht mehr busy + Pose passt nicht -> weiter pollen bis Timeout
+        # - Status STOPPED/ERROR waehrend des Wartens -> Abbruch mit Fehler
+        # - Timeout -> stop wird gesendet, MOVEMENT_TIMEOUT
         timeout_s = compute_motion_timeout(
             travel_time,
             multiplier=multiplier,
@@ -218,10 +252,8 @@ class MoverUtils:
             fallback_s=self.config.movement_timeout,
         )
         deadline = time.monotonic() + max(timeout_s, self.config.movement_timeout)
-        last_snapshot: XBotSnapshot | None = None
         while time.monotonic() < deadline:
             snapshot = self.get_snapshot(xbot_id)
-            last_snapshot = snapshot
             if not snapshot.busy:
                 if snapshot.device_state == DeviceState.STOPPED:
                     raise MotionError(
@@ -248,11 +280,6 @@ class MoverUtils:
                         f"Motion completed for XBot {xbot_id}",
                     )
                     return snapshot
-                raise MotionError(
-                    f"XBot {xbot_id} did not reach the requested target",
-                    error_code=error_codes.MOVEMENT_FAILED,
-                    details={"xbot_id": xbot_id},
-                )
             time.sleep(0.05)
 
         try:
@@ -280,6 +307,9 @@ class MoverUtils:
         return list(self._known_xbot_ids)
 
     def build_info_message(self, xbot_id: int) -> XBotInfo | None:
+        # Baut die XBotInfo-ROS-Nachricht fuer das periodische Publishing.
+        # Bei getrennter Verbindung: Status-Only-Nachricht (keine Pose).
+        # Bei fehlender Pose (None): gibt None zurueck -> publish wird uebersprungen.
         if not self._connected:
             return self._status_only_info_message()
         snapshot = self.get_snapshot(xbot_id)
@@ -301,6 +331,8 @@ class MoverUtils:
             return self._device_state, self._error_code, self._status_message
 
     def mark_startup_failed(self, exc: Exception) -> None:
+        # Setzt den Status auf ERROR und extrahiert Error-Code und Nachricht
+        # aus der Exception (ProMocError -> spezifischer Code, sonst UNKNOWN_ERROR).
         error_code = error_codes.UNKNOWN_ERROR
         message = str(exc) or exc.__class__.__name__
         if isinstance(exc, ProMocError):
@@ -348,6 +380,7 @@ class MoverUtils:
 
     @staticmethod
     def _pose_matches(current: XBotPose, expected: XBotPose, tolerance: float) -> bool:
+        # Vergleicht zwei Posen: Alle 6 Achsen muessen innerhalb der Toleranz liegen.
         return (
             abs(current.x - expected.x) <= tolerance
             and abs(current.y - expected.y) <= tolerance

@@ -3,43 +3,43 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Sequence
-
 from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
 class PlanarMotorDriver(ABC):
-    """Minimal driver boundary used by the planar-motor node."""
+    """Minimal driver boundary used by the planar-motor node.
+
+    Abstrakte Schnittstelle, die alle Treiberimplementierungen erfuellen muessen.
+    Trennt die ROS-Logik sauber von der Hardware/Mock-Implementierung.
+    """
 
     @abstractmethod
     def connect(self, controller_address: str) -> None:
-        """Connect to the planar-motor controller."""
+        """Verbindung zum Planarmotor-Controller aufbauen."""
 
     @abstractmethod
     def disconnect(self) -> None:
-        """Disconnect from the planar-motor controller."""
+        """Verbindung zum Planarmotor-Controller trennen."""
 
     @abstractmethod
     def list_xbot_ids(self) -> list[int]:
-        """Return the currently discoverable XBot identifiers."""
+        """Liste aller verfuegbaren XBot-IDs vom Controller abrufen."""
 
     @abstractmethod
-    def activate_xbots(self, xbot_ids: Sequence[int] | None = None) -> None:
-        """Activate one or more XBots."""
+    def activate_xbots(self) -> None:
+        """Einen oder mehrere XBots aktivieren."""
 
     @abstractmethod
-    def deactivate_xbots(self, xbot_ids: Sequence[int] | None = None) -> None:
-        """Deactivate one or more XBots."""
+    def deactivate_xbots(self) -> None:
+        """Einen oder mehrere XBots deaktivieren."""
 
     @abstractmethod
-    def set_levitation(
-        self, xbot_ids: Sequence[int] | None = None, enabled: bool = True
-    ) -> None:
-        """Enable or disable levitation for one or more XBots."""
+    def set_levitation(self, xbot_id: int, enabled: bool = True) -> None:
+        """Levitation (Schwebezustand) fuer XBots ein-/ausschalten."""
 
     @abstractmethod
     def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
-        """Return the current XBot snapshot."""
+        """Aktuellen Zustand (Pose, Status, Flags) eines XBots abrufen."""
 
     @abstractmethod
     def move_linear_absolute(
@@ -49,7 +49,7 @@ class PlanarMotorDriver(ABC):
         target_y: float,
         speed: SpeedProfile,
     ) -> float | None:
-        """Start an absolute XY motion and return an estimated travel time."""
+        """Absolute XY-Linearbewegung starten, geschaetzte Fahrzeit zurueckgeben."""
 
     @abstractmethod
     def move_six_dof_absolute(
@@ -58,7 +58,7 @@ class PlanarMotorDriver(ABC):
         target_pose: XBotPose,
         speed: SpeedProfile,
     ) -> float | None:
-        """Start an absolute 6-DOF motion and return an estimated travel time."""
+        """Absolute 6-DOF-Bewegung starten, geschaetzte Fahrzeit zurueckgeben."""
 
     @abstractmethod
     def arc_move(
@@ -77,7 +77,7 @@ class PlanarMotorDriver(ABC):
         arc_direction: int,
         angle_rad: float,
     ) -> float | None:
-        """Start an arc move and return an estimated travel time."""
+        """Kreisbogenbewegung starten, geschaetzte Fahrzeit zurueckgeben."""
 
     @abstractmethod
     def rotate(
@@ -88,12 +88,12 @@ class PlanarMotorDriver(ABC):
         max_accel: float,
         mode: int,
     ) -> float | None:
-        """Start a rotary move and return an estimated travel time."""
+        """Rotationsbewegung um Z-Achse starten, geschaetzte Fahrzeit zurueckgeben."""
 
     @abstractmethod
     def stop(self, xbot_id: int) -> None:
-        """Stop motion for a single XBot."""
+        """Einzelnen XBot sofort stoppen."""
 
     @abstractmethod
     def stop_all(self) -> None:
-        """Stop all controlled XBots."""
+        """Alle XBots sofort stoppen."""

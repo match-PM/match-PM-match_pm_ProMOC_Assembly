@@ -59,6 +59,9 @@ This package owns:
 
 - `config/cameras/*.yaml`
 
+The default hardware camera profile is `ids_u3_3800cp_hq` for the IDS
+U3-3800CP-C-HQ Rev.2.2 (`AB12874`) USB3 camera.
+
 Current source state:
 
 - `system.launch.py` loads package-specific YAML directly

@@ -4,7 +4,11 @@ from typing import Optional, Dict, Any
 
 
 class ProMocError(Exception):
-    """Base exception carrying a message, details, and error code."""
+    """Basis-Exception mit message, details (dict) und error_code.
+
+    Ermoeglicht strukturierte Fehlerbehandlung: Jeder Fehler traegt einen
+    numerischen Code aus error_codes und optionale Debug-Details.
+    """
 
     def __init__(
         self,
@@ -24,109 +28,112 @@ class ProMocError(Exception):
         return f"[{self.__class__.__name__}] {self.message}"
 
 
-class ConnectionError(ProMocError):
-    """Connection and communication errors."""
+# --- Exception-Hierarchie ---
+# ProMocError
+#   +-- ConnectionError (Verbindungsfehler)
+#   |     +-- CommunicationError
+#   |     +-- DeviceNotFoundError
+#   |     +-- CommunicationTimeoutError
+#   +-- MotionError (Bewegungsfehler)
+#   |     +-- MovementTimeoutError
+#   |     +-- HomingRequiredError
+#   |     +-- HomingFailedError
+#   +-- SafetyError (Sicherheitsverletzungen)
+#   |     +-- PositionOutOfBoundsError
+#   |     +-- CollisionDetectedError
+#   |     +-- SoftLimitViolationError
+#   +-- HardwareError (Hardware-Fehler)
+#   |     +-- DriverNotAvailableError
+#   +-- ConfigurationError (Konfiguration/Validierung)
+#   +-- ServiceError (ROS2-Service-Fehler)
+#   |     +-- ServiceCallFailedError
+#   +-- ImageProcessingError (Bildverarbeitung)
 
+class ConnectionError(ProMocError):
+    """Verbindungs- und Kommunikationsfehler."""
     pass
 
 
 class CommunicationError(ConnectionError):
-    """Low-level communication errors."""
-
+    """Low-Level-Kommunikationsfehler."""
     pass
 
 
 class DeviceNotFoundError(ConnectionError):
-    """Device discovery errors."""
-
+    """Geraet nicht gefunden."""
     pass
 
 
 class CommunicationTimeoutError(ConnectionError):
-    """Communication timeout errors."""
-
+    """Kommunikations-Timeout."""
     pass
 
 
 class MotionError(ProMocError):
-    """Errors during motion operations."""
-
+    """Fehler waehrend Bewegungsoperationen."""
     pass
 
 
 class MovementTimeoutError(MotionError):
-    """Movement timeout errors."""
-
+    """Bewegungs-Timeout."""
     pass
 
 
 class HomingRequiredError(MotionError):
-    """Raised when homing is required before a motion."""
-
+    """Homing erforderlich vor Bewegung."""
     pass
 
 
 class HomingFailedError(MotionError):
-    """Homing failed."""
-
+    """Homing fehlgeschlagen."""
     pass
 
 
 class SafetyError(ProMocError):
-    """Safety violations."""
-
+    """Sicherheitsverletzung."""
     pass
 
 
 class PositionOutOfBoundsError(SafetyError):
-    """Position is outside allowed bounds."""
-
+    """Position ausserhalb erlaubter Grenzen."""
     pass
 
 
 class CollisionDetectedError(SafetyError):
-    """Collision risk detected."""
-
+    """Kollisionsrisiko erkannt."""
     pass
 
 
 class SoftLimitViolationError(SafetyError):
-    """Soft limit was reached."""
-
+    """Soft-Limit erreicht."""
     pass
 
 
 class HardwareError(ProMocError):
-    """Hardware-related errors."""
-
+    """Hardware-bezogene Fehler."""
     pass
 
 
 class DriverNotAvailableError(HardwareError):
-    """Required driver library or interface not available."""
-
+    """Treiberbibliothek oder -schnittstelle nicht verfuegbar."""
     pass
 
 
 class ConfigurationError(ProMocError):
-    """Configuration and validation errors."""
-
+    """Konfigurations- und Validierungsfehler."""
     pass
 
 
 class ServiceError(ProMocError):
-    """ROS2 service-related errors."""
-
+    """ROS2-Service-bezogene Fehler."""
     pass
 
 
 class ServiceCallFailedError(ServiceError):
-    """Service call failed or returned an error."""
-
+    """Service-Aufruf fehlgeschlagen."""
     pass
 
 
 class ImageProcessingError(ProMocError):
-    """Errors during image processing."""
-
+    """Fehler bei der Bildverarbeitung."""
     pass

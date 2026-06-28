@@ -35,26 +35,37 @@ class MoverServiceNode(Node):
     def __init__(self):
         super().__init__("mover_node")
         self.log = TaggedLogger(self.get_logger(), LogTags.PMC)
+        # Lade Konfiguration via ROS-Parameter (declare + get -> MoverNodeConfig)
         self.config = self._load_config()
+        # Erstelle den Treiber je nach Konfiguration (hardware/mock)
         self.driver = self._create_driver()
+        # MoverUtils verwaltet den Laufzeitzustand (Verbindung, Positionen,
+        # Geschwindigkeitsprofile, Motion-Lock, Motion-Polling)
         self.runtime = MoverUtils(self.get_logger(), self.driver, self.config)
+        # Callback-Klassen für Bewegungs- und Steuerungsservices
         self.motion_callbacks = MotionCallbacks(
             self.get_logger(), self.driver, self.runtime, self.config
         )
         self.control_callbacks = ControlCallbacks(
             self.get_logger(), self.driver, self.runtime, self.config
         )
+        # Separate ReentrantCallbackGroups erlauben parallele Verarbeitung von
+        # Motion-, Control- und Publisher-Callbacks in verschiedenen Threads
         self._motion_group = ReentrantCallbackGroup()
         self._control_group = ReentrantCallbackGroup()
         self._publisher_group = ReentrantCallbackGroup()
+        # Publisher sendet regelmässig XBot-Status (Position, Zustand) auf /promoc/mover/xbot_info
         self.xbot_info_publisher = self.create_publisher(
             XBotInfo, "/promoc/mover/xbot_info", 10
         )
+        # Registriere alle ROS2-Services (Motion + Control)
         self._create_services()
+        # Verbinde zum Planarmotor-Controller und aktiviere ggf. XBots (auto_activate)
         try:
             self.runtime.connect_and_prepare()
         except Exception as exc:
             self.log.error(f"Startup connection failed: {exc}")
+        # Periodischer Timer für XBot-Status-Publishing (1/publish_rate Sekunden)
         self.create_timer(
             1.0 / self.config.publish_rate,
             self._publish_xbot_info,
@@ -63,6 +74,9 @@ class MoverServiceNode(Node):
         self.log.info(f"Planar motor configuration: {asdict(self.config)}")
 
     def _load_config(self) -> MoverNodeConfig:
+        # Deklariere alle Parameter beim ROS-Node mit ihren Default-Werten,
+        # lese sie dann aus (überschreibbar via YAML/Launch-File) und
+        # baue daraus das typisierte MoverNodeConfig-Objekt.
         for name, value in DEFAULT_MOVER_NODE_PARAMETERS.items():
             self.declare_parameter(name, value)
         values = {
@@ -72,6 +86,9 @@ class MoverServiceNode(Node):
         return MoverNodeConfig.from_mapping(values)
 
     def _create_driver(self):
+        # Wähle Treiber basierend auf driver_mode:
+        # "mock"  -> in-process Mock-Treiber für Entwicklung/Tests ohne echte Hardware
+        # "hardware" -> Echter Treiber der über PMCLib mit dem Controller kommuniziert
         if self.config.driver_mode == "mock":
             return MockPlanarMotorDriver(
                 self.log,
@@ -134,6 +151,8 @@ class MoverServiceNode(Node):
         )
 
     def _publish_xbot_info(self) -> None:
+        # Baut periodisch eine XBotInfo-Nachricht mit aktueller Pose und Status,
+        # stempelt sie mit dem aktuellen ROS-Zeitstempel und publiziert sie.
         try:
             message = self.runtime.build_info_message(self.config.xbot_id)
         except Exception as exc:
@@ -144,11 +163,15 @@ class MoverServiceNode(Node):
             self.xbot_info_publisher.publish(message)
 
     def destroy_node(self):
+        # Beim Herunterfahren: Stoppe alle XBots und trenne die Verbindung sauber.
         self.runtime.shutdown()
         super().destroy_node()
 
 
 def main(args=None):
+    # Einstiegspunkt: Initialisiert ROS, erstellt den Mover-Knoten und
+    # fuehrt ihn in einem MultiThreadedExecutor (4 Threads) aus, damit
+    # Motion-, Control- und Publisher-Callbacks parallel arbeiten koennen.
     rclpy.init(args=args)
     node = MoverServiceNode()
     executor = MultiThreadedExecutor(num_threads=4)

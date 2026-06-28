@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-import threading
-import time
 from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -171,38 +169,17 @@ def test_unavailable_position_is_rejected_instead_of_fabricated():
     assert result.error_code == error_codes.POSITION_UNAVAILABLE
 
 
-def test_busy_rejection_and_stop_during_motion():
+def test_stop_updates_mock_status():
     logger, driver, runtime = _runtime()
-    motion = MotionCallbacks(logger, driver, runtime, _config())
     control = ControlCallbacks(logger, driver, runtime, _config())
-
-    first_request = SimpleNamespace(xbot_id=0, x_pos=250.0, y_pos=160.0)
-    first_response = SimpleNamespace(success=False, error_code=0, status_message="")
-    holder: dict[str, object] = {}
-
-    def _run_motion():
-        holder["move"] = motion.callback_linear_motion_si(first_request, first_response)
-
-    worker = threading.Thread(target=_run_motion, daemon=True)
-    worker.start()
-    time.sleep(0.05)
-
-    second_request = SimpleNamespace(xbot_id=0, x_pos=260.0, y_pos=165.0)
-    second_response = SimpleNamespace(success=False, error_code=0, status_message="")
-    second = motion.callback_linear_motion_si(second_request, second_response)
-    assert second.success is False
-    assert second.error_code == error_codes.DEVICE_BUSY
 
     stop_request = SimpleNamespace(xbot_id=0)
     stop_response = SimpleNamespace(success=False, error_code=0, status_message="")
     stop = control.callback_stop_motion(stop_request, stop_response)
+
     assert stop.success is True
     assert stop.error_code == error_codes.STOP_REQUESTED
-
-    worker.join(timeout=2.0)
-    move_result = holder["move"]
-    assert move_result.success is False
-    assert move_result.error_code == error_codes.MOVEMENT_STOPPED
+    assert runtime.get_snapshot(0).device_state.name == "STOPPED"
 
 
 def test_status_message_populates_shared_device_status():

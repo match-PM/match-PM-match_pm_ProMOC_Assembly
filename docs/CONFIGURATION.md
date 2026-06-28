@@ -36,10 +36,17 @@ Hardware camera profiles live in:
 Hardware-specific camera profile files under
 `promoc_bringup/config/cameras/` define:
 
-- camera GUID and driver type
+- camera product identity, GUID, and driver type
 - resolution and pixel format data
 - calibration data
 - dynamic parameter exposure
+
+The default hardware profile is `ids_u3_3800cp_hq`, matching the IDS
+U3-3800CP-C-HQ Rev.2.2 (`AB12874`) USB3 camera with Sony IMX183 CMOS sensor,
+5536x3692 maximum sensor resolution, and 2.40 um pixels. The physical sensor
+resolution is stored under `camera_params.sensor_resolution_h/v`; the
+`camera_info.image_width/height` values are calibration/runtime CameraInfo and
+may describe a smaller active stream.
 
 ## Linear Axes
 
@@ -59,6 +66,12 @@ Hardware-specific camera profile files under
 
 These files own the local soft limits for each axis. Wrong values here can make
 commands unsafe or unusable.
+
+In hardware mode, `serial_number` is the preferred axis selector. Leave
+`serial_port` empty for the normal setup: the driver scans `/dev/ttyUSB*` and
+`/dev/ttyACM*`, opens each candidate briefly, reads the Thorlabs serial number,
+and keeps the device whose serial matches the axis config. Set `serial_port`
+only when you intentionally want to force one device path.
 
 ## Planar Motor
 
@@ -113,7 +126,8 @@ Current launches use `driver_mode`, not `runtime_mode`, `use_mock`, or
 `use_simulator`.
 
 - `driver_mode:=mock`
-  uses software-only drivers behind the same ROS topics and services
+  uses simple software-only dummy drivers behind the same ROS topics and
+  services. These are wiring checks, not mechanical simulations.
 - `driver_mode:=hardware`
   tries to connect to real devices or vendor integrations
 

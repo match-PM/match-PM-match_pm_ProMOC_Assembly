@@ -63,6 +63,21 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
+## Linear-Axis Hardware Dependency
+
+Mock mode does not require Thorlabs hardware dependencies.
+
+Linear-axis hardware mode uses `pylablib` and the Thorlabs Kinesis motor API.
+Verify the Python package in the active ROS environment:
+
+```bash
+python3 -c 'from pylablib.devices import Thorlabs'
+```
+
+The normal axis configs keep `serial_port` empty and select the physical axis
+by `serial_number`. Hardware startup scans `/dev/ttyUSB*` and `/dev/ttyACM*`
+and connects to the device whose serial number matches the X or Z config.
+
 ## Planar-Motor Hardware Vendor Library
 
 Mock mode does not require PMCLib.
@@ -114,7 +129,15 @@ python3 tools/check_project.py \
 
 ## About `setup/`
 
-The [`../setup/`](../setup/) directory still contains helper scripts, but the
-canonical target path for this milestone is the manual Humble workspace build
-shown above. Treat the helper scripts as secondary machine-setup utilities,
-not as the primary handover path.
+The [`../setup/`](../setup/) directory contains one helper CLI:
+
+```bash
+python3 setup/setup.py check
+python3 setup/setup.py install --all
+python3 setup/setup.py validate
+python3 setup/setup.py repair
+```
+
+Treat it as a secondary machine-setup utility, not as the primary handover
+path. The canonical target path for this milestone is still the manual Humble
+workspace build shown above.

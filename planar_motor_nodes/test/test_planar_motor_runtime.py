@@ -49,14 +49,14 @@ class _AlwaysBusyDriver:
     def list_xbot_ids(self) -> list[int]:
         return [0]
 
-    def activate_xbots(self, xbot_ids=None) -> None:
-        _ = xbot_ids
+    def activate_xbots(self) -> None:
+        return None
 
-    def deactivate_xbots(self, xbot_ids=None) -> None:
-        _ = xbot_ids
+    def deactivate_xbots(self) -> None:
+        return None
 
-    def set_levitation(self, xbot_ids=None, enabled: bool = True) -> None:
-        _ = xbot_ids, enabled
+    def set_levitation(self, xbot_id: int, enabled: bool = True) -> None:
+        _ = xbot_id, enabled
 
     def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
         _ = xbot_id

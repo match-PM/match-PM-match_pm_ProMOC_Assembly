@@ -4,7 +4,15 @@ from typing import Any
 
 
 class LogTags:
-    """Common log tags."""
+    """Zentrale Log-Tags zur Kategorisierung aller Log-Ausgaben.
+
+    Jeder Knotentyp hat eigene Tags:
+    - PMC: Planar Motor Controller
+    - LTS: Linear Axis (Thorlabs LTS300)
+    - CAM: Kamera
+    - SYS/LAUNCH: System und Launch
+    - MOCK: Simulation/Mock-Treiber
+    """
 
     # Planar Motor
     PMC = "[PMC]"
@@ -33,14 +41,18 @@ class LogTags:
 
 
 class TaggedLogger:
-    """Prefix every log message with one tag."""
+    """Wrapper um ROS-Logger mit Prefix-Unterstuetzung.
+
+    Jede Log-Nachricht wird mit einem Tag-Prefix versehen, z.B.:
+    "[PMC] Verbindung hergestellt" oder "[LTS:MOVE] Bewegung gestartet".
+    """
 
     def __init__(self, logger: Any, tag: str):
         self._logger = logger
         self._tag = tag
 
     def _format(self, msg: str) -> str:
-        """Format message with tag prefix."""
+        """Haengt den Tag vor jede Nachricht."""
         return f"{self._tag} {msg}"
 
     def debug(self, msg: str, *args, **kwargs) -> None:

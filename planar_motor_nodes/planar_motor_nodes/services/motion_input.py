@@ -25,7 +25,12 @@ def process_six_dof_request(
     current_pose: XBotPose,
     no_change: float,
 ) -> ProcessedMotionInput:
-    """Normalize the 6-DOF request into an absolute target pose."""
+    """Normalize the 6-DOF request into an absolute target pose.
+
+    Jeder Achsenwert wird geprueft: Bei NO_CHANGE (-999999.0) bleibt die
+    aktuelle Position erhalten. Ansonsten Umrechnung von mm nach m (XYZ)
+    bzw. von Grad nach Radiant (RX, RY, RZ).
+    """
     xbot_id = _validated_xbot_id(request.xbot_id)
     target = XBotPose(
         x=_optional_mm(request.x_pos, current_pose.x, no_change),
@@ -39,7 +44,11 @@ def process_six_dof_request(
 
 
 def process_linear_request(request) -> ProcessedMotionInput:
-    """Normalize the linear absolute request."""
+    """Normalize the linear absolute request.
+
+    Reine XY-Bewegung: X/Y von mm nach m umrechnen, Z konstant auf 0.001 m
+    (Schwebehoehe), Rotationen auf 0.
+    """
     xbot_id = _validated_xbot_id(request.xbot_id)
     target = XBotPose(
         x=_require_finite(request.x_pos, "x_pos") / 1000.0,
@@ -53,7 +62,12 @@ def process_linear_request(request) -> ProcessedMotionInput:
 
 
 def process_rotary_request(request, current_pose: XBotPose) -> ProcessedMotionInput:
-    """Normalize the rotary request."""
+    """Normalize the rotary request.
+
+    Reine RZ-Rotation: target_rz von Grad nach Radiant umrechnen,
+    alle anderen Achsen bleiben auf der aktuellen Position.
+    Validiert zusaetzlich, dass max_rz_speed und max_accel_rz positiv sind.
+    """
     xbot_id = _validated_xbot_id(request.xbot_id)
     if _require_finite(request.max_rz_speed, "max_rz_speed") <= 0.0:
         raise ConfigurationError(
@@ -80,7 +94,14 @@ def process_rotary_request(request, current_pose: XBotPose) -> ProcessedMotionIn
 
 
 def process_arc_request(request, current_pose: XBotPose) -> ProcessedMotionInput:
-    """Normalize the arc request into absolute and optional relative targets."""
+    """Normalize the arc request into absolute and optional relative targets.
+
+    Kreisbogen-Parameter:
+    - pos_mode=1 -> relative Bewegung (relative_target gesetzt, absolute = current + delta)
+    - pos_mode=0 -> absolute Bewegung (nur absolute_target)
+    - radius, max_speed, max_accel muessen positiv sein
+    - arc_mode, arc_type, arc_direction, pos_mode muessen 0 oder 1 sein
+    """
     xbot_id = _validated_xbot_id(request.xbot_id)
     _validate_arc_mode(
         request.arc_mode,
@@ -151,6 +172,7 @@ def _require_finite(value: float, name: str) -> float:
 
 
 def _optional_mm(value: float, current: float, no_change: float) -> float:
+    # NO_CHANGE-Sentinel: Behalte aktuelle Position, sonst mm -> m
     numeric = _require_finite(value, "position")
     if numeric == no_change:
         return current
@@ -158,6 +180,7 @@ def _optional_mm(value: float, current: float, no_change: float) -> float:
 
 
 def _optional_deg(value: float, current: float, no_change: float) -> float:
+    # NO_CHANGE-Sentinel: Behalte aktuelle Rotation, sonst Grad -> Radiant
     numeric = _require_finite(value, "rotation")
     if numeric == no_change:
         return current
@@ -170,6 +193,7 @@ def _validate_arc_mode(
     arc_direction: int,
     pos_mode: int,
 ) -> None:
+    # Validiert, dass alle Arc-Steuerparameter gueltige Werte (0 oder 1) haben
     if int(arc_mode) not in {0, 1}:
         raise ConfigurationError(
             f"Invalid arc_mode: {arc_mode}",

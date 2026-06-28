@@ -36,8 +36,9 @@ This page answers two questions:
 - Public runtime surface:
   `/promoc/linear_axis/lts300_x_axis/...` and
   `/promoc/linear_axis/lts300_z_axis/...`
-- Mock behavior: software-only axis driver behind the same services and topics
-- Hardware behavior: expects the real axis connection details from config
+- Mock behavior: tiny in-memory dummy axis behind the same services and topics
+- Hardware behavior: uses pylablib and selects the USB device by configured
+  serial number when `serial_port` is empty
 - Limitation: safe motion still depends on correct homing, limits, and operator
   awareness
 - Start here:
@@ -48,7 +49,7 @@ This page answers two questions:
 - Purpose: expose mover status plus planar-motor control and motion services
 - Public runtime surface:
   `/promoc/mover/xbot_info` and `/promoc/mover/...`
-- Mock behavior: software-only driver with the same ROS service names
+- Mock behavior: tiny in-memory dummy driver with the same ROS service names
 - Hardware behavior: depends on planar-motor vendor support and connectivity
 - Limitation: hardware mode needs local PMCLib under
   `drivers/vendor/pmclib/`; this path is intentionally local-only

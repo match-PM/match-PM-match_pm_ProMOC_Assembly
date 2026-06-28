@@ -25,8 +25,6 @@ from promoc_core.promoc_exceptions import (
     CommunicationError,
     ConnectionError,
     DriverNotAvailableError,
-    HardwareError,
-    MotionError,
     MovementTimeoutError,
     ProMocError,
     SafetyError,
@@ -66,15 +64,24 @@ class AxisSnapshot:
 
 
 class AxisController:
-    """Single-flight axis logic shared by the X and Z node instances."""
+    """Gemeinsame Achsenlogik fuer X- und Z-Achsen-Instanzen.
+
+    Verwaltet:
+    - Verbindungsaufbau und Seriennummer-Verifikation
+    - Bewegungssteuerung (absolute, relative, jog, homing)
+    - Geschwindigkeitsprofile (get/set)
+    - Stop-Mechanismus (einfaches Stop-Flag + Motion-Lock)
+    - Zustandsverfolgung (DeviceState, AxisState)
+    - Fehlermapping von Treiber-Exceptions auf AxisOperationError
+    """
 
     def __init__(self, logger, config: LinearAxisConfig):
         self._logger = logger
         self._config = config
         self._driver = self._create_driver()
-        self._state_lock = threading.Lock()
-        self._motion_lock = threading.Lock()
-        self._stop_requested = threading.Event()
+        self._state_lock = threading.Lock()    # Schuetzt Status-Felder
+        self._motion_lock = threading.Lock()   # Verhindert parallele Bewegungen
+        self._stop_requested = False
         self._connected = False
         self._device_state = DeviceState.DISCONNECTED
         self._axis_state = AxisState.UNKNOWN
@@ -82,16 +89,20 @@ class AxisController:
         self._error_code = error_codes.SUCCESS
         self._status_message = "Axis not connected"
         self._last_position = config.min_position
-        self._connect()
+        self._connect()  # Verbinde sofort bei Initialisierung
 
     def _create_driver(self):
+        # Waehle Treiber: Mock (in-process) oder ThorlabsLTS300 (echte Hardware)
         if self._config.driver_mode == "mock":
             self._logger.info("Using mock linear-axis driver")
             return MockLinearAxisDriver(self._logger, self._config)
 
         if self._config.driver_mode == "hardware":
             self._logger.info("Using Thorlabs LTS300 hardware driver")
-            return ThorlabsLTS300Driver(self._logger)
+            return ThorlabsLTS300Driver(
+                self._logger,
+                expected_serial=self._config.serial_number,
+            )
 
         raise ValueError(
             "Unsupported driver_mode "
@@ -212,7 +223,7 @@ class AxisController:
     def stop(self) -> bool:
         self._require_connected()
         was_busy = self._motion_lock.locked() or self._driver.is_moving()
-        self._stop_requested.set()
+        self._stop_requested = True
         try:
             self._driver.stop()
         except Exception as exc:
@@ -237,7 +248,7 @@ class AxisController:
     def shutdown(self) -> None:
         if self._connected:
             if self._motion_lock.locked() or self._driver.is_moving():
-                self._stop_requested.set()
+                self._stop_requested = True
                 try:
                     self._driver.stop()
                 except Exception as exc:
@@ -252,6 +263,8 @@ class AxisController:
                     self._status_message = "Axis disconnected"
 
     def _connect(self) -> None:
+        # Verbindungsaufbau: Treiber verbinden, Seriennummer pruefen,
+        # Default-Geschwindigkeiten setzen, Position abfragen.
         self._set_status(
             device_state=DeviceState.CONNECTING,
             operation_status="idle",
@@ -315,10 +328,18 @@ class AxisController:
         starting_axis_state: AxisState | None = None,
         error_axis_state: AxisState | None = None,
     ) -> float:
+        # Generische Bewegungsausfuehrung mit Locking und Fehlerbehandlung.
+        # 1. Motion-Lock holen (nicht-blockierend -> DEVICE_BUSY wenn belegt)
+        # 2. Status auf BUSY setzen, Stop-Flag zuruecksetzen
+        # 3. Operation ausfuehren (Treiber-Aufruf)
+        # 4. Stop-Flag pruefen (wurde waehrend der Fahrt Stop gerufen?)
+        # 5. Bei Erfolg: Position aktualisieren, Status auf READY
+        # 6. Bei Fehler: Exception mappen und Status setzen
+        # 7. Lock in finally immer freigeben
         if not self._motion_lock.acquire(blocking=False):
             raise AxisOperationError(error_codes.DEVICE_BUSY, "Axis is already busy")
 
-        self._stop_requested.clear()
+        self._stop_requested = False
         active_axis_state = starting_axis_state or self.snapshot().axis_state
         self._set_status(
             device_state=DeviceState.BUSY,
@@ -329,7 +350,7 @@ class AxisController:
         )
         try:
             operation()
-            if self._stop_requested.is_set():
+            if self._stop_requested:
                 raise AxisOperationError(
                     error_codes.STOP_REQUESTED,
                     f"{operation_status.capitalize()} stopped",
@@ -366,6 +387,9 @@ class AxisController:
         *,
         error_axis_state: AxisState,
     ) -> None:
+        # Setzt den Status nach einem Bewegungsfehler.
+        # STOP_REQUESTED -> STOPPED, DEVICE_BUSY/UNHOMED/TARGET_OUT_OF_RANGE -> READY,
+        # alles andere -> ERROR.
         device_state = DeviceState.ERROR
         operation_status = "error"
         if exc.error_code == error_codes.STOP_REQUESTED:
@@ -460,6 +484,7 @@ class AxisController:
         *,
         connect_error: bool = False,
     ) -> AxisOperationError:
+        # Kleine Zuordnung: Verbindung, Timeout, Safety/Parameter, Rest.
         if isinstance(exc, AxisOperationError):
             return exc
         if isinstance(exc, (DriverNotAvailableError, ConnectionError, CommunicationError)):
@@ -471,21 +496,24 @@ class AxisController:
             )
         if isinstance(exc, MovementTimeoutError):
             return AxisOperationError(error_codes.MOVEMENT_TIMEOUT, str(exc))
-        if isinstance(exc, MotionError):
-            return AxisOperationError(error_codes.MOVEMENT_FAILED, str(exc))
         if isinstance(exc, SafetyError):
             return AxisOperationError(error_codes.TARGET_OUT_OF_RANGE, str(exc))
-        if isinstance(exc, HardwareError):
-            return AxisOperationError(error_codes.MOVEMENT_FAILED, str(exc))
         if isinstance(exc, ValueError):
             return AxisOperationError(error_codes.INVALID_PARAMETER, str(exc))
         if isinstance(exc, ProMocError):
-            return AxisOperationError(error_codes.UNKNOWN_ERROR, str(exc))
+            return AxisOperationError(
+                getattr(exc, "error_code", error_codes.MOVEMENT_FAILED),
+                str(exc),
+            )
         return AxisOperationError(error_codes.UNKNOWN_ERROR, str(exc))
 
 
 class LTS300Node(Node):
-    """Configuration-driven ROS node shared by both linear axes."""
+    """Konfigurationsgetriebener ROS-Knoten fuer X- und Z-Linearachse.
+
+    Der gleiche Node-Typ wird zweimal instanziiert (mit axis_id="x" bzw. "z"),
+    jeweils mit eigenem Namespace und eigener Konfigurations-YAML.
+    """
 
     def __init__(self):
         super().__init__("lts300_node")
@@ -493,10 +521,12 @@ class LTS300Node(Node):
         self.config.validate()
         self.controller = AxisController(self.get_logger(), self.config)
 
+        # Callback-Gruppen: Bewegung parallel (Reentrant), Control/Status seriell
         self._movement_group = ReentrantCallbackGroup()
         self._control_group = MutuallyExclusiveCallbackGroup()
         self._state_group = MutuallyExclusiveCallbackGroup()
 
+        # Basis-Topic: /promoc/linear_axis/lts300_<x|z>_axis
         base_topic = f"{self.get_namespace().rstrip('/')}/{self.get_name()}"
         self._base_topic = base_topic.replace("//", "/")
 
@@ -604,6 +634,7 @@ class LTS300Node(Node):
         self.position_publisher.publish(msg)
 
     def publish_state(self) -> None:
+        # Baut eine DeviceStatus-Nachricht mit Achsenzustand, Position und Status
         snapshot = self.controller.snapshot()
         msg = DeviceStatus()
         msg.stamp = self.get_clock().now().to_msg()
@@ -618,6 +649,7 @@ class LTS300Node(Node):
         self.status_publisher.publish(msg)
 
     def destroy_node(self) -> bool:
+        # Sauberes Herunterfahren: Achse stoppen und Verbindung trennen
         self.controller.shutdown()
         return super().destroy_node()
 

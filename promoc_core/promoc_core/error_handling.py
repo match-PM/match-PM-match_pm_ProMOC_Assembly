@@ -10,6 +10,7 @@ from .promoc_exceptions import ProMocError
 
 
 def _logger_from_args(args, explicit_logger):
+    # Sucht den Logger: explizit uebergeben -> self.logger vom ersten Argument -> None
     if explicit_logger is not None:
         return explicit_logger
     if args and hasattr(args[0], "logger"):
@@ -18,6 +19,7 @@ def _logger_from_args(args, explicit_logger):
 
 
 def _response_from_args(args):
+    # Findet das Response-Objekt in den Funktionsargumenten (Attribut 'success')
     for arg in args:
         if hasattr(arg, "success"):
             return arg
@@ -25,6 +27,9 @@ def _response_from_args(args):
 
 
 def _fill_error_response(response, error: Exception):
+    # Befuellt die Service-Response mit Fehlerdaten.
+    # Bei ProMocError: spezifischer error_code und message.
+    # Bei anderen Exceptions: UNKNOWN_ERROR und Typ+Message.
     response.success = False
     if isinstance(error, ProMocError):
         response.error_code = int(error.error_code)
@@ -36,7 +41,15 @@ def _fill_error_response(response, error: Exception):
 
 
 def handle_service_errors(logger=None):
-    """Convert service callback exceptions into standard ROS response fields."""
+    """Dekorator: Wandelt Exceptions in Service-Callbacks in ROS-Response-Felder um.
+
+    Funktionsweise:
+    1. Fangt jede Exception im dekorierten Callback ab
+    2. Loggt den Fehler (mit ProMocError-Erkennung)
+    3. Sucht das Response-Objekt (anhand des 'success'-Attributs)
+    4. Befuellt success=False, error_code und status_message
+    5. Wirft die Exception weiter, wenn kein Response gefunden wurde
+    """
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)

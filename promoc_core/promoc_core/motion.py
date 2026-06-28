@@ -1,4 +1,4 @@
-"""Small motion helpers shared by device nodes."""
+"""Hilfsfunktionen fuer Bewegungs-Timeouts."""
 
 from __future__ import annotations
 
@@ -11,7 +11,15 @@ def compute_motion_timeout(
     min_s: float = 5.0,
     fallback_s: float | None = None,
 ) -> float:
-    """Compute a polling timeout from a driver-provided travel time."""
+    """Berechnet einen Polling-Timeout aus der vom Treiber geschaetzten Fahrzeit.
+
+    Formel: max(travel_time * multiplier + buffer, min_s)
+
+    - Wenn travel_time verfuegbar ist (>0): timeout = travel_time * multiplier + buffer_s
+    - Sonst: fallback_s (oder min_s falls None)
+    - Ergebnis wird auf min_s begrenzt (Mindest-Timeout)
+    - multiplier und buffer_s geben Sicherheitsreserve fuer Kommunikationsverzoegerung
+    """
     if multiplier <= 0:
         raise ValueError("multiplier must be > 0")
     if min_s <= 0:

@@ -46,6 +46,11 @@ Hardware camera profiles are selected through:
 
 - `promoc_bringup/config/cameras/*.yaml`
 
+The current default hardware profile is `ids_u3_3800cp_hq`, for the IDS
+U3-3800CP-C-HQ Rev.2.2 (`AB12874`) USB3 camera with Sony IMX183 sensor,
+5536x3692 maximum sensor resolution, 2.40 um pixels, and 19.8 fps at full
+resolution.
+
 ## Primary Topics
 
 - `/promoc/camera/image_raw`

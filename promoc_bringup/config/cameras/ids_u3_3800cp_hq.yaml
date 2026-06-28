@@ -1,6 +1,18 @@
 # IDS U3-3800CP-C-HQ Rev.2.2 default runtime camera configuration.
 
 camera_params:
+  article_number: AB12874
+  model: U3-3800CP-C-HQ Rev.2.2
+  family: CP
+  interface: USB 3
+  interface_speed_gbps: 5.0
+  sensor_type: CMOS
+  sensor_manufacturer: Sony
+  sensor_model: IMX183
+  shutter: Rolling-Shutter
+  optical_class: '1"'
+  protection_class: IP30
+  lifecycle: In Serie
   guid: IDS Imaging Development Systems GmbH-1409f4a43375-4104401781
   driver: usb3vision
   cameraname: promoc_camera
@@ -26,11 +38,13 @@ exposure_time:
   max_val: 814000.0
 
 frame_rate:
-  freerun_max: 19.0
+  freerun_max: 19.8
   trigger_continuous: 10.0
   trigger_max: 10.0
 
 camera_info:
+  # Calibration/runtime CameraInfo, not necessarily the full sensor resolution.
+  # Full sensor resolution is 5536x3692 in camera_params above.
   image_width: 2448
   image_height: 2048
   camera_name: assembly_camera_stream0
@@ -56,7 +70,7 @@ dynamic_parameters:
   - FeatureName: AcquisitionFrameRate
     Type: float
     Min: 1.0
-    Max: 19.0
+    Max: 19.8
     Description: Controls the acquisition rate in Hertz.
   - FeatureName: ExposureTime
     Type: float

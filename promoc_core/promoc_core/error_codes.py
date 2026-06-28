@@ -1,20 +1,32 @@
-"""Shared numeric error codes for ProMOC assembly nodes."""
+"""Gemeinsame numerische Fehlercodes fuer alle ProMOC-Knoten.
+
+Bereiche:
+  0           SUCCESS (kein Fehler)
+  1000-1099   Verbindungsfehler
+  1100-1199   Konfigurationsfehler
+  1200-1299   Geraetezustand und Homing
+  1300-1399   Bewegungsfehler
+  1400-1499   Arbeitsbereich-Verletzungen
+  1500-1599   Systemsicherheit
+  1600-1699   Stop und Reset
+  9999        Unbekannter Fehler
+"""
 
 SUCCESS = 0
 
-# 1000-1099: connection
+# 1000-1099: Verbindung
 CONNECTION_FAILED = 1000
 CONNECTION_LOST = 1001
 CONNECTION_TIMEOUT = 1002
 CONTROLLER_NOT_CONNECTED = 1003
 
-# 1100-1199: configuration
+# 1100-1199: Konfiguration
 INVALID_CONFIGURATION = 1100
 MISSING_CONFIGURATION = 1101
 INVALID_PARAMETER = 1102
 INVALID_COMMAND = 1103
 
-# 1200-1299: device state and homing
+# 1200-1299: Geraetezustand und Homing
 DEVICE_NOT_READY = 1200
 DEVICE_BUSY = 1201
 DEVICE_UNHOMED = 1202
@@ -24,23 +36,23 @@ XBOT_NOT_ACTIVE = 1205
 POSITION_UNAVAILABLE = 1206
 DRIVER_FAILURE = 1207
 
-# 1300-1399: movement
+# 1300-1399: Bewegung
 MOVEMENT_FAILED = 1300
 MOVEMENT_TIMEOUT = 1301
 MOVEMENT_REJECTED = 1302
 
-# 1400-1499: local limits
+# 1400-1499: Arbeitsbereich
 SOFT_LIMIT_REACHED = 1400
 TARGET_OUT_OF_RANGE = 1401
 
-# 1500-1599: system safety
+# 1500-1599: Systemsicherheit
 SYSTEM_STOP_ACTIVE = 1500
 STALE_SYSTEM_STATE = 1501
 WORKSPACE_VIOLATION = 1502
 REQUIRED_DEVICE_MISSING = 1503
 DEVICE_STATUS_STALE = 1504
 
-# 1600-1699: stop and reset
+# 1600-1699: Stop und Reset
 STOP_REQUESTED = 1600
 RESET_REQUIRED = 1601
 RESET_FAILED = 1602

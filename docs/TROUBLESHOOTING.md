@@ -112,6 +112,28 @@ If you are only trying to validate the stack, switch to:
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
+## Linear axis hardware does not connect
+
+Hardware mode needs `pylablib` in the active ROS Python environment:
+
+```bash
+python3 -c 'from pylablib.devices import Thorlabs'
+```
+
+For the normal setup, leave `serial_port` empty and keep the correct
+`serial_number` in `x_axis.yaml` or `z_axis.yaml`. The driver scans
+`/dev/ttyUSB*` and `/dev/ttyACM*`, reads each detected Thorlabs serial number,
+and uses the device matching the config.
+
+Check:
+
+- the USB device is visible, for example with `ls /dev/ttyUSB*`
+- the configured serial number matches the label/device info
+- the current user has permission to access the serial device
+- no other process has the Kinesis device open
+
+Set `serial_port` only when you intentionally want to force one path.
+
 ## Planar-motor PMCLib checkout is unavailable
 
 Planar-motor hardware mode depends on the proprietary PMCLib package at:

@@ -23,8 +23,9 @@
 
 - real IDS camera on the current simplified runtime
 - real Thorlabs axes on the current simplified runtime
+- linear-axis serial-number USB scan on the real X/Z hardware pair
 - real planar motor on the current simplified runtime
-- planar-motor hardware PMCLib connection and mastership on a real controller
+- planar-motor hardware PMCLib connection on a real controller
 - planar-motor hardware activation sequence with real XBots
 - planar-motor hardware Z-acceleration behavior beyond current PMCLib call
   coverage
@@ -45,6 +46,10 @@ real machine behavior.
 Planar-motor PMCLib remains local-only under
 `planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/` and is required
 only for hardware mode.
+
+Linear-axis hardware mode uses `pylablib`. With the normal config, `serial_port`
+is empty and the driver selects the physical X/Z axis by the configured
+Thorlabs serial number after scanning `/dev/ttyUSB*` and `/dev/ttyACM*`.
 
 Hardware planar-motor startup defaults to `auto_activate` true, matching the
 legacy main-branch startup flow after the explicit PMC connection succeeds. Set

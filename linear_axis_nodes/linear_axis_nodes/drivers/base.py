@@ -7,51 +7,55 @@ from typing import Optional, Tuple
 
 
 class LinearAxisDriver(ABC):
-    """Small device interface used by the unified axis node."""
+    """Abstrakte Treiberschnittstelle fuer Linearachsen.
+
+    Trennt die ROS-Knotenlogik von der Hardware/Mock-Implementierung.
+    Alle Positionsangaben in Millimetern, Geschwindigkeiten in mm/s.
+    """
 
     @abstractmethod
     def connect(self, port: str = None) -> bool:
-        """Connect to the axis device."""
+        """Mit dem Achsengeraet verbinden."""
 
     @abstractmethod
     def disconnect(self) -> None:
-        """Disconnect from the axis device."""
+        """Verbindung trennen."""
 
     @abstractmethod
     def move_absolute(self, position: float, timeout: Optional[float] = None) -> None:
-        """Move to an absolute position in millimeters."""
+        """Absolute Position in mm anfahren."""
 
     @abstractmethod
     def move_relative(self, distance: float, timeout: Optional[float] = None) -> None:
-        """Move by a relative distance in millimeters."""
+        """Relative Strecke in mm fahren."""
 
     @abstractmethod
     def jog(self, step_size: float, timeout: Optional[float] = None) -> None:
-        """Jog by a signed step size in millimeters."""
+        """Jog um signierten Schritt in mm (step_mode)."""
 
     @abstractmethod
     def home(self, timeout: float = 180.0) -> None:
-        """Home the axis."""
+        """Achse homed (Referenzfahrt)."""
 
     @abstractmethod
     def stop(self) -> None:
-        """Stop the current motion."""
+        """Aktuelle Bewegung sofort stoppen."""
 
     @abstractmethod
     def get_position(self) -> float:
-        """Return the current position in millimeters."""
+        """Aktuelle Position in mm abrufen."""
 
     @abstractmethod
     def is_moving(self) -> bool:
-        """Return whether the axis is currently moving."""
+        """Prueft ob die Achse gerade in Bewegung ist."""
 
     @abstractmethod
     def get_serial_number(self) -> str:
-        """Return the device serial number."""
+        """Seriennummer des Geraets abrufen."""
 
     @abstractmethod
     def get_velocity_parameters(self) -> Tuple[float, float, float]:
-        """Return (min_velocity, acceleration, max_velocity)."""
+        """(min_velocity, acceleration, max_velocity) in mm/s bzw. mm/s^2 abrufen."""
 
     @abstractmethod
     def set_velocity_parameters(
@@ -60,4 +64,4 @@ class LinearAxisDriver(ABC):
         acceleration: Optional[float] = None,
         max_velocity: Optional[float] = None,
     ) -> Tuple[float, float, float]:
-        """Set velocity parameters and return the applied values."""
+        """Geschwindigkeitsparameter setzen, gibt angewandte Werte zurueck."""

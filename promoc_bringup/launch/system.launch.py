@@ -17,6 +17,17 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    """Haupt-Launch-File fuer den gesamten ProMOC Geraete-Stack.
+
+    Startet je nach Launch-Argumenten:
+    - camera (camera.launch.py)
+    - x_axis (lts300_node mit x_axis.yaml)
+    - z_axis (lts300_node mit z_axis.yaml)
+    - planar_motor (mover_node mit planar_motor.yaml)
+    - system_controller (promoc_system_controller)
+
+    Alle Knoten teilen sich den driver_mode (hardware|mock).
+    """
     driver_mode_arg = DeclareLaunchArgument(
         "driver_mode",
         default_value="hardware",
@@ -48,6 +59,7 @@ def generate_launch_description():
         description="true|false",
     )
 
+    # Pfade zu den YAML-Konfigurationen der einzelnen Knoten
     camera_config = os.path.join(
         get_package_share_directory("camera_nodes"),
         "config",
@@ -75,6 +87,7 @@ def generate_launch_description():
     )
 
     driver_mode_param = {"driver_mode": LaunchConfiguration("driver_mode")}
+    # Kamera-Launch (separate Launch-Description mit eigenem camera.launch.py)
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -87,6 +100,7 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("camera")),
     )
 
+    # X-Achse: lts300_node im Namespace /promoc/linear_axis
     x_axis_node = Node(
         package="linear_axis_nodes",
         executable="lts300_node",
@@ -98,6 +112,7 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "INFO"],
     )
 
+    # Z-Achse: lts300_node im Namespace /promoc/linear_axis
     z_axis_node = Node(
         package="linear_axis_nodes",
         executable="lts300_node",
@@ -109,6 +124,7 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "INFO"],
     )
 
+    # Planarmotor: mover_node im Namespace /promoc
     planar_motor_node = Node(
         package="planar_motor_nodes",
         executable="mover_node",
@@ -120,6 +136,7 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "INFO"],
     )
 
+    # System-Controller: Ueberwacht alle Geraete und koordiniert Stop/Reset
     system_controller_node = Node(
         package="promoc_core",
         executable="promoc_system_controller",

@@ -152,10 +152,18 @@ class _FakeDriver:
 
 
 class _FakeThorlabsDevice:
-    def __init__(self):
+    def __init__(self, serial_number="45456044"):
         self.setup_jog_calls = []
         self.jog_calls = []
         self.position = 0
+        self.serial_number = serial_number
+        self.closed = False
+
+    def get_device_info(self):
+        return (self.serial_number,)
+
+    def close(self):
+        self.closed = True
 
     def setup_jog(self, **kwargs):
         self.setup_jog_calls.append(kwargs)
@@ -336,6 +344,35 @@ def test_hardware_jog_uses_builtin_kinesis_jog():
         }
     ]
     assert device.jog_calls == [("-", "builtin")]
+
+
+def test_hardware_connect_scans_ports_for_expected_serial(monkeypatch):
+    opened = {}
+
+    class _FakeThorlabs:
+        @staticmethod
+        def KinesisMotor(port, scale):
+            assert scale == "m"
+            serial = "45407924" if port == "/dev/ttyUSB1" else "45456044"
+            device = _FakeThorlabsDevice(serial)
+            opened[port] = device
+            return device
+
+    monkeypatch.setattr(
+        "linear_axis_nodes.drivers.hardware.Thorlabs",
+        _FakeThorlabs,
+    )
+    monkeypatch.setattr(
+        "linear_axis_nodes.drivers.hardware.glob.glob",
+        lambda pattern: ["/dev/ttyUSB0", "/dev/ttyUSB1"] if pattern == "/dev/ttyUSB*" else [],
+    )
+
+    driver = ThorlabsLTS300Driver(_DummyLogger(), expected_serial="45407924")
+    driver.connect(port="")
+
+    assert driver.get_serial_number() == "45407924"
+    assert opened["/dev/ttyUSB0"].closed is True
+    assert opened["/dev/ttyUSB1"].closed is False
 
 
 def test_movement_timeout_returns_correct_error(monkeypatch):

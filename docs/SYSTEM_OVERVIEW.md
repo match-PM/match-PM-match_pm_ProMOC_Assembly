@@ -49,9 +49,10 @@ Current launch files use:
 - `driver_mode:=mock`
 - `driver_mode:=hardware`
 
-`mock` means software-only device substitutes behind the same public ROS
-interfaces. `hardware` means the node will try to connect to real devices or
-vendor drivers.
+`mock` means simple software-only substitutes behind the same public ROS
+interfaces. These substitutes are for wiring checks, not physical simulation.
+`hardware` means the node will try to connect to real devices or vendor
+drivers.
 
 ## Package Boundaries
 

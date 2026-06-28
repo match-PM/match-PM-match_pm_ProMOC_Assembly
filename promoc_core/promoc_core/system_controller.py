@@ -76,16 +76,16 @@ SAFE_RESET_STATES = {
 
 @dataclass(frozen=True)
 class DeviceRecord:
-    """Latest observed state for one monitored device."""
+    """Letzte bekannte Zustandsinformation eines ueberwachten Geraets."""
 
     state: int = int(DeviceState.DISCONNECTED)
     error_code: int = int(error_codes.SUCCESS)
     message: str = "no status received"
-    has_message: bool = False
-    received_at: float | None = None
+    has_message: bool = False  # True sobald mindestens ein Status empfangen wurde
+    received_at: float | None = None  # Zeitstempel der letzten Aktualisierung
 
     def is_fresh(self, now: float, timeout_sec: float) -> bool:
-        """Return whether the record has a recent enough observation."""
+        """Prueft ob der letzte Status innerhalb des Timeout-Fensters liegt."""
         if not self.has_message or self.received_at is None:
             return False
         return (now - self.received_at) <= timeout_sec
@@ -93,7 +93,12 @@ class DeviceRecord:
 
 @dataclass(frozen=True)
 class SystemStatusSnapshot:
-    """Minimal combined system status published by the controller."""
+    """Kombinierter Systemstatus, der vom Controller publiziert wird.
+
+    stop_latched: True wenn das Sicherheitssystem einen Stop ausgeloest hat
+    all_required_present: Alle erforderlichen Geraete haben jemals Status gesendet
+    all_required_fresh: Alle Status sind aktuell (innerhalb timeout_sec)
+    """
 
     state: int
     stop_latched: bool
@@ -105,7 +110,7 @@ class SystemStatusSnapshot:
 
 @dataclass(frozen=True)
 class StopCallResult:
-    """Outcome of one motion-device stop request."""
+    """Ergebnis eines Stop-Requests an ein Bewegungsgeraet."""
 
     device_name: str
     success: bool
@@ -115,7 +120,7 @@ class StopCallResult:
 
 @dataclass(frozen=True)
 class StopEndpoint:
-    """Callables that let the pure stop helper drive one stop service."""
+    """Callbacks, die einen Stop-Service fuer ein Geraet kapseln."""
 
     device_name: str
     wait_for_service: Callable[[float], bool]
@@ -206,7 +211,14 @@ class SystemControllerConfig:
 
 
 class SystemStateStore:
-    """Pure-Python state store used by the ROS node and most unit tests."""
+    """Zustandsspeicher fuer das System-Monitoring (reines Python, keine ROS-Abhaengigkeit).
+
+    Verwaltet:
+    - DeviceRecords fuer alle bekannten Geraete (camera, x_axis, z_axis, planar_motor)
+    - Stop-Latch (bleibt aktiv bis reset_stop aufgerufen wird)
+    - Frische-Pruefung (is_fresh) fuer Timeout-Erkennung
+    - Berechnung des kombinierten Systemstatus (compute_status)
+    """
 
     def __init__(
         self,
@@ -214,11 +226,10 @@ class SystemStateStore:
         required_devices: tuple[str, ...] = KNOWN_DEVICE_NAMES,
         status_timeout_sec: float = 2.0,
     ) -> None:
-        """Create an empty store for the configured required devices."""
         self.required_devices = tuple(required_devices)
         self.status_timeout_sec = float(status_timeout_sec)
         self._records = {name: DeviceRecord() for name in KNOWN_DEVICE_NAMES}
-        self._lock = threading.RLock()
+        self._lock = threading.RLock()  # ReentrantLock fuer verschachtelte Aufrufe
         self._stop_latched = False
         self._latched_error_code = int(error_codes.SUCCESS)
         self._latched_message = "system not stopped"
@@ -302,7 +313,17 @@ class SystemStateStore:
             self._latched_message = "system stop cleared"
 
     def compute_status(self, now: float) -> SystemStatusSnapshot:
-        """Compute the current combined system status."""
+        """Berechnet den kombinierten Systemstatus basierend auf allen Geraete-Records.
+
+        Prioritaet (erste zutreffende Bedingung):
+        1. stop_latched -> STOPPED
+        2. Fehlende Geraete -> NOT_READY (REQUIRED_DEVICE_MISSING)
+        3. Veraltete Status -> NOT_READY (DEVICE_STATUS_STALE)
+        4. Geraet im ERROR -> ERROR
+        5. Geraete BUSY -> BUSY
+        6. Alle READY -> READY
+        7. Sonst -> NOT_READY
+        """
         with self._lock:
             missing = [
                 name
@@ -348,6 +369,7 @@ class SystemStateStore:
                     message=f"stale status from: {', '.join(stale)}",
                 )
 
+            # Pruefe auf ERROR-Geraete
             error_devices = [
                 name
                 for name in self.required_devices
@@ -364,6 +386,7 @@ class SystemStateStore:
                     message=f"device error: {error_devices[0]} ({first.message})",
                 )
 
+            # Pruefe auf BUSY-Geraete
             busy_devices = [
                 name
                 for name in self.required_devices
@@ -402,7 +425,15 @@ class SystemStateStore:
             )
 
     def can_reset(self, now: float) -> tuple[bool, int, str]:
-        """Return whether `reset_stop` may safely clear the system latch."""
+        """Prueft ob das System-Stop-Latch sicher zurueckgesetzt werden kann.
+
+        Bedingungen fuer Reset:
+        - Alle Geraete haben Status gesendet (nicht missing)
+        - Alle Status sind aktuell (nicht stale)
+        - Kein Geraet ist BUSY
+        - Kein Geraet ist im ERROR
+        - Alle Geraete sind in einem sicheren Zustand (SAFE_RESET_STATES)
+        """
         with self._lock:
             missing = [
                 name
@@ -479,9 +510,20 @@ def execute_stop_requests(
     monotonic_fn: Callable[[], float] = time.monotonic,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> list[StopCallResult]:
-    """Dispatch motion stop requests concurrently and collect a bounded result."""
+    """Verteilt Stop-Requests parallel an alle Bewegungsgeraete.
+
+    Ablauf:
+    1. Geraete, die bereits sicher gestoppt sind, werden uebersprungen
+    2. Auf verfuegbare Services warten (mit Timeout)
+    3. Async Stop-Requests an alle bereiten Services senden
+    4. Auf Antworten warten (mit Timeout)
+    5. Timeout fuer nicht geantwortete Requests -> STOP_REQUEST_TIMED_OUT
+
+    Reine Funktion ohne ROS-Abhaengigkeit (testbar).
+    """
     results: list[StopCallResult] = []
     pending_endpoints: list[StopEndpoint] = []
+    # Schritt 1: Bereits gestoppte Geraete ueberspringen
     for endpoint in endpoints:
         if endpoint.is_safely_stopped():
             results.append(
@@ -501,6 +543,7 @@ def execute_stop_requests(
     readiness_deadline = monotonic_fn() + timeout_sec
     ready_endpoints: list[StopEndpoint] = []
     waiting_endpoints = list(pending_endpoints)
+    # Schritt 2: Auf Service-Verfuegbarkeit warten
     while waiting_endpoints and monotonic_fn() < readiness_deadline:
         still_waiting: list[StopEndpoint] = []
         for endpoint in waiting_endpoints:
@@ -549,6 +592,7 @@ def execute_stop_requests(
                 )
             )
 
+    # Schritt 3: Async Stop-Requests senden
     pending_futures: dict[str, tuple[StopEndpoint, Any]] = {}
     for endpoint in ready_endpoints:
         try:
@@ -566,6 +610,7 @@ def execute_stop_requests(
                 )
             )
 
+    # Schritt 4: Auf Antworten aller Futures warten
     response_deadline = monotonic_fn() + timeout_sec
     while pending_futures and monotonic_fn() < response_deadline:
         completed = [
@@ -622,6 +667,7 @@ def execute_stop_requests(
         if pending_futures:
             sleep_fn(0.01)
 
+    # Schritt 5: Timeout-Behandlung fuer uebrige Futures
     for device_name, (endpoint, future) in pending_futures.items():
         if future.done():
             try:
@@ -671,7 +717,7 @@ def execute_stop_requests(
 
 
 def summarize_stop_results(results: list[StopCallResult]) -> tuple[bool, int, str]:
-    """Turn individual stop-call outcomes into one service response."""
+    """Fasst einzelne Stop-Ergebnisse zu einer Service-Antwort zusammen."""
     if not results:
         return True, int(error_codes.STOP_REQUESTED), "stop_all succeeded (no motion devices configured)"
 
@@ -722,10 +768,16 @@ def _ensure_ros_runtime() -> None:
 
 
 class SystemControllerNode(Node):
-    """ROS node that monitors device status and coordinates stop/reset."""
+    """ROS-Knoten zur Ueberwachung aller Geraete-Status und Stop-Koordination.
+
+    Aufgaben:
+    - Abonniert Status-Topics aller Geraete (Camera, X-Achse, Z-Achse, Planarmotor)
+    - Berechnet und publiziert kombinierten SystemStatus
+    - Bietet stop_all Service (latch STOPPED, sende Stop an alle Bewegungsgeraete)
+    - Bietet reset_stop Service (loese Stop-Latch nur bei sicheren Zustaenden)
+    """
 
     def __init__(self) -> None:
-        """Initialize subscriptions, publishers, services, and stop clients."""
         _ensure_ros_runtime()
         super().__init__(NODE_NAME, namespace=NODE_NAMESPACE)
         self._config = SystemControllerConfig.from_node(self)
@@ -738,6 +790,7 @@ class SystemControllerNode(Node):
         self._service_group = ReentrantCallbackGroup()
         self._client_group = ReentrantCallbackGroup()
 
+        # Publisher mit TRANSIENT_LOCAL: neue Subscriber erhalten sofort den letzten Status
         self._status_publisher = self.create_publisher(
             SystemStatus,
             "status",

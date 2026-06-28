@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
-from typing import Any, Sequence
+from typing import Any
 
 from promoc_core import error_codes
 from promoc_core.promoc_exceptions import (
@@ -21,33 +20,35 @@ from .pmclib_loader import load_pmclib
 from ..models import SpeedProfile, XBotPose, XBotSnapshot
 
 
-@dataclass(frozen=True)
-class _BackendModules:
-    bot: Any
-    sys_cmd: Any
-    pmc_types: Any
-    source: str
-
-
 class HardwarePlanarMotorDriver(PlanarMotorDriver):
-    """Small adapter from the internal driver contract to the vendor API."""
+    """Small adapter from the internal driver contract to the vendor API.
 
+    Uebersetzt die abstrakten Treibermethoden in Aufrufe der proprietaren
+    PMCLib (xbot_commands, system_commands). Verwaltet Verbindung und
+    XBot-Statusabfrage ueber die Vendor-API.
+    """
+
+    # Wiederholungsintervall fuer Verbindungsversuche
     CONNECT_RETRY_INTERVAL_S = 0.1
     CONNECT_LOG_EVERY_ATTEMPTS = 25
 
     def __init__(self, logger):
         self._logger = logger
-        self._backend: _BackendModules | None = None
+        self._sys_cmd: Any | None = None
+        self._bot: Any | None = None
         self._connected = False
 
     def connect(self, controller_address: str) -> None:
-        backend = self._backend or self._load_backend()
+        # Verbindet zum PMC-Controller mit Wiederholungslogik.
+        # Laedt zuerst das PMCLib-Backend (lazy import), versucht dann
+        # system_commands.connect_to_pmc() bis es erfolgreich ist.
+        self._load_backend()
         attempts = 0
 
         while not self._connected:
             attempts += 1
             try:
-                success = backend.sys_cmd.connect_to_pmc(controller_address)
+                success = self._sys_cmd.connect_to_pmc(controller_address)
             except Exception as exc:
                 success = False
                 if attempts == 1 or attempts % self.CONNECT_LOG_EVERY_ATTEMPTS == 0:
@@ -68,9 +69,6 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
                 )
             time.sleep(self.CONNECT_RETRY_INTERVAL_S)
 
-        gain_mastership = getattr(backend.sys_cmd, "gain_mastership", None)
-        if callable(gain_mastership):
-            gain_mastership()
         self._connected = True
         if attempts > 1:
             self._log(
@@ -79,16 +77,11 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             )
 
     def disconnect(self) -> None:
-        if not self._backend:
-            return
-        try:
-            release_mastership = getattr(self._backend.sys_cmd, "release_mastership", None)
-            if callable(release_mastership):
-                release_mastership()
-        finally:
-            self._connected = False
+        self._connected = False
 
     def list_xbot_ids(self) -> list[int]:
+        # Liest alle XBots vom Controller, extrahiert deren IDs, prueft
+        # auf Duplikate und gibt eine sortierte Liste zurueck.
         xbots = self._read_all_xbots()
         ids = [self._extract_xbot_id(xbot) for xbot in xbots]
         if len(ids) != len(set(ids)):
@@ -99,42 +92,30 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             )
         return sorted(ids)
 
-    def activate_xbots(self, xbot_ids: Sequence[int] | None = None) -> None:
+    def activate_xbots(self) -> None:
         self._require_connected()
-        if xbot_ids:
-            for xbot_id in xbot_ids:
-                self._validate_known_xbot(xbot_id)
-        self._backend.bot.activate_xbots()
+        self._bot.activate_xbots()
 
-    def deactivate_xbots(self, xbot_ids: Sequence[int] | None = None) -> None:
+    def deactivate_xbots(self) -> None:
         self._require_connected()
-        if xbot_ids:
-            for xbot_id in xbot_ids:
-                self._validate_known_xbot(xbot_id)
-        deactivate = getattr(self._backend.bot, "deactivate_xbots", None)
+        deactivate = getattr(self._bot, "deactivate_xbots", None)
         if callable(deactivate):
             deactivate()
 
-    def set_levitation(
-        self, xbot_ids: Sequence[int] | None = None, enabled: bool = True
-    ) -> None:
+    def set_levitation(self, xbot_id: int, enabled: bool = True) -> None:
         self._require_connected()
-        if xbot_ids and len(xbot_ids) == 1:
-            target_id = int(xbot_ids[0])
-            self._validate_known_xbot(target_id)
-        else:
-            target_id = 0
-        self._backend.bot.levitation_command(target_id, 1 if enabled else 0)
+        self._bot.levitation_command(int(xbot_id), 1 if enabled else 0)
 
     def get_snapshot(self, xbot_id: int) -> XBotSnapshot:
+        # Baut einen XBotSnapshot aus den Rohdaten des Controllers.
+        # 1. XBot-Daten lesen (_read_xbot)
+        # 2. Status aus dem xbot_state-Attribut ableiten
+        # 3. Pose extrahieren (x/y/z/rx/ry/rz)
+        # 4. device_state aus raw_state ableiten
+        # 5. active/levitated/busy Flags setzen
         self._require_connected()
         xbot = self._read_xbot(xbot_id)
-        raw_state = "UNKNOWN"
-        try:
-            status = self._backend.bot.get_xbot_status(xbot_id)
-            raw_state = self._state_name(getattr(status, "xbot_state", None))
-        except Exception:
-            raw_state = self._state_name(getattr(xbot, "xbot_state", None))
+        raw_state = self._state_name(getattr(xbot, "xbot_state", None))
 
         pose = XBotPose(
             x=float(xbot.x_pos),
@@ -163,8 +144,7 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
         speed: SpeedProfile,
     ) -> float | None:
         self._require_connected()
-        self._validate_known_xbot(xbot_id)
-        return self._backend.bot.linear_motion_si(
+        return self._bot.linear_motion_si(
             xbot_id,
             target_x,
             target_y,
@@ -179,8 +159,7 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
         speed: SpeedProfile,
     ) -> float | None:
         self._require_connected()
-        self._validate_known_xbot(xbot_id)
-        return self._backend.bot.six_d_of_motion_si(
+        return self._bot.six_d_of_motion_si(
             xbot_id,
             target_pose.x,
             target_pose.y,
@@ -212,8 +191,10 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
         arc_direction: int,
         angle_rad: float,
     ) -> float | None:
+        # Kreisbogenbewegung ueber PMCLib.
+        # Bei relativer Bewegung: target_x/y werden zum aktuellen X/Y addiert.
+        # pos_mode wird als 0 (absolut) oder 1 (relativ) an PMCLib uebergeben.
         self._require_connected()
-        self._validate_known_xbot(xbot_id)
         if relative:
             current = self.get_snapshot(xbot_id).pose
             if current is None:
@@ -224,7 +205,7 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
                 )
             target_x += current.x
             target_y += current.y
-        return self._backend.bot.arc_motion_si(
+        return self._bot.arc_motion_si(
             xbot_id,
             target_x,
             target_y,
@@ -249,8 +230,7 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
         mode: int,
     ) -> float | None:
         self._require_connected()
-        self._validate_known_xbot(xbot_id)
-        return self._backend.bot.rotary_motion(
+        return self._bot.rotary_motion(
             xbot_id,
             target_rz,
             max_speed,
@@ -261,23 +241,20 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
 
     def stop(self, xbot_id: int) -> None:
         self._require_connected()
-        self._validate_known_xbot(xbot_id)
-        self._backend.bot.stop_motion(xbot_id)
+        self._bot.stop_motion(xbot_id)
 
     def stop_all(self) -> None:
         self._require_connected()
-        self._backend.bot.stop_motion(0)
+        self._bot.stop_motion(0)
 
-    def _load_backend(self) -> _BackendModules:
+    def _load_backend(self) -> None:
+        # Laedt die PMCLib-Module (system_commands, xbot_commands)
+        # ueber den Lazy-Loader. Wirft DriverNotAvailableError, wenn die
+        # PMCLib nicht installiert/verfuegbar ist.
+        if self._sys_cmd is not None and self._bot is not None:
+            return
         try:
-            modules = load_pmclib()
-            self._backend = _BackendModules(
-                bot=modules.xbot_commands,
-                sys_cmd=modules.system_commands,
-                pmc_types=modules.pmc_types,
-                source=modules.source,
-            )
-            return self._backend
+            self._sys_cmd, self._bot = load_pmclib()
         except ImportError as exc:
             raise DriverNotAvailableError(
                 f"Vendor planar-motor driver is unavailable: {exc}",
@@ -285,7 +262,7 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             ) from exc
 
     def _require_connected(self) -> None:
-        if not self._connected:
+        if not self._connected or self._sys_cmd is None or self._bot is None:
             raise ConnectionError(
                 "Planar motor controller is not connected",
                 error_code=error_codes.CONTROLLER_NOT_CONNECTED,
@@ -297,12 +274,11 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             log_fn(message)
 
     def _read_all_xbots(self) -> list[Any]:
-        backend = self._backend or self._load_backend()
-        get_xbot_data = getattr(backend.bot, "get_xbot_data", None)
-        if callable(get_xbot_data):
-            xbots = get_xbot_data()
-        else:
-            xbots = backend.bot.get_all_xbot_info(0)
+        # Liest alle XBot-Daten vom Controller.
+        # Nutzt denselben PMCLib-Pfad wie main: get_all_xbot_info(0).
+        # Wirft HardwareError, wenn keine Daten zurueckkommen.
+        self._load_backend()
+        xbots = self._bot.get_all_xbot_info(0)
         if not xbots:
             raise HardwareError(
                 "No XBot data returned by the planar-motor driver",
@@ -321,9 +297,6 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             error_code=error_codes.XBOT_NOT_FOUND,
             details={"xbot_id": xbot_id},
         )
-
-    def _validate_known_xbot(self, xbot_id: int) -> None:
-        self._read_xbot(xbot_id)
 
     @staticmethod
     def _extract_xbot_id(xbot: Any) -> int:
@@ -359,6 +332,12 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
 
     @staticmethod
     def _device_state_from_raw(raw_state: str) -> DeviceState:
+        # Mappt den rohen Zustandsstring des Controllers auf DeviceState.
+        # MOTION/WAIT/DISCOVERING -> BUSY (XBot bewegt sich)
+        # STOPPING/STOPPED -> STOPPED
+        # ERROR/OBSTACLE -> ERROR
+        # LANDED/UNDETECTED/DISABLED -> NOT_READY
+        # Alles andere -> READY
         if any(token in raw_state for token in ("MOTION", "WAIT", "DISCOVERING")):
             return DeviceState.BUSY
         if any(token in raw_state for token in ("STOPPING", "STOPPED")):

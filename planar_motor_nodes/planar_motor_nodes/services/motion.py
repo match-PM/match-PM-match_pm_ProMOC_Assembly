@@ -22,6 +22,12 @@ class MotionCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_linear_motion_si(self, request, response):
+        # Lineare XY-Bewegung in SI-Einheiten (Meter).
+        # 1. Request normalisieren (mm -> m).
+        # 2. Aktuelle Pose holen, Ziel-Pose bauen (Z/Rotation bleiben unveraendert).
+        # 3. Pruefen ob das Ziel innerhalb der konfigurierten Grenzen liegt.
+        # 4. Operation-Lock holen (verhindert parallele Bewegungen desselben XBots).
+        # 5. Bewegung starten und auf Abschluss warten (Polling mit Timeout).
         processed = process_linear_request(request)
         self.mover_utils.ensure_xbot_active(processed.xbot_id)
         current = self.mover_utils.get_current_position(processed.xbot_id)
@@ -63,6 +69,9 @@ class MotionCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_six_d_motion(self, request, response):
+        # 6-DOF-Bewegung (X, Y, Z, RX, RY, RZ).
+        # NO_CHANGE-Sentinel (-999999.0) erlaubt das Weglassen einzelner Achsen --
+        # diese behalten dann ihre aktuelle Position bei.
         xbot_id = int(request.xbot_id)
         current = self.mover_utils.get_current_position(xbot_id)
         processed = process_six_dof_request(request, current, self.NO_CHANGE)
@@ -96,6 +105,11 @@ class MotionCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_arc_motion_si(self, request, response):
+        # Kreisbogenbewegung (Arc) in SI-Einheiten.
+        # 1. Request normalisieren, Einheiten umrechnen (mm->m, deg->rad).
+        # 2. pos_mode=1 -> relative Bewegung (delta zur aktuellen Position).
+        # 3. pos_mode=0 -> absolute Zielkoordinaten.
+        # 4. arc_mode, arc_type, arc_direction steuern die Geometrie des Bogens.
         xbot_id = int(request.xbot_id)
         current = self.mover_utils.get_current_position(xbot_id)
         processed = process_arc_request(request, current)
@@ -149,6 +163,9 @@ class MotionCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_rotary_motion(self, request, response):
+        # Reine Rotationsbewegung um die Z-Achse (RZ).
+        # Geschwindigkeit und Beschleunigung werden von deg/s nach rad/s umgerechnet.
+        # rot_mode steuert, ob absolut oder relativ gedreht wird.
         current = self.mover_utils.get_current_position(int(request.xbot_id))
         processed = process_rotary_request(request, current)
         self.mover_utils.ensure_xbot_active(processed.xbot_id)

@@ -33,6 +33,13 @@ def generate_launch_description():
 
 
 def launch_setup(context, *args, **kwargs):
+    """Haupt-Launch-Logik fuer die Kamera.
+
+    Ablauf:
+    - driver_mode aus Fail: "hardware" startet auch den camera_aravis2-Treiberknoten
+    - "mock" startet nur den camera_nodes-Knoten (Mock-Modus)
+    - Bei "hardware": Laedt kameraspezifische YAML-Konfiguration aus config/cameras/
+    """
     del args, kwargs
     driver_mode = LaunchConfiguration("driver_mode").perform(context).strip().lower()
     camera_type = LaunchConfiguration("camera_type").perform(context).strip()
@@ -58,8 +65,8 @@ def launch_setup(context, *args, **kwargs):
     try:
         hardware_config = _load_yaml(hardware_config_file)
         return [
-            _hardware_camera_driver_node(hardware_config),
-            _camera_node("hardware"),
+            _hardware_camera_driver_node(hardware_config),  # camera_aravis2 Treiber
+            _camera_node("hardware"),                        # ProMOC Kamera-Knoten
         ]
     except Exception as exc:
         logger.error(f"Failed to load camera configuration: {exc}")
@@ -67,6 +74,7 @@ def launch_setup(context, *args, **kwargs):
 
 
 def _camera_node(driver_mode: str) -> Node:
+    """Erstellt den ProMOC camera_nodes-Knoten mit Konfiguration."""
     camera_config = os.path.join(
         get_package_share_directory("camera_nodes"), "config", "camera.yaml"
     )
@@ -82,6 +90,7 @@ def _camera_node(driver_mode: str) -> Node:
 
 
 def _camera_hardware_config_path(camera_type: str) -> str:
+    """Pfad zur kameraspezifischen YAML-Konfiguration (z.B. ids_u3_3800cp_hq.yaml)."""
     bringup_pkg_share = get_package_share_directory("promoc_bringup")
     return os.path.join(bringup_pkg_share, "config", "cameras", f"{camera_type}.yaml")
 
@@ -100,7 +109,15 @@ def _write_temp_yaml(filename: str, data) -> str:
 
 
 def _hardware_camera_driver_node(hardware_config: dict) -> Node:
+    """Erstellt den camera_aravis2-Hardware-Treiberknoten.
+
+    Aus der YAML-Konfiguration werden extrahiert:
+    - Kameraparameter (GUID, Treibertyp usb3vision/gigevision)
+    - CameraInfo (wird als temporaere YAML gespeichert)
+    - Dynamische Parameter (wird als temporaere YAML gespeichert)
+    """
     camera_params = hardware_config.get("camera_params", {})
+    # Mapping: Kameratreiber -> ROS-Executable
     driver = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}.get(
         camera_params.get("driver", "usb3vision")
     )

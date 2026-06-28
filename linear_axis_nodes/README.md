@@ -72,9 +72,13 @@ See [`../docs/INTERFACES.md`](../docs/INTERFACES.md) for the full namespaces.
 ## Hardware And Mock Behavior
 
 - `driver_mode:=mock`
-  uses a software-only axis backend with the same ROS surface
+  uses a tiny in-memory dummy backend with the same ROS surface. Commands update
+  the stored position immediately; this is for local wiring checks, not motion
+  simulation.
 - `driver_mode:=hardware`
-  uses the real axis connection settings from the config file
+  uses the Thorlabs LTS300 hardware driver through pylablib. If `serial_port`
+  is empty, the driver scans `/dev/ttyUSB*` and `/dev/ttyACM*` and connects to
+  the device whose serial number matches `serial_number`.
 - `jog_axis`
   is its own driver operation; hardware uses the built-in Kinesis jog command
 

@@ -13,12 +13,15 @@ class ControlCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_activate_xbot(self, request, response):
+        # Aktiviert oder deaktiviert den konfigurierten XBot.
+        # Prueft zunaechst ob der XBot beim Controller bekannt ist,
+        # fuehrt dann activate bzw. deactivate aus.
         self.mover_utils.ensure_selected_xbot(self.config.xbot_id)
         if request.activation_status:
-            self.driver.activate_xbots([self.config.xbot_id])
+            self.driver.activate_xbots()
             message = f"Activated XBot {self.config.xbot_id}"
         else:
-            self.driver.deactivate_xbots([self.config.xbot_id])
+            self.driver.deactivate_xbots()
             message = f"Deactivated XBot {self.config.xbot_id}"
         if hasattr(response, "activation_status"):
             response.activation_status = bool(request.activation_status)
@@ -26,8 +29,10 @@ class ControlCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_levitation_xbot(self, request, response):
+        # Schaltet die Levitation (Schwebezustand) des XBots ein oder aus.
+        # Der XBot muss bekannt sein; die Levitation wird direkt am Treiber gesetzt.
         self.mover_utils.ensure_selected_xbot(self.config.xbot_id)
-        self.driver.set_levitation([self.config.xbot_id], enabled=bool(request.levitation))
+        self.driver.set_levitation(self.config.xbot_id, enabled=bool(request.levitation))
         if hasattr(response, "levitation"):
             response.levitation = bool(request.levitation)
         action = "enabled" if request.levitation else "disabled"
@@ -38,6 +43,8 @@ class ControlCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_stop_motion(self, request, response):
+        # Stoppt die Bewegung eines XBots sofort. Setzt den Status auf STOPPED
+        # und gibt STOP_REQUESTED als Error-Code zurueck (kein Fehler, sondern Abbruch).
         self.mover_utils.stop_xbot(int(request.xbot_id))
         response.success = True
         response.error_code = error_codes.STOP_REQUESTED
@@ -46,6 +53,10 @@ class ControlCallbacks(ServiceCallbacksBase):
 
     @handle_service_errors()
     def callback_set_velocity_acceleration(self, request, response):
+        # Setzt Geschwindigkeits- und Beschleunigungsparameter fuer einen XBot.
+        # 1. Validiert, dass alle Werte endlich und positiv sind.
+        # 2. Speichert das SpeedProfile im MoverUtils-Laufzeitzustand.
+        # 3. Warnt im Hardware-Modus, falls z_max_accel gesetzt wird (PMCLib ignoriert dies).
         xbot_id = int(request.xbot_id)
         self.mover_utils.ensure_selected_xbot(xbot_id)
         values = {
