@@ -14,7 +14,7 @@ This page answers two questions:
 | `planar_motor_nodes` | planar-motor runtime and motion services | `mover_node` | `planar_motor_nodes/config/planar_motor.yaml` |
 | `promoc_assembly_interfaces` | ROS messages and services only | none | n/a |
 | `promoc_core` | shared status/errors plus optional system controller | `promoc_system_controller` | `promoc_core/config/system_controller.yaml` |
-| `promoc_bringup` | launch composition and package wiring | none | camera profiles and `system.reference.yaml` |
+| `promoc_bringup` | launch composition and package wiring | none | camera hardware profiles |
 | `promoc_simulation` | RViz/URDF assets for future richer simulation | none | `promoc_simulation/launch/display.launch.py` and URDF assets |
 
 ## Package Details

@@ -14,20 +14,11 @@ Hardware camera profiles live in:
 
 - `promoc_bringup/config/cameras/*.yaml`
 
-## Central Versus Package-Specific Settings
-
-`promoc_bringup/config/system.reference.yaml` records the intended top-level
-composition for readers only:
-
-- `driver_mode`
-- component enable flags
-- config paths for each package
-
-Current state from source:
+## Launch Choices Versus Device Settings
 
 - `system.launch.py` owns top-level start choices through launch arguments
 - device parameters live in package-specific YAML files
-- `system.reference.yaml` is not consumed automatically by the main launch
+- camera hardware profiles live under `promoc_bringup/config/cameras/`
 
 ## Camera
 

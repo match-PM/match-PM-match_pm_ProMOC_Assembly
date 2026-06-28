@@ -47,3 +47,16 @@ def test_system_controller_is_optional_by_default():
     assert match is not None
     system_controller_block = match.group(0)
     assert 'default_value="false"' in system_controller_block
+
+
+def test_bringup_has_no_unused_system_reference_yaml():
+    assert not (ROOT / "promoc_bringup" / "config" / "system.reference.yaml").exists()
+
+
+def test_camera_launch_keeps_mock_and_hardware_steps_named():
+    content = (ROOT / "promoc_bringup" / "launch" / "camera.launch.py").read_text(
+        encoding="utf-8", errors="ignore"
+    )
+    assert "def _camera_node" in content
+    assert "def _hardware_camera_driver_node" in content
+    assert "def _camera_hardware_config_path" in content

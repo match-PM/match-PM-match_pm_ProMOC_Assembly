@@ -4,22 +4,15 @@ This directory contains tracked bringup-level configuration artifacts.
 
 ## Files
 
-- `system.reference.yaml`
 - `cameras/*.yaml`
 
 ## Current Source Behavior
 
-`system.reference.yaml` records the intended top-level composition:
-
-- `driver_mode`
-- component enable flags
-- config paths for package-owned YAML files
-
-`system.launch.py` behavior is intentionally simpler:
+`system.launch.py` owns top-level start choices directly:
 
 - it declares launch arguments directly
 - it loads package-owned YAML files directly
-- it does not parse the reference file
+- it does not parse a separate bringup-level system YAML
 
 ## Camera Profiles
 

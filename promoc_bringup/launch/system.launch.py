@@ -1,7 +1,7 @@
-"""Main ProMOC system launch file.
+"""Main ProMOC device-stack launch file.
 
 This launch file provides one clear and predictable way to launch the
-complete ProMOC system while preserving independent package startup.
+ProMOC device nodes while preserving independent package startup.
 """
 
 from __future__ import annotations

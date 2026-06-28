@@ -104,8 +104,7 @@ Main package-owned configuration files:
 - `promoc_core/config/system_controller.yaml`
 
 The current `system.launch.py` loads the package-specific config files directly.
-`promoc_bringup/config/system.reference.yaml` is documentation only; the main
-launch does not read it automatically.
+Top-level component choices are launch arguments, not a separate bringup YAML.
 
 ## What This Repository Does Not Yet Claim
 

@@ -12,7 +12,7 @@ Maintained runtime entry points:
 - `launch/system.launch.py`
 - `launch/camera.launch.py`
 
-`system.launch.py` is the canonical full-system entry point.
+`system.launch.py` is the canonical device-stack entry point.
 
 The launch file is intentionally flat: launch arguments and `Node(...)` actions
 are named explicitly instead of being hidden behind helper factories.
@@ -35,13 +35,13 @@ interface also exposes `camera_type` when the camera component is enabled.
 
 ## Common Commands
 
-Full mock system:
+Mock device stack:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
 ```
 
-Mock system with the optional supervisor:
+Mock device stack with the optional supervisor:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock system_controller:=true
@@ -57,14 +57,12 @@ ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
 
 This package owns:
 
-- `config/system.reference.yaml`
 - `config/cameras/*.yaml`
 
 Current source state:
 
 - `system.launch.py` loads package-specific YAML directly
-- `config/system.reference.yaml` is documentation only; it is not parsed by the
-  main launch file
+- top-level start choices are launch arguments, not a separate bringup YAML
 
 ## Current Limitations
 
