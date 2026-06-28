@@ -1,6 +1,10 @@
 # Local libraries and dependencies
 local_libs/
 
+.agents
+.codex
+.github
+
 # Python cache files
 __pycache__/
 .mypy_cache/
@@ -20,7 +24,7 @@ install/
 log/
 
 # Private vendor libraries
-planar_motor_nodes/planar_motor_nodes/drivers/match_pm_xBot/
+planar_motor_nodes/planar_motor_nodes/drivers/vendor/
 
 # Environment files
 .env
