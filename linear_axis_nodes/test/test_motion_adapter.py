@@ -98,12 +98,6 @@ class _FakeDriver:
         self.stop_requested = True
         self.moving = False
 
-    def jog_positive(self, step_size: float = 1.0, timeout: float | None = None) -> None:
-        self.move_relative(abs(step_size), timeout)
-
-    def jog_negative(self, step_size: float = 1.0, timeout: float | None = None) -> None:
-        self.move_relative(-abs(step_size), timeout)
-
     def get_position(self) -> float:
         return self.position
 
@@ -112,9 +106,6 @@ class _FakeDriver:
 
     def get_serial_number(self) -> str:
         return f"SIM-{self.axis_id.upper()}"
-
-    def get_axis_type(self) -> str:
-        return self.axis_id
 
     def get_velocity_parameters(self):
         return self.velocity
@@ -129,9 +120,6 @@ class _FakeDriver:
             current[2] = max_velocity
         self.velocity = tuple(current)
         return self.velocity
-
-    def validate_position(self, position: float) -> bool:
-        return 0.0 <= position <= 300.0
 
     def _run_move(self, target: float, timeout: float | None) -> None:
         self.moving = True
@@ -167,6 +155,25 @@ def _config(**overrides) -> LinearAxisConfig:
     return LinearAxisConfig(**values)
 
 
+class _Param:
+    def __init__(self, value):
+        self.value = value
+
+
+class _FakeNode:
+    def __init__(self, overrides=None):
+        self.values = dict(overrides or {})
+
+    def has_parameter(self, name):
+        return name in self.values
+
+    def declare_parameter(self, name, default):
+        self.values.setdefault(name, default)
+
+    def get_parameter(self, name):
+        return _Param(self.values[name])
+
+
 def _controller(monkeypatch, *, axis_id: str = "x", move_delay_s: float = 0.2, **cfg):
     driver = _FakeDriver(axis_id=axis_id, move_delay_s=move_delay_s)
     monkeypatch.setattr(
@@ -175,6 +182,15 @@ def _controller(monkeypatch, *, axis_id: str = "x", move_delay_s: float = 0.2, *
         lambda self: driver,
     )
     return AxisController(_DummyLogger(), _config(axis_id=axis_id, **cfg)), driver
+
+
+def test_config_from_node_normalizes_axis_and_driver_mode():
+    config = LinearAxisConfig.from_node(
+        _FakeNode({"axis_id": " X ", "driver_mode": " MOCK "})
+    )
+
+    assert config.axis_id == "x"
+    assert config.driver_mode == "mock"
 
 
 def test_movement_before_homing_is_rejected(monkeypatch):

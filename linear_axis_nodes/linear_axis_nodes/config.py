@@ -41,8 +41,8 @@ class LinearAxisConfig:
         node.declare_parameter("state_publish_rate_hz", 10.0)
 
         return cls(
-            axis_id=str(node.get_parameter("axis_id").value),
-            driver_mode=str(node.get_parameter("driver_mode").value),
+            axis_id=str(node.get_parameter("axis_id").value).strip().lower(),
+            driver_mode=str(node.get_parameter("driver_mode").value).strip().lower(),
             serial_number=str(node.get_parameter("serial_number").value),
             serial_port=str(node.get_parameter("serial_port").value),
             min_position=float(node.get_parameter("min_position").value),

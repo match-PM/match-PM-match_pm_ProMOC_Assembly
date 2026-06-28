@@ -89,8 +89,14 @@ class AxisController:
             self._logger.info("Using mock linear-axis driver")
             return MockLinearAxisDriver(self._logger, self._config)
 
-        self._logger.info("Using Thorlabs LTS300 hardware driver")
-        return ThorlabsLTS300Driver(self._logger, self._config.axis_id)
+        if self._config.driver_mode == "hardware":
+            self._logger.info("Using Thorlabs LTS300 hardware driver")
+            return ThorlabsLTS300Driver(self._logger)
+
+        raise ValueError(
+            "Unsupported driver_mode "
+            f"'{self._config.driver_mode}'. Use 'hardware' or 'mock'."
+        )
 
     def snapshot(self) -> AxisSnapshot:
         with self._state_lock:

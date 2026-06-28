@@ -54,16 +54,6 @@ class MockLinearAxisDriver(LinearAxisDriver):
     def stop(self) -> None:
         self._stop_requested.set()
 
-    def jog_positive(
-        self, step_size: float = 1.0, timeout: Optional[float] = None
-    ) -> None:
-        self.move_relative(abs(float(step_size)), timeout)
-
-    def jog_negative(
-        self, step_size: float = 1.0, timeout: Optional[float] = None
-    ) -> None:
-        self.move_relative(-abs(float(step_size)), timeout)
-
     def get_position(self) -> float:
         with self._lock:
             return self._position
@@ -74,9 +64,6 @@ class MockLinearAxisDriver(LinearAxisDriver):
 
     def get_serial_number(self) -> str:
         return self.config.serial_number or f"MOCK-{self.config.axis_id.upper()}"
-
-    def get_axis_type(self) -> str:
-        return self.config.axis_id
 
     def get_velocity_parameters(self) -> Tuple[float, float, float]:
         with self._lock:

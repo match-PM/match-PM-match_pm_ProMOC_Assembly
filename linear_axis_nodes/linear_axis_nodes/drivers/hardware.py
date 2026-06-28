@@ -3,8 +3,6 @@
 import time
 import warnings
 from typing import Optional, Tuple
-import struct
-import sys
 import os
 
 # Try to import Thorlabs library
@@ -20,7 +18,6 @@ from promoc_core.promoc_exceptions import (
     HardwareError,
     HomingFailedError,
     MovementTimeoutError,
-    SoftLimitViolationError,
     DriverNotAvailableError
 )
 
@@ -28,7 +25,6 @@ from promoc_core.promoc_exceptions import (
 warnings.filterwarnings("ignore", message="can't recognize the stage name*")
 warnings.filterwarnings("ignore", message="can't recognize motor model*")
 
-ABSOLUTE_MAX_POSITION = 300.0
 LOCK_TIMEOUT_FAST_S = 0.05
 LOCK_TIMEOUT_SHORT_S = 0.1
 LOCK_TIMEOUT_NORMAL_S = 0.3
@@ -36,7 +32,7 @@ LOCK_TIMEOUT_PATIENT_S = 0.5
 
 
 class ThorlabsLTS300Driver(LinearAxisDriver):
-    def __init__(self, logger, axis_id: str):
+    def __init__(self, logger):
         """
         Initialize the Thorlabs LTS300 driver.
 
@@ -47,7 +43,6 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
         self.device: Optional[Thorlabs.KinesisMotor] = None  # type: ignore
         self.connected: bool = False
         self.serial_no: Optional[str] = None
-        self.axis_type: Optional[str] = axis_id
         # LTS300 uses 409600 device units per mm
         self.device_units_per_mm: float = 409600.0
 
@@ -423,9 +418,6 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
     def get_serial_number(self) -> str:
         return self.serial_no if self.serial_no else ""
 
-    def get_axis_type(self) -> str:
-        return self.axis_type if self.axis_type else "unknown"
-
     def get_velocity_parameters(self) -> Tuple[float, float, float]:
         """
         Get current velocity parameters (min_velocity, acceleration, max_velocity).
@@ -546,74 +538,3 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 self.logger.error(
                     f'Error during force stop: {e}')
                 raise
-
-    def jog_positive(self, step_size: float = 1.0, timeout: Optional[float] = None):
-        """
-        Jog the axis in positive direction by the specified step size.
-
-        Args:
-            step_size (float): Distance to jog in mm (default: 1.0mm)
-        """
-        self._jog(abs(float(step_size)), timeout=timeout, label="positive")
-
-    def jog_negative(self, step_size: float = 1.0, timeout: Optional[float] = None):
-        """
-        Jog the axis in negative direction by the specified step size.
-
-        Args:
-            step_size (float): Distance to jog in mm (default: 1.0mm)
-        """
-        self._jog(-abs(float(step_size)), timeout=timeout, label="negative")
-
-    def _jog(self, signed_step: float, timeout: Optional[float], label: str) -> None:
-        self._ensure_connected()
-
-        try:
-            self.logger.debug(f'Jogging {label} by {abs(signed_step)} mm')
-            current_pos = self.get_position()
-            target_pos = current_pos + signed_step
-
-            if not self.validate_position(target_pos):
-                raise SoftLimitViolationError(
-                    "Jog target position would exceed safety limits",
-                    details={
-                        'current_position': current_pos,
-                        'step_size': signed_step,
-                        'target_position': target_pos,
-                        'limits': {'min': 0.0, 'max': ABSOLUTE_MAX_POSITION}
-                    }
-                )
-
-            self.move_relative(signed_step, timeout=timeout)
-
-        except SoftLimitViolationError:
-            raise
-        except Exception as e:
-            raise HardwareError(
-                f"Error during {label} jog: {str(e)}",
-                details={'step_size': signed_step, 'error': str(e)}
-            )
-
-    def validate_position(self, position: float) -> bool:
-        """
-        Validate if position is within safe hardware limits.
-        Uses conservative defaults to ensure safety.
-
-        Args:
-            position: Position to validate in mm
-
-        Returns:
-            True if position is valid, False otherwise
-        """
-        min_position = 0.0
-        max_position = ABSOLUTE_MAX_POSITION
-
-        if position < min_position or position > max_position:
-            self.logger.warn(
-                (
-                    f"Position {position}mm outside limits "
-                    f"[{min_position}, {max_position}]mm"
-                )
-            )
-            return False
-        return True
