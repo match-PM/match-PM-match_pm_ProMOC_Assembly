@@ -78,10 +78,6 @@ class _AlwaysBusyDriver:
         _ = xbot_id, target_pose, speed
         return 5.0
 
-    def move_relative(self, xbot_id: int, delta_pose: XBotPose, speed: SpeedProfile):
-        _ = xbot_id, delta_pose, speed
-        return 5.0
-
     def arc_move(self, xbot_id: int, target_x: float, target_y: float, radius_m: float, max_speed: float, max_accel: float, *, relative: bool, final_speed: float, arc_mode: int, arc_type: int, arc_direction: int, angle_rad: float):
         _ = (
             xbot_id,

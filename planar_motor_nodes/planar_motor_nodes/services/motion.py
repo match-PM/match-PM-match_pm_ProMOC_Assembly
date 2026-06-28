@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from promoc_core import error_codes
 from promoc_core.promoc_exceptions import PositionOutOfBoundsError
 
@@ -54,7 +56,10 @@ class MotionCallbacks(ServiceCallbacksBase):
                 multiplier=1.5,
                 minimum_timeout=5.0,
             )
-        return self._success(response, f"Linear motion completed for XBot {processed.xbot_id}")
+        return self._success(
+            response,
+            f"Linear motion completed for XBot {processed.xbot_id}",
+        )
 
     @handle_service_errors()
     def callback_six_d_motion(self, request, response):
@@ -84,7 +89,10 @@ class MotionCallbacks(ServiceCallbacksBase):
                 multiplier=1.5,
                 minimum_timeout=8.0,
             )
-        return self._success(response, f"6-DOF motion completed for XBot {processed.xbot_id}")
+        return self._success(
+            response,
+            f"6-DOF motion completed for XBot {processed.xbot_id}",
+        )
 
     @handle_service_errors()
     def callback_arc_motion_si(self, request, response):
@@ -98,22 +106,31 @@ class MotionCallbacks(ServiceCallbacksBase):
                 error_code=error_codes.TARGET_OUT_OF_RANGE,
                 details={"xbot_id": processed.xbot_id},
             )
+        command_target = processed.relative_target or processed.absolute_target
+        radius_m = self._require_finite(request.radius, "radius") / 1000.0
+        max_speed_m_s = self._require_finite(request.max_speed, "max_speed") / 1000.0
+        max_accel_m_s2 = self._require_finite(request.max_accel, "max_accel") / 1000.0
+        final_speed_m_s = (
+            self._require_finite(request.final_speed, "final_speed") / 1000.0
+        )
+        angle_rad = math.radians(
+            self._require_finite(request.angle_degrees, "angle_degrees")
+        )
+
         with self._operation_guard(processed.xbot_id):
             travel_time = self.driver.arc_move(
                 processed.xbot_id,
-                processed.absolute_target.x if processed.relative_target is None else processed.relative_target.x,
-                processed.absolute_target.y if processed.relative_target is None else processed.relative_target.y,
-                self._require_finite(request.radius, "radius") / 1000.0,
-                self._require_finite(request.max_speed, "max_speed") / 1000.0,
-                self._require_finite(request.max_accel, "max_accel") / 1000.0,
+                command_target.x,
+                command_target.y,
+                radius_m,
+                max_speed_m_s,
+                max_accel_m_s2,
                 relative=processed.relative_target is not None,
-                final_speed=self._require_finite(request.final_speed, "final_speed") / 1000.0,
+                final_speed=final_speed_m_s,
                 arc_mode=int(request.arc_mode),
                 arc_type=int(request.arc_type),
                 arc_direction=int(request.arc_direction),
-                angle_rad=self._require_finite(request.angle_degrees, "angle_degrees")
-                * 3.141592653589793
-                / 180.0,
+                angle_rad=angle_rad,
             )
             self.mover_utils.wait_for_motion_completion(
                 processed.xbot_id,
@@ -125,19 +142,28 @@ class MotionCallbacks(ServiceCallbacksBase):
                 minimum_timeout=8.0,
             )
         mode = "relative" if processed.relative_target is not None else "absolute"
-        return self._success(response, f"Arc motion ({mode}) completed for XBot {processed.xbot_id}")
+        return self._success(
+            response,
+            f"Arc motion ({mode}) completed for XBot {processed.xbot_id}",
+        )
 
     @handle_service_errors()
     def callback_rotary_motion(self, request, response):
         current = self.mover_utils.get_current_position(int(request.xbot_id))
         processed = process_rotary_request(request, current)
         self.mover_utils.ensure_xbot_active(processed.xbot_id)
+        max_speed_rad_s = math.radians(
+            self._require_finite(request.max_rz_speed, "max_rz_speed")
+        )
+        max_accel_rad_s2 = math.radians(
+            self._require_finite(request.max_accel_rz, "max_accel_rz")
+        )
         with self._operation_guard(processed.xbot_id):
             travel_time = self.driver.rotate(
                 processed.xbot_id,
                 processed.absolute_target.rz,
-                self._require_finite(request.max_rz_speed, "max_rz_speed") * 3.141592653589793 / 180.0,
-                self._require_finite(request.max_accel_rz, "max_accel_rz") * 3.141592653589793 / 180.0,
+                max_speed_rad_s,
+                max_accel_rad_s2,
                 int(request.rot_mode),
             )
             self.mover_utils.wait_for_motion_completion(
@@ -149,4 +175,7 @@ class MotionCallbacks(ServiceCallbacksBase):
                 multiplier=1.5,
                 minimum_timeout=4.0,
             )
-        return self._success(response, f"Rotary motion completed for XBot {processed.xbot_id}")
+        return self._success(
+            response,
+            f"Rotary motion completed for XBot {processed.xbot_id}",
+        )

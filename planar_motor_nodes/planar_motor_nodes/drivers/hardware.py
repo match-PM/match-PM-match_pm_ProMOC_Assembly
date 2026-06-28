@@ -196,21 +196,6 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
             speed.rz_vel,
         )
 
-    def move_relative(
-        self,
-        xbot_id: int,
-        delta_pose: XBotPose,
-        speed: SpeedProfile,
-    ) -> float | None:
-        current = self.get_snapshot(xbot_id).pose
-        if current is None:
-            raise MotionError(
-                "Current position unavailable for relative motion",
-                error_code=error_codes.POSITION_UNAVAILABLE,
-                details={"xbot_id": xbot_id},
-            )
-        return self.move_six_dof_absolute(xbot_id, current.with_delta(delta_pose), speed)
-
     def arc_move(
         self,
         xbot_id: int,

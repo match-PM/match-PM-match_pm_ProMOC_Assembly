@@ -72,12 +72,16 @@ class MoverServiceNode(Node):
         return MoverNodeConfig.from_mapping(values)
 
     def _create_driver(self):
-        if self.config.driver_mode in ("mock", "sim", "simulator"):
+        if self.config.driver_mode == "mock":
             return MockPlanarMotorDriver(
                 self.log,
                 mock_xbot_count=self.config.mock_xbot_count,
             )
-        return HardwarePlanarMotorDriver(self.log)
+        if self.config.driver_mode == "hardware":
+            return HardwarePlanarMotorDriver(self.log)
+        raise ValueError(
+            f"Unsupported driver_mode '{self.config.driver_mode}'. Use 'hardware' or 'mock'."
+        )
 
     def _create_services(self) -> None:
         self.create_service(

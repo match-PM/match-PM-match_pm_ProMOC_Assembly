@@ -61,15 +61,6 @@ class PlanarMotorDriver(ABC):
         """Start an absolute 6-DOF motion and return an estimated travel time."""
 
     @abstractmethod
-    def move_relative(
-        self,
-        xbot_id: int,
-        delta_pose: XBotPose,
-        speed: SpeedProfile,
-    ) -> float | None:
-        """Start a relative motion and return an estimated travel time."""
-
-    @abstractmethod
     def arc_move(
         self,
         xbot_id: int,

@@ -33,7 +33,7 @@ class MoverNodeConfig:
     def from_mapping(cls, values: Mapping[str, Any]) -> "MoverNodeConfig":
         """Build typed config from ROS parameter values."""
         return cls(
-            driver_mode=str(values["driver_mode"]),
+            driver_mode=str(values["driver_mode"]).strip().lower(),
             xbot_id=int(values["xbot_id"]),
             publish_rate=float(values["publish_rate"]),
             pmc_ip=str(values["pmc_ip"]),

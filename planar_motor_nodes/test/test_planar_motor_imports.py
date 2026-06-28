@@ -70,3 +70,13 @@ def test_hardware_driver_import_is_lazy():
     module = importlib.import_module("planar_motor_nodes.drivers.hardware")
     assert hasattr(module, "HardwarePlanarMotorDriver")
     assert "pmclib" not in sys.modules
+
+
+def test_driver_mode_config_is_normalized_for_simple_launch_values():
+    config_module = importlib.import_module("planar_motor_nodes.config")
+    values = dict(config_module.DEFAULT_MOVER_NODE_PARAMETERS)
+    values["driver_mode"] = " MOCK "
+
+    config = config_module.MoverNodeConfig.from_mapping(values)
+
+    assert config.driver_mode == "mock"
