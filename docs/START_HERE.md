@@ -25,9 +25,6 @@ ROS workspace root:
 <ros-workspace>
 ```
 
-The full project check needs the real ROS workspace root, not just the Git
-repository root.
-
 The repository directory under `src/` should stay source-only. Do not keep
 local `.venv`, IDE folders, agent scratch folders, or ROS `build/install/log`
 outputs inside it.
@@ -69,39 +66,23 @@ current checked path in this repository.
 From the repository root:
 
 ```bash
-python3 tools/check_project.py --quick
+python3 setup/setup.py validate
 ```
+
+To also rebuild the workspace and run `colcon test`:
 
 ```bash
-python3 tools/check_project.py \
-  --full \
-  --workspace-root <ros-workspace>
+python3 setup/setup.py validate --full
 ```
 
-For a read-only source checkout or to keep `build/`, `install/`, and `log/`
-outside the repository workspace, add:
+Default validate mode runs setup checks plus the maintained source-level test
+set. Full mode also:
 
-```bash
-python3 tools/check_project.py \
-  --full \
-  --workspace-root <ros-workspace> \
-  --artifact-root <artifact-dir>
-```
-
-Quick mode is source and repository validation only. Full mode also:
-
-- cleans prior build/test outputs in the active full-mode artifact layout
 - rebuilds the workspace
 - runs `colcon test`
 - runs `colcon test-result --verbose`
-- starts full and partial mock-system smoke checks
-- verifies that those mock processes terminate
 
-Without `--artifact-root`, the active full-mode artifact layout is the
-workspace-local `build/`, `install/`, and `log/` directories.
-
-Full mode uses mock ROS processes. It does not command verified real hardware
-motion during the smoke checks.
+Full mode does not command verified real hardware motion.
 
 ## 4. Start The Full Mock System
 

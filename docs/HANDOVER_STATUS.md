@@ -6,9 +6,8 @@
 - ROS 2 Jazzy workspace tests
 - ROS 2 Humble workspace build
 - ROS 2 Humble workspace tests
-- `python3 tools/check_project.py --quick`
-- `python3 tools/check_project.py --full`
-- `python3 tools/check_project.py --full --artifact-root <artifact-dir>`
+- `python3 setup/setup.py validate`
+- `python3 setup/setup.py validate --full`
 - mock camera
 - mock X axis
 - mock Z axis
@@ -38,10 +37,7 @@
 The authoritative target platform is Ubuntu 22.04, ROS 2 Humble, and Python
 3.10. The currently recorded verification evidence in this repository includes
 successful Humble and Jazzy workspace build/test execution, plus source-level
-and mock runtime checks. The full check now also supports an external artifact
-root, so the Humble validation can run with a read-only source checkout and
-persisted build artifacts outside the repository. This still does not certify
-real machine behavior.
+and mock runtime checks. This still does not certify real machine behavior.
 
 Planar-motor PMCLib remains local-only under
 `planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/` and is required

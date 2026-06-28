@@ -114,17 +114,13 @@ colcon test-result --verbose
 From the repository root:
 
 ```bash
-python3 tools/check_project.py --quick
-python3 tools/check_project.py --full --workspace-root <ros-workspace>
+python3 setup/setup.py validate
 ```
 
-Optional external artifact root for read-only source workspaces:
+To also rebuild the workspace and run `colcon test`:
 
 ```bash
-python3 tools/check_project.py \
-  --full \
-  --workspace-root <ros-workspace> \
-  --artifact-root <artifact-dir>
+python3 setup/setup.py validate --full
 ```
 
 ## About `setup/`

@@ -37,39 +37,20 @@ The authoritative target platform is ROS 2 Humble on Ubuntu 22.04. Newer
 distributions may be used for local development, but they are not the primary
 handover target.
 
-## `check_project --full` cannot find the workspace root
+## `setup/setup.py validate --full` uses the wrong workspace
 
-Pass the real ROS workspace root explicitly:
+Run it from a normal ROS workspace checkout:
 
-```bash
-python3 tools/check_project.py --full --workspace-root <ros-workspace>
+```text
+<ros-workspace>/
+  src/
+    <this repository>
 ```
 
-The workspace root must contain this repository under `src/`.
-
-## `check_project --full` should not write `build/`, `install/`, or `log/` into the workspace
-
-Use an external artifact root:
-
-```bash
-python3 tools/check_project.py \
-  --full \
-  --workspace-root <ros-workspace> \
-  --artifact-root <artifact-dir>
-```
-
-This keeps full-mode outputs outside the validated source workspace while still
-running the same build, test, and mock-smoke checks.
-
-## Quick check fails because the tree is dirty
-
-Review the tracked changes first. Only use:
-
-```bash
-python3 tools/check_project.py --quick --allow-dirty
-```
-
-when you intentionally want a local development check on uncommitted work.
+`validate --full` builds and tests the workspace root inferred from that layout.
+If the checkout is elsewhere, move it under `src/` or run the plain ROS commands
+from the workspace root: `colcon build`, `colcon test`, and
+`colcon test-result --verbose`.
 
 ## Device status is missing or stale
 
@@ -226,8 +207,8 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-If you intentionally keep outputs outside the workspace, clean the external
-artifact root you passed to `--artifact-root` instead.
+If you intentionally keep outputs elsewhere, clean that custom output directory
+as well.
 
 ## Agent, IDE, Or Virtualenv Folders Appeared In `src`
 

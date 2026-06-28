@@ -28,7 +28,7 @@ make start-mock
 - `camera_node` can publish a synthetic image stream
 - `lts300_node` can run with tiny in-memory dummy drivers
 - `mover_node` can run with a tiny in-memory planar-motor dummy backend
-- `tools/check_project.py --full` uses mock-mode smoke checks
+- `setup/setup.py validate` checks the maintained source-level mock paths
 
 The axis and planar-motor dummy drivers update stored positions immediately
 when commands are accepted. They intentionally do not model travel time,
@@ -37,5 +37,5 @@ mechanics, collisions, controller firmware, or real stop distance.
 ## Relationship To `promoc_simulation`
 
 `promoc_simulation` currently contains RViz and URDF assets. That package is
-not the same thing as the checked mock bringup. The full mock-system checks run
+not the same thing as the checked mock bringup. The maintained mock bringup runs
 through `promoc_bringup` plus mock drivers in the runtime packages.

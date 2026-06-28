@@ -147,5 +147,4 @@ The repository should sit under the ROS workspace `src/` directory:
 
 Do not keep `.venv`, IDE metadata, agent scratch folders, or `build/`,
 `install/`, `log/` inside the repository directory. ROS build artifacts belong
-at the workspace root or in the explicit `--artifact-root` passed to
-`tools/check_project.py --full`.
+at the workspace root.

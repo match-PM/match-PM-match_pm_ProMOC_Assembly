@@ -15,9 +15,8 @@ Tracked contents include:
 
 ## Important Limitation
 
-The validated mock bringup used by `tools/check_project.py --full` does not come
-from this package. Mock device behavior currently lives in the runtime packages
-behind `driver_mode:=mock`.
+The maintained mock bringup does not come from this package. Mock device
+behavior currently lives in the runtime packages behind `driver_mode:=mock`.
 
 Use this package for visualization and future simulation extensions, not as the
 source of truth for the checked mock system.

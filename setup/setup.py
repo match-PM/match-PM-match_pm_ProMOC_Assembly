@@ -65,6 +65,23 @@ NUMBA_PACKAGES = [
     "numba==0.59.1",
 ]
 
+VALIDATE_TESTS = [
+    "linear_axis_nodes/test/test_motion_adapter.py",
+    "linear_axis_nodes/test/test_service_callbacks_regression.py",
+    "linear_axis_nodes/test/test_linear_axis_namespace_contract.py",
+    "planar_motor_nodes/test/test_pmclib_loader.py",
+    "camera_nodes/test/test_config.py",
+    "camera_nodes/test/test_mock_camera_driver.py",
+    "camera_nodes/test/test_camera_namespace_contract.py",
+    "promoc_bringup/test/test_system_launch.py",
+    "promoc_core/test/test_interface_contracts.py",
+    "promoc_core/test/test_conversions.py",
+    "promoc_core/test/test_error_codes.py",
+    "promoc_core/test/test_error_handling.py",
+    "promoc_core/test/test_motion_timeout.py",
+    "promoc_core/test/test_system_controller.py",
+]
+
 
 @dataclass
 class Result:
@@ -331,18 +348,20 @@ def install_camera_aravis2(camera_ws: Path, dry_run: bool) -> int:
 def command_validate(args: argparse.Namespace) -> int:
     print_header("ProMOC Validate")
     checks_failed = command_check(args)
-    quick = run([sys.executable, str(REPO_ROOT / "tools/check_project.py"), "--quick"], cwd=REPO_ROOT)
+
+    test_command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        *VALIDATE_TESTS,
+    ]
+    quick = run(test_command, cwd=REPO_ROOT)
+
     if args.full:
-        full = run(
-            [
-                sys.executable,
-                str(REPO_ROOT / "tools/check_project.py"),
-                "--full",
-                "--workspace-root",
-                str(WORKSPACE_ROOT),
-            ],
-            cwd=REPO_ROOT,
-        )
+        build = run(["colcon", "build", "--symlink-install"], cwd=WORKSPACE_ROOT)
+        test = run(["colcon", "test"], cwd=WORKSPACE_ROOT)
+        test_result = run(["colcon", "test-result", "--verbose"], cwd=WORKSPACE_ROOT)
+        full = 0 if build == 0 and test == 0 and test_result == 0 else 1
     else:
         full = 0
     return 0 if checks_failed == 0 and quick == 0 and full == 0 else 1
@@ -394,7 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
     install.set_defaults(func=command_install)
 
     validate = sub.add_parser("validate", help="run setup check plus project checks")
-    validate.add_argument("--full", action="store_true", help="also run tools/check_project.py --full")
+    validate.add_argument("--full", action="store_true", help="also build and run colcon tests")
     validate.set_defaults(func=command_validate)
 
     repair = sub.add_parser("repair", help="recreate or refresh the Python venv")
