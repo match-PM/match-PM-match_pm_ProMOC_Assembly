@@ -46,5 +46,6 @@ Planar-motor PMCLib remains local-only under
 `planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/` and is required
 only for hardware mode.
 
-Hardware planar-motor startup now leaves `auto_activate` disabled by default.
-Real XBot activation must be requested explicitly after status is checked.
+Hardware planar-motor startup defaults to `auto_activate` true, matching the
+legacy main-branch startup flow after the explicit PMC connection succeeds. Set
+it false when activation should be requested explicitly after status is checked.

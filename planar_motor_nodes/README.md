@@ -27,8 +27,8 @@ Important keys:
 - `xbot_id`
 - `publish_rate`
 - `pmc_ip`
-- `auto_activate` defaults to `false`; setting it to `true` is advanced and
-  sends an activation command during startup
+- `auto_activate` defaults to `true` and sends the activation command after the
+  PMC connection succeeds
 - workspace bounds: `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max`
 - tolerances
 - default speed profile values:
@@ -66,9 +66,11 @@ planar_motor_nodes/planar_motor_nodes/drivers/vendor/pmclib/
 Do not commit that proprietary directory. Mock mode works without it. If the
 vendor package uses .NET interop, hardware mode also needs `pythonnet`/`clr`.
 
-Hardware startup does not activate XBots by default. Use the activation service
-explicitly after checking status, or set `auto_activate:=true` only when that
-startup intervention is intentional.
+Hardware startup connects to the configured `pmc_ip` using the explicit
+PMCLib `connect_to_pmc(...)` path and retries until the connection succeeds.
+The PMCLib `auto_connect_to_pmc()` network scan path is intentionally not used.
+With the default config, startup then activates the configured XBot. Set
+`auto_activate:=false` only when activation should be a separate operator step.
 
 `z_max_accel` is kept in the public speed-profile API for compatibility. The
 current PMCLib hardware backend accepts and stores the value, but does not apply

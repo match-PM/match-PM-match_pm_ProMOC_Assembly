@@ -2,20 +2,22 @@
 
 ## Purpose
 
-`promoc_core` holds shared helpers and the system controller. It should not
-become a generic dump for hardware-specific runtime logic.
+`promoc_core` holds small shared status/error helpers plus the optional system
+controller. It should not become a generic dump for hardware-specific runtime
+logic.
 
 ## Executable
 
 - `ros2 run promoc_core promoc_system_controller`
 
-This node is normally started by:
+This optional node is started only when shared system status or coordinated
+stop/reset behavior is needed:
 
 ```bash
-ros2 launch promoc_bringup system.launch.py driver_mode:=mock
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock system_controller:=true
 ```
 
-or hardware mode.
+The default device-stack launch leaves it off.
 
 ## Configuration
 

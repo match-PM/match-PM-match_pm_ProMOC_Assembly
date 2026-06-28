@@ -63,7 +63,7 @@ DEFAULT_MOVER_NODE_PARAMETERS = {
     "xbot_id": 0,
     "publish_rate": 10.0,
     "pmc_ip": "192.168.10.100",
-    "auto_activate": False,
+    "auto_activate": True,
     "movement_timeout": 10.0,
     "mock_xbot_count": 1,
     "xy_tolerance": 0.001,

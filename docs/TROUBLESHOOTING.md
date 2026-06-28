@@ -135,11 +135,12 @@ Missing PMCLib, missing `clr`, or controller connection failures should appear
 on `/promoc/mover/xbot_info` as an `ERROR` device status while the node remains
 alive.
 
-## Planar motor does not activate after hardware startup
+## Planar motor should not activate after hardware startup
 
-That is the safe default. Hardware startup keeps `auto_activate` false so no
-activation command is sent implicitly. Check `/promoc/mover/xbot_info` first,
-then call `/promoc/mover/activate_xbots` only when activation is intended.
+Hardware startup defaults to `auto_activate` true. Set `auto_activate` false in
+the planar-motor config or launch parameters when activation should remain a
+separate operator step. Check `/promoc/mover/xbot_info` before sending motion
+commands.
 
 ## `z_max_accel` is accepted but not applied in hardware mode
 

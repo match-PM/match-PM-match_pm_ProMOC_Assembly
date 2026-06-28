@@ -6,8 +6,8 @@ is a small hardware-control stack with:
 - one camera node that republishes raw images and status
 - two linear-axis nodes for the X and Z axes
 - one planar-motor node
-- one system controller that monitors device status and exposes `stop_all` and
-  guarded `reset_stop`
+- optional system controller that monitors device status and exposes `stop_all`
+  and guarded `reset_stop`
 
 Authoritative target platform:
 
@@ -55,7 +55,7 @@ make start-mock
 If your checkout is nested as `<ros-workspace>/src/<repo>`, source
 `../../install/setup.bash` from the repository root instead.
 
-## Start The Complete System
+## Start The Device Stack
 
 Mock bringup (no hardware needed):
 
@@ -80,6 +80,10 @@ Launch arguments:
 
 When the camera component is enabled, the built launch interface also exposes
 `camera_type` from `camera.launch.py`.
+
+The optional system controller is off by default. Add
+`system_controller:=true` when you need `/promoc/system/status`,
+`/promoc/system/stop_all`, and `/promoc/system/reset_stop`.
 
 Partial example:
 
@@ -106,7 +110,7 @@ Single-device work is usually done by disabling the other components in
 
 - Camera topics:
   `/promoc/camera/image_raw`, `/promoc/camera/status`
-- System controller:
+- Optional system controller:
   `/promoc/system/status`, `/promoc/system/stop_all`, `/promoc/system/reset_stop`
 - Linear axes:
   `/promoc/linear_axis/lts300_x_axis/...`,

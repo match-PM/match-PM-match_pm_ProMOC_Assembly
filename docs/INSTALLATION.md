@@ -83,9 +83,9 @@ If the vendor package uses .NET interop, install `pythonnet` and verify:
 python3 -c 'import clr'
 ```
 
-Hardware planar-motor startup does not activate XBots by default. Keep
-`auto_activate` false for first hardware checks and activate explicitly only
-after the status topic is healthy.
+Hardware planar-motor startup activates the configured XBot by default after
+the explicit PMC connection succeeds. Set `auto_activate` false for first
+hardware checks when activation should remain a separate operator step.
 
 ## Tests
 

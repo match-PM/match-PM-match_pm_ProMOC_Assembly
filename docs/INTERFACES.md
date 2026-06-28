@@ -84,7 +84,9 @@ limitation when a non-default value is set.
 - `xbot_state`
 - embedded `device_status`
 
-## System Controller
+## Optional System Controller
+
+These interfaces exist only when `system_controller:=true` is enabled.
 
 Topic:
 
@@ -118,7 +120,6 @@ Status freshness is determined by `status_timeout_sec` in
 ```bash
 ros2 topic list
 ros2 service list
-ros2 topic echo /promoc/system/status --once
 ros2 interface show promoc_assembly_interfaces/msg/SystemStatus
 ros2 interface show promoc_assembly_interfaces/srv/Stop
 ```

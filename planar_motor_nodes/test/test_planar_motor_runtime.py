@@ -206,8 +206,8 @@ def test_wait_for_motion_completion_maps_timeout_to_meaningful_error():
         raise AssertionError("Expected MotionError with MOVEMENT_TIMEOUT")
 
 
-def test_default_auto_activate_is_safe_for_hardware_startup():
-    assert DEFAULT_MOVER_NODE_PARAMETERS["auto_activate"] is False
+def test_default_auto_activate_matches_main_startup_behavior():
+    assert DEFAULT_MOVER_NODE_PARAMETERS["auto_activate"] is True
 
 
 def test_startup_failure_publishes_error_status_message():

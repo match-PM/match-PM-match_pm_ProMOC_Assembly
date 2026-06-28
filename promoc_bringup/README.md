@@ -26,6 +26,10 @@ are named explicitly instead of being hidden behind helper factories.
 - `planar_motor:=true|false`
 - `system_controller:=true|false`
 
+The system controller is optional and defaults to `false`. Enable it only when
+you want the shared `/promoc/system/status`, `/promoc/system/stop_all`, and
+`/promoc/system/reset_stop` coordination layer.
+
 Because `system.launch.py` includes `camera.launch.py`, the built launch
 interface also exposes `camera_type` when the camera component is enabled.
 
@@ -35,6 +39,12 @@ Full mock system:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py driver_mode:=mock
+```
+
+Mock system with the optional supervisor:
+
+```bash
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock system_controller:=true
 ```
 
 Camera-only stack:

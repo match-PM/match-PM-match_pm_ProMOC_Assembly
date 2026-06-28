@@ -44,7 +44,7 @@ def generate_launch_description():
     )
     system_controller_arg = DeclareLaunchArgument(
         "system_controller",
-        default_value="true",
+        default_value="false",
         description="true|false",
     )
 

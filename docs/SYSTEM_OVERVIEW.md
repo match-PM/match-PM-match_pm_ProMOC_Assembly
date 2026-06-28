@@ -78,9 +78,14 @@ The current runtime intentionally favors a boring, explicit ROS 2 style:
 - keep generated artifacts, virtual environments, IDE folders, and agent
   scratch folders outside this source repository
 
-## System Controller
+## Optional System Controller
 
-`promoc_system_controller` lives in `promoc_core` and:
+`promoc_system_controller` lives in `promoc_core`. It is optional and is not
+started by the default `system.launch.py` path. Enable it with
+`system_controller:=true` when shared system status or coordinated stop/reset
+behavior is needed.
+
+When enabled, it:
 
 - subscribes to camera, X-axis, Z-axis, and planar-motor status
 - publishes `/promoc/system/status`

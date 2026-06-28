@@ -22,7 +22,8 @@ device packages.
 
 ## System-Level Safety
 
-The system controller adds a second layer:
+The optional system controller adds a second layer when started with
+`system_controller:=true`:
 
 - monitors device status topics
 - tracks stale or missing status

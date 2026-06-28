@@ -13,7 +13,7 @@ This page answers two questions:
 | `linear_axis_nodes` | X and Z linear-axis runtime | `lts300_node` | `linear_axis_nodes/config/x_axis.yaml`, `linear_axis_nodes/config/z_axis.yaml` |
 | `planar_motor_nodes` | planar-motor runtime and motion services | `mover_node` | `planar_motor_nodes/config/planar_motor.yaml` |
 | `promoc_assembly_interfaces` | ROS messages and services only | none | n/a |
-| `promoc_core` | shared helpers and system controller | `promoc_system_controller` | `promoc_core/config/system_controller.yaml` |
+| `promoc_core` | shared status/errors plus optional system controller | `promoc_system_controller` | `promoc_core/config/system_controller.yaml` |
 | `promoc_bringup` | launch composition and package wiring | none | camera profiles and `system.reference.yaml` |
 | `promoc_simulation` | RViz/URDF assets for future richer simulation | none | `promoc_simulation/launch/display.launch.py` and URDF assets |
 
@@ -68,9 +68,9 @@ This page answers two questions:
 
 ### `promoc_core`
 
-- Purpose: hold shared helpers and the system controller
+- Purpose: hold shared status/error helpers and the optional system controller
 - Executable: `promoc_system_controller`
-- Public runtime surface:
+- Optional runtime surface:
   `/promoc/system/status`, `/promoc/system/stop_all`, `/promoc/system/reset_stop`
 - Limitation: it is a software coordinator, not a certified safety layer
 - Start here:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any, Sequence
 
 from promoc_core import error_codes
@@ -31,6 +32,9 @@ class _BackendModules:
 class HardwarePlanarMotorDriver(PlanarMotorDriver):
     """Small adapter from the internal driver contract to the vendor API."""
 
+    CONNECT_RETRY_INTERVAL_S = 0.1
+    CONNECT_LOG_EVERY_ATTEMPTS = 25
+
     def __init__(self, logger):
         self._logger = logger
         self._backend: _BackendModules | None = None
@@ -38,17 +42,41 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
 
     def connect(self, controller_address: str) -> None:
         backend = self._backend or self._load_backend()
-        success = backend.sys_cmd.connect_to_pmc(controller_address)
-        if not success:
-            raise ConnectionError(
-                f"Failed to connect to PMC at {controller_address}",
-                error_code=error_codes.CONNECTION_FAILED,
-                details={"controller_address": controller_address},
-            )
+        attempts = 0
+
+        while not self._connected:
+            attempts += 1
+            try:
+                success = backend.sys_cmd.connect_to_pmc(controller_address)
+            except Exception as exc:
+                success = False
+                if attempts == 1 or attempts % self.CONNECT_LOG_EVERY_ATTEMPTS == 0:
+                    self._log(
+                        "warning",
+                        "PMC connection attempt "
+                        f"{attempts} to {controller_address} failed: {exc}",
+                    )
+
+            if success:
+                break
+
+            if attempts == 1 or attempts % self.CONNECT_LOG_EVERY_ATTEMPTS == 0:
+                self._log(
+                    "warning",
+                    "Waiting for PMC connection at "
+                    f"{controller_address}; attempt {attempts} failed",
+                )
+            time.sleep(self.CONNECT_RETRY_INTERVAL_S)
+
         gain_mastership = getattr(backend.sys_cmd, "gain_mastership", None)
         if callable(gain_mastership):
             gain_mastership()
         self._connected = True
+        if attempts > 1:
+            self._log(
+                "info",
+                f"Connected to PMC at {controller_address} after {attempts} attempts",
+            )
 
     def disconnect(self) -> None:
         if not self._backend:
@@ -277,6 +305,11 @@ class HardwarePlanarMotorDriver(PlanarMotorDriver):
                 "Planar motor controller is not connected",
                 error_code=error_codes.CONTROLLER_NOT_CONNECTED,
             )
+
+    def _log(self, level: str, message: str) -> None:
+        log_fn = getattr(self._logger, level, None)
+        if callable(log_fn):
+            log_fn(message)
 
     def _read_all_xbots(self) -> list[Any]:
         backend = self._backend or self._load_backend()

@@ -106,6 +106,9 @@ Mock mode works without that directory.
 - service call timeout
 - system status publication rate
 
+The system controller is optional. The default `system.launch.py` device stack
+does not start it unless `system_controller:=true` is passed.
+
 These values define how the controller decides whether device state is fresh and
 whether `reset_stop` may succeed.
 

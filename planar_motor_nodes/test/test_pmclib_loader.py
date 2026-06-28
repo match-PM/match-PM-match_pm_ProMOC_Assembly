@@ -142,6 +142,43 @@ def test_hardware_driver_mastership_lifecycle(monkeypatch):
     assert calls == ["connect:192.0.2.10", "gain", "release"]
 
 
+def test_hardware_driver_retries_pmc_connection_until_success(monkeypatch):
+    calls: list[str] = []
+
+    class SystemCommands:
+        @staticmethod
+        def connect_to_pmc(controller_address):
+            calls.append(f"connect:{controller_address}")
+            return len(calls) >= 3
+
+        @staticmethod
+        def auto_connect_to_pmc():  # pragma: no cover - must not be used
+            raise AssertionError("auto_connect_to_pmc must stay unused")
+
+        @staticmethod
+        def gain_mastership():
+            calls.append("gain")
+
+    modules = SimpleNamespace(
+        pmc_types=SimpleNamespace(),
+        system_commands=SystemCommands,
+        xbot_commands=SimpleNamespace(),
+        source="fake pmclib",
+    )
+    monkeypatch.setattr(hardware, "load_pmclib", lambda: modules)
+    monkeypatch.setattr(hardware.time, "sleep", lambda _seconds: None)
+
+    driver = hardware.HardwarePlanarMotorDriver(SimpleNamespace())
+    driver.connect("192.0.2.10")
+
+    assert calls == [
+        "connect:192.0.2.10",
+        "connect:192.0.2.10",
+        "connect:192.0.2.10",
+        "gain",
+    ]
+
+
 def _hardware_driver_with_xbots(monkeypatch, xbots):
     class SystemCommands:
         @staticmethod

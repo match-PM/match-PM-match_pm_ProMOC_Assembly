@@ -124,6 +124,10 @@ Available launch arguments:
 - `planar_motor:=true|false`
 - `system_controller:=true|false`
 
+`system_controller` defaults to `false`. Leave it off for the simplest device
+bringup. Set `system_controller:=true` when you want the optional shared system
+status plus `stop_all` and guarded `reset_stop` services.
+
 The built launch interface also exposes `camera_type` through the included
 camera launch when the camera component is enabled.
 
@@ -135,7 +139,7 @@ Camera-only stack:
 ros2 launch promoc_bringup camera.launch.py driver_mode:=mock
 ```
 
-Only X axis plus system controller:
+Only X axis:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py \
@@ -145,7 +149,7 @@ ros2 launch promoc_bringup system.launch.py \
   planar_motor:=false
 ```
 
-Only planar motor plus system controller:
+Only planar motor:
 
 ```bash
 ros2 launch promoc_bringup system.launch.py \
@@ -160,20 +164,24 @@ ros2 launch promoc_bringup system.launch.py \
 ```bash
 ros2 topic list
 ros2 service list
-ros2 topic echo /promoc/system/status --once
 ros2 topic echo /promoc/camera/status --once
 ros2 topic echo /promoc/camera/image_raw --once
 ```
 
 Useful status topics:
 
-- `/promoc/system/status`
 - `/promoc/camera/status`
 - `/promoc/linear_axis/lts300_x_axis/status`
 - `/promoc/linear_axis/lts300_z_axis/status`
 - `/promoc/mover/xbot_info`
 
 ## 7. Use `stop_all` And `reset_stop`
+
+Start the optional supervisor first:
+
+```bash
+ros2 launch promoc_bringup system.launch.py driver_mode:=mock system_controller:=true
+```
 
 ```bash
 ros2 service call /promoc/system/stop_all \

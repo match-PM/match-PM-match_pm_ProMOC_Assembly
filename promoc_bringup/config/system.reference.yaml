@@ -16,7 +16,7 @@ system:
     enable_x_axis: true
     enable_z_axis: true
     enable_planar_motor: true
-    enable_system_controller: true
+    enable_system_controller: false
     config_paths:
       camera: "camera_nodes/config/camera.yaml"
       x_axis: "linear_axis_nodes/config/x_axis.yaml"
