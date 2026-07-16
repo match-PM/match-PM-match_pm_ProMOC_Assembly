@@ -22,7 +22,7 @@ class HeadlessScientificAnalyzer(Node):
         self.bridge = CvBridge()
 
         # --- ZIELPFAD FÜR DATENSPEICHERUNG ---
-        self.save_dir = "/home/pmlab/Dokumente/Messungen/Yannis Wesser/Messungen/V0012_MTF0_Verz1_Versch0_RotY0_RotP0_Transl0_Cam2"
+        self.save_dir = "/home/pmlab/Dokumente/Messungen/Yannis Wesser/Messungen/V006_MTF0_Verz1_Versch0_RotY0_RotP0_Transl0_Cam1"
         os.makedirs(self.save_dir, exist_ok=True)
 
         # --- PHYSIKALISCHE KONFIGURATION ---
@@ -257,7 +257,7 @@ class HeadlessScientificAnalyzer(Node):
         df = pd.DataFrame(self.all_points_data)
 
         max_r = df['Feldhoehe_r_mm'].max()
-        bins_edges = np.linspace(0.0, max_r, 16)
+        bins_edges = np.linspace(0.0, max_r, 21)
         df['Feldhoehe_Bin'] = pd.cut(df['Feldhoehe_r_mm'], bins=bins_edges, include_lowest=True)
 
         stats = df.groupby('Feldhoehe_Bin', observed=False).agg(
@@ -433,65 +433,65 @@ class HeadlessScientificAnalyzer(Node):
         # ---------------------------------------------------------
         # NEU: PLOT 04 - DIAGNOSTISCHE FEHLERANALYSE (SPEZIELL FÜR BIN 10 & 11)
         # ---------------------------------------------------------
-        self.get_logger().info("Erzeuge messtechnischen Diagnose-Plot...")
-        fig4, (ax4_1, ax4_2) = plt.subplots(1, 2, figsize=(16, 7))
+        #self.get_logger().info("Erzeuge messtechnischen Diagnose-Plot...")
+        #fig4, (ax4_1, ax4_2) = plt.subplots(1, 2, figsize=(16, 7))
 
         # Grenzen für Bin 10 und Bin 11 ermitteln (Kantenindizes 9, 10, 11)
-        r_bin10_start = bins_edges[9]
-        r_bin11_end = bins_edges[12]
+        #r_bin10_start = bins_edges[9]
+        #r_bin11_end = bins_edges[12]
         
         # Daten für die fehlerhaften Bins isolieren (letzter Frame als repräsentative Stichprobe)
-        df_last_frame = df[df['Messung_Nr'] == self.measurement_counter]
-        df_bins_10_11 = df_last_frame[(df_last_frame['Feldhoehe_r_mm'] >= r_bin10_start) & 
-                                      (df_last_frame['Feldhoehe_r_mm'] <= r_bin11_end)]
+        #df_last_frame = df[df['Messung_Nr'] == self.measurement_counter]
+        #df_bins_10_11 = df_last_frame[(df_last_frame['Feldhoehe_r_mm'] >= r_bin10_start) & 
+           #                           (df_last_frame['Feldhoehe_r_mm'] <= r_bin11_end)]
 
         # Dynamische Skalierung der Farbkarte (95%-Perzentil fängt extreme Ausreißer ab)
-        v_max_cmap = max(1.0, np.percentile(np.abs(df_last_frame['Verzeichnung_Prozent']), 95))
+        #v_max_cmap = max(1.0, np.percentile(np.abs(df_last_frame['Verzeichnung_Prozent']), 95))
 
         # Subplot 1: Räumliche Fehlerkarte auf dem Sensor
-        sc = ax4_1.scatter(df_last_frame['Sensor_U'], df_last_frame['Sensor_V'], 
-                            c=df_last_frame['Verzeichnung_Prozent'], 
-                            cmap='coolwarm', vmin=-v_max_cmap, vmax=v_max_cmap, s=15, edgecolors='none')
+        #sc = ax4_1.scatter(df_last_frame['Sensor_U'], df_last_frame['Sensor_V'], 
+          #                  c=df_last_frame['Verzeichnung_Prozent'], 
+         #                   cmap    ='coolwarm', vmin=-v_max_cmap, vmax=v_max_cmap, s=15, edgecolors='none')
         
         # Umrechnung von mm Feldhöhe in Pixelradius für die Ring-Visualisierung
-        cod_x, cod_y = last_cod
-        pts_r_px = np.sqrt((df_last_frame['Sensor_U'] - cod_x)**2 + (df_last_frame['Sensor_V'] - cod_y)**2)
-        scale_mm_to_px = np.mean(pts_r_px / df_last_frame['Feldhoehe_r_mm'])
+        #cod_x, cod_y = last_cod
+        #pts_r_px = np.sqrt((df_last_frame['Sensor_U'] - cod_x)**2 + (df_last_frame['Sensor_V'] - cod_y)**2)
+        #scale_mm_to_px = np.mean(pts_r_px / df_last_frame['Feldhoehe_r_mm'])
         
         # Ringe für Bin 10 und 11 einzeichnen
-        circle_start = plt.Circle((cod_x, cod_y), r_bin10_start * scale_mm_to_px, color='black', fill=False, linestyle='--', alpha=0.5)
-        circle_end = plt.Circle((cod_x, cod_y), r_bin11_end * scale_mm_to_px, color='black', fill=False, linestyle='--', alpha=0.5)
-        ax4_1.add_patch(circle_start)
-        ax4_1.add_patch(circle_end)
+        #circle_start = plt.Circle((cod_x, cod_y), r_bin10_start * scale_mm_to_px, color='black', fill=False, linestyle='--', alpha=0.5)
+        #circle_end = plt.Circle((cod_x, cod_y), r_bin11_end * scale_mm_to_px, color='black', fill=False, linestyle='--', alpha=0.5)
+        #ax4_1.add_patch(circle_start)
+        #ax4_1.add_patch(circle_end)
 
-        ax4_1.plot(cod_x, cod_y, 'kX', markersize=10, label='CoD')
-        ax4_1.set_xlim(0, self.img_width if self.img_width > 0 else 2464)
-        ax4_1.set_ylim(0, self.img_height if self.img_height > 0 else 2056)
-        ax4_1.invert_yaxis()
-        ax4_1.set_aspect('equal')
-        ax4_1.set_title('Räumliche Verteilungs-Map (Farbe = Verzeichnung %)\nGestrichelte Linien = Bereich von Bin 10 & 11', fontsize=11, fontweight='bold')
-        ax4_1.set_xlabel('Sensor U [px]')
-        ax4_1.set_ylabel('Sensor V [px]')
-        fig4.colorbar(sc, ax=ax4_1, label='Verzeichnung [%]')
+        #ax4_1.plot(cod_x, cod_y, 'kX', markersize=10, label='CoD')
+        #ax4_1.set_xlim(0, self.img_width if self.img_width > 0 else 2464)
+        #ax4_1.set_ylim(0, self.img_height if self.img_height > 0 else 2056)
+        #ax4_1.invert_yaxis()
+        #ax4_1.set_aspect('equal')
+        #ax4_1.set_title('Räumliche Verteilungs-Map (Farbe = Verzeichnung %)\nGestrichelte Linien = Bereich von Bin 10 & 11', fontsize=11, fontweight='bold')
+        #ax4_1.set_xlabel('Sensor U [px]')
+        #ax4_1.set_ylabel('Sensor V [px]')
+        #fig4.colorbar(sc, ax=ax4_1, label='Verzeichnung [%]')
 
         # Subplot 2: Verzeichnung vs. Polarwinkel in Bin 10 & 11
-        if len(df_bins_10_11) > 0:
-            angles_deg = np.degrees(df_bins_10_11['Polar_Winkel_Rad'])
-            ax4_2.scatter(angles_deg, df_bins_10_11['Verzeichnung_Prozent'], color='crimson', s=25, alpha=0.8, label='Punkte in Bin 10 & 11')
-            ax4_2.axhline(0, color='black', linestyle='-', alpha=0.5)
-            ax4_2.set_xlim(-180, 180)
-            ax4_2.set_title('Analyse für Bin 10 & 11: Verzeichnung vs. Winkel\n[Sinusform = Target-Kippung | Einzelne Punkte = Match-Fehler]', fontsize=11, fontweight='bold')
-            ax4_2.set_xlabel('Polarwinkel auf dem Sensor [Grad°]')
-            ax4_2.set_ylabel('Berechnete Verzeichnung [%]')
-            ax4_2.grid(True, alpha=0.3)
-            ax4_2.legend()
-        else:
-            ax4_2.text(0.5, 0.5, 'Keine Daten im betroffenen Bin-Bereich.', ha='center', va='center')
+        #if len(df_bins_10_11) > 0:
+         #   angles_deg = np.degrees(df_bins_10_11['Polar_Winkel_Rad'])
+         #   ax4_2.scatter(angles_deg, df_bins_10_11['Verzeichnung_Prozent'], color='crimson', s=25, alpha=0.8, label='Punkte in Bin 10 & 11')
+         #   ax4_2.axhline(0, color='black', linestyle='-', alpha=0.5)
+         #   ax4_2.set_xlim(-180, 180)
+         #   ax4_2.set_title('Analyse für Bin 10 & 11: Verzeichnung vs. Winkel\n[Sinusform = Target-Kippung | Einzelne Punkte = Match-Fehler]', fontsize=11, #fontweight='bold')
+         #   ax4_2.set_xlabel('Polarwinkel auf dem Sensor [Grad°]')
+         #   ax4_2.set_ylabel('Berechnete Verzeichnung [%]')
+         #   ax4_2.grid(True, alpha=0.3)
+         #   ax4_2.legend()
+        #else:
+         #   ax4_2.text(0.5, 0.5, 'Keine Daten im betroffenen Bin-Bereich.', ha='center', va='center')
 
-        fig4.tight_layout()
-        fig4.savefig(os.path.join(self.save_dir, "plot_04_diagnose_standardabweichung.svg"), format='svg')
-        fig4.savefig(os.path.join(self.save_dir, "plot_04_diagnose_standardabweichung.png"), format='png', dpi=300)
-        plt.close(fig4)
+        #fig4.tight_layout()
+        #fig4.savefig(os.path.join(self.save_dir, "plot_04_diagnose_standardabweichung.svg"), format='svg')
+        #fig4.savefig(os.path.join(self.save_dir, "plot_04_diagnose_standardabweichung.png"), format='png', dpi=300)
+        #plt.close(fig4)
 
         # --- ABBRECH-LOGIK AM ENDE DER FUNKTION ---
         if len(zero_crossings) > 0:

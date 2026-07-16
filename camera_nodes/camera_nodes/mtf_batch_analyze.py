@@ -20,6 +20,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Capture run folder, capture_manifest.json, or parent folder.",
     )
     parser.add_argument(
+        "--delete-npy",
+        action="store_true",
+        help="Delete .npy files in the run folder after successful MTF analysis.",
+    )
+    parser.add_argument(
         "--recursive",
         action="store_true",
         help="Search recursively for capture_manifest.json files below --input.",
@@ -81,6 +86,16 @@ def _write_batch_summary(path: Path, rows: list[dict[str, object]]) -> None:
         for row in rows:
             writer.writerow({name: row.get(name, "") for name in fieldnames})
 
+def _delete_npy_files(run_dir: Path) -> int:
+    """Delete all .npy files directly inside run_dir. Returns count deleted."""
+    deleted = 0
+    for npy_path in Path(run_dir).rglob("*.npy"):
+        try:
+            npy_path.unlink()
+            deleted += 1
+        except OSError as exc:
+            print(f"WARN could not delete {npy_path}: {exc}", file=sys.stderr)
+    return deleted
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
@@ -144,6 +159,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"summary={result['summary_csv']}"
             )
             status = "ok"
+            if args.delete_npy:
+                n_deleted = _delete_npy_files(result["run_dir"])
+                print(f"CLEANUP {result['run_dir']}: removed {n_deleted} .npy file(s)")
         batch_rows.append(
             {
                 "run_dir": result["run_dir"],

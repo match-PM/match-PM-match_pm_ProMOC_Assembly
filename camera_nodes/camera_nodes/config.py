@@ -113,7 +113,9 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.use_full_frame", False),
     ("mtf.use_raw_capture", True),
     ("mtf.capture_required_raw", True),
-    ("mtf.capture_pixel_format", "BayerRG12"),
+    #("mtf.capture_pixel_format", "BayerRG12"), # Wechsel bei Kamera wechsel
+    #("mtf.capture_bayer_pattern", "RGGB"), # Wechsel bei Kamera wechsel
+    ("mtf.capture_pixel_format", "Mono12"),
     ("mtf.capture_bayer_pattern", "RGGB"),
     ("mtf.capture_width", 5536),
     ("mtf.capture_height", 3692),
@@ -243,7 +245,8 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
         ("mtf.use_full_frame", "use_full_frame", bool, False),
         ("mtf.use_raw_capture", "use_raw_capture", bool, True),
         ("mtf.capture_required_raw", "capture_required_raw", bool, True),
-        ("mtf.capture_pixel_format", "capture_pixel_format", str, "BayerRG12"),
+        #("mtf.capture_pixel_format", "capture_pixel_format", str, "BayerRG12"), # Wechsel bei Kamera wechsel
+        ("mtf.capture_pixel_format", "capture_pixel_format", str, "Mono12"),
         ("mtf.capture_bayer_pattern", "capture_bayer_pattern", str, "RGGB"),
         ("mtf.capture_width", "capture_width", int, 5536),
         ("mtf.capture_height", "capture_height", int, 3692),
@@ -322,6 +325,12 @@ def get_camera_param(node, name: str, default=None):
     if not node.has_parameter(name):
         return default
     value = node.get_parameter(name).value
+    
+    # NEU: Falls der Parameter als leerer String ("") übergeben wird, 
+    # erzwingen wir "RGGB", um den Core-Algorithmus glücklich zu machen.
+    if name == "mtf.capture_bayer_pattern" and isinstance(value, str) and not value.strip():
+        return "RGGB"
+        
     return default if value is None else value
 
 

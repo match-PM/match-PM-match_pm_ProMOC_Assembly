@@ -17,8 +17,9 @@ camera_params:
   # -------------------------------------------------------------------------
   # GUID of camera (get using `arv-tool-0.8` or `arv-tool`)
   # To find your camera GUID, run: arv-tool-0.8 -l
-  guid: 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781'
-  
+  #guid: 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781'
+  guid: 'IDS Imaging Development Systems GmbH-1409f4fab7ac-4110071724'  # Monochrom
+  #guid: 'IDS Imaging Development Systems GmbH-1409f49a1e40-4103740992' # Wechsel bei Kamera wechsel
   # Driver type for this camera
   # Options: 'usb3vision' | 'gigevision'
   driver: 'usb3vision'
@@ -31,7 +32,8 @@ camera_params:
   # -------------------------------------------------------------------------
   # Physical pixel size on sensor (in micrometers)
   # Source: IDS datasheet - Pixelgröße: 2.4 µm
-  pixelsize: 2.4  # µm
+  pixelsize: 2.4  # µm # Wechsel bei Kamera wechsel
+  #pixelsize: 1.85 
   # Uncertainty of Pixel Pitch (Lithography tolerances)
   #realistic: < 0.01 µm. 
   #for error propagation: negligible compared to Magnification Error.
@@ -39,14 +41,20 @@ camera_params:
   
   # Optical sensor dimensions
   # Source: IDS datasheet - Optische Fläche: 13.286 mm x 8.861 mm
-  sensor_width_mm: 13.286
-  sensor_height_mm: 8.861
+  sensor_width_mm: 13.286 # Wechsel bei Kamera wechsel
+  sensor_height_mm: 8.861 # Wechsel bei Kamera wechsel
+  # 	7,4 mm x 5,55 mm
+  #sensor_width_mm: 7.4 # Wechsel bei Kamera wechsel
+  #sensor_height_mm: 5.55 # Wechsel bei Kamera wechsel
   
   # Native sensor resolution (full frame)
   # Source: IDS datasheet - Auflösung: 5536 x 3692 Pixel
-  sensor_resolution_h: 5536
-  sensor_resolution_v: 3692
-  
+  #sensor_resolution_h: 5536
+  #sensor_resolution_v: 3692
+  #sensor_resolution_h: 4000 # Wechsel bei Kamera wechsel
+  #sensor_resolution_v: 3000 # Wechsel bei Kamera wechsel
+  sensor_resolution_h: 5504 # mono
+  sensor_resolution_v: 3682 # mono
   # Sensor aspect ratio: 3:2
   # ADC: 12 Bit
   # Color depth: 12 Bit
@@ -60,9 +68,12 @@ camera_params:
   # 
   # The messstand starts directly in raw Bayer mode.
   # MTF reads the raw stream, while AF/live preview derive an internal preview image.
-  pixel_format: 'BayerRG12'
-  mtf_capture_pixel_format: 'BayerRG12'
-  mtf_capture_bayer_pattern: 'RGGB'
+  #pixel_format: 'BayerRG12' # Wechsel bei Kamera wechsel
+  #mtf_capture_pixel_format: 'BayerRG12' # Wechsel bei Kamera wechsel
+  #mtf_capture_bayer_pattern: 'RGGB' # Wechsel bei Kamera wechsel
+  pixel_format: 'Mono12' # Wechsel bei Kamera wechsel
+  mtf_capture_pixel_format: 'Mono12' # Wechsel bei Kamera wechsel
+  
   
   # -------------------------------------------------------------------------
   # Optical System Configuration
@@ -99,11 +110,10 @@ camera_params:
 # - Long exposure mode: up to 30000 ms (30 seconds)
 exposure_time:
   # Start exposure loaded by the launch and used as the service fallback value.
-  default_ms: 30.0
-  
+  default_ms: 7.999
   # Minimum exposure time in microseconds
   # Source: IDS datasheet - Belichtungszeit min: 0.053 ms = 53 µs
-  min_val: 53.0  # µs
+  min_val: 53.0  # 53.0 µs 
   
   # Maximum standard exposure time in microseconds
   # Source: IDS datasheet - Belichtungszeit max: 814 ms = 814000 µs
@@ -133,9 +143,12 @@ camera_info:
   # Note: 1x1 Binning resolution (20 MP)
   # Full Sensor: 5536 x 3692
   # 2x2 Binning: 2768 x 1846
-  image_width: 5536
-  image_height: 3692
-  
+  #image_width: 5536 # Wechsel bei Kamera wechsel
+  #image_height: 3692 # Wechsel bei Kamera wechsel
+  #image_width: 4000 # Cam2
+  #image_height: 3000 # Cam2
+  image_width: 5504 # mono
+  image_height: 3682 # mono
   camera_name: promoc_camera_stream0
   
   # Camera intrinsic matrix K [3x3]
@@ -180,13 +193,13 @@ camera_info:
 # Parameters relevant for MTF measurement and optical quality assessment
 mtf_params:
   # Sensor-related parameters affecting MTF
-  nyquist_frequency: 208.33  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.0024))
-  
+  nyquist_frequency: 208.33  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.0024)) # Wechsel bei Kamera wechsel
+  #nyquist_frequency: 270.27  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.00185)) # Wechsel bei Kamera wechsel
   # Pixel size in mm (for MTF calculations)
-  pixel_size_mm: 0.0024  # 2.4 µm = 0.0024 mm
-  
+  pixel_size_mm: 0.0024  # 2.4 µm = 0.0024 mm # Wechsel bei Kamera wechsel
+  #pixel_size_mm: 0.00185  # 1.85 µm = 0.00185 mm  # Wechsel bei Kamera wechsel
   # Recommended settings for MTF measurement
-  recommended_exposure_ms: 30.0   # Start conservative for initial hardware bringup
+  recommended_exposure_ms: 7.999 # Start conservative for initial hardware bringup
   recommended_gain: 1.0           # Keep within camera gain range for stable MTF capture
   
   # Binning affects MTF - IDS U3-3800CP supports 2x2 binning

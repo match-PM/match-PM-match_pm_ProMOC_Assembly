@@ -114,9 +114,8 @@ SOP-Fensters markiert.
 5. Offline auswerten:
 
 ```bash
-ros2 run camera_nodes mtf_batch_analyze \
-  --input "$HOME/Dokumente/Messungen/Yannis Wesser/Test/mtf_messungen" \
-  --recursive --overwrite \
+ros2 run camera_nodes mtf_batch_analyze   --input "$HOME/Dokumente/Messungen/Yannis Wesser/mtf_messungen/ORDNERNAME"   --recursive --overwrite 
+
 
 ```
 

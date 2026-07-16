@@ -281,11 +281,13 @@ def _create_camera_node(
                 ),
                 "mtf.capture_pixel_format": camera_params.get(
                     "mtf_capture_pixel_format",
-                    "BayerRG12",
+                    #"BayerRG12",
+                     "Mono12",
                 ),
                 "mtf.capture_bayer_pattern": camera_params.get(
                     "mtf_capture_bayer_pattern",
-                    "RGGB",
+                    #"RGGB",
+                    "",
                 ),
                 "mtf.capture_width": camera_params.get(
                     "sensor_resolution_h",

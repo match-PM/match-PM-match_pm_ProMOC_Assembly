@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
+
 def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save_dir):
     # Mittelwert pro Run (über die 4 Kanten)
     mtf_mean_per_run = np.nanmean(mtf_datenbank, axis=1)
@@ -62,12 +63,12 @@ def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save
     # PLOT 1: Mittelwert mit 3-Sigma
     fig1, ax1 = plt.subplots(figsize=(10, 5), dpi=150, constrained_layout=True)
     ax1.fill_between(spatial_frequencies, lower_3sigma, upper_3sigma,
-                     color=sigma_color, alpha=0.20, label='3 $\sigma$ (99,7 %)')
+                     color=sigma_color, alpha=0.20)
     ax1.plot(spatial_frequencies, global_mean, color='darkblue', linewidth=2,
              label='Mittelwert der MTF-Messungen')
-    ax1.set_title('MTF — Mittelwert und ± 3σ (n=100)', fontsize=13, pad=12)
-    ax1.set_xlabel('Ortsfrequenz [Lp/mm]', labelpad=10)
-    ax1.set_ylabel('Kontrast [%]', labelpad=10)
+    ax1.set_title('MTF Mittelwert und ± 3σ', fontsize=13, pad=12)
+    ax1.set_xlabel('Ortsfrequenz [lp/mm]', labelpad=10)
+    ax1.set_ylabel('MTF', labelpad=10)
     ax1.set_ylim(0, 1.1)
     ax1.grid(True, linestyle=':', alpha=0.7)
     ax1.legend()
@@ -78,13 +79,13 @@ def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save
     for i in range(4):
         ax2.plot(spatial_frequencies, edge_means[i],
                  label=edge_labels[i], color=edge_colors[i], linewidth=1.5)
-    ax2.set_title('MTF – Vergleich der Kantenorientierungen', fontsize=13, pad=12)
-    ax2.set_xlabel('Ortsfrequenz [Lp/mm]', labelpad=10)
-    ax2.set_ylabel('Kontrast [%]', labelpad=10)
+    ax2.set_title('MTF Vergleich der Kanten', fontsize=13, pad=12)
+    ax2.set_xlabel('Ortsfrequenz [lp/mm]', labelpad=10)
+    ax2.set_ylabel('MTF', labelpad=10)
     ax2.set_ylim(0, 1.05)
     ax2.grid(True, linestyle=':', alpha=0.7)
     ax2.legend()
-    save_figure(fig2, "plot_02_kantenorientierung")
+    save_figure(fig2, "plot_02_kanten")
 
     # PLOT 3: Globaler MTF mit Min-Max
     fig3, ax3 = plt.subplots(figsize=(10, 5), dpi=150, constrained_layout=True)
@@ -92,9 +93,9 @@ def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save
                      color='gray', alpha=0.2, label='Min-Max-Band')
     ax3.plot(spatial_frequencies, global_mean, color='black', linewidth=2,
              label='Mittelwert der MTF-Messungen')
-    ax3.set_title('MTF – Globaler Mittelwert mit Min-Max-Band', fontsize=13, pad=12)
-    ax3.set_xlabel('Ortsfrequenz [Lp/mm]', labelpad=10)
-    ax3.set_ylabel('Kontrast [%]', labelpad=10)
+    ax3.set_title('MTF globaler Mittelwert mit Min-Max-Band', fontsize=13, pad=12)
+    ax3.set_xlabel('Ortsfrequenz [lp/mm]', labelpad=10)
+    ax3.set_ylabel('MTF', labelpad=10)
     ax3.set_ylim(0, 1.05)
     ax3.grid(True, linestyle=':', alpha=0.7)
     ax3.legend()
@@ -108,11 +109,11 @@ def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save
         ax4.fill_between(spatial_frequencies, edge_lower_3sigma, edge_upper_3sigma,
                          color=edge_colors[i], alpha=0.08)
         ax4.plot(spatial_frequencies, edge_means[i],
-                 label=f"{edge_labels[i]} 3 $\sigma$ (99,7 %)",
+                 label=f"{edge_labels[i]}",
                  color=edge_colors[i], linewidth=1.5)
-    ax4.set_title('MTF – Mittelwert und ± 3σ je Kantenorientierung', fontsize=13, pad=12)
-    ax4.set_xlabel('Ortsfrequenz [Lp/mm]', labelpad=10)
-    ax4.set_ylabel('Kontrast [%]', labelpad=10)
+    ax4.set_title('MTF Mittelwert und ± 3σ je Kantenorientierung', fontsize=13, pad=12)
+    ax4.set_xlabel('Ortsfrequenz [lp/mm]', labelpad=10)
+    ax4.set_ylabel('MTF', labelpad=10)
     ax4.set_ylim(0, 1.1)
     ax4.grid(True, linestyle=':', alpha=0.7)
     ax4.legend()
@@ -123,7 +124,7 @@ def analyze_and_plot_all_mtf(spatial_frequencies, mtf_datenbank, run_names, save
 
 def load_mtf_data_with_strict_filter(base_dir):
     base_path   = Path(base_dir)
-    run_folders = sorted(base_path.glob("mtf_square4_*"))
+    run_folders = sorted(base_path.glob("mtf_capture_only*"))
 
     if not run_folders:
         raise FileNotFoundError("Keine Messordner gefunden")
@@ -218,20 +219,50 @@ def load_mtf_data_with_strict_filter(base_dir):
 
 if __name__ == '__main__':
 
-    BASIS_VERZEICHNIS    = "/home/pmlab/Dokumente/Messungen/default_user/mtf_messungen"
-    SPEICHER_VERZEICHNIS = "/home/pmlab/Dokumente/Messungen/Yannis Wesser/MTF"
+    HAUPT_VERZEICHNIS = Path("/home/pmlab/Dokumente/Messungen/Yannis Wesser/Messungen")
 
-    print("Starte Import...")
+    print("Starte Batch-Verarbeitung für alle Unterordner...")
 
-    frequenzen, datenbank, skipped, run_names = load_mtf_data_with_strict_filter(
-        BASIS_VERZEICHNIS)
+    # Iteriere über alle direkten Unterordner im Hauptverzeichnis
+    for unterordner in HAUPT_VERZEICHNIS.iterdir():
+        if unterordner.is_dir():
 
-    print(f"Geladene Messungen:      {datenbank.shape[0]}")
-    print(f"Übersprungen (defekt):   {skipped}")
-    print(f"Anzahl Datenpunkte:      {len(frequenzen)} (interpoliert auf {len(frequenzen)} Stützstellen)")
-    print(f"Frequenzbereich:         {frequenzen[0]:.4f} – {frequenzen[-1]:.4f} Lp/mm")
+            # Speicherort: gesammelt auf Ebene von "Messungen" in einem
+            # zentralen "Visualisierung"-Ordner, darin ein Unterordner,
+            # der nach dem jeweiligen Überordner (unterordner.name) benannt ist.
+            speicher_verzeichnis = HAUPT_VERZEICHNIS / "Visualisierung" / unterordner.name
 
-    if datenbank.size > 0:
-        analyze_and_plot_all_mtf(frequenzen, datenbank, run_names, SPEICHER_VERZEICHNIS)
-    else:
-        print("Keine Daten vorhanden")
+            # Der neue "Visualisierung"-Ordner selbst darf natürlich nicht
+            # als zu verarbeitender Messordner durchlaufen werden.
+            if unterordner.name == "Visualisierung":
+                continue
+
+            # Prüfen, ob dieser Unterordner bereits verarbeitet wurde ---
+            if speicher_verzeichnis.exists():
+                print(f"Überspringe '{unterordner.name}' (Bereits verarbeitet).")
+                continue
+
+            print("\n" + "="*80)
+            print(f"Verarbeite Ordner: {unterordner.name}")
+            print("="*80)
+            
+
+            
+            try:
+                # Analyse für den aktuellen Unterordner starten
+                frequenzen, datenbank, skipped, run_names = load_mtf_data_with_strict_filter(unterordner)
+
+                if datenbank.size > 0:
+                    print(f"Geladene Messungen:      {datenbank.shape[0]}")
+                    print(f"Übersprungen (defekt):   {skipped}")
+                    print(f"Anzahl Datenpunkte:      {len(frequenzen)}")
+                    print(f"Frequenzbereich:         {frequenzen[0]:.4f} – {frequenzen[-1]:.4f} Lp/mm")
+                    
+                    analyze_and_plot_all_mtf(frequenzen, datenbank, run_names, speicher_verzeichnis)
+                #else:
+                    #print(f"Keine auswertbaren Daten in {unterordner.name} vorhanden.")
+            
+            except FileNotFoundError:
+                print(f"Keine passenden Messordner ('mtf_capture_only*') in {unterordner.name} gefunden. Überspringe...")
+            except Exception as e:
+                print(f"Unerwarteter Fehler bei {unterordner.name}: {e}")

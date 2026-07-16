@@ -27,6 +27,7 @@ setup(
             'run_mtf_client = start_mtf.mtf_automated_client:main',
             'grid_tracker = start_mtf.verschiebung:main',
             'verzeichnung = start_mtf.verzeichnung:main',
+            'exposure_control = start_mtf.exposure_control:main',
         ],
     },
 )

@@ -2,12 +2,14 @@
 
 import copy
 from dataclasses import dataclass
+from logging import config
 from pathlib import Path
 import re
 import time
 
 import cv2
 import numpy as np
+
 
 from promoc_core.promoc_exceptions import ImageProcessingError
 from .base import CallbackBase
@@ -366,12 +368,30 @@ class MTFHandler(CallbackBase):
             )
         return x1, y1, w, h
 
+    def _is_mono_encoding(self, encoding: str) -> bool:
+        """Return whether a pixel format or ROS encoding describes a monochrome stream."""
+        normalized = str(encoding or "").strip().lower()
+        return "mono" in normalized
+
+    def _resolve_input_mode(self, capture_pixel_format: str, image_encoding: str) -> str:
+        """Derive the correct MTFAnalyzer input_mode from format and stream encoding.
+
+        The decision is made after capture_pixel_format is fully resolved so the
+        node parameter default ("BayerRG12") cannot mask an actual mono stream.
+        """
+        if self._is_mono_encoding(capture_pixel_format) or self._is_mono_encoding(image_encoding):
+            return "dense_gray"
+        if self._param_bool("mtf.use_raw_capture", True):
+            return "raw_bayer_rggb"
+        return "dense_gray"
+
     def _build_mtf_config(
         self,
         pixel_size_um: float,
         min_edge_angle: float,
         max_edge_angle: float,
         auto_roi: bool,
+        image_encoding: str = "",
     ) -> MTFConfig:
         """Build MTFConfig from node parameters and profile overrides."""
         config = MTFConfig(
@@ -403,23 +423,30 @@ class MTFHandler(CallbackBase):
         if self._param_bool("mtf.edge_validation_only_auto", False) and not auto_roi:
             config.edge_validation_mode = "off"
 
-        config.input_mode = (
-            "raw_bayer_rggb"
-            if self._param_bool("mtf.use_raw_capture", True)
-            else "dense_gray"
-        )
-        config.raw_bayer_pattern = self._param_str(
-            "mtf.capture_bayer_pattern",
-            "RGGB",
-        ).strip().upper()
+        # Resolve capture pixel format first so input_mode can use it.
         config.capture_pixel_format = self._param_str(
             "mtf.capture_pixel_format",
             "BayerRG12",
         ).strip()
+
+        # Derive input_mode from the fully-resolved format and the live stream
+        # encoding so a mono camera is never forced into the Bayer path even
+        # when the node parameter still carries the Bayer default.
+        config.input_mode = self._resolve_input_mode(
+            config.capture_pixel_format, image_encoding
+        )
+
+        # Set raw_bayer_pattern; always force RGGB for dense_gray to satisfy
+        # strict library validation even though the value is unused in that path.
+        raw_pattern = self._param_str("mtf.capture_bayer_pattern", "RGGB").strip().upper()
+        config.raw_bayer_pattern = raw_pattern if raw_pattern else "RGGB"
+        if config.input_mode == "dense_gray":
+            config.raw_bayer_pattern = "RGGB"
+
         config.capture_binning_h = self._param_int("mtf.capture_binning", 1)
         config.capture_binning_v = self._param_int("mtf.capture_binning", 1)
         config.capture_exposure_us = self._param_float("mtf.capture_exposure_us", 0.0)
-        config.capture_gain = self._param_float("mtf.capture_gain", 0.0) 
+        config.capture_gain = self._param_float("mtf.capture_gain", 0.0)
         config.source_encoding = self._param_str("mtf.capture_pixel_format", "").strip()
         config.raw_green_pair_warn_pct = self._param_float(
             "mtf.raw_green_pair_warn_pct",
@@ -460,7 +487,7 @@ class MTFHandler(CallbackBase):
     def _is_raw_bayer_encoding(self, encoding: str) -> bool:
         """Return whether a ROS image encoding looks like a Bayer/raw stream."""
         normalized = str(encoding or "").strip().lower()
-        return "bayer" in normalized
+        return "bayer" in normalized or "mono" in normalized
 
     def _get_mtf_capture_image(self):
         """Get the latest image in the format required for scientific MTF."""
@@ -548,6 +575,21 @@ class MTFHandler(CallbackBase):
             if self._is_raw_bayer_encoding(encoding):
                 return latest_image, latest_ts, latest_encoding
         return latest_image, latest_ts, latest_encoding
+    def _apply_mirror_correction(self, image: np.ndarray) -> np.ndarray:
+        """Undo the horizontal/vertical flip introduced by a mirror in the beam path."""
+        flip_mode = self._param_str("mtf.mirror_flip_mode", "none").strip().lower()
+        if flip_mode in ("", "none", "off"):
+            return image
+        if flip_mode in ("horizontal", "h", "x"):
+            return cv2.flip(image, 1)
+        if flip_mode in ("vertical", "v", "y"):
+            return cv2.flip(image, 0)
+        if flip_mode in ("both", "hv", "180"):
+            return cv2.flip(image, -1)
+        self._node.get_logger().warn(
+            f"Unknown mtf.mirror_flip_mode='{flip_mode}', no flip applied."
+        )
+        return image
 
     def _acquire_measurement_frame(self) -> tuple[np.ndarray, int | None, str, object | None]:
         """Fetch the current measurement frame after the optional MTF camera switch."""
@@ -559,6 +601,8 @@ class MTFHandler(CallbackBase):
                     f"check {self._camera_image_topic()} in rqt_image_view and retry.",
                 )
             )
+        # NUR FÜR SPIEGEL BENÖTIGT
+        cv_image = self._apply_mirror_correction(cv_image)
 
         live_geometry = self._current_stream_geometry(cv_image)
         restore_state, switched_image = self._camera_format_controller.switch_to_full_frame_for_mtf(
@@ -598,8 +642,6 @@ class MTFHandler(CallbackBase):
         request,
     ) -> tuple[float, dict[str, object]]:
         """Resolve request metadata once before ROI selection and export writing."""
-        # We resolve request metadata exactly once so the analyzer config, logs,
-        # and exported CSV context all describe the same measurement conditions.
         pixel_size_um = self._resolve_pixel_size_um(request)
         measurement_metadata = self._collect_measurement_metadata(request, pixel_size_um)
         measurement_context = self._format_measurement_metadata(measurement_metadata)
@@ -633,8 +675,6 @@ class MTFHandler(CallbackBase):
                     for item in capture_error[len(mismatch_prefix) :].split(",")
                     if item.strip()
                 ]
-            # Even a failed scientific capture should leave a traceable run
-            # folder so later comparisons can exclude misconfigured attempts.
             summary_csv, context_csv = self._write_failed_measurement_run(
                 request=request,
                 measurement_metadata=measurement_metadata,
@@ -656,8 +696,6 @@ class MTFHandler(CallbackBase):
         request,
     ) -> _MeasurementRun:
         """Resolve ROI candidates and create the run folder used for all exports."""
-        # Auto-ROI and manual ROI intentionally converge here so everything
-        # after this point uses the same edge-measurement and export pipeline.
         edge_rois = self._resolve_edge_rois(cv_image, request)
         edge_count = len(edge_rois)
         run_timestamp = self._get_timestamp()
@@ -694,8 +732,6 @@ class MTFHandler(CallbackBase):
         last_error = "Unknown error"
 
         for edge_index, edge_roi in enumerate(measurement_run.edge_rois):
-            # The first valid edge wins the ROS response, but we still measure
-            # every candidate so the run folder stays complete for later review.
             row, measured_edge, edge_error = self._measure_edge_candidate(
                 edge_roi=edge_roi,
                 edge_index=edge_index,
@@ -765,8 +801,6 @@ class MTFHandler(CallbackBase):
         last_error: str,
     ) -> tuple[Path, Path]:
         """Write per-edge and per-run artifacts after edge measurement finishes."""
-        # The export step happens before we decide success/failure so even
-        # failed runs keep their summary/context for later debugging.
         valid_edge_count = sum(int(bool(row["valid"])) for row in edge_rows)
         summary_csv = write_summary_csv(measurement_run.run_dir, edge_rows)
         context_csv = write_context_csv(
@@ -819,6 +853,16 @@ class MTFHandler(CallbackBase):
             return None
 
         try:
+            # Mono-Bilder direkt als Graustufe konvertieren ohne Debayering.
+            if self._is_mono_encoding(image_encoding):
+                if image.dtype != np.uint8:
+                    normalized = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX)
+                    gray_u8 = normalized.astype(np.uint8)
+                elif len(image.shape) == 2:
+                    gray_u8 = image
+                else:
+                    gray_u8 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                return cv2.cvtColor(gray_u8, cv2.COLOR_GRAY2BGR)
             if (
                 self._is_raw_bayer_encoding(image_encoding)
                 or image.dtype != np.uint8
@@ -926,9 +970,10 @@ class MTFHandler(CallbackBase):
                 int(row.get("roi_bbox_w", 0) or 0),
                 int(row.get("roi_bbox_h", 0) or 0),
             )
-            is_valid = bool(row.get("valid", 0))
+            raw_valid = row.get("valid", 0)
+            is_valid = bool(int(raw_valid)) if isinstance(raw_valid, str) else bool(raw_valid)
             is_selected = edge_label == selected_label
-            color = (0, 220, 0) if is_selected else ((0, 215, 255) if is_valid else (0, 0, 255))
+            color = (0, 220, 0) if is_valid else (0, 0, 255)
             stats = ""
             if is_valid:
                 stats = (
@@ -1857,6 +1902,7 @@ class MTFHandler(CallbackBase):
             min_edge_angle=min_edge_angle,
             max_edge_angle=max_edge_angle,
             auto_roi=auto_roi,
+            image_encoding=image_encoding,
         )
         config.debug_export_dir = str(run_dir)
         config.debug_export_csv = True
@@ -1887,6 +1933,15 @@ class MTFHandler(CallbackBase):
         except (TypeError, ValueError):
             pass
         config.source_encoding = image_encoding or config.source_encoding
+
+        # Re-derive input_mode now that capture_pixel_format may have been
+        # updated to the actual readback value from the camera.
+        config.input_mode = self._resolve_input_mode(
+            config.capture_pixel_format, image_encoding
+        )
+        if config.input_mode == "dense_gray":
+            config.raw_bayer_pattern = "RGGB"
+
         return config
 
     def _measure_average_samples(
@@ -1895,7 +1950,6 @@ class MTFHandler(CallbackBase):
         edge_roi: EdgeROI,
         first_result: MTFResult,
     ) -> list[MTFResult]:
-        """Keep the first exported result and average later frames numerically."""
         valid_samples = [first_result]
         if MTF_AVG_SAMPLES <= 1:
             return valid_samples
@@ -1906,6 +1960,10 @@ class MTFHandler(CallbackBase):
 
         roi_x, roi_y, roi_w, roi_h = edge_roi.bbox
         last_ts = int(self._get_latest_image_timestamp_ns() or 0)
+
+        # Rohframes für Bild-Mittelung sammeln
+        raw_frames: list[np.ndarray] = [edge_roi.image.astype(np.float32)]
+
         for _ in range(MTF_AVG_SAMPLES - 1):
             next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
                 last_ts,
@@ -1932,14 +1990,96 @@ class MTFHandler(CallbackBase):
                 continue
 
             crop_img = next_img[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
-            sample_result = analyzer.compute_mtf(
-                crop_img,
-                roi_origin=(roi_x, roi_y),
+
+            # NEU: Kontrast-Check pro Frame
+            frame_contrast = RoiDetector.calculate_michelson_contrast(crop_img)
+            if frame_contrast < MTF_MIN_EDGE_CONTRAST:
+                self._node.get_logger().warn(
+                    f"Skipping low-contrast averaging frame ({frame_contrast:.2f})"
+                )
+                continue
+
+            raw_frames.append(crop_img.astype(np.float32))
+
+        # NEU: gemitteltes Bild berechnen und einmal MTF darauf rechnen
+        if len(raw_frames) > 1:
+            averaged = np.mean(np.stack(raw_frames, axis=0), axis=0)
+            averaged_img = np.clip(averaged, 0, np.iinfo(edge_roi.image.dtype).max).astype(
+                edge_roi.image.dtype
             )
-            if sample_result.valid:
-                valid_samples.append(sample_result)
+            averaged_result = analyzer.compute_mtf(
+                averaged_img,
+                roi_origin=edge_roi.bbox[:2],
+            )
+            if averaged_result.valid:
+                return [averaged_result]
 
         return valid_samples
+    
+    # def _log_brightness_profile(
+    #     self,
+    #     edge_roi: EdgeROI,
+    #     edge_label: str,
+    #     run_dir: Path,
+    # ) -> None:
+    #     """Log Helligkeitswerte der flachen Plateau-Bereiche beidseitig der Kante
+    #     und exportiert ein Debug-PNG mit den betrachteten Bereichen markiert."""
+    #     img = edge_roi.image
+    #     h, w = img.shape[:2]
+    #     margin_frac = self._param_float("mtf.brightness_check_margin_frac", 0.2)
+
+    #     # Kantenrichtung bestimmt, ob entlang Breite (horizontal, top/bottom-Kanten)
+    #     # oder entlang Höhe (vertikal, left/right-Kanten) aufgeteilt wird.
+    #     is_horizontal_edge = edge_roi.edge_direction == "horizontal" or edge_roi.edge_name in (
+    #         "top",
+    #         "bottom",
+    #     )
+
+    #     if is_horizontal_edge:
+    #         margin = max(1, int(h * margin_frac))
+    #         plateau_a_bounds = (0, 0, w, margin)                  # oberer Streifen
+    #         plateau_b_bounds = (0, h - margin, w, margin)          # unterer Streifen
+    #         label_a, label_b = "top_plateau", "bottom_plateau"
+    #     else:
+    #         margin = max(1, int(w * margin_frac))
+    #         plateau_a_bounds = (0, 0, margin, h)                   # linker Streifen
+    #         plateau_b_bounds = (w - margin, 0, margin, h)          # rechter Streifen
+    #         label_a, label_b = "left_plateau", "right_plateau"
+
+    #     def crop(bounds):
+    #         x, y, bw, bh = bounds
+    #         return img[y : y + bh, x : x + bw]
+
+    #     plateau_a = crop(plateau_a_bounds)
+    #     plateau_b = crop(plateau_b_bounds)
+
+    #     def stats(region, name):
+    #         return (
+    #             f"{name}: min={int(np.min(region))} max={int(np.max(region))} "
+    #             f"mean={float(np.mean(region)):.1f} std={float(np.std(region)):.1f}"
+    #         )
+
+    #     self._node.get_logger().info(
+    #         f"[Brightness check] edge={edge_label} dtype={img.dtype} direction={edge_roi.edge_direction} "
+    #         f"{stats(plateau_a, label_a)} | {stats(plateau_b, label_b)}"
+    #     )
+
+    #     if not hasattr(cv2, "imwrite"):
+    #         return
+
+    #     if img.dtype != np.uint8:
+    #         vis = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    #     else:
+    #         vis = img.copy()
+    #     if len(vis.shape) == 2:
+    #         vis = cv2.cvtColor(vis, cv2.COLOR_GRAY2BGR)
+
+    #     self._draw_export_box(vis, plateau_a_bounds, (0, 140, 255), label=label_a)
+    #     self._draw_export_box(vis, plateau_b_bounds, (255, 140, 0), label=label_b)
+
+    #     out_path = run_dir / f"{self._slugify_label(edge_label)}_brightness_check.png"
+    #     cv2.imwrite(str(out_path), vis)
+    #     self._node.get_logger().info(f"[Brightness check] visualization written: {out_path}")
 
     def _measure_edge_candidate(
         self,
@@ -1965,8 +2105,6 @@ class MTFHandler(CallbackBase):
             )
 
         edge_label = self._build_edge_export_label(edge_roi, edge_index, edge_count)
-        # Each edge gets its own analyzer config so debug exports, ROI origin,
-        # and per-edge metadata stay tied to the physical edge on the target.
         config = self._prepare_edge_config(
             pixel_size_um=pixel_size_um,
             min_edge_angle=min_edge_angle,
@@ -1985,6 +2123,7 @@ class MTFHandler(CallbackBase):
         )
         camera_matrix, dist_coeffs = self._get_camera_calibration()
         analyzer = MTFAnalyzer(config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+        #self._log_brightness_profile(edge_roi, edge_label, run_dir)
         result = analyzer.compute_mtf(
             edge_roi.image,
             roi_origin=edge_roi.bbox[:2],
@@ -1999,8 +2138,6 @@ class MTFHandler(CallbackBase):
                 self._node.get_logger().warn(
                     f"MTF warning ({edge_roi.edge_name}): {result.warning_msg}"
                 )
-            # The first frame produces the exported debug artifacts. Additional
-            # frames only improve the numeric average and do not rewrite files.
             valid_samples = self._measure_average_samples(analyzer, edge_roi, result)
             result.edge_name = edge_roi.edge_name
             result.edge_direction = edge_roi.edge_direction
@@ -2142,7 +2279,14 @@ class MTFHandler(CallbackBase):
         capture_state: dict,
         image_encoding: str,
     ) -> tuple[dict, str, list[str]]:
-        """Fail fast when the scientific raw capture state is not actually active."""
+        """Fail fast when the scientific raw capture state is not actually active.
+
+        For monochrome cameras the encoding will contain 'mono' rather than
+        'bayer', which is equally valid for scientific MTF.  The pixel-format
+        check therefore accepts both Bayer* and Mono* readbacks, and the
+        encoding guard uses the shared _is_raw_bayer_encoding helper that
+        already covers both cases.
+        """
         capture_values = dict((capture_state or {}).get("values", {}))
         actual_pixel_format = str(
             capture_values.get(
@@ -2159,18 +2303,25 @@ class MTFHandler(CallbackBase):
         raw_switch_error = self._camera_format_controller.get_last_operation_error().strip()
         raw_switch_hint = f" Raw-switch status: {raw_switch_error}" if raw_switch_error else ""
 
-        if actual_pixel_format and not actual_pixel_format.startswith("Bayer"):
+        # Accept Bayer* (color camera) and Mono* (monochrome camera) as valid
+        # scientific raw formats.  Any other readback (e.g. BGR8, YUV) fails.
+        if actual_pixel_format and not (
+            actual_pixel_format.startswith("Bayer")
+            or actual_pixel_format.startswith("Mono")
+        ):
             raise ImageProcessingError(
                 self._with_next_step(
-                    f"Scientific MTF requires Bayer raw, but readback is '{actual_pixel_format}'."
+                    f"Scientific MTF requires Bayer raw or Mono, but readback is '{actual_pixel_format}'."
                     f"{raw_switch_hint}",
                     "check the camera pixel format and retry the measurement.",
                 )
             )
+
+        # _is_raw_bayer_encoding accepts both 'bayer*' and 'mono*' encodings.
         if not self._is_raw_bayer_encoding(image_encoding):
             raise ImageProcessingError(
                 self._with_next_step(
-                    f"Scientific MTF requires raw Bayer input, got encoding "
+                    f"Scientific MTF requires raw Bayer or Mono input, got encoding "
                     f"'{image_encoding or 'unknown'}'.{raw_switch_hint}",
                     "check the camera stream encoding and retry the measurement.",
                 )
@@ -2201,14 +2352,10 @@ class MTFHandler(CallbackBase):
         restore_state = None
 
         try:
-            # Step 1: acquire the current work image after the optional camera
-            # switch into the scientific capture mode.
             cv_image, image_ts_ns, image_encoding, restore_state = (
                 self._acquire_measurement_frame()
             )
 
-            # Step 2: collect request metadata and validate that the camera
-            # really runs in the expected scientific raw mode.
             capture_state, capture_values, capture_available_keys = self._read_capture_state()
             capture_values = self._annotate_capture_geometry(capture_values, cv_image)
             pixel_size_um, measurement_metadata = self._prepare_measurement_metadata(request)
@@ -2224,8 +2371,6 @@ class MTFHandler(CallbackBase):
             )
             capture_values = self._annotate_capture_geometry(capture_values, cv_image)
 
-            # Step 3: resolve edge candidates and create one predictable run
-            # folder before we start the per-edge analyzer loop.
             min_edge_angle = self._param_float("mtf_min_edge_angle", 2.0)
             max_edge_angle = self._param_float("mtf_max_edge_angle", 11.0)
             measurement_run = self._prepare_measurement_run(cv_image, request)
@@ -2254,8 +2399,6 @@ class MTFHandler(CallbackBase):
                     image_encoding=image_encoding,
                 )
 
-            # Step 4: measure every candidate edge through the shared analyzer
-            # path so auto ROI and manual ROI stay directly comparable.
             edge_rows, measured_edges, selected_edge, last_error = self._measure_run_edges(
                 measurement_run=measurement_run,
                 request=request,
@@ -2268,8 +2411,6 @@ class MTFHandler(CallbackBase):
                 image_encoding=image_encoding,
             )
 
-            # Step 5: export the full run before deciding whether the service
-            # should return success or surface the final failure.
             summary_csv, _context_csv = self._write_measurement_exports(
                 measurement_run=measurement_run,
                 source_image=cv_image,
@@ -2285,8 +2426,6 @@ class MTFHandler(CallbackBase):
                 last_error=last_error,
             )
 
-            # Step 6: return the selected edge response or fail with the same
-            # preserved run folder that was already written above.
             return self._finalize_measurement_response(
                 response=response,
                 request=request,
