@@ -11,6 +11,7 @@ gepflegte Simulationsschicht und kein Repo-internes Setup mehr.
 ## Leitdokumente
 
 - `README.md`: Start, Bedienung und die alltaeglichen Standardbefehle
+- [`ACTIONS.md`](ACTIONS.md): Bedienung, Parameter und Diagnose der ROS-2-Actions
 - [`MTF_PROTOCOL.md`](MTF_PROTOCOL.md): wissenschaftliches Messprotokoll,
   Datenfluss und CSV-Vertrag fuer Vergleichsmessungen
 

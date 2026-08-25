@@ -133,6 +133,9 @@ def load_user_config(bringup_share_dir: str) -> dict:
             "profile": "ids_u3_3800cp_m_gl_r22",
             "pixel_size_um": None,
         },
+        # Kept as a free-form section so every calibrated tilt parameter from
+        # the local user_config reaches the action node unchanged.
+        "target_tilt": {},
         "mtf": {
             "profile": "default",
             "debug_export_dir": "",

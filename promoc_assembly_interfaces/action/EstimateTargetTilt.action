@@ -1,0 +1,56 @@
+# Scan centre and symmetric range along the optical (stage) axis [mm].
+float64 center_z_mm
+float64 half_range_mm
+float64 step_mm
+uint32 frames_per_position
+bool fit_field_curvature
+bool return_to_center
+---
+uint8 OK=0
+uint8 INSUFFICIENT_TEXTURE=1
+uint8 INSUFFICIENT_COVERAGE=2
+uint8 FOCUS_OUTSIDE_SCAN=3
+uint8 FIT_UNSTABLE=4
+uint8 CANCELLED=5
+uint8 HARDWARE_TIMEOUT=6
+uint8 IMAGE_TIMEOUT=7
+
+uint8 status
+string status_message
+float64 tilt_x_deg
+float64 tilt_y_deg
+float64 uncertainty_x_deg
+float64 uncertainty_y_deg
+float64 detection_limit_x_deg
+float64 detection_limit_y_deg
+float64 center_focus_z_mm
+float64 surface_rms_um
+uint32 roi_total
+uint32 roi_valid
+float64 x_span_fraction
+float64 y_span_fraction
+bool tilt_x_detectable
+bool tilt_y_detectable
+bool within_tolerance_x
+bool within_tolerance_y
+bool resolution_limited_x
+bool resolution_limited_y
+# Extended diagnostics (all original result fields above remain unchanged).
+string decision_x
+string decision_y
+float64 surface_mae_um
+float64 surface_median_abs_um
+float64 surface_max_abs_um
+uint32 roi_surface_inliers
+uint32 roi_rejected_focus
+uint32 roi_robust_outliers
+float64 mean_peak_uncertainty_um
+float64 median_peak_uncertainty_um
+string evaluation_directory
+---
+string phase
+uint32 z_index
+uint32 z_count
+float64 current_z_mm
+uint32 frames_acquired
+uint32 preliminary_valid_rois

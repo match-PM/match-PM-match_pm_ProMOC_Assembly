@@ -28,6 +28,12 @@ Monochromprofil erhalten.
 Die allgemeine Beschreibung der Messstand-Konfiguration liegt im Root-README
 und in [`../README.md`](../README.md).
 
+Kamera und Objektiv werden fuer die Verkippungsmessung gemeinsam als
+Imaging-Profil kalibriert. Das Referenzprofil fuer `IDS U3-3800CP-C-HQ +
+Myutron FTV30-150, 3x` liegt unter
+`../imaging_profiles/ids_u3_3800cp_c_hq_myutron_ftv30_150_3x.yaml`. Der dortige
+Objektmassstab von 0,8 um/Pixel darf nicht aus `CameraInfo` ersetzt werden.
+
 Fuer jede physische Kamera gibt es damit eine eigene GUID, Sensorgeometrie,
 Pixelgroesse, Raw-Pixelformat und MTF-Kanalauswahl. Insbesondere muessen diese
 Werte zusammenpassen:

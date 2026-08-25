@@ -91,6 +91,7 @@ def launch_setup(context, *args, **kwargs):
     camera_info = camera_profile.get("camera_info", {})
     exposure_config = camera_profile.get("exposure_time", {})
     camera_mtf_params = camera_profile.get("mtf_params", {})
+    target_tilt_config = user_config.get("target_tilt", {})
     driver_type = str(camera_params.get("driver", "")).strip().lower()
     if driver_type not in SUPPORTED_CAMERA_DRIVERS:
         driver_note = str(camera_params.get("driver_note", "")).strip()
@@ -171,7 +172,12 @@ def launch_setup(context, *args, **kwargs):
                     driver_declared_parameter_names,
                     mtf_analysis_channel,
                     pixel_size_um,
-                )
+                ),
+                _create_target_tilt_node(
+                    camera_params,
+                    target_tilt_config,
+                    pixel_size_um,
+                ),
             ],
         ),
     ]
@@ -525,4 +531,92 @@ def _create_camera_node(
                 ],
             }
         ],
+    )
+
+
+def _create_target_tilt_node(
+    camera_params: dict,
+    config: dict,
+    sensor_pixel_size_um: float,
+):
+    """Create one remappable action node in the selected camera namespace."""
+    camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
+    magnification = float(config.get("magnification", camera_params.get("magnification", 1.0)))
+    object_um_per_pixel = float(
+        config.get("object_um_per_pixel", sensor_pixel_size_um / max(magnification, 1.0e-9))
+    )
+    parameter_names = (
+        "roi_rows",
+        "roi_cols",
+        "roi_width_fraction",
+        "roi_height_fraction",
+        "roi_margin_fraction",
+        "use_integral_image",
+        "focus_metric",
+        "evaluation_focus_metrics",
+        "peak_fit_method",
+        "surface_weighted",
+        "surface_robust",
+        "huber_k",
+        "settle_time_s",
+        "axis_timeout_s",
+        "image_timeout_s",
+        "axis_position_tolerance_mm",
+        "min_contrast",
+        "max_black_fraction",
+        "max_saturated_fraction",
+        "min_gradient_energy",
+        "max_frame_cv",
+        "min_peak_prominence",
+        "min_peak_curvature",
+        "min_fit_r2",
+        "max_peak_uncertainty_um",
+        "weight_sigma_floor_um",
+        "weight_sigma_ceiling_um",
+        "robust_outlier_weight_threshold",
+        "min_valid_rois",
+        "min_span_fraction",
+        "min_quadrants",
+        "max_design_condition",
+        "repeatability_x_deg",
+        "repeatability_y_deg",
+        "tolerance_x_deg",
+        "tolerance_y_deg",
+        "peak_half_window",
+        "bootstrap_iterations",
+        "bootstrap_seed",
+        "reference_surface_path",
+        "evaluation_enabled",
+        "evaluation_output_directory",
+    )
+    parameters = {
+        # Relative topics keep the node reusable for one instance per camera.
+        "image_topic": "stream0/image_raw",
+        "camera_info_topic": "stream0/camera_info",
+        # Canonical physical focus-stage interface found in this repository.
+        "axis_service_prefix": str(
+            config.get("axis_service_prefix", "/promoc/linear_axis/lts300_x_axis")
+        ),
+        "object_um_per_pixel": object_um_per_pixel,
+    }
+    parameters.update(
+        {
+            name: config[name]
+            for name in parameter_names
+            if name in config
+            # ROS 2 Launch cannot infer the element type of an empty array and
+            # normalizes it to (), which ParameterValue rejects. The node
+            # declares this parameter explicitly as STRING_ARRAY, so omitting
+            # an empty override correctly yields its typed empty default.
+            and not (name == "evaluation_focus_metrics" and not config[name])
+        }
+    )
+    return Node(
+        package="camera_nodes",
+        executable="target_tilt_estimator",
+        name="target_tilt_estimator",
+        namespace=f"promoc/{camera_name}",
+        output="screen",
+        emulate_tty=True,
+        parameters=[parameters],
     )

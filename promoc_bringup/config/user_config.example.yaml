@@ -19,6 +19,31 @@ camera:
   # pixel size is used for MTF frequencies.
   # pixel_size_um: 2.40
 
+# Camera/objective-specific scale and quality limits for EstimateTargetTilt.
+# The example values match IDS U3-3800CP-C-HQ + Myutron FTV30-150 at 3x.
+target_tilt:
+  magnification: 3.0
+  object_um_per_pixel: 0.8
+  roi_rows: 7
+  roi_cols: 7
+  focus_metric: tenengrad
+  peak_fit_method: quadratic
+  surface_weighted: false
+  surface_robust: true
+  # Diagnostic mode retains only scalar per-frame ROI scores, never images.
+  evaluation_enabled: false
+  evaluation_focus_metrics: []  # modified_laplacian, variance_laplacian
+  evaluation_output_directory: ~/Dokumente/Messungen/tilt_evaluation
+  bootstrap_iterations: 0
+  reference_surface_path: ""
+  settle_time_s: 0.15
+  axis_timeout_s: 30.0
+  image_timeout_s: 2.0
+  repeatability_x_deg: 0.002
+  repeatability_y_deg: 0.002
+  tolerance_x_deg: 0.05
+  tolerance_y_deg: 0.05
+
 autofocus:
   refinement_samples: 51
   min_step_mm: 0.01

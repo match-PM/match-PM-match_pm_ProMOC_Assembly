@@ -19,6 +19,10 @@ setup(
             os.path.join("share", package_name, "config", "cameras"),
             glob("config/cameras/*.yaml"),
         ),
+        (
+            os.path.join("share", package_name, "config", "imaging_profiles"),
+            glob("config/imaging_profiles/*.yaml"),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

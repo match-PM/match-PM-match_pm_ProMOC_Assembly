@@ -16,6 +16,10 @@ den `messstand`-Branch.
   Ein Profil pro physischer Kamera. Die Auswahl erfolgt ueber
   `camera.profile` in `user_config.yaml`; Details stehen in
   [`cameras/README.md`](cameras/README.md).
+- `imaging_profiles/*.yaml`
+  Kalibrierte Kombinationen aus Kamera, Objektiv und Abbildungsmaßstab für die
+  Verkippungsmessung. `object_um_per_pixel` wird nicht aus `CameraInfo`
+  abgeleitet.
 
 ## Bewusst nicht mehr gepflegt
 

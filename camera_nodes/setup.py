@@ -20,6 +20,8 @@ setup(
     entry_points={
         "console_scripts": [
             "camera_node = camera_nodes.node:main",
+            "target_tilt_estimator = camera_nodes.target_tilt_node:main",
+            "target_tilt_repeatability = camera_nodes.tilt_repeatability:main",
             "mtf_batch_analyze = camera_nodes.mtf_batch_analyze:main",
         ],
     },

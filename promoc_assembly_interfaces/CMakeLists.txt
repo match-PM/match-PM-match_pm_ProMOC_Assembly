@@ -24,13 +24,14 @@ endif()
 # Keep the package definition in sync with the filesystem after interface refactors.
 file(GLOB_RECURSE INTERFACE_FILES
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+  "action/*.action"
   "msg/*.msg"
   "srv/*.srv"
 )
 list(SORT INTERFACE_FILES)
 
 if(NOT INTERFACE_FILES)
-  message(FATAL_ERROR "No ROS interface files found under msg/ or srv/")
+  message(FATAL_ERROR "No ROS interface files found under action/, msg/, or srv/")
 endif()
 
 rosidl_generate_interfaces(${PROJECT_NAME}

@@ -1,0 +1,56 @@
+# Imaging profile for camera-based target-tilt estimation.
+# object_um_per_pixel is a calibrated profile value; it is not inferred from
+# CameraInfo. Recalibrate it whenever camera, objective, tube optics, binning,
+# or ROI mode changes.
+imaging_profile:
+  name: ids_u3_3800cp_c_hq_myutron_ftv30_150_3x
+  camera: IDS U3-3800CP-C-HQ Rev.2.2
+  objective: Myutron FTV30-150
+  magnification: 3.0
+  sensor_pixel_size_um: 2.4
+  object_um_per_pixel: 0.8
+  analysis_channel: green
+
+target_tilt:
+  roi_rows: 7
+  roi_cols: 7
+  roi_width_fraction: 0.10
+  roi_height_fraction: 0.10
+  roi_margin_fraction: 0.08
+  use_integral_image: true
+  focus_metric: tenengrad
+  peak_fit_method: quadratic
+  surface_weighted: false
+  surface_robust: true
+  huber_k: 1.345
+  max_peak_uncertainty_um: 100.0
+  weight_sigma_floor_um: 0.5
+  weight_sigma_ceiling_um: 100.0
+  robust_outlier_weight_threshold: 0.25
+  evaluation_enabled: false
+  evaluation_focus_metrics: []
+  evaluation_output_directory: ~/Dokumente/Messungen/tilt_evaluation
+  bootstrap_iterations: 0
+  bootstrap_seed: 1729
+  reference_surface_path: ""
+  settle_time_s: 0.15
+  axis_timeout_s: 30.0
+  image_timeout_s: 2.0
+  axis_position_tolerance_mm: 0.01
+  min_contrast: 0.015
+  max_black_fraction: 0.98
+  max_saturated_fraction: 0.98
+  min_gradient_energy: 0.00001
+  max_frame_cv: 0.35
+  min_peak_prominence: 0.03
+  min_peak_curvature: 0.000001
+  min_fit_r2: 0.40
+  min_valid_rois: 10
+  min_span_fraction: 0.50
+  min_quadrants: 4
+  max_design_condition: 100.0
+  repeatability_x_deg: 0.002
+  repeatability_y_deg: 0.002
+  tolerance_x_deg: 0.05
+  tolerance_y_deg: 0.05
+  peak_half_window: 2
