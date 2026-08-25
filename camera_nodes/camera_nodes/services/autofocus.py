@@ -1237,6 +1237,73 @@ class AutofocusHandler(CallbackBase):
             analysis_roi_rect=self._resolve_or_select_roi_rect(request),
         )
 
+    @handle_service_errors()
+    def measure_tenengrad_roi_callback(self, request, response):
+        """Measure the autofocus Tenengrad score in one ROI without axis motion."""
+        self._reset_analysis_logging()
+        requested_roi = self._resolve_or_select_roi_rect(request)
+
+        image, timestamp_ns, encoding = self._get_latest_passthrough_image()
+        if image is None:
+            image, timestamp_ns = self._get_latest_cv_image()
+            encoding = ""
+        if image is None:
+            raise ImageProcessingError(
+                "Tenengrad measurement needs one live camera frame. "
+                f"Next step: check {self._camera_image_topic()} in "
+                "rqt_image_view and retry."
+            )
+
+        image_height, image_width = image.shape[:2]
+        effective_roi = self._clamp_roi_rect(
+            image_width,
+            image_height,
+            requested_roi[0],
+            requested_roi[1],
+            requested_roi[2],
+            requested_roi[3],
+        )
+        if effective_roi is None:
+            raise ImageProcessingError(
+                "Tenengrad ROI lies outside the current camera image"
+            )
+
+        analysis_image = self._prepare_autofocus_analysis_image(
+            image,
+            roi_rect=effective_roi,
+            encoding=str(encoding or ""),
+        )
+        if analysis_image is None or analysis_image.size == 0:
+            raise ImageProcessingError("Tenengrad analysis produced an empty ROI")
+
+        score = float(self._calculate_sharpness(analysis_image))
+        analysis_height, analysis_width = analysis_image.shape[:2]
+        roi_x, roi_y, roi_width, roi_height = effective_roi
+
+        response.success = True
+        response.status_message = (
+            f"Tenengrad measured: value={score:.0f}, "
+            f"roi=({roi_x},{roi_y},{roi_width},{roi_height}), "
+            f"analysis={analysis_width}x{analysis_height}"
+        )
+        response.tenengrad_value = score
+        response.roi_x = roi_x
+        response.roi_y = roi_y
+        response.roi_width = roi_width
+        response.roi_height = roi_height
+        response.analysis_width = analysis_width
+        response.analysis_height = analysis_height
+        response.image_timestamp_ns = max(0, int(timestamp_ns or 0))
+        response.image_encoding = str(encoding or "")
+
+        self._node.get_logger().info(
+            "Tenengrad ROI: "
+            f"value={score:.0f} roi=({roi_x},{roi_y},{roi_width},{roi_height}) "
+            f"analysis={analysis_width}x{analysis_height} "
+            f"encoding={str(encoding or 'converted')}"
+        )
+        return response
+
     def _run_autofocus_request(
         self,
         request,

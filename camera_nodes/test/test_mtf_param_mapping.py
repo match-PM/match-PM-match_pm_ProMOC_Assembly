@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
@@ -210,3 +212,65 @@ def test_build_mtf_config_uses_raw_capture_metadata_params():
     assert config.capture_gain == 0.0
     assert config.raw_green_pair_warn_pct == 7.5
     assert config.wavelength_um == 0.53
+
+
+@pytest.mark.parametrize(
+    ("analysis_channel", "pixel_format", "image_encoding", "expected_mode"),
+    [
+        ("mono", "Mono12", "mono16", "dense_gray"),
+        ("green", "BayerRG12", "bayer_rggb16", "raw_bayer_rggb"),
+        ("auto", "Mono12", "mono16", "dense_gray"),
+        ("auto", "BayerRG12", "bayer_rggb16", "raw_bayer_rggb"),
+    ],
+)
+def test_analysis_channel_selects_camera_specific_sampling(
+    analysis_channel,
+    pixel_format,
+    image_encoding,
+    expected_mode,
+):
+    callbacks = _callbacks(
+        {
+            "mtf.analysis_channel": analysis_channel,
+            "mtf.capture_pixel_format": pixel_format,
+        }
+    )
+
+    config = callbacks._build_mtf_config(
+        2.4,
+        2.0,
+        10.0,
+        auto_roi=True,
+        image_encoding=image_encoding,
+    )
+
+    assert config.input_mode == expected_mode
+
+
+@pytest.mark.parametrize(
+    ("analysis_channel", "pixel_format", "image_encoding"),
+    [
+        ("green", "Mono12", "mono16"),
+        ("mono", "BayerRG12", "bayer_rggb16"),
+    ],
+)
+def test_analysis_channel_rejects_camera_format_mismatch(
+    analysis_channel,
+    pixel_format,
+    image_encoding,
+):
+    callbacks = _callbacks(
+        {
+            "mtf.analysis_channel": analysis_channel,
+            "mtf.capture_pixel_format": pixel_format,
+        }
+    )
+
+    with pytest.raises(Exception, match="does not match camera data"):
+        callbacks._build_mtf_config(
+            2.4,
+            2.0,
+            10.0,
+            auto_roi=True,
+            image_encoding=image_encoding,
+        )

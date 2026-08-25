@@ -192,6 +192,11 @@ camera_info:
 # =============================================================================
 # Parameters relevant for MTF measurement and optical quality assessment
 mtf_params:
+  # MTF sampling for this camera profile:
+  # - mono: use every monochrome sensor pixel
+  # - green: use only the two real green sensel groups of a raw Bayer image
+  # - auto: derive the mode from the active raw pixel format
+  analysis_channel: mono
   # Sensor-related parameters affecting MTF
   nyquist_frequency: 208.33  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.0024)) # Wechsel bei Kamera wechsel
   #nyquist_frequency: 270.27  # lp/mm (1/(2 * pixel_size_mm) = 1/(2 * 0.00185)) # Wechsel bei Kamera wechsel

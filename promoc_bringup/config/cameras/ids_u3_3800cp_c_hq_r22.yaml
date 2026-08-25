@@ -1,0 +1,78 @@
+# IDS U3-3800CP-C-HQ Rev.2.2 (AB12874)
+# USB3 Vision, Sony IMX183 color, 5536x3692, 2.40 um.
+
+camera_params:
+  # Mapping recovered from the previous messstand configuration; verify the
+  # serial on the next hardware connection.
+  guid: 'IDS Imaging Development Systems GmbH-1409f4a43375-4104401781'
+  driver: usb3vision
+  cameraname: promoc_camera
+  pixelsize: 2.40
+  pixel_size_uncertainty_um: 0.01
+  sensor_width_mm: 13.286
+  sensor_height_mm: 8.861
+  sensor_resolution_h: 5536
+  sensor_resolution_v: 3692
+  pixel_format: BayerRG12
+  mtf_capture_pixel_format: BayerRG12
+  mtf_capture_bayer_pattern: RGGB
+  magnification: 1.0
+  binning_factor: 1
+  subscription_topic: /promoc/promoc_camera/stream0/image_raw
+
+exposure_time:
+  default_ms: 7.999
+  min_val: 53.0
+  max_val: 814000.0
+
+frame_rate:
+  freerun_max: 19.0
+  trigger_continuous: 10.0
+  trigger_max: 10.0
+
+# Uncalibrated placeholder. Replace this block with this physical camera's
+# calibration; calibration values must never be copied between cameras.
+camera_info:
+  image_width: 5536
+  image_height: 3692
+  camera_name: promoc_camera_stream0
+  camera_matrix:
+    rows: 3
+    cols: 3
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  distortion_model: plumb_bob
+  distortion_coefficients:
+    rows: 1
+    cols: 5
+    data: [0.0, 0.0, 0.0, 0.0, 0.0]
+  rectification_matrix:
+    rows: 3
+    cols: 3
+    data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  projection_matrix:
+    rows: 3
+    cols: 4
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+mtf_params:
+  analysis_channel: green
+  wavelength_um: 0.555
+  nyquist_frequency: 208.333
+  pixel_size_mm: 0.00240
+  recommended_exposure_ms: 7.999
+  recommended_gain: 1.0
+
+dynamic_parameters:
+  - {FeatureName: AcquisitionFrameRate, Type: float, Min: 1.0, Max: 19.0}
+  - {FeatureName: ExposureTime, Type: float, Min: 53.0, Max: 814000.0}
+  - {FeatureName: Gain, Type: float}
+  - {FeatureName: PixelFormat, Type: string}
+  - {FeatureName: ExposureAuto, Type: string}
+  - {FeatureName: GainAuto, Type: string}
+  - {FeatureName: BalanceWhiteAuto, Type: string}
+  - {FeatureName: GammaEnable, Type: bool}
+  - {FeatureName: ColorTransformationEnable, Type: bool}
+  - {FeatureName: BinningHorizontal, Type: int, Min: 1, Max: 2}
+  - {FeatureName: BinningVertical, Type: int, Min: 1, Max: 2}
+  - {FeatureName: Width, Type: int, Min: 256, Max: 5536}
+  - {FeatureName: Height, Type: int, Min: 256, Max: 3692}

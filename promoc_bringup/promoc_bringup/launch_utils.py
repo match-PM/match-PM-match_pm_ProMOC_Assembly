@@ -129,7 +129,10 @@ def load_user_config(bringup_share_dir: str) -> dict:
         },
         "autofocus_profiles": {"default": {}, "profiles": {}},
         "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
-        "camera": {"pixel_size_um": 2.40},
+        "camera": {
+            "profile": "ids_u3_3800cp_m_gl_r22",
+            "pixel_size_um": None,
+        },
         "mtf": {
             "profile": "default",
             "debug_export_dir": "",
@@ -233,7 +236,20 @@ def materialize_dynamic_parameters_yaml(
     target_path: str | None = None,
 ) -> str:
     """Write camera_aravis2 dynamic-parameter YAML and return its path."""
-    payload = list(dynamic_parameters or [])
+    # camera_aravis2 documents Description as optional, but the Humble driver
+    # reads it unconditionally for every available feature. Always materialize
+    # it as a string to prevent YAML::TypedBadConversion during driver startup.
+    payload = []
+    for item in dynamic_parameters or []:
+        if not isinstance(item, dict):
+            continue
+        normalized = deepcopy(item)
+        feature_name = str(normalized.get("FeatureName", "")).strip()
+        description = normalized.get("Description")
+        if description is None:
+            description = f"Dynamic GenICam feature {feature_name}."
+        normalized["Description"] = str(description)
+        payload.append(normalized)
     if target_path is None:
         safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", camera_name)
         target_path = os.path.join(

@@ -113,6 +113,7 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.use_full_frame", False),
     ("mtf.use_raw_capture", True),
     ("mtf.capture_required_raw", True),
+    ("mtf.analysis_channel", "auto"),
     #("mtf.capture_pixel_format", "BayerRG12"), # Wechsel bei Kamera wechsel
     #("mtf.capture_bayer_pattern", "RGGB"), # Wechsel bei Kamera wechsel
     ("mtf.capture_pixel_format", "Mono12"),

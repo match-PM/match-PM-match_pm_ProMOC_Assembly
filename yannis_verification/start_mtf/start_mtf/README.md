@@ -2,23 +2,25 @@
 
 cd ros2_ws
 source ~/.bashrc
+# Kamera einmal in promoc_bringup/config/user_config.yaml auswaehlen:
+# camera:
+#   profile: ids_u3_3800cp_m_gl_r22
+# Profil, Pixelgroesse und mono/green werden danach automatisch geladen.
 ros2 launch promoc_bringup optical_measurement_system.launch.py
+
+# Farbkamera: passendes Raw-Bayer-Profil waehlen und nur Gruen-Sensel nutzen
+# ros2 launch promoc_bringup optical_measurement_system.launch.py \
+#   camera_type:=ids_u3_3890cp_c_hq_r22
 rqt
 ros2 run rqt_image_view rqt_image_view 
 ros2 run start_mtf run_mtf_client 
 
 
 
-Kamera wechsel:
-suche nach # Wechsel bei Kamera wechsel
-guid: 'IDS Imaging Development Systems GmbH-1409f49a1e40-4103740992'
-image_width: 4000 # Cam2
-image_height: 3000 # Cam2
-pixelsize: 2.4  # µm
-sensor_resolution_h
-sensor_width_mm
-nyquist_frequency
-save and build
+Kamerawechsel:
+In `promoc_bringup/config/user_config.yaml` nur `camera.profile` auf eines der
+Profile aus `promoc_bringup/config/cameras/README.md` setzen, danach neu starten.
+Keine GUID-, Aufloesungs- oder Pixelgroessenwerte mehr von Hand umkommentieren.
 
 
 MTF Messung:

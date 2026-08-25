@@ -1,0 +1,28 @@
+# Measure the autofocus Tenengrad score on one ROI without moving the axis.
+# Set all ROI fields to zero to select the ROI interactively.
+int32 roi_x
+int32 roi_y
+int32 roi_width
+int32 roi_height
+
+---
+
+bool success
+string status_message
+
+# Sum of squared Sobel gradients. Higher means sharper.
+float64 tenengrad_value
+
+# Effective ROI after clipping to the current image bounds.
+int32 roi_x
+int32 roi_y
+int32 roi_width
+int32 roi_height
+
+# Size after the same ROI/downsampling preparation used by autofocus.
+int32 analysis_width
+int32 analysis_height
+
+# Source frame metadata for traceability.
+uint64 image_timestamp_ns
+string image_encoding

@@ -1,0 +1,67 @@
+# IDS UI-3280CP-C-HQ Rev.2 (AB00851)
+# Legacy IDS Software Suite/uEye camera, Sony IMX264 color, 2456x2054,
+# 3.45 um. This is a reference profile until a uEye ROS 2 driver is integrated.
+
+camera_params:
+  # The repository contains no serial/GUID for this physical unit yet.
+  guid: REPLACE_WITH_UI_3280_SERIAL
+  driver: ids_software_suite
+  driver_note: >-
+    UI models require the IDS Software Suite/uEye driver. camera_aravis2 only
+    supports GenICam GigE Vision and USB3 Vision devices; install/integrate a
+    uEye ROS 2 driver before using this profile.
+  cameraname: promoc_camera
+  pixelsize: 3.45
+  pixel_size_uncertainty_um: 0.01
+  sensor_width_mm: 8.473
+  sensor_height_mm: 7.086
+  sensor_resolution_h: 2456
+  sensor_resolution_v: 2054
+  pixel_format: BayerRG12
+  mtf_capture_pixel_format: BayerRG12
+  mtf_capture_bayer_pattern: RGGB
+  magnification: 1.0
+  binning_factor: 1
+  subscription_topic: /promoc/promoc_camera/stream0/image_raw
+
+exposure_time:
+  default_ms: 7.999
+  min_val: 27.0
+  max_val: 999000.0
+
+frame_rate:
+  freerun_max: 36.0
+  trigger_continuous: 36.0
+  trigger_max: 36.0
+
+camera_info:
+  image_width: 2456
+  image_height: 2054
+  camera_name: promoc_camera_stream0
+  camera_matrix:
+    rows: 3
+    cols: 3
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  distortion_model: plumb_bob
+  distortion_coefficients:
+    rows: 1
+    cols: 5
+    data: [0.0, 0.0, 0.0, 0.0, 0.0]
+  rectification_matrix:
+    rows: 3
+    cols: 3
+    data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  projection_matrix:
+    rows: 3
+    cols: 4
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+mtf_params:
+  analysis_channel: green
+  wavelength_um: 0.555
+  nyquist_frequency: 144.928
+  pixel_size_mm: 0.00345
+  recommended_exposure_ms: 7.999
+  recommended_gain: 1.0
+
+dynamic_parameters: []

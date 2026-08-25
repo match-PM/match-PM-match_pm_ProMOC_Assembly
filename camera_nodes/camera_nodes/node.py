@@ -10,6 +10,7 @@ from promoc_assembly_interfaces.srv import (
     AutoFocusROI,
     GetRoiCoordinates,
     MeasureMTF,
+    MeasureTenengradROI,
     SetExposure,
 )
 from promoc_core.logging import LogTags, TaggedLogger
@@ -160,6 +161,12 @@ class CameraNode(Node):
             MeasureMTF,
             "/promoc/camera/measure_mtf_roi",
             self.mtf_handler.measure_mtf_roi_callback,
+            callback_group=self.cb_group,
+        )
+        self.tenengrad_roi_service = self.create_service(
+            MeasureTenengradROI,
+            "/promoc/camera/measure_tenengrad_roi",
+            self.autofocus_handler.measure_tenengrad_roi_callback,
             callback_group=self.cb_group,
         )
         self.roi_coordinates_service = self.create_service(

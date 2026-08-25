@@ -1,0 +1,78 @@
+# IDS U3-3800CP-M-GL Rev.2.2 (AB12832)
+# The official monochrome suffix is M-GL (not M-HQ).
+# USB3 Vision, Sony IMX183 mono, 2.40 um.
+
+camera_params:
+  guid: 'IDS Imaging Development Systems GmbH-1409f4fab7ac-4110071724'
+  driver: usb3vision
+  cameraname: promoc_camera
+  pixelsize: 2.40
+  pixel_size_uncertainty_um: 0.01
+  sensor_width_mm: 13.286
+  sensor_height_mm: 8.861
+  # Read back from serial 4110071724 with Aravis: SensorWidth/SensorHeight are
+  # 5536x3692, while the largest settable Width/Height AOI is 5504x3682.
+  native_sensor_resolution_h: 5536
+  native_sensor_resolution_v: 3692
+  sensor_resolution_h: 5504
+  sensor_resolution_v: 3682
+  pixel_format: Mono12
+  mtf_capture_pixel_format: Mono12
+  mtf_capture_bayer_pattern: ''
+  magnification: 1.0
+  binning_factor: 1
+  subscription_topic: /promoc/promoc_camera/stream0/image_raw
+
+exposure_time:
+  default_ms: 7.999
+  min_val: 53.0
+  max_val: 814000.0
+
+frame_rate:
+  freerun_max: 19.0
+  trigger_continuous: 10.0
+  trigger_max: 10.0
+
+# Existing calibration data in the old mixed profile was recorded at another
+# resolution and is intentionally not reused here.
+camera_info:
+  image_width: 5504
+  image_height: 3682
+  camera_name: promoc_camera_stream0
+  camera_matrix:
+    rows: 3
+    cols: 3
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  distortion_model: plumb_bob
+  distortion_coefficients:
+    rows: 1
+    cols: 5
+    data: [0.0, 0.0, 0.0, 0.0, 0.0]
+  rectification_matrix:
+    rows: 3
+    cols: 3
+    data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  projection_matrix:
+    rows: 3
+    cols: 4
+    data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+mtf_params:
+  analysis_channel: mono
+  wavelength_um: 0.555
+  nyquist_frequency: 208.333
+  pixel_size_mm: 0.00240
+  recommended_exposure_ms: 7.999
+  recommended_gain: 1.0
+
+dynamic_parameters:
+  - {FeatureName: AcquisitionFrameRate, Type: float, Min: 1.0, Max: 19.0}
+  - {FeatureName: ExposureTime, Type: float, Min: 53.0, Max: 814000.0}
+  - {FeatureName: Gain, Type: float}
+  - {FeatureName: PixelFormat, Type: string}
+  - {FeatureName: ExposureAuto, Type: string}
+  - {FeatureName: GainAuto, Type: string}
+  - {FeatureName: BinningHorizontal, Type: int, Min: 1, Max: 2}
+  - {FeatureName: BinningVertical, Type: int, Min: 1, Max: 2}
+  - {FeatureName: Width, Type: int, Min: 256, Max: 5504}
+  - {FeatureName: Height, Type: int, Min: 256, Max: 3682}

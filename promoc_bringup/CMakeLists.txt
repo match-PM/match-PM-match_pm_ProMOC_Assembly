@@ -21,6 +21,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
   set(ament_cmake_uncrustify_FOUND TRUE)
@@ -29,6 +30,7 @@ if(BUILD_TESTING)
   set(ament_cmake_copyright_CONFIG_FILE
     "${CMAKE_CURRENT_SOURCE_DIR}/.ament_copyright_exclude")
   ament_lint_auto_find_test_dependencies()
+  ament_add_pytest_test(test_launch_utils test/test_launch_utils.py)
 endif()
 
 ament_package()

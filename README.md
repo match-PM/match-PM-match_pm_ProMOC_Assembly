@@ -100,6 +100,32 @@ rqt_image_view
 Im `rqt_image_view` den Topic `/promoc/promoc_camera/stream0/image_raw`
 waehlen.
 
+Der MTF-Abtastkanal kommt standardmaessig aus dem gewaehlten Kameraprofil.
+Das Profil selbst wird in `promoc_bringup/config/user_config.yaml` gesetzt:
+
+```yaml
+camera:
+  profile: ids_u3_3800cp_m_gl_r22
+```
+
+Fuer einen kontrollierten Start kann er explizit ueberschrieben werden:
+
+```bash
+# Monochromkamera: alle Sensorpixel auswerten
+ros2 launch promoc_bringup optical_measurement_system.launch.py \
+  mtf_analysis_channel:=mono
+
+# Farbkamera: nur echte gruene Sensel des Raw-Bayer-Bildes auswerten
+ros2 launch promoc_bringup optical_measurement_system.launch.py \
+  camera_type:=ids_u3_3890cp_c_hq_r22 mtf_analysis_channel:=green
+```
+
+`green` setzt ein Raw-Bayer-Kameraprofil voraus, zum Beispiel mit
+`pixel_format: BayerRG12`, passendem `mtf_capture_pixel_format` und korrektem
+Bayer-Pattern. Debayerte Formate wie `RGB8` sind kein wissenschaftlicher
+Gruen-Sensel-Pfad. Bei einer unpassenden Kombination aus Kanal und Kameradaten
+bricht die MTF-Messung mit einer klaren Fehlermeldung ab.
+
 ## Raw-First Preflight
 
 Vor der ersten Messung am Tag einmal kurz pruefen:
@@ -337,6 +363,7 @@ Die oeffentliche Kamera-API des Messstand-Branches besteht nur aus:
 - `/promoc/camera/measure_mtf`
 - `/promoc/camera/measure_mtf_center`
 - `/promoc/camera/measure_mtf_roi`
+- `/promoc/camera/measure_tenengrad_roi`
 - `/promoc/camera/set_exposure`
 
 Der Achsenpfad bleibt unter:
@@ -349,6 +376,20 @@ Beispiel:
 ros2 service call /promoc/camera/set_exposure promoc_assembly_interfaces/srv/SetExposure "{exposure_time: 12000.0}"
 ros2 service call /promoc/linear_axis/lts300_x_axis/get_position promoc_assembly_interfaces/srv/GetPosition "{}"
 ```
+
+Tenengrad ohne Achsbewegung in einer festen ROI messen:
+
+```bash
+ros2 service call /promoc/camera/measure_tenengrad_roi \
+  promoc_assembly_interfaces/srv/MeasureTenengradROI \
+  "{roi_x: 1979, roi_y: 1010, roi_width: 1689, roi_height: 1624}"
+```
+
+Mit vier Nullwerten oeffnet der Service eine interaktive ROI-Auswahl. Die
+Auswertung verwendet exakt dieselbe ROI-, Downsampling- und Tenengrad-Pipeline
+wie der Autofokus, bewegt die Achse aber nicht. Da der Wert eine Summe der
+quadrierten Sobel-Gradienten ist, sind nur Messungen mit gleicher ROI-Groesse,
+Analyseaufloesung, Belichtung und Kameraaufbereitung direkt vergleichbar.
 
 Der offizielle Bedienpfad fuer Studierende nutzt nur:
 

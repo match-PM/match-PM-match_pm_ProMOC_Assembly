@@ -24,18 +24,23 @@ Nicht der Anspruch dieser Stufe:
 wissenschaftlichen Raw-Pfad wie die Kompatibilitaets-Aliase
 `/promoc/camera/measure_mtf_center` und `/promoc/camera/measure_mtf_roi`:
 
-- der Kamerastream startet bereits offiziell als `BayerRG12`
+- der Kamerastream startet passend zum Kameraprofil als Raw-Mono oder Raw-Bayer
 - Autofokus/Fly-over erzeugen daraus intern nur ein 8-bit-Preview
 - die Start-Belichtung kommt aus dem beim Launch geladenen Kamera-Profil
-- `PixelFormat=BayerRG12`
+- Monochromprofil: `PixelFormat=Mono*` und `analysis_channel=mono`
+- Farbprofil: `PixelFormat=Bayer*` und `analysis_channel=green`
 - `1x1`-Binning
 - echte Gruen-Sensel aus `RGGB`
 - Auto-Exposure, Auto-Gain, Auto-Whitebalance aus
 - Gamma und Farbtransformation aus
 - Capture-Readback muss passen, sonst ist der Run fachlich ungueltig
 
-Der Analyzer arbeitet direkt auf den Gruen-Samples. Es gibt kein Debayering und
-kein 2D-Infill fuer den offiziellen Vergleichspfad.
+Der Analyzer verwendet bei der Monochromkamera alle Sensorpixel. Bei einer
+Farbkamera arbeitet er direkt auf den beiden echten Gruen-Senselgruppen. Es gibt
+kein Debayering und kein 2D-Infill fuer den offiziellen Farbvergleichspfad. Der
+Startparameter `mtf_analysis_channel:=mono|green|auto` kann das im Kameraprofil
+hinterlegte Verhalten kontrolliert ueberschreiben; eine unpassende Kombination
+aus Kanal und Raw-Format wird abgelehnt.
 
 Der Standardpfad ist bewusst konservativer eingestellt:
 

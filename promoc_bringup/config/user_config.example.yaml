@@ -13,7 +13,11 @@ measurement:
   base_path: ~/Dokumente/Messungen
 
 camera:
-  pixel_size_um: 2.40
+  # Available profiles are listed in config/cameras/README.md.
+  profile: ids_u3_3800cp_m_gl_r22
+  # Optional expert override. Normally omit this so the profile's sensor
+  # pixel size is used for MTF frequencies.
+  # pixel_size_um: 2.40
 
 autofocus:
   refinement_samples: 51

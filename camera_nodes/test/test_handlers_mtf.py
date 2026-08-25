@@ -1630,7 +1630,7 @@ def test_validate_scientific_capture_state_reports_raw_switch_error():
     else:
         raise AssertionError("Expected ImageProcessingError for rgb8 scientific capture")
 
-    assert "raw Bayer input" in message
+    assert "raw Bayer or Mono input" in message
     assert "Raw-switch status" in message
     assert "PixelFormat=BayerRG12" in message
 

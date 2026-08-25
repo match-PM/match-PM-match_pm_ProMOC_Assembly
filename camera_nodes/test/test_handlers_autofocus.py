@@ -781,6 +781,84 @@ def test_prepare_autofocus_analysis_image_clamps_small_source_image():
     assert any("effective_roi=(0,0,1200,800)" in msg for msg in handler._node._logger.infos)
 
 
+def test_measure_tenengrad_roi_uses_same_analysis_path_without_axis_motion():
+    node = _Node(
+        {
+            "camera.expected_width": 30,
+            "camera.expected_height": 20,
+            "autofocus.analysis_downsample_max_dim_px": 2048,
+            "autofocus.analysis_log_effective_roi": False,
+        }
+    )
+    handler = AutofocusHandler(node, camera_driver=object())
+    image = np.arange(20 * 30, dtype=np.uint16).reshape(20, 30)
+    handler._get_latest_passthrough_image = lambda: (image, 123456789, "mono16")
+    captured = {}
+
+    def _score(analysis_image):
+        captured["analysis_image"] = analysis_image.copy()
+        return 42.0
+
+    handler._calculate_sharpness = _score
+
+    request = types.SimpleNamespace(
+        roi_x=5,
+        roi_y=4,
+        roi_width=10,
+        roi_height=8,
+    )
+    response = types.SimpleNamespace(
+        success=False,
+        status_message="",
+        tenengrad_value=0.0,
+        roi_x=0,
+        roi_y=0,
+        roi_width=0,
+        roi_height=0,
+        analysis_width=0,
+        analysis_height=0,
+        image_timestamp_ns=0,
+        image_encoding="",
+    )
+
+    result = handler.measure_tenengrad_roi_callback(request, response)
+
+    assert result.success is True
+    assert result.tenengrad_value == 42.0
+    assert np.array_equal(captured["analysis_image"], image[4:12, 5:15])
+    assert (result.roi_x, result.roi_y, result.roi_width, result.roi_height) == (
+        5,
+        4,
+        10,
+        8,
+    )
+    assert (result.analysis_width, result.analysis_height) == (10, 8)
+    assert result.image_timestamp_ns == 123456789
+    assert result.image_encoding == "mono16"
+    assert not node.created_clients
+
+
+def test_measure_tenengrad_roi_reports_missing_live_frame():
+    handler = AutofocusHandler(
+        _Node({"camera.expected_width": 30, "camera.expected_height": 20}),
+        camera_driver=object(),
+    )
+    handler._get_latest_passthrough_image = lambda: (None, None, "")
+    handler._get_latest_cv_image = lambda: (None, None)
+    request = types.SimpleNamespace(
+        roi_x=1,
+        roi_y=1,
+        roi_width=10,
+        roi_height=8,
+    )
+    response = types.SimpleNamespace(success=False, status_message="")
+
+    result = handler.measure_tenengrad_roi_callback(request, response)
+
+    assert result.success is False
+    assert "live camera frame" in result.status_message
+
+
 def test_run_autofocus_loop_scores_preprocessed_analysis_image():
     handler = _RunnerHandler(
         {

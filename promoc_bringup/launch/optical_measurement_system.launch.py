@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 from ament_index_python import get_package_share_directory
 import launch
@@ -27,6 +28,14 @@ from promoc_bringup.launch_utils import (
 os.environ["RCUTILS_CONSOLE_OUTPUT_FORMAT"] = "{time}: [{name}] [{severity}]\t{message}"
 
 X_AXIS_NAME = "lts300_x_axis"
+DEFAULT_CAMERA_PROFILE = "ids_u3_3800cp_m_gl_r22"
+CAMERA_PROFILE_ALIASES = {
+    "ids_u3_3800cp_hq": "ids_u3_3800cp_m_gl_r22",
+}
+SUPPORTED_CAMERA_DRIVERS = {
+    "usb3vision": "camera_driver_uv",
+    "gigevision": "camera_driver_gv",
+}
 
 
 def generate_launch_description():
@@ -39,8 +48,19 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "camera_type",
-                default_value="ids_u3_3800cp_hq",
-                description="IDS camera config filename in config/cameras without extension.",
+                default_value="profile",
+                description=(
+                    "Camera profile filename in config/cameras without extension. "
+                    "The default 'profile' reads camera.profile from user_config.yaml."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "mtf_analysis_channel",
+                default_value="profile",
+                description=(
+                    "MTF sampling channel: profile, auto, mono, or green. "
+                    "Use green only with a raw Bayer color-camera profile."
+                ),
             ),
             OpaqueFunction(function=launch_setup),
         ]
@@ -49,12 +69,20 @@ def generate_launch_description():
 
 def launch_setup(context, *args, **kwargs):
     runtime_mode = resolve_runtime_mode(context, logger=launch.logging.get_logger())
-    camera_type = LaunchConfiguration("camera_type").perform(context).strip()
+    camera_type_override = LaunchConfiguration("camera_type").perform(context).strip()
+    mtf_analysis_channel_override = LaunchConfiguration(
+        "mtf_analysis_channel"
+    ).perform(context).strip()
     bringup_share = get_package_share_directory("promoc_bringup")
     logger = launch.logging.get_logger()
 
     user_config = load_user_config(bringup_share)
     axis_config = load_linear_axis_config(bringup_share, X_AXIS_NAME)
+    camera_type = _resolve_camera_profile_name(
+        camera_type_override,
+        user_config,
+        logger,
+    )
     camera_profile = _load_camera_profile(bringup_share, camera_type, logger)
     if not camera_profile:
         return [LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}")]
@@ -63,6 +91,30 @@ def launch_setup(context, *args, **kwargs):
     camera_info = camera_profile.get("camera_info", {})
     exposure_config = camera_profile.get("exposure_time", {})
     camera_mtf_params = camera_profile.get("mtf_params", {})
+    driver_type = str(camera_params.get("driver", "")).strip().lower()
+    if driver_type not in SUPPORTED_CAMERA_DRIVERS:
+        driver_note = str(camera_params.get("driver_note", "")).strip()
+        logger.error(
+            f"Camera profile '{camera_type}' requires driver '{driver_type or 'unknown'}', "
+            "but this launch currently supports only USB3 Vision and GigE Vision."
+            + (f" {driver_note}" if driver_note else "")
+        )
+        return [
+            LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}"),
+            LogInfo(msg=f"Camera profile: {camera_type} (not started)"),
+        ]
+
+    pixel_size_um = _resolve_camera_pixel_size_um(
+        user_config,
+        camera_params,
+        camera_mtf_params,
+        logger,
+    )
+    mtf_analysis_channel = _resolve_mtf_analysis_channel(
+        mtf_analysis_channel_override,
+        camera_mtf_params,
+        logger,
+    )
     dynamic_parameters = camera_profile.get("dynamic_parameters", [])
     driver_declared_parameter_names = [
         str(item.get("FeatureName", "")).strip()
@@ -83,6 +135,7 @@ def launch_setup(context, *args, **kwargs):
 
     return [
         LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}"),
+        LogInfo(msg=f"Camera profile: {camera_type}"),
         _create_startup_info(),
         LogInfo(
             msg=(
@@ -90,6 +143,12 @@ def launch_setup(context, *args, **kwargs):
                 f"{camera_params.get('sensor_resolution_h', camera_info.get('image_width', 5536))}x"
                 f"{camera_params.get('sensor_resolution_v', camera_info.get('image_height', 3692))}, "
                 f"exposure={float(exposure_config.get('default_ms', 30.0)):.2f} ms"
+            )
+        ),
+        LogInfo(
+            msg=(
+                f"MTF analysis channel: {mtf_analysis_channel}, "
+                f"sensor pixel size: {pixel_size_um:.3f} um"
             )
         ),
         _create_camera_driver_node(
@@ -110,10 +169,36 @@ def launch_setup(context, *args, **kwargs):
                     camera_mtf_params,
                     exposure_config,
                     driver_declared_parameter_names,
+                    mtf_analysis_channel,
+                    pixel_size_um,
                 )
             ],
         ),
     ]
+
+
+def _resolve_camera_profile_name(override: str, user_config: dict, logger) -> str:
+    """Resolve the profile selected in user_config with a launch-time override."""
+    configured = str(
+        user_config.get("camera", {}).get("profile", DEFAULT_CAMERA_PROFILE)
+    ).strip()
+    requested = str(override or "profile").strip()
+    resolved = configured if requested.lower() in {"", "profile"} else requested
+    if not resolved:
+        resolved = DEFAULT_CAMERA_PROFILE
+    if resolved in CAMERA_PROFILE_ALIASES:
+        replacement = CAMERA_PROFILE_ALIASES[resolved]
+        logger.warn(
+            f"Camera profile '{resolved}' is deprecated; using '{replacement}'."
+        )
+        resolved = replacement
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", resolved):
+        logger.warn(
+            f"Invalid camera profile name '{resolved}', falling back to "
+            f"'{DEFAULT_CAMERA_PROFILE}'."
+        )
+        return DEFAULT_CAMERA_PROFILE
+    return resolved
 
 
 def _load_camera_profile(bringup_share: str, camera_type: str, logger) -> dict:
@@ -125,6 +210,42 @@ def _load_camera_profile(bringup_share: str, camera_type: str, logger) -> dict:
     return config or {}
 
 
+def _resolve_camera_pixel_size_um(
+    user_config: dict,
+    camera_params: dict,
+    camera_mtf_params: dict,
+    logger,
+) -> float:
+    """Use the selected camera's pitch unless a positive user override is set."""
+    override = user_config.get("camera", {}).get("pixel_size_um")
+    if override is not None and override != "":
+        try:
+            override_value = float(override)
+            if override_value > 0:
+                logger.warn(
+                    "camera.pixel_size_um overrides the selected camera profile; "
+                    "remove it to use the profile value."
+                )
+                return override_value
+        except (TypeError, ValueError):
+            logger.warn(
+                f"Ignoring invalid camera.pixel_size_um={override!r}; using profile value."
+            )
+
+    candidates = (
+        (camera_params.get("pixelsize"), 1.0),
+        (camera_mtf_params.get("pixel_size_mm"), 1000.0),
+    )
+    for candidate, scale in candidates:
+        try:
+            value = float(candidate) * scale
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+    raise ValueError("Selected camera profile has no positive sensor pixel size")
+
+
 def _resolve_axis_port(axis_config: dict) -> str | None:
     serial = str(axis_config.get("serial_number", "")).strip()
     if not serial:
@@ -133,11 +254,30 @@ def _resolve_axis_port(axis_config: dict) -> str | None:
     return connected.get(serial)
 
 
+def _resolve_mtf_analysis_channel(
+    override: str,
+    camera_mtf_params: dict,
+    logger,
+) -> str:
+    """Resolve the per-camera MTF channel with an optional launch override."""
+    profile_value = str(
+        camera_mtf_params.get("analysis_channel", "auto")
+    ).strip().lower()
+    requested = str(override or "profile").strip().lower()
+    resolved = profile_value if requested in {"", "profile"} else requested
+    if resolved not in {"auto", "mono", "green"}:
+        logger.warn(
+            f"Invalid mtf_analysis_channel='{resolved}', falling back to 'auto'."
+        )
+        return "auto"
+    return resolved
+
+
 def _create_startup_info():
     return LogInfo(
         msg="\n"
         "=== ProMOC Measurement Stand ===\n"
-        "Services: /promoc/camera/autofocus, /promoc/camera/measure_mtf, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
+        "Services: /promoc/camera/autofocus, /promoc/camera/measure_tenengrad_roi, /promoc/camera/measure_mtf, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
       )
 
 
@@ -150,9 +290,7 @@ def _create_camera_driver_node(
 ):
     camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
     driver_type = camera_params.get("driver", "usb3vision")
-    executable = {"usb3vision": "camera_driver_uv", "gigevision": "camera_driver_gv"}[
-        driver_type
-    ]
+    executable = SUPPORTED_CAMERA_DRIVERS[driver_type]
     target_width = int(
         camera_params.get("sensor_resolution_h", camera_info.get("image_width", 5536))
     )
@@ -217,6 +355,8 @@ def _create_camera_node(
     camera_mtf_params: dict,
     exposure_config: dict,
     driver_declared_parameter_names: list[str],
+    mtf_analysis_channel: str,
+    pixel_size_um: float,
 ):
     camera_name = str(camera_params.get("cameraname", "promoc_camera")).strip()
     image_topic = f"/promoc/{camera_name}/stream0/image_raw"
@@ -244,7 +384,7 @@ def _create_camera_node(
             {
                 "measurement.username": config["measurement"]["operator"],
                 "measurement.base_path": base_dir,
-                "pixel_size_um": config["camera"]["pixel_size_um"],
+                "pixel_size_um": pixel_size_um,
                 "camera.image_topic": image_topic,
                 "camera.camera_info_topic": camera_info_topic,
                 "camera.param_set_service_primary": param_set_service_primary,
@@ -276,6 +416,7 @@ def _create_camera_node(
                 ),
                 "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": bool(mtf_config.get("use_raw_capture", True)),
+                "mtf.analysis_channel": mtf_analysis_channel,
                 "mtf.capture_required_raw": bool(
                     mtf_config.get("capture_required_raw", True)
                 ),

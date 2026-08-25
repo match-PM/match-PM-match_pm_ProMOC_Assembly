@@ -373,17 +373,70 @@ class MTFHandler(CallbackBase):
         normalized = str(encoding or "").strip().lower()
         return "mono" in normalized
 
-    def _resolve_input_mode(self, capture_pixel_format: str, image_encoding: str) -> str:
-        """Derive the correct MTFAnalyzer input_mode from format and stream encoding.
+    @staticmethod
+    def _is_bayer_encoding(encoding: str) -> bool:
+        """Return whether a format or ROS encoding describes raw Bayer data."""
+        return "bayer" in str(encoding or "").strip().lower()
 
-        The decision is made after capture_pixel_format is fully resolved so the
-        node parameter default ("BayerRG12") cannot mask an actual mono stream.
+    def _resolve_input_mode(self, capture_pixel_format: str, image_encoding: str) -> str:
+        """Resolve Mono/all-pixel or Bayer/green-only MTF sampling.
+
+        ``mtf.analysis_channel=auto`` derives the channel from the actual ROS
+        encoding first and the configured/read-back pixel format second.
+        Explicit ``mono`` and ``green`` selections fail on a mismatching camera
+        stream so a color mosaic can never silently enter the dense-gray path.
         """
-        if self._is_mono_encoding(capture_pixel_format) or self._is_mono_encoding(image_encoding):
-            return "dense_gray"
-        if self._param_bool("mtf.use_raw_capture", True):
-            return "raw_bayer_rggb"
-        return "dense_gray"
+        requested = self._param_str(
+            "mtf.analysis_channel",
+            "auto",
+        ).strip().lower()
+        aliases = {
+            "": "auto",
+            "gray": "mono",
+            "grey": "mono",
+            "raw_green": "green",
+            "bayer_green": "green",
+        }
+        requested = aliases.get(requested, requested)
+        if requested not in {"auto", "mono", "green"}:
+            raise ImageProcessingError(
+                "Invalid mtf.analysis_channel "
+                f"'{requested}'; expected auto, mono, or green."
+            )
+
+        # The current image encoding is authoritative after capture switching.
+        detected = ""
+        if self._is_mono_encoding(image_encoding):
+            detected = "mono"
+        elif self._is_bayer_encoding(image_encoding):
+            detected = "green"
+        elif self._is_mono_encoding(capture_pixel_format):
+            detected = "mono"
+        elif self._is_bayer_encoding(capture_pixel_format):
+            detected = "green"
+
+        if requested == "auto":
+            if detected == "mono":
+                return "dense_gray"
+            if detected == "green":
+                return "raw_bayer_rggb"
+            return (
+                "raw_bayer_rggb"
+                if self._param_bool("mtf.use_raw_capture", True)
+                else "dense_gray"
+            )
+
+        if detected and requested != detected:
+            raise ImageProcessingError(
+                f"MTF analysis channel '{requested}' does not match "
+                f"camera data '{image_encoding or capture_pixel_format}'."
+            )
+        if not detected:
+            raise ImageProcessingError(
+                "Cannot verify MTF analysis channel because the camera format "
+                "is neither Mono nor raw Bayer."
+            )
+        return "dense_gray" if requested == "mono" else "raw_bayer_rggb"
 
     def _build_mtf_config(
         self,
@@ -2327,6 +2380,10 @@ class MTFHandler(CallbackBase):
                 )
             )
 
+        # Enforce the explicitly selected per-camera analysis channel before
+        # ROI analysis and preserve a failed run through the normal error path.
+        self._resolve_input_mode(actual_pixel_format, image_encoding)
+
         mismatches = self._camera_format_controller.collect_scientific_capture_mismatches(
             capture_state,
             self._camera_format_controller.build_mtf_scientific_capture_target(capture_values),
@@ -2347,7 +2404,7 @@ class MTFHandler(CallbackBase):
         self._node.get_logger().info("MTF measurement service called.")
         if self._param_bool("mtf.use_raw_capture", True):
             self._node.get_logger().info(
-                "MTF capture: enabling scientific raw Bayer on the current stream."
+                "MTF capture: enabling scientific raw Mono/Bayer on the current stream."
             )
         restore_state = None
 
