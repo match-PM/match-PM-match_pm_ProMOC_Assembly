@@ -19,7 +19,7 @@ def main(argv=None):
     for path in sorted(root.glob("run_*/summary.json")):
         data=json.loads(path.read_text(encoding="utf-8")); data["run_directory"]=str(path.parent); summaries.append(data)
     if not summaries: raise SystemExit(f"no run_*/summary.json below {root}")
-    names=("tilt_x_deg","tilt_y_deg","center_focus_z_mm","surface_rms_um","roi_valid")
+    names=("tilt_x_deg","tilt_y_deg","center_focus_z_mm","surface_rms_um","roi_valid","selected_roi_count","surface_inlier_count")
     with (output/"runs_summary.csv").open("w",newline="",encoding="utf-8") as handle:
         writer=csv.DictWriter(handle,fieldnames=("run_directory",)+names); writer.writeheader()
         for data in summaries: writer.writerow({name:data.get(name) for name in ("run_directory",)+names})

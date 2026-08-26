@@ -12,6 +12,32 @@ imaging_profile:
   analysis_channel: green
 
 target_tilt:
+  roi_selection_mode: auto_texture
+  manual_target_bbox: [0.0, 0.0, 1.0, 1.0]
+  candidate_roi_width_fraction: 0.08
+  candidate_roi_height_fraction: 0.08
+  candidate_step_x_fraction: 0.06
+  candidate_step_y_fraction: 0.06
+  minimum_structured_pixel_fraction: 0.01
+  structure_mad_multiplier: 3.0
+  structure_energy_quantile: 0.90
+  analysis_max_dimension_px: 2048
+  sparse_contrast_quantile: 0.999
+  sparse_energy_quantile: 0.995
+  minimum_gradient_snr: 6.0
+  minimum_connected_edge_pixels: 6
+  minimum_connected_edge_span_fraction: 0.12
+  support_closing_radius: 1
+  minimum_target_coverage_fraction: 0.05
+  minimum_baseline_x_mm: 0.25
+  minimum_baseline_y_mm: 0.25
+  minimum_spatial_bins_x: 3
+  minimum_spatial_bins_y: 3
+  minimum_selected_rois: 10
+  maximum_selected_rois: 30
+  minimum_quality_weight: 0.05
+  maximum_quality_weight: 20.0
+  maximum_standardized_residual: 3.5
   roi_rows: 7
   roi_cols: 7
   roi_width_fraction: 0.10
@@ -28,6 +54,7 @@ target_tilt:
   weight_sigma_ceiling_um: 100.0
   robust_outlier_weight_threshold: 0.25
   evaluation_enabled: false
+  evaluation_export_all_focus_curves: false
   evaluation_focus_metrics: []
   evaluation_output_directory: ~/Dokumente/Messungen/tilt_evaluation
   bootstrap_iterations: 0

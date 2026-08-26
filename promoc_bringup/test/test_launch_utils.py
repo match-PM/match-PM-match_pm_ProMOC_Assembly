@@ -3,6 +3,7 @@ from __future__ import annotations
 import yaml
 
 from promoc_bringup.launch_utils import (
+    load_target_tilt_config,
     load_user_config,
     materialize_dynamic_parameters_yaml,
 )
@@ -54,3 +55,25 @@ target_tilt:
         "roi_rows": 7,
         "repeatability_x_deg": 0.002,
     }
+
+
+def test_target_tilt_user_values_override_selected_imaging_profile(tmp_path):
+    profile_dir=tmp_path/"config"/"imaging_profiles"; profile_dir.mkdir(parents=True)
+    (profile_dir/"test_profile.yaml").write_text(
+        """
+imaging_profile:
+  object_um_per_pixel: 0.9
+target_tilt:
+  roi_selection_mode: fixed_grid
+  minimum_selected_rois: 12
+""",encoding="utf-8")
+    user_config={"target_tilt":{"imaging_profile":"test_profile","roi_selection_mode":"auto_texture"}}
+
+    resolved,profile_name,error=load_target_tilt_config(str(tmp_path),user_config)
+
+    assert error is None
+    assert profile_name=="test_profile"
+    assert resolved["object_um_per_pixel"]==0.9
+    assert resolved["minimum_selected_rois"]==12
+    assert resolved["roi_selection_mode"]=="auto_texture"
+    assert "imaging_profile" not in resolved

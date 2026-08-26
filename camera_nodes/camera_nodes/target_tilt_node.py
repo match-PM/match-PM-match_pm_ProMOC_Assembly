@@ -9,13 +9,14 @@ import time
 from cv_bridge import CvBridge
 from promoc_assembly_interfaces.action import EstimateTargetTilt
 from promoc_assembly_interfaces.srv import (
+    EstimateTargetTilt as EstimateTargetTiltService,
     GetOperationStatus,
     GetPosition,
     MoveAbsolute,
     Stop,
 )
 import rclpy
-from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
@@ -29,6 +30,7 @@ from .algorithms.target_tilt import (
     make_grid_rois,
 )
 from .algorithms.tilt_evaluation import export_evaluation
+from .algorithms.tilt_roi_selection import make_overlapping_rois, validate_bbox
 
 
 class _Cancelled(Exception):
@@ -97,6 +99,11 @@ class TargetTiltActionNode(Node):
             10,
             callback_group=self._cb_group,
         )
+        self._diagnostic_publisher = self.create_publisher(
+            Image,
+            str(self.get_parameter("diagnostic_image_topic").value),
+            1,
+        )
         self._action_server = ActionServer(
             self,
             EstimateTargetTilt,
@@ -106,8 +113,21 @@ class TargetTiltActionNode(Node):
             cancel_callback=self._cancel_callback,
             callback_group=self._cb_group,
         )
+        self._action_client = ActionClient(
+            self,
+            EstimateTargetTilt,
+            "estimate_target_tilt",
+            callback_group=self._cb_group,
+        )
+        self._service = self.create_service(
+            EstimateTargetTiltService,
+            "estimate_target_tilt_service",
+            self._service_callback,
+            callback_group=self._cb_group,
+        )
         self.get_logger().info(
-            f"EstimateTargetTilt ready; image='{image_topic}', axis='{axis_prefix}'"
+            "EstimateTargetTilt action and rqt service ready; "
+            f"image='{image_topic}', axis='{axis_prefix}'"
         )
 
     def _declare_parameters(self) -> None:
@@ -161,9 +181,88 @@ class TargetTiltActionNode(Node):
             "reference_surface_path": "",
             "evaluation_enabled": False,
             "evaluation_output_directory": "tilt_evaluation",
+            "evaluation_export_all_focus_curves": False,
+            "service_wait_timeout_s": 900.0,
+            "roi_selection_mode": "auto_texture",
+            "manual_target_bbox": [0.0, 0.0, 1.0, 1.0],
+            "candidate_roi_width_fraction": 0.08,
+            "candidate_roi_height_fraction": 0.08,
+            "candidate_step_x_fraction": 0.06,
+            "candidate_step_y_fraction": 0.06,
+            "minimum_structured_pixel_fraction": 0.01,
+            "structure_mad_multiplier": 3.0,
+            "structure_energy_quantile": 0.90,
+            "analysis_max_dimension_px": 2048,
+            "sparse_contrast_quantile": 0.999,
+            "sparse_energy_quantile": 0.995,
+            "minimum_gradient_snr": 6.0,
+            "minimum_connected_edge_pixels": 6,
+            "minimum_connected_edge_span_fraction": 0.12,
+            "support_closing_radius": 1,
+            "minimum_target_coverage_fraction": 0.05,
+            "minimum_baseline_x_mm": 0.25,
+            "minimum_baseline_y_mm": 0.25,
+            "minimum_spatial_bins_x": 3,
+            "minimum_spatial_bins_y": 3,
+            "minimum_selected_rois": 10,
+            "maximum_selected_rois": 30,
+            "minimum_quality_weight": 0.05,
+            "maximum_quality_weight": 20.0,
+            "maximum_standardized_residual": 3.5,
+            "diagnostic_image_enabled": False,
+            "diagnostic_image_topic": "target_tilt/roi_diagnostics",
+            "diagnostic_image_max_dimension": 1600,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
+
+    def _service_callback(self, request, response):
+        """Forward an rqt-friendly service call to the canonical action path."""
+        goal = EstimateTargetTilt.Goal()
+        for name in (
+            "center_z_mm", "half_range_mm", "step_mm", "frames_per_position",
+            "fit_field_curvature", "return_to_center",
+        ):
+            setattr(goal, name, getattr(request, name))
+        timeout = float(self.get_parameter("service_wait_timeout_s").value)
+        deadline = time.monotonic() + timeout
+        if not self._action_client.wait_for_server(timeout_sec=min(timeout, 2.0)):
+            response.accepted = False
+            response.status = int(TiltStatus.HARDWARE_TIMEOUT)
+            response.status_message = "EstimateTargetTilt action server unavailable"
+            return response
+        send_future = self._action_client.send_goal_async(goal)
+        if not self._wait_future(send_future, deadline):
+            response.accepted = False
+            response.status = int(TiltStatus.HARDWARE_TIMEOUT)
+            response.status_message = "timed out while submitting action goal"
+            return response
+        goal_handle = send_future.result()
+        if goal_handle is None or not goal_handle.accepted:
+            response.accepted = False
+            response.status = int(TiltStatus.FIT_UNSTABLE)
+            response.status_message = "goal rejected; scan active or request invalid"
+            return response
+        response.accepted = True
+        result_future = goal_handle.get_result_async()
+        if not self._wait_future(result_future, deadline):
+            goal_handle.cancel_goal_async()
+            response.status = int(TiltStatus.HARDWARE_TIMEOUT)
+            response.status_message = "service wait timeout; cancellation requested"
+            return response
+        action_result = result_future.result().result
+        for name in EstimateTargetTiltService.Response.get_fields_and_field_types():
+            if name != "accepted" and hasattr(action_result, name):
+                setattr(response, name, getattr(action_result, name))
+        return response
+
+    @staticmethod
+    def _wait_future(future, deadline):
+        while rclpy.ok() and not future.done():
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.01)
+        return future.done()
 
     def _goal_callback(self, request) -> GoalResponse:
         if (
@@ -224,7 +323,7 @@ class TargetTiltActionNode(Node):
 
     def _execute(self, goal_handle):
         goal = goal_handle.request
-        result = None
+        result = None; estimator = None; terminal_state = "succeed"
         try:
             self._wait_for_axis_services(goal_handle)
             estimator = self._make_estimator()
@@ -271,86 +370,119 @@ class TargetTiltActionNode(Node):
                 quadratic_surface=bool(goal.fit_field_curvature),
                 peak_half_window=int(self.get_parameter("peak_half_window").value),
             )
-            if bool(self.get_parameter("evaluation_enabled").value):
-                metric_results = {}
-                for metric in self.get_parameter("evaluation_focus_metrics").value:
-                    if not str(metric).strip():
-                        continue
-                    metric_results[str(metric)] = estimator.solve_metric(
-                        str(metric),
-                        quadratic_surface=bool(goal.fit_field_curvature),
-                        peak_half_window=int(self.get_parameter("peak_half_window").value),
-                    )
-                try:
-                    evaluation_directory = export_evaluation(
-                        str(self.get_parameter("evaluation_output_directory").value),
-                        result,
-                        metric_results=metric_results,
-                        roi_rows=int(self.get_parameter("roi_rows").value),
-                        roi_cols=int(self.get_parameter("roi_cols").value),
-                        metadata={
-                            "center_z_mm": float(goal.center_z_mm),
-                            "half_range_mm": float(goal.half_range_mm),
-                            "step_mm": float(goal.step_mm),
-                            "frames_per_position": int(goal.frames_per_position),
-                            "object_um_per_pixel": float(
-                                self.get_parameter("object_um_per_pixel").value
-                            ),
-                            "image_shape": list(estimator.image_signature[0])
-                            if estimator.image_signature else [],
-                        },
-                    )
-                    result.status_message += f"; evaluation={evaluation_directory}"
-                    result.evaluation_directory = evaluation_directory
-                except (OSError, RuntimeError, ValueError) as exc:
-                    self.get_logger().error(f"Evaluation export failed: {exc}")
-                    result.status_message += f"; evaluation export failed: {exc}"
-            if goal.return_to_center:
-                self._feedback(goal_handle, "returning", len(positions), len(positions), goal.center_z_mm, 0, estimator)
-                self._move_and_wait(float(goal.center_z_mm), goal_handle)
-            goal_handle.succeed()
+            self.get_logger().info(
+                "Tilt ROI counts: "
+                f"candidates={result.candidate_roi_count}, "
+                f"focus_valid={result.focus_valid_roi_count}, "
+                f"selected={result.selected_roi_count}, "
+                f"surface_inliers={result.surface_inlier_count}, "
+                f"rejected_focus={result.roi_rejected_focus}, "
+                f"rejected_spatial={result.roi_rejected_spatial}, "
+                f"rejected_surface={result.roi_rejected_surface}"
+            )
         except _Cancelled:
             self._stop_axis()
-            if goal.return_to_center:
-                try:
-                    self._move_and_wait(float(goal.center_z_mm), goal_handle, allow_cancel=False)
-                except _HardwareTimeout as exc:
-                    self.get_logger().error(f"Return-to-center after cancellation failed: {exc}")
             result = TiltEstimate(TiltStatus.CANCELLED, "scan cancelled by client")
-            goal_handle.canceled()
+            terminal_state = "canceled"
         except _ImageTimeout as exc:
             result = TiltEstimate(TiltStatus.IMAGE_TIMEOUT, str(exc))
-            self._return_after_abort(goal, goal_handle)
-            goal_handle.abort()
+            terminal_state = "abort"
         except _HardwareTimeout as exc:
+            self._stop_axis()
             result = TiltEstimate(TiltStatus.HARDWARE_TIMEOUT, str(exc))
-            self._return_after_abort(goal, goal_handle)
-            goal_handle.abort()
+            terminal_state = "abort"
         except (ValueError, RuntimeError) as exc:
             self.get_logger().error(f"Tilt scan failed: {exc}")
             result = TiltEstimate(TiltStatus.FIT_UNSTABLE, str(exc))
-            self._return_after_abort(goal, goal_handle)
-            goal_handle.abort()
+            terminal_state = "abort"
+        except Exception as exc:
+            self.get_logger().error(f"Unexpected tilt scan failure: {exc}")
+            result = TiltEstimate(TiltStatus.FIT_UNSTABLE, str(exc))
+            terminal_state = "abort"
         finally:
             with self._frame_condition:
                 self._capture_limit = 0
                 self._captured_frames.clear()
                 self._captured_stamps.clear()
+            if goal.return_to_center:
+                try:
+                    if estimator is not None:
+                        self._feedback(goal_handle, "returning", 0, 0, goal.center_z_mm, 0, estimator)
+                    self._move_and_wait(float(goal.center_z_mm), goal_handle, allow_cancel=False)
+                except _HardwareTimeout as exc:
+                    self.get_logger().error(f"Mandatory return-to-center failed: {exc}")
+                    if result is None or terminal_state == "succeed":
+                        result = TiltEstimate(TiltStatus.HARDWARE_TIMEOUT, f"return-to-center failed: {exc}")
+                        terminal_state = "abort"
+                    else:
+                        result.status_message += f"; return-to-center failed: {exc}"
+
+        result=result or TiltEstimate(TiltStatus.FIT_UNSTABLE,"unknown failure")
+        # Diagnostics deliberately run only after the hardware cleanup above.
+        if estimator is not None:
+            self._publish_diagnostics_after_cleanup(estimator,result)
+            self._export_evaluation_after_cleanup(estimator,result,goal)
+        try:
+            if terminal_state == "canceled": goal_handle.canceled()
+            elif terminal_state == "abort": goal_handle.abort()
+            else: goal_handle.succeed()
+            return self._to_action_result(result)
+        finally:
             with self._goal_lock:
                 self._goal_reserved = False
-        return self._to_action_result(result or TiltEstimate(TiltStatus.FIT_UNSTABLE, "unknown failure"))
+
+    def _publish_diagnostics_after_cleanup(self,estimator,result):
+        if not bool(self.get_parameter("diagnostic_image_enabled").value): return
+        try:
+            diagnostic=estimator.diagnostic_image(result,int(self.get_parameter("diagnostic_image_max_dimension").value))
+            message=self._bridge.cv2_to_imgmsg(diagnostic,encoding="bgr8")
+            message.header.stamp=self.get_clock().now().to_msg(); message.header.frame_id="target_tilt_diagnostics"
+            self._diagnostic_publisher.publish(message)
+        except Exception as exc:
+            self.get_logger().error(f"Diagnostic image failed after hardware cleanup: {exc}")
+            result.status_message+=f"; diagnostic image failed: {exc}"
+
+    def _export_evaluation_after_cleanup(self,estimator,result,goal):
+        if not bool(self.get_parameter("evaluation_enabled").value): return
+        try:
+            metric_results={}
+            for metric in self.get_parameter("evaluation_focus_metrics").value:
+                if str(metric).strip():
+                    metric_results[str(metric)]=estimator.solve_metric(str(metric),quadratic_surface=bool(goal.fit_field_curvature),peak_half_window=int(self.get_parameter("peak_half_window").value))
+            evaluation_directory=export_evaluation(
+                str(self.get_parameter("evaluation_output_directory").value),result,
+                metric_results=metric_results,
+                metadata={"center_z_mm":float(goal.center_z_mm),"half_range_mm":float(goal.half_range_mm),"step_mm":float(goal.step_mm),"frames_per_position":int(goal.frames_per_position),"object_um_per_pixel":float(self.get_parameter("object_um_per_pixel").value),"image_shape":list(estimator.image_signature[0]) if estimator.image_signature else []},
+                export_all_focus_curves=bool(self.get_parameter("evaluation_export_all_focus_curves").value),
+            )
+            result.status_message+=f"; evaluation={evaluation_directory}"; result.evaluation_directory=evaluation_directory
+        except Exception as exc:
+            self.get_logger().error(f"Evaluation export failed after hardware cleanup: {exc}")
+            result.status_message+=f"; evaluation export failed: {exc}"
 
     def _make_estimator(self) -> RoiTiltEstimator:
         def value(name):
             return self.get_parameter(name).value
 
-        rois = make_grid_rois(
-            int(value("roi_rows")),
-            int(value("roi_cols")),
-            roi_width_fraction=float(value("roi_width_fraction")),
-            roi_height_fraction=float(value("roi_height_fraction")),
-            margin_fraction=float(value("roi_margin_fraction")),
-        )
+        selection_mode = str(value("roi_selection_mode"))
+        manual_bbox = validate_bbox(value("manual_target_bbox"))
+        if selection_mode == "fixed_grid":
+            rois = make_grid_rois(
+                int(value("roi_rows")),
+                int(value("roi_cols")),
+                roi_width_fraction=float(value("roi_width_fraction")),
+                roi_height_fraction=float(value("roi_height_fraction")),
+                margin_fraction=float(value("roi_margin_fraction")),
+            )
+        else:
+            candidate_bbox = manual_bbox if selection_mode == "manual_bbox" else (0.0, 0.0, 1.0, 1.0)
+            rois, _ = make_overlapping_rois(
+                float(value("candidate_roi_width_fraction")),
+                float(value("candidate_roi_height_fraction")),
+                float(value("candidate_step_x_fraction")),
+                float(value("candidate_step_y_fraction")),
+                bbox=candidate_bbox,
+            )
         config = TiltEstimatorConfig(
             object_um_per_pixel=float(value("object_um_per_pixel")),
             use_integral_image=bool(value("use_integral_image")),
@@ -388,6 +520,28 @@ class TargetTiltActionNode(Node):
             bootstrap_iterations=int(value("bootstrap_iterations")),
             bootstrap_seed=int(value("bootstrap_seed")),
             reference_surface_path=str(value("reference_surface_path")),
+            roi_selection_mode=selection_mode,
+            manual_target_bbox=manual_bbox,
+            minimum_structured_pixel_fraction=float(value("minimum_structured_pixel_fraction")),
+            structure_mad_multiplier=float(value("structure_mad_multiplier")),
+            structure_energy_quantile=float(value("structure_energy_quantile")),
+            analysis_max_dimension_px=int(value("analysis_max_dimension_px")),
+            sparse_contrast_quantile=float(value("sparse_contrast_quantile")),
+            sparse_energy_quantile=float(value("sparse_energy_quantile")),
+            minimum_gradient_snr=float(value("minimum_gradient_snr")),
+            minimum_connected_edge_pixels=int(value("minimum_connected_edge_pixels")),
+            minimum_connected_edge_span_fraction=float(value("minimum_connected_edge_span_fraction")),
+            support_closing_radius=int(value("support_closing_radius")),
+            minimum_target_coverage_fraction=float(value("minimum_target_coverage_fraction")),
+            minimum_baseline_x_mm=float(value("minimum_baseline_x_mm")),
+            minimum_baseline_y_mm=float(value("minimum_baseline_y_mm")),
+            minimum_spatial_bins_x=int(value("minimum_spatial_bins_x")),
+            minimum_spatial_bins_y=int(value("minimum_spatial_bins_y")),
+            minimum_selected_rois=int(value("minimum_selected_rois")),
+            maximum_selected_rois=int(value("maximum_selected_rois")),
+            minimum_quality_weight=float(value("minimum_quality_weight")),
+            maximum_quality_weight=float(value("maximum_quality_weight")),
+            maximum_standardized_residual=float(value("maximum_standardized_residual")),
         )
         return RoiTiltEstimator(rois, config)
 
@@ -569,13 +723,29 @@ class TargetTiltActionNode(Node):
             "surface_max_abs_um",
             "mean_peak_uncertainty_um",
             "median_peak_uncertainty_um",
+            "target_coverage_fraction",
+            "baseline_x_mm",
+            "baseline_y_mm",
+            "design_condition_number",
         ):
             setattr(result, name, float(getattr(estimate, name)))
         result.roi_total = int(estimate.roi_total)
         result.roi_valid = int(estimate.roi_valid)
         result.roi_surface_inliers = int(estimate.roi_surface_inliers)
         result.roi_rejected_focus = int(estimate.roi_rejected_focus)
+        result.roi_rejected_spatial = int(estimate.roi_rejected_spatial)
+        result.roi_rejected_surface = int(estimate.roi_rejected_surface)
         result.roi_robust_outliers = int(estimate.roi_robust_outliers)
+        result.target_bbox_normalized = [
+            float(value) for value in estimate.target_bbox_normalized
+        ]
+        result.candidate_roi_count = int(estimate.candidate_roi_count)
+        result.structurally_valid_candidate_count = int(
+            estimate.structurally_valid_candidate_count
+        )
+        result.focus_valid_roi_count = int(estimate.focus_valid_roi_count)
+        result.selected_roi_count = int(estimate.selected_roi_count)
+        result.surface_inlier_count = int(estimate.surface_inlier_count)
         result.decision_x = str(estimate.decision_x)
         result.decision_y = str(estimate.decision_y)
         result.evaluation_directory = str(getattr(estimate, "evaluation_directory", ""))

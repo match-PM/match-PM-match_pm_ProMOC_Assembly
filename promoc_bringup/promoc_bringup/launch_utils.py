@@ -185,6 +185,32 @@ def load_user_config(bringup_share_dir: str) -> dict:
         return defaults
 
 
+def load_target_tilt_config(bringup_share_dir: str, user_config: dict):
+    """Resolve internal-default < imaging-profile < user-config precedence."""
+    user_values = dict(user_config.get("target_tilt", {}) or {})
+    profile_name = str(user_values.pop("imaging_profile", "")).strip()
+    profile_values = {}
+    error = None
+    if profile_name:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", profile_name):
+            error = f"invalid target_tilt.imaging_profile '{profile_name}'"
+        else:
+            path = get_config_path(
+                bringup_share_dir,
+                os.path.join("imaging_profiles", f"{profile_name}.yaml"),
+            )
+            profile, error = load_yaml_config(path)
+            if not error:
+                profile_values.update(profile.get("target_tilt", {}) or {})
+                metadata = profile.get("imaging_profile", {}) or {}
+                for name in ("object_um_per_pixel", "magnification"):
+                    if name in metadata and name not in profile_values:
+                        profile_values[name] = metadata[name]
+    resolved = dict(profile_values)
+    resolved.update(user_values)
+    return resolved, profile_name, error
+
+
 def load_linear_axis_config(bringup_share_dir: str, axis_name: str) -> dict:
     """Load linear axis configuration for a specific axis."""
     config_path = get_config_path(bringup_share_dir, "linear_axes_params.yaml")

@@ -22,8 +22,25 @@ camera:
 # Camera/objective-specific scale and quality limits for EstimateTargetTilt.
 # The example values match IDS U3-3800CP-C-HQ + Myutron FTV30-150 at 3x.
 target_tilt:
+  # Runtime hierarchy: node defaults < this imaging profile < values below.
+  imaging_profile: ids_u3_3800cp_c_hq_myutron_ftv30_150_3x
   magnification: 3.0
   object_um_per_pixel: 0.8
+  # auto_texture (default), manual_bbox or fixed_grid
+  roi_selection_mode: auto_texture
+  manual_target_bbox: [0.0, 0.0, 1.0, 1.0]
+  candidate_roi_width_fraction: 0.08
+  candidate_roi_height_fraction: 0.08
+  candidate_step_x_fraction: 0.06
+  candidate_step_y_fraction: 0.06
+  minimum_structured_pixel_fraction: 0.01
+  minimum_target_coverage_fraction: 0.05
+  minimum_baseline_x_mm: 0.25
+  minimum_baseline_y_mm: 0.25
+  minimum_spatial_bins_x: 3
+  minimum_spatial_bins_y: 3
+  minimum_selected_rois: 10
+  maximum_selected_rois: 30
   roi_rows: 7
   roi_cols: 7
   focus_metric: tenengrad
@@ -32,10 +49,13 @@ target_tilt:
   surface_robust: true
   # Diagnostic mode retains only scalar per-frame ROI scores, never images.
   evaluation_enabled: false
+  # true exports hundreds of curves and is intended only for deep debugging.
+  evaluation_export_all_focus_curves: false
   evaluation_focus_metrics: []  # modified_laplacian, variance_laplacian
   evaluation_output_directory: ~/Dokumente/Messungen/tilt_evaluation
   bootstrap_iterations: 0
   reference_surface_path: ""
+  diagnostic_image_enabled: false
   settle_time_s: 0.15
   axis_timeout_s: 30.0
   image_timeout_s: 2.0

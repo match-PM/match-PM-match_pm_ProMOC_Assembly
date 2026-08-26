@@ -47,6 +47,37 @@ def test_action_contains_required_goal_result_feedback_and_statuses():
         assert status in action
 
 
+def test_rqt_service_mirrors_action_request_and_adaptive_diagnostics():
+    service = (
+        ROOT / "promoc_assembly_interfaces" / "srv" / "EstimateTargetTilt.srv"
+    ).read_text(encoding="utf-8")
+    for field in (
+        "center_z_mm", "half_range_mm", "step_mm", "frames_per_position",
+        "fit_field_curvature", "return_to_center", "accepted", "status",
+        "tilt_x_deg", "decision_x", "target_bbox_normalized",
+        "target_coverage_fraction", "baseline_x_mm", "baseline_y_mm",
+        "candidate_roi_count", "structurally_valid_candidate_count",
+        "focus_valid_roi_count", "selected_roi_count", "surface_inlier_count",
+        "roi_rejected_spatial", "roi_rejected_surface", "design_condition_number",
+    ):
+        assert field in service
+    node = (
+        ROOT / "camera_nodes" / "camera_nodes" / "target_tilt_node.py"
+    ).read_text(encoding="utf-8")
+    assert '"estimate_target_tilt_service"' in node
+    assert "ActionClient(" in node
+
+
+def test_hardware_cleanup_precedes_evaluation_export():
+    node = (
+        ROOT / "camera_nodes" / "camera_nodes" / "target_tilt_node.py"
+    ).read_text(encoding="utf-8")
+    execute=node[node.index("    def _execute"):node.index("    def _publish_diagnostics_after_cleanup")]
+    assert execute.index("finally:")<execute.index("self._export_evaluation_after_cleanup")
+    assert execute.index("self._move_and_wait")<execute.index("self._export_evaluation_after_cleanup")
+    assert "allow_cancel=False" in execute
+
+
 def test_launch_uses_canonical_axis_and_relative_camera_topics():
     launch = (
         ROOT / "promoc_bringup" / "launch" / "optical_measurement_system.launch.py"

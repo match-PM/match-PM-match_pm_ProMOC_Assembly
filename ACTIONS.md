@@ -1,7 +1,7 @@
 # ROS-2-Actions am ProMOC-Messstand
 
 Dieses Dokument beschreibt die Benutzung der kamerabasierten
-Target-Verkippungsmessung `EstimateTargetTilt`. Die Action fährt einen Fokus-
+Target-Verkippungsmessung `EstimateTargetTilt`. Action und Service fahren einen Fokus-
 Scan, nimmt an jeder Achsposition mehrere Bilder auf und bestimmt aus den
 optimalen Fokuspositionen räumlich verteilter ROIs die Targetebene.
 
@@ -16,7 +16,27 @@ Die Action misst ausschließlich. Sie verstellt keine mechanische Kippachse.
 | Action-Node | `/promoc/promoc_camera/target_tilt_estimator` |
 | Bild-Topic | `/promoc/promoc_camera/stream0/image_raw` |
 | Fokusachse | `/promoc/linear_axis/lts300_x_axis` |
-| Konfiguration | `promoc_bringup/config/user_config.yaml`, Abschnitt `target_tilt` |
+| Konfiguration | Node-Defaults < gewähltes Imaging-Profil < `user_config.yaml` |
+
+Für `rqt_service_caller` steht zusätzlich der synchrone Service
+`/promoc/promoc_camera/estimate_target_tilt_service` vom Typ
+`promoc_assembly_interfaces/srv/EstimateTargetTilt` bereit. Er leitet intern
+ein Goal an dieselbe Action weiter; Kamera- und Achslogik existieren nur einmal.
+
+## Einfacher Aufruf über rqt
+
+1. `rqt` starten.
+2. **Plugins → Services → Service Caller** öffnen.
+3. `/promoc/promoc_camera/estimate_target_tilt_service` auswählen.
+4. Scanparameter eintragen und **Call** drücken.
+
+Beispielwerte sind `center_z_mm: 294.19`, `half_range_mm: 0.15`,
+`step_mm: 0.01`, `frames_per_position: 5`, `fit_field_curvature: false` und
+`return_to_center: true`.
+
+Der Service antwortet erst nach dem vollständigen Scan. Über ihn gibt es kein
+laufendes Feedback und keinen Cancel-Button. Für Fortschrittsfeedback und
+Abbruch bleibt die Action die geeignete Schnittstelle.
 
 Die Achse heißt in der vorhandenen Hardware-API `lts300_x_axis`. Innerhalb der
 Tilt-Action heißt ihre optische Fokuskoordinate trotzdem `z`. Der
@@ -148,10 +168,10 @@ dem bestätigten Ende der Achsbewegung und nach der Einpendelzeit liegt.
 | `detection_limit_y_deg` | Grad | 95-%-Nachweisgrenze `1.96 * uncertainty_y_deg`. |
 | `center_focus_z_mm` | mm | Gefittete optimale Fokusposition im Bildzentrum. |
 | `surface_rms_um` | µm | RMS der Residuen zwischen gültigen ROI-Fokuspositionen und gefitteter Fläche. Kleinere Werte bedeuten eine konsistentere Fläche. |
-| `roi_total` | Anzahl | Gesamtzahl der Kandidaten-ROIs, standardmäßig 49. |
-| `roi_valid` | Anzahl | Zahl der ROIs, die alle Textur-, Stabilitäts- und Peak-Prüfungen bestanden haben. |
-| `x_span_fraction` | Anteil | X-Spannweite der gültigen ROI-Zentren relativ zur Bildbreite. |
-| `y_span_fraction` | Anteil | Y-Spannweite der gültigen ROI-Zentren relativ zur Bildhöhe. |
+| `roi_total` | Anzahl | Gesamtzahl der Kandidaten-ROIs; im adaptiven Modus deutlich mehr als 49. |
+| `roi_valid`, `focus_valid_roi_count` | Anzahl | Alle Kandidaten mit gültigem Fokusfit. `roi_valid` behält damit seine historische Bedeutung. |
+| `x_span_fraction` | Anteil | X-Spannweite der finalen Surface-Inlier relativ zum erkannten Target. |
+| `y_span_fraction` | Anteil | Entsprechende Y-Spannweite der finalen Surface-Inlier. |
 | `tilt_x_detectable` | bool | `true`, wenn `abs(tilt_x_deg)` mindestens der 95-%-Nachweisgrenze entspricht. |
 | `tilt_y_detectable` | bool | Entsprechende Aussage für Y. |
 | `within_tolerance_x` | bool | `true`, wenn der Betrag des X-Winkels innerhalb von `tolerance_x_deg` liegt. |
@@ -162,12 +182,22 @@ dem bestätigten Ende der Achsbewegung und nach der Einpendelzeit liegt.
 | `surface_mae_um` | µm | Mittlerer Absolutbetrag der Flächenresiduen. |
 | `surface_median_abs_um` | µm | Medianer Absolutbetrag; weniger ausreißerempfindlich als RMS. |
 | `surface_max_abs_um` | µm | Größter Absolutbetrag eines gültigen ROI-Residuums. |
-| `roi_surface_inliers` | Anzahl | Gültige Fokus-ROIs oberhalb der konfigurierten Huber-Gewichtsschwelle. |
-| `roi_rejected_focus` | Anzahl | Vor dem Flächenfit wegen Textur, Randpeak, Instabilität oder Peakunsicherheit verworfene ROIs. |
+| `roi_surface_inliers`, `surface_inlier_count` | Anzahl | Ausgewählte ROIs, die nach dem robusten Flächenfit Inlier bleiben. |
+| `roi_rejected_focus` | Anzahl | Ausschließlich Kandidaten mit `fit.valid == false`. |
+| `roi_rejected_spatial` | Anzahl | Gültige Fokusfits, die wegen Support, Überlappung oder räumlicher Auswahl nicht verwendet wurden. |
+| `roi_rejected_surface` | Anzahl | Ausgewählte ROIs, die als Surface-Outlier markiert wurden. |
 | `roi_robust_outliers` | Anzahl | Gültige Fokus-ROIs, die der robuste Flächenfit stark heruntergewichtet hat. |
 | `mean_peak_uncertainty_um` | µm | Mittelwert der endlich bestimmbaren ROI-Peakunsicherheiten. |
 | `median_peak_uncertainty_um` | µm | Median derselben Unsicherheiten. |
 | `evaluation_directory` | Pfad | Erzeugtes Laufverzeichnis im Evaluationsmodus, sonst leer. |
+| `target_bbox_normalized` | Anteil | Erkannte beziehungsweise manuelle Targetbox `[xmin,ymin,xmax,ymax]`. |
+| `target_coverage_fraction` | Anteil | Anteil strukturell zum Support gehörender Kandidaten. |
+| `baseline_x_mm`, `baseline_y_mm` | mm | Tatsächliche physische Messbasis der finalen Surface-Inlier. |
+| `candidate_roi_count` | Anzahl | Zahl aller dicht erzeugten Kandidaten. |
+| `structurally_valid_candidate_count` | Anzahl | Kandidaten mit ausreichender lokaler Struktur vor Peak- und Raumauswahl. |
+| `selected_roi_count` | Anzahl | Räumlich verteilte Kandidaten, die in den Flächenfit eingehen. |
+| `surface_inlier_count` | Anzahl | Final beobachtbare Inlier nach robustem Flächenfit. |
+| `design_condition_number` | – | Konditionszahl der skalierten Designmatrix der finalen Inlier. |
 
 `detectable` und `within_tolerance` beantworten verschiedene Fragen:
 
@@ -222,6 +252,7 @@ Aktuelles 3×-Beispiel:
 
 ```yaml
 target_tilt:
+  imaging_profile: ids_u3_3800cp_c_hq_myutron_ftv30_150_3x
   magnification: 3.0
   object_um_per_pixel: 0.8
   roi_rows: 7
@@ -247,10 +278,10 @@ target_tilt:
   tolerance_y_deg: 0.05
 ```
 
-Die vollständigen Qualitätsparameter stehen im Imaging-Profil
-`promoc_bringup/config/imaging_profiles/ids_u3_3800cp_c_hq_myutron_ftv30_150_3x.yaml`.
-Werte aus einem Imaging-Profil werden nur wirksam, wenn sie in den
-`target_tilt`-Abschnitt der geladenen `user_config.yaml` übernommen werden.
+`target_tilt.imaging_profile` lädt die gleichnamige Datei aus
+`config/imaging_profiles`. Die eindeutige Hierarchie ist: interne Node-Defaults,
+danach das Imaging-Profil und zuletzt einzelne Werte aus `user_config.yaml`.
+Damit können lokale Kalibrierwerte gezielt Profilwerte überschreiben.
 
 ### Abbildungsmaßstab
 
@@ -264,6 +295,39 @@ klein; ein zu kleiner Wert macht ihn zu groß.
 
 ### ROI-Geometrie
 
+#### Adaptive Target- und ROI-Auswahl
+
+| Parameter | Standard | Wirkung |
+| --- | ---: | --- |
+| `roi_selection_mode` | `auto_texture` | `auto_texture` erkennt den strukturierten Target-Support; `manual_bbox` begrenzt Kandidaten auf eine Benutzerbox; `fixed_grid` reproduziert das alte Raster. |
+| `manual_target_bbox` | `[0,0,1,1]` | Normalisierte Box `[xmin,ymin,xmax,ymax]`; nur bei `manual_bbox`. Ungültige oder invertierte Boxen werden abgelehnt. |
+| `candidate_roi_width_fraction` | 0.08 | Breite einer adaptiven Kandidaten-ROI relativ zum Bild. |
+| `candidate_roi_height_fraction` | 0.08 | Höhe einer adaptiven Kandidaten-ROI relativ zum Bild. |
+| `candidate_step_x_fraction` | 0.06 | Horizontaler Kandidatenschritt. Kleiner als die ROI-Breite bedeutet Überlappung. |
+| `candidate_step_y_fraction` | 0.06 | Vertikaler Kandidatenschritt. |
+| `minimum_structured_pixel_fraction` | 0.01 | Dichte Strukturroute: Mindestanteil signifikanter Gradientenpixel. Dünne Kanten können alternativ die Sparse-Edge-Route bestehen. |
+| `structure_mad_multiplier` | 3.0 | Robuste Schwelle `Median + Faktor·MAD` für signifikante Gradienten. |
+| `structure_energy_quantile` | 0.90 | Obere lokale Gradientenquantile als Ergänzung zur mittleren Energie. |
+| `analysis_max_dimension_px` | 2048 | Maximale Kantenlänge des verkleinerten Analysebilds für Kontrast-, Schwarz-, Sättigungs- und Strukturdiagnostik. Das Fokusmaß selbst bleibt vollaufgelöst. |
+| `sparse_contrast_quantile` | 0.999 | Erfasst dünne helle oder dunkle Linien, die in P99–P01 verschwinden würden. |
+| `sparse_energy_quantile` | 0.995 | Top-Gradientenstatistik für wenige starke Kantenpixel. |
+| `minimum_gradient_snr` | 6.0 | Mindestabstand der starken Gradienten vom lokalen Median/MAD-Rauschboden. |
+| `minimum_connected_edge_pixels` | 6 | Mindestgröße der stärksten zusammenhängenden Kantenkomponente. |
+| `minimum_connected_edge_span_fraction` | 0.12 | Mindestspannweite dieser Komponente relativ zur ROI; unterdrückt isolierte Hotpixel. |
+| `support_closing_radius` | 1 | Morphologisches Schließen auf dem Kandidatenraster; verbindet kleine Lücken in Ring- und Gitterstrukturen. |
+| `minimum_target_coverage_fraction` | 0.05 | Mindestanteil struktureller Kandidaten am Kandidatenraster. |
+| `minimum_selected_rois` | 10 | Mindestzahl räumlich ausgewählter Fokus-ROIs. |
+| `maximum_selected_rois` | 30 | Obergrenze; verhindert, dass viele überlappende ROIs denselben Bereich mehrfach gewichten. |
+
+`auto_texture` benutzt keine Hough-Kreis-, Checkerboard- oder Grid-Erkennung.
+Aus strukturell gültigen Kandidaten wird eine morphologisch bereinigte
+Connected-Component-Region gebildet. Isolierte Außeninseln werden verworfen;
+innere Komponenten innerhalb der Hauptregion bleiben für konzentrische Ringe
+erhalten. Die Auswahl reserviert zuerst äußere X-/Y-Punkte, Targetquadranten und
+Pflichtbins. Verbleibende Plätze werden deterministisch nach räumlichem Abstand
+und Qualität ergänzt; ein abschließendes globales Qualitäts-Capping entfernt
+die geometrische Grundabdeckung nicht mehr.
+
 | Parameter | Standard | Wirkung |
 | --- | ---: | --- |
 | `roi_rows` | 7 | Zahl der Kandidatenzeilen. |
@@ -271,7 +335,7 @@ klein; ein zu kleiner Wert macht ihn zu groß.
 | `roi_width_fraction` | 0.10 | Breite jeder ROI als Anteil der Bildbreite. Größere ROIs liefern mehr Textur, können aber lokale Effekte mitteln und sich überlappen. |
 | `roi_height_fraction` | 0.10 | Höhe jeder ROI als Anteil der Bildhöhe. |
 | `roi_margin_fraction` | 0.08 | Abstand der äußeren ROI-Zentren vom Bildrand. Größere Werte ziehen das Raster zur Mitte und verringern die räumliche Hebelwirkung. |
-| `use_integral_image` | `true` | Beschleunigt die gemeinsame Auswertung aller ROIs aus derselben Gradientenkarte. Das Fokusmaß bleibt gleich. |
+| `use_integral_image` | `true` | Kompatibilitätsparameter. Die aktuelle speichersparende Implementierung verwendet unabhängig davon direkte Float64-ROI-Summen aus jeweils einer Float32-Fokuskarte und keine Vollbild-Integralbilder. |
 
 Alle ROI-Angaben sind normiert und passen sich automatisch an die aktuelle
 Bildgröße an. Ändern sich Bildgröße oder Encoding innerhalb eines Scans, wird
@@ -300,7 +364,7 @@ Diese Expertparameter können ebenfalls unter `target_tilt` gesetzt werden:
 
 | Parameter | Standard | Prüfung und Auswirkung |
 | --- | ---: | --- |
-| `min_contrast` | 0.015 | Minimale lokale Intensitätsspanne `P95-P05` im auf `[0,1]` normierten Bild. Erhöhen verwirft schwach strukturierte ROIs strenger. |
+| `min_contrast` | 0.015 | Mindestkontrast. Dichte Textur verwendet P99–P01; die Sparse-Edge-Route zusätzlich die konfigurierbaren äußersten Quantile für Linien mit weniger als 1 % Flächenanteil. |
 | `max_black_fraction` | 0.98 | Maximal erlaubter Anteil von Pixeln kleiner/gleich 0.005. Verringern verwirft dunkle ROIs früher. |
 | `max_saturated_fraction` | 0.98 | Maximal erlaubter Anteil von Pixeln größer/gleich 0.995. Verringern verwirft gesättigte ROIs früher. |
 | `min_gradient_energy` | 0.00001 | Minimale mittlere Sobel-/Tenengrad-Energie. Erhöhen fordert stärkere Kantenstruktur. |
@@ -320,7 +384,7 @@ und gehen nicht in den Flächenfit ein.
 
 | Parameter | Standard | Wirkung |
 | --- | ---: | --- |
-| `surface_weighted` | `false` | Bei `true` erhält jeder gültige ROI das Gewicht `1/sigma_z²`. `false` reproduziert das bisherige gleichgewichtete Verhalten. |
+| `surface_weighted` | `false` | Erzwingt auch bei `fixed_grid` Qualitätsgewichte. Die adaptiven Modi verwenden ihre begrenzten Qualitätsgewichte immer. |
 | `surface_robust` | `true` | Aktiviert den Huber-IRLS-Fit. Ausreißer werden nicht heimlich gelöscht, sondern erhalten ein kleineres robustes Gewicht. |
 | `huber_k` | 1.345 | Übergang zwischen quadratischer und linearer Huber-Verlustfunktion. Kleinere Werte reagieren strenger auf Ausreißer. |
 | `weight_sigma_floor_um` | 0.5 | Untere Begrenzung für `sigma_z`, damit unrealistisch kleine Unsicherheiten kein extremes Gewicht erzeugen. |
@@ -330,9 +394,11 @@ und gehen nicht in den Flächenfit ein.
 Zusätzlich zum bisherigen `surface_rms_um` berechnet der Kern MAE, medianen
 Absolutfehler und maximalen Absolutfehler. Pro ROI werden gemessener Peak,
 Flächenprognose, Residuum sowie Basis-, Huber- und Gesamtgewicht exportiert.
-Ein zusammengesetzter Quality Score wird absichtlich nicht ausgegeben: Die
-einzelnen Kriterien, Grenzwerte und Reject-Gründe bleiben dadurch prüfbar und
-werden nicht hinter einer schwer kalibrierbaren Kennzahl verborgen.
+Im adaptiven Modus ist `base_weight` das median-normalisierte und begrenzte
+Produkt aus Peakunsicherheit, Prominenz, R², Krümmung, Frame-Stabilität und
+Strukturpixelanteil. Der zugrunde liegende ROI-`quality_score` wird in der CSV
+zusammen mit allen Einzelkriterien ausgegeben. Einen zusätzlichen opaken
+Gesamtscore für die vollständige Messung gibt es bewusst nicht.
 
 ### Räumliche Beobachtbarkeit
 
@@ -342,9 +408,20 @@ werden nicht hinter einer schwer kalibrierbaren Kennzahl verborgen.
 | `min_span_fraction` | 0.50 | Geforderte Spannweite der gültigen ROI-Zentren sowohl in X als auch in Y relativ zur Bildgröße. |
 | `min_quadrants` | 4 | Mindestzahl belegter Bildquadranten. Mit dem Standardwert müssen alle vier Quadranten gültige ROIs enthalten. |
 | `max_design_condition` | 100.0 | Maximal erlaubte Konditionszahl der skalierten linearen Designmatrix. Kleinere Werte prüfen die Ebenenbeobachtbarkeit strenger. |
+| `minimum_baseline_x_mm` | 0.25 mm | Minimale reale X-Messbasis der finalen ROIs. |
+| `minimum_baseline_y_mm` | 0.25 mm | Minimale reale Y-Messbasis. |
+| `minimum_spatial_bins_x` | 3 | Mindestzahl belegter X-Bereiche relativ zum erkannten Target. |
+| `minimum_spatial_bins_y` | 3 | Mindestzahl belegter Y-Bereiche. Horizontale oder vertikale Linien scheitern dadurch kontrolliert. |
+| `maximum_standardized_residual` | 3.5 | Zusätzliche Residuenprüfung für `surface_inlier`; nach Ausreißern wird die Beobachtbarkeit erneut bewertet. |
 
-Eine große Zahl gültiger ROIs allein reicht nicht. Liegen sie beispielsweise
-nur in einer Bildhälfte, wird der Winkel mit `INSUFFICIENT_COVERAGE` verweigert.
+Eine große Zahl gültiger ROIs allein reicht nicht. Im adaptiven Modus beziehen
+sich Spannweiten und Quadranten auf den erkannten Target-Support, während die
+physischen Messbasen weiterhin in Millimetern geprüft werden. Ein kleines
+Target kann daher nicht dieselbe Winkelunsicherheit wie ein sensorfüllendes
+Target vortäuschen. Nach Surface-Outliern wird die Beobachtbarkeit erneut
+geprüft; Messbasis und Konditionszahl im Ergebnis stammen aus diesen finalen
+Inliern. Die Mindestbasis ist keine Genauigkeitsgarantie – eine kleinere Basis
+vergrößert weiterhin die aus der Fitkovarianz gemeldete Winkelunsicherheit.
 
 ### Wiederholbarkeit und Toleranz
 
@@ -375,19 +452,30 @@ ROI-Fokuswerte und erzeugt nach dem Scan reproduzierbare Artefakte:
 ```yaml
 target_tilt:
   evaluation_enabled: true
+  evaluation_export_all_focus_curves: false
   evaluation_output_directory: ~/Dokumente/Messungen/tilt_evaluation
   evaluation_focus_metrics: [modified_laplacian, variance_laplacian]
   bootstrap_iterations: 200
   bootstrap_seed: 1729
 ```
 
-Jeder Lauf erhält ein Verzeichnis `run_<UTC-Zeit>` mit `summary.json`,
-`roi_data.csv`, `focus_curves.csv`, je einem Fokuskurven-Plot pro ROI,
-Peak-/Residuen-Heatmaps und einer 3D-Flächendarstellung. Die alternativen
+Der produktionsnahe Standard ist `evaluation_enabled: false`. Bei Aktivierung
+erhält jeder Lauf ein Verzeichnis `run_<UTC-Zeit>` mit `summary.json`,
+`roi_data.csv`, `focus_curves.csv`, Kandidatenübersicht, koordinatenbasierter
+Peak-/Residuen-Darstellung und einer 3D-Flächendarstellung. Einzelplots werden
+standardmäßig nur für ausgewählte ROIs und je einen relevanten Ablehnungsgrund
+geschrieben. `evaluation_export_all_focus_curves: true` ist ein langsamer
+Debugmodus für wirklich alle Kandidaten. Die alternativen
 Fokusmaße werden aus denselben aufgenommenen Bildern berechnet; die Achse wird
 nicht erneut bewegt. `bootstrap_iterations: 0` deaktiviert Bootstrap im
 Normalbetrieb. Bei aktiviertem Bootstrap werden pro Z-Position nur die
 skalaren Frame-Scores mit Zurücklegen resampelt.
+
+Bei `return_to_center: true` erfolgt die bestätigte Rückfahrt in einem gemeinsamen
+Cleanup-Pfad vor jedem Diagnose- oder Plotexport – auch nach Cancellation,
+Bildfehlern und Hardwarefehlern. Der Export bleibt bewusst synchron und erzeugt
+damit keine unkontrollierten Hintergrundthreads; die Action gilt frühestens nach
+erfolgreicher Rückfahrt als abgeschlossen.
 
 Mehrere exportierte Läufe lassen sich zusammenfassen mit:
 
@@ -435,11 +523,12 @@ Bayer12 wird bewusst nicht im Estimator entpackt. Der Kameranode muss es vor der
 Das in ROS 2 Humble installierte `rqt_action` ist nur ein
 Action-Type-Browser. Es kann Goal-, Feedback- und Result-Typen anzeigen, aber
 kein Goal senden. `rqt_service_caller` sollte nicht zum manuellen Aufruf der
-internen Action-Services verwendet werden.
+internen Action-Services wie `.../_action/send_goal` verwendet werden.
 
-Zum Starten der Action wird deshalb `ros2 action send_goal` verwendet. Für eine
-regelmäßig benutzte GUI wäre ein eigenes kleines rqt-Plugin erforderlich, das
-Goal, Feedback, Result und Cancellation als zusammengehörige Action behandelt.
+Stattdessen kann der eigens dafür bereitgestellte
+`estimate_target_tilt_service` direkt mit `rqt_service_caller` verwendet
+werden. `ros2 action send_goal` bleibt verfügbar, wenn Feedback oder
+Cancellation benötigt werden.
 
 ## Typische Scanprofile
 

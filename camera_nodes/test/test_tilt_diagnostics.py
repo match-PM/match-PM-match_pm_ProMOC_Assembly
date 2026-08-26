@@ -78,6 +78,20 @@ def test_evaluation_export_writes_machine_readable_artifacts(tmp_path):
     assert (tmp_path/str(directory).split("/")[-1]/"focus_curves.csv").exists()
 
 
+def test_adaptive_evaluation_uses_coordinates_and_limits_curve_plots(tmp_path):
+    fits=[]
+    for index,(x,y) in enumerate(((12,10),(47,18),(81,31),(20,72),(65,88),(103,61))):
+        selected=index in {0,5}; inlier=index==0; valid=index not in {2,3}
+        reason="ok" if valid else "weak_peak" if index==2 else "insufficient_structure"
+        fits.append(RoiFocusFit(index=index,valid=valid,reason=reason,x_px=x,y_px=y,x0_px=x-5,y0_px=y-5,x1_px=x+5,y1_px=y+5,focus_z_mm=1+index*.001 if valid else math.nan,surface_z_mm=1.0 if selected else math.nan,surface_residual_um=float(index) if selected else math.nan,selected=selected,surface_inlier=inlier,curve_z_mm=[.9,1.,1.1],curve_values=[1.,2.,1.]))
+    estimate=TiltEstimate(TiltStatus.OK,"ok",roi_total=len(fits),roi_valid=4,roi_fits=fits)
+    directory=export_evaluation(tmp_path,estimate,roi_rows=7,roi_cols=7)
+    run=tmp_path/str(directory).split("/")[-1]
+    for name in ("roi_selection.png","z_peak_heatmap.png","residual_heatmap.png","surface_3d.png"):
+        assert (run/name).exists()
+    assert len(list((run/"focus_curves").glob("*.png")))==4
+
+
 def test_repeatability_report_and_reference(tmp_path):
     root=tmp_path/"runs"
     for index,angle in enumerate((.01,.02)):

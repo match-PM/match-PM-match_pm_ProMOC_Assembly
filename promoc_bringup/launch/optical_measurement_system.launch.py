@@ -18,6 +18,7 @@ from promoc_bringup.launch_utils import (
     discover_thorlabs_devices,
     get_config_path,
     load_linear_axis_config,
+    load_target_tilt_config,
     load_user_config,
     load_yaml_config,
     materialize_camera_info_yaml,
@@ -91,7 +92,19 @@ def launch_setup(context, *args, **kwargs):
     camera_info = camera_profile.get("camera_info", {})
     exposure_config = camera_profile.get("exposure_time", {})
     camera_mtf_params = camera_profile.get("mtf_params", {})
-    target_tilt_config = user_config.get("target_tilt", {})
+    target_tilt_config, target_tilt_profile, tilt_profile_error = load_target_tilt_config(
+        bringup_share, user_config
+    )
+    if tilt_profile_error:
+        logger.warn(
+            f"Target-tilt imaging profile could not be loaded: {tilt_profile_error}; "
+            "using user_config and node defaults."
+        )
+    elif target_tilt_profile:
+        logger.info(
+            f"Target-tilt configuration: imaging profile '{target_tilt_profile}' "
+            "overridden by user_config.yaml"
+        )
     driver_type = str(camera_params.get("driver", "")).strip().lower()
     if driver_type not in SUPPORTED_CAMERA_DRIVERS:
         driver_note = str(camera_params.get("driver_note", "")).strip()
@@ -284,6 +297,8 @@ def _create_startup_info():
         msg="\n"
         "=== ProMOC Measurement Stand ===\n"
         "Services: /promoc/camera/autofocus, /promoc/camera/measure_tenengrad_roi, /promoc/camera/measure_mtf, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
+        "Tilt service (rqt): /promoc/promoc_camera/estimate_target_tilt_service\n"
+        "Tilt action: /promoc/promoc_camera/estimate_target_tilt\n"
       )
 
 
@@ -588,6 +603,37 @@ def _create_target_tilt_node(
         "reference_surface_path",
         "evaluation_enabled",
         "evaluation_output_directory",
+        "evaluation_export_all_focus_curves",
+        "service_wait_timeout_s",
+        "roi_selection_mode",
+        "manual_target_bbox",
+        "candidate_roi_width_fraction",
+        "candidate_roi_height_fraction",
+        "candidate_step_x_fraction",
+        "candidate_step_y_fraction",
+        "minimum_structured_pixel_fraction",
+        "structure_mad_multiplier",
+        "structure_energy_quantile",
+        "analysis_max_dimension_px",
+        "sparse_contrast_quantile",
+        "sparse_energy_quantile",
+        "minimum_gradient_snr",
+        "minimum_connected_edge_pixels",
+        "minimum_connected_edge_span_fraction",
+        "support_closing_radius",
+        "minimum_target_coverage_fraction",
+        "minimum_baseline_x_mm",
+        "minimum_baseline_y_mm",
+        "minimum_spatial_bins_x",
+        "minimum_spatial_bins_y",
+        "minimum_selected_rois",
+        "maximum_selected_rois",
+        "minimum_quality_weight",
+        "maximum_quality_weight",
+        "maximum_standardized_residual",
+        "diagnostic_image_enabled",
+        "diagnostic_image_topic",
+        "diagnostic_image_max_dimension",
     )
     parameters = {
         # Relative topics keep the node reusable for one instance per camera.
