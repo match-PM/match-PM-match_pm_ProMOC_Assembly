@@ -1,5 +1,15 @@
 # MTF Protocol
 
+## Automatisierte Kampagnen (2026-09-04)
+
+Der neue YAML-Runner und die Action `/promoc/camera/start_measurement` sind in
+[MEASUREMENT_WORKFLOW.md](MEASUREMENT_WORKFLOW.md) beschrieben. Sie verwenden lokale
+Bestschärfe, kompensierende Auto-Exposure bei grünem Koaxiallicht (Referenz 20 V),
+danach feste Parameter für die 50×10-Wiederholungen. Schema-v2-Aufnahmen der Action
+werden mit `measurement_analyze` ausgewertet; `mtf_batch_analyze` bleibt der Legacy-Pfad.
+Softwaretests sind vorhanden, Hardware-Pilotfreigabe steht noch aus. Die folgenden
+Abschnitte beschreiben weiterhin die manuellen MTF-Services und deren Analyseprotokoll.
+
 Dieses Dokument beschreibt den offiziellen wissenschaftlichen Arbeitsablauf
 fuer den Messstand-Branch. Ziel ist ein lehrfreundlicher, aber belastbarer
 **vergleichender Slanted-Edge-MTF-Teststand**.
@@ -54,8 +64,39 @@ diagnostisch zu verstecken.
 
 `/promoc/camera/set_exposure` nutzt fuer Live-Belichtungswechsel denselben
 ROS-Parameterpfad wie die restliche Kamera-Reconfigure-Logik. Wenn der
-Wunschwert nicht sauber geschrieben oder rueckgelesen werden kann, ist die
-beim Launch gesetzte Start-Belichtung die offizielle Fallback-Stufe.
+Wunschwert nicht sauber geschrieben oder rueckgelesen werden kann, wird die
+beim Launch gesetzte Start-Belichtung als sichere Fallback-Stufe restauriert.
+Der Service meldet diesen Fall als Fehler und darf ihn nicht als erfolgreichen
+Belichtungswechsel maskieren.
+
+Standardmaessig ist `mtf.capture_exposure_us=0`. Dadurch behaelt ein MTF-Capture
+die aktuell gesetzte Live-Belichtung bei. Ein positiver Wert erzwingt dagegen
+bewusst genau diese Belichtung in Mikrosekunden fuer jeden MTF-Capture.
+
+### Automatische Belichtung
+
+`/promoc/camera/auto_exposure` regelt die Belichtungszeit deterministisch auf
+Basis frischer Raw-Frames. Der Standard nutzt das 95. Perzentil der ausgewaehlten
+ROI, ein Ziel von 75 Prozent des nativen Sensorbereichs und maximal 0,1 Prozent
+Pixel oberhalb von 98 Prozent. Bei Bayer-RGGB werden nur echte Gruen-Sensel
+ausgewertet. Die native Bittiefe stammt aus dem PixelFormat; `BayerRG12` wird
+daher auch in einem `uint16`-Container korrekt als 12-Bit-Signal behandelt. Der
+Regler erkennt dabei rechtsbuendige Werte bis 4095 ebenso wie linksbuendig in
+16 Bit abgebildete Werte.
+
+Ohne ROI-Koordinaten wird der gesamte Frame verwendet. Fuer reproduzierbare
+Messreihen ist eine feste, helle Target-ROI vorzuziehen:
+
+```bash
+ros2 service call /promoc/camera/auto_exposure \
+  promoc_assembly_interfaces/srv/AutoExposure \
+  "{roi_x: 0, roi_y: 0, roi_width: 0, roi_height: 0, target_level_fraction: 0.0, tolerance_fraction: 0.0, max_iterations: 0, frames_per_iteration: 0}"
+```
+
+Nullwerte waehlen die Parameter aus `user_config.yaml`. Der Service liefert die
+angewendete Belichtung, Iterationszahl, normierten Zielpegel, Saettigungsanteil
+und den verwendeten nativen Maximalwert zurueck. Auto-Gain und kameraeigene
+Auto-Exposure bleiben fuer diesen Ablauf ausgeschaltet.
 
 Fallback-Reihenfolge bei Hardwareproblemen:
 
@@ -96,6 +137,13 @@ Konstant halten:
 - Fokusstrategie
 - Expositionsstrategie
 - Objektiv, sofern es nicht selbst die Vergleichsvariable ist
+
+Empfohlene Reihenfolge pro Messbedingung:
+
+1. automatische Belichtung auf der festen Referenz-ROI
+2. Autofokus bei eingefrorener Belichtung und festem Gain
+3. automatische Belichtung einmal bestaetigen bzw. bei Bedarf nachregeln
+4. MTF-Capture mit unveraenderter Belichtung
 
 Default fuer Vergleichsstudien:
 

@@ -309,10 +309,20 @@ class CallbackBase:
                         self._driver._current_exposure = float(  # noqa: SLF001
                             fallback.get("applied_exposure_us", default_exposure_us)
                         )
-                    fallback["used_fallback"] = True
-                    fallback["requested_exposure_us"] = requested_exposure_us
-                    fallback["fallback_reason"] = target_reason
-                    return fallback
+                    applied_fallback_us = float(
+                        fallback.get("applied_exposure_us", default_exposure_us)
+                    )
+                    raise HardwareError(
+                        message=(
+                            "Failed to apply requested exposure; restored configured "
+                            "start exposure"
+                        ),
+                        details={
+                            "requested_exposure_us": requested_exposure_us,
+                            "target_reason": target_reason,
+                            "fallback_exposure_us": applied_fallback_us,
+                        },
+                    )
 
                 fallback_reason = str(
                     fallback.get("reason", "configured start exposure fallback failed")
@@ -510,4 +520,4 @@ class CallbackBase:
 
     def _get_timestamp(self) -> str:
         """Returns the current timestamp as a string."""
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
+        return datetime.now().strftime("%Y%m%d_%H%M%S_%f")

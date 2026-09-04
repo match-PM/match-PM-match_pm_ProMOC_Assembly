@@ -129,6 +129,17 @@ def load_user_config(bringup_share_dir: str) -> dict:
         },
         "autofocus_profiles": {"default": {}, "profiles": {}},
         "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
+        "auto_exposure": {
+            "target_level_fraction": 0.75,
+            "tolerance_fraction": 0.02,
+            "percentile": 95.0,
+            "max_saturated_fraction": 0.001,
+            "saturation_threshold_fraction": 0.98,
+            "frames_per_iteration": 3,
+            "max_iterations": 10,
+            "stable_iterations": 2,
+            "settle_frames_after_set": 2,
+        },
         "camera": {
             "profile": "ids_u3_3800cp_m_gl_r22",
             "pixel_size_um": None,
@@ -141,6 +152,8 @@ def load_user_config(bringup_share_dir: str) -> dict:
             "debug_export_dir": "",
             "use_raw_capture": True,
             "capture_required_raw": True,
+            # 0 keeps the current live exposure during an MTF capture.
+            "capture_exposure_us": 0.0,
             "min_edge_angle": 2.0,
             "max_edge_angle": 11.0,
             "capture_only_context_margin_px": 64,

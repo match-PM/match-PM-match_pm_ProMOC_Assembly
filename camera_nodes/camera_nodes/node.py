@@ -2,10 +2,12 @@
 """ROS2 runtime node for camera services."""
 
 import time
+import threading
 from cv_bridge import CvBridge
 
 from promoc_assembly_interfaces.msg import LinearAxisInfo
 from promoc_assembly_interfaces.srv import (
+    AutoExposure,
     AutoFocus,
     AutoFocusROI,
     GetRoiCoordinates,
@@ -18,6 +20,7 @@ import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rcl_interfaces.msg import SetParametersResult
 from sensor_msgs.msg import CameraInfo, Image
 
 from .config import declare_camera_parameters, get_camera_param
@@ -78,9 +81,14 @@ class CameraNode(Node):
         self._format_controller = CameraFormatController(self)
 
         self.cb_group = ReentrantCallbackGroup()
+        self.measurement_lock = threading.Lock()
+        self.add_on_set_parameters_callback(self._guard_measurement_parameters)
+        self.measurement_image_snapshot = None
         self._create_subscriptions()
         self._create_publishers()
         self._create_services()
+        from .measurement_runtime import MeasurementAction
+        self.measurement_action = MeasurementAction(self)
         self._startup_capture_timer = self.create_timer(
             2.0,
             self._log_startup_capture_state,
@@ -109,7 +117,7 @@ class CameraNode(Node):
             Image,
             self.camera_image_topic,
             self.assembly_image_callback,
-            10,
+            1,  # latest frame only: avoid a stale backlog after axis/exposure changes
         )
         self.axis_pos_sub = self.create_subscription(
             LinearAxisInfo,
@@ -136,51 +144,76 @@ class CameraNode(Node):
         self.autofocus_service = self.create_service(
             AutoFocus,
             "/promoc/camera/autofocus",
-            self.autofocus_handler.autofocus_callback,
+            self._guard_measurement(self.autofocus_handler.autofocus_callback),
             callback_group=self.cb_group,
         )
         self.autofocus_roi_service = self.create_service(
             AutoFocusROI,
             "/promoc/camera/autofocus_roi",
-            self.autofocus_handler.autofocus_roi_callback,
+            self._guard_measurement(self.autofocus_handler.autofocus_roi_callback),
             callback_group=self.cb_group,
         )
         self.mtf_service = self.create_service(
             MeasureMTF,
             "/promoc/camera/measure_mtf",
-            self.mtf_handler.measure_mtf_callback,
+            self._guard_measurement(self.mtf_handler.measure_mtf_callback),
             callback_group=self.cb_group,
         )
         self.mtf_center_service = self.create_service(
             MeasureMTF,
             "/promoc/camera/measure_mtf_center",
-            self.mtf_handler.measure_mtf_center_callback,
+            self._guard_measurement(self.mtf_handler.measure_mtf_center_callback),
             callback_group=self.cb_group,
         )
         self.mtf_roi_service = self.create_service(
             MeasureMTF,
             "/promoc/camera/measure_mtf_roi",
-            self.mtf_handler.measure_mtf_roi_callback,
+            self._guard_measurement(self.mtf_handler.measure_mtf_roi_callback),
             callback_group=self.cb_group,
         )
         self.tenengrad_roi_service = self.create_service(
             MeasureTenengradROI,
             "/promoc/camera/measure_tenengrad_roi",
-            self.autofocus_handler.measure_tenengrad_roi_callback,
+            self._guard_measurement(self.autofocus_handler.measure_tenengrad_roi_callback),
             callback_group=self.cb_group,
         )
         self.roi_coordinates_service = self.create_service(
             GetRoiCoordinates,
             "/promoc/camera/get_roi_coordinates",
-            self.mtf_handler.get_roi_coordinates_callback,
+            self._guard_measurement(self.mtf_handler.get_roi_coordinates_callback),
             callback_group=self.cb_group,
         )
         self.set_exposure_service = self.create_service(
             SetExposure,
             "/promoc/camera/set_exposure",
-            self.exposure_handler.manual_set_exposure_callback,
+            self._guard_measurement(self.exposure_handler.manual_set_exposure_callback),
             callback_group=self.cb_group,
         )
+        self.auto_exposure_service = self.create_service(
+            AutoExposure,
+            "/promoc/camera/auto_exposure",
+            self._guard_measurement(self.exposure_handler.auto_exposure_callback),
+            callback_group=self.cb_group,
+        )
+
+    def _guard_measurement(self, callback):
+        def guarded(request, response):
+            lock = getattr(self, "measurement_lock", None)
+            if lock is not None and not lock.acquire(blocking=False):
+                response.success = False
+                response.status_message = "Camera is busy with another operation/measurement"
+                return response
+            try:
+                return callback(request, response)
+            finally:
+                if lock is not None:
+                    lock.release()
+        return guarded
+
+    def _guard_measurement_parameters(self, parameters):
+        busy = self.measurement_lock.locked()
+        return SetParametersResult(successful=not busy,
+                                   reason="Camera operation active" if busy else "")
 
     def _warn_once(self, key: str, message: str):
         """Log one warning per repeated preview/debug conversion failure."""
@@ -389,6 +422,7 @@ class CameraNode(Node):
 
     def assembly_image_callback(self, msg: Image):
         """Cache the latest image and publish optional debug overlay."""
+        self.measurement_image_snapshot = (msg, time.time_ns(), time.monotonic_ns())
         self._log_stream_health(msg)
         self.latest_image_msg = msg
         cv_image = self._cache_driver_image(msg)

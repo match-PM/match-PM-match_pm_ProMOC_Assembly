@@ -530,7 +530,7 @@ class CameraFormatController:
         target_exposure_us = float(exposure_time_us)
         tolerance_us = max(
             0.0,
-            self._get_float_param("exposure.readback_tolerance_us", 500.0),
+            self._get_float_param("exposure.readback_tolerance_us", 20.0),
         )
         self._last_operation_error = ""
 

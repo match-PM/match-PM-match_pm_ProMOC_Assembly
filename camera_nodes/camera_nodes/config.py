@@ -13,6 +13,8 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("measurement.base_path", ""),
     ("enable_debug_overlay", False),
     ("camera.expected_width", 0),
+    ("camera.profile_id", ""),
+    ("camera.device_id", ""),
     ("camera.expected_height", 0),
     ("camera.default_exposure_us", 0.0),
     ("camera.min_exposure_us", 0.0),
@@ -145,7 +147,16 @@ ALL_PARAM_VALUES: tuple[tuple[str, object], ...] = (
     ("mtf.log_format_switch", True),
     ("exposure.settle_frames_after_set", 2),
     ("exposure.frame_timeout_s", 1.0),
-    ("exposure.readback_tolerance_us", 500.0),
+    ("exposure.readback_tolerance_us", 20.0),
+    ("auto_exposure.target_level_fraction", 0.75),
+    ("auto_exposure.tolerance_fraction", 0.02),
+    ("auto_exposure.percentile", 95.0),
+    ("auto_exposure.max_saturated_fraction", 0.001),
+    ("auto_exposure.saturation_threshold_fraction", 0.98),
+    ("auto_exposure.frames_per_iteration", 3),
+    ("auto_exposure.max_iterations", 10),
+    ("auto_exposure.stable_iterations", 2),
+    ("auto_exposure.settle_frames_after_set", 2),
 )
 
 ACTIVE_PARAM_VALUES: tuple[tuple[str, object], ...] = ALL_PARAM_VALUES
@@ -310,7 +321,33 @@ _GROUP_SPECS: dict[str, tuple[tuple[str, str, type, object], ...]] = {
     "exposure": (
         ("exposure.settle_frames_after_set", "settle_frames_after_set", int, 2),
         ("exposure.frame_timeout_s", "frame_timeout_s", float, 1.0),
-        ("exposure.readback_tolerance_us", "readback_tolerance_us", float, 500.0),
+        ("exposure.readback_tolerance_us", "readback_tolerance_us", float, 20.0),
+    ),
+    "auto_exposure": (
+        ("auto_exposure.target_level_fraction", "target_level_fraction", float, 0.75),
+        ("auto_exposure.tolerance_fraction", "tolerance_fraction", float, 0.02),
+        ("auto_exposure.percentile", "percentile", float, 95.0),
+        (
+            "auto_exposure.max_saturated_fraction",
+            "max_saturated_fraction",
+            float,
+            0.001,
+        ),
+        (
+            "auto_exposure.saturation_threshold_fraction",
+            "saturation_threshold_fraction",
+            float,
+            0.98,
+        ),
+        ("auto_exposure.frames_per_iteration", "frames_per_iteration", int, 3),
+        ("auto_exposure.max_iterations", "max_iterations", int, 10),
+        ("auto_exposure.stable_iterations", "stable_iterations", int, 2),
+        (
+            "auto_exposure.settle_frames_after_set",
+            "settle_frames_after_set",
+            int,
+            2,
+        ),
     ),
 }
 
@@ -353,4 +390,5 @@ def load_camera_runtime_config(node) -> SimpleNamespace:
         autofocus=_load_group(node, "autofocus"),
         mtf=_load_group(node, "mtf"),
         exposure=_load_group(node, "exposure"),
+        auto_exposure=_load_group(node, "auto_exposure"),
     )

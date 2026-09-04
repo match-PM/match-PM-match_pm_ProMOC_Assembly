@@ -75,6 +75,18 @@ autofocus:
   analysis_downsample_max_dim_px: 2048
   analysis_use_center_roi: true
 
+auto_exposure:
+  # P95 of the selected raw ROI is regulated to 75% of the native sensor range.
+  target_level_fraction: 0.75
+  tolerance_fraction: 0.02
+  percentile: 95.0
+  max_saturated_fraction: 0.001
+  saturation_threshold_fraction: 0.98
+  frames_per_iteration: 3
+  max_iterations: 10
+  stable_iterations: 2
+  settle_frames_after_set: 2
+
 fly_over:
   refinement_mode: 0
   refinement_strategy: linear
@@ -86,6 +98,9 @@ mtf:
   debug_export_dir: ""
   use_raw_capture: true
   capture_required_raw: true
+  # 0 keeps the exposure selected through /promoc/camera/set_exposure.
+  # Set a positive value in microseconds only when MTF must force a fixed exposure.
+  capture_exposure_us: 0.0
   min_edge_angle: 2.0
   max_edge_angle: 11.0
   capture_only_samples: 10

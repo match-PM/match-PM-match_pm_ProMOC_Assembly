@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import types
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[2]
 for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
@@ -90,6 +92,30 @@ class _Response:
         self.status_message = ""
 
 
+class _AutoExposureRequest:
+    def __init__(self, **overrides):
+        self.roi_x = 0
+        self.roi_y = 0
+        self.roi_width = 0
+        self.roi_height = 0
+        self.target_level_fraction = 0.0
+        self.tolerance_fraction = 0.0
+        self.max_iterations = 0
+        self.frames_per_iteration = 0
+        for name, value in overrides.items():
+            setattr(self, name, value)
+
+
+class _AutoExposureResponse(_Response):
+    def __init__(self):
+        super().__init__()
+        self.exposure_time = 0.0
+        self.iterations = 0
+        self.measured_level_fraction = 0.0
+        self.saturated_fraction = 0.0
+        self.native_max_value = 0.0
+
+
 def test_exposure_handler_sets_exposure_on_valid_request():
     driver = _Driver()
     node = _Node(
@@ -118,7 +144,7 @@ def test_exposure_handler_marks_error_for_invalid_request():
     assert "positive" in response.status_message.lower()
 
 
-def test_exposure_handler_restores_configured_default_when_live_write_fails():
+def test_exposure_handler_reports_failure_after_restoring_configured_default():
     driver = _Driver()
     node = _Node(
         {
@@ -136,10 +162,10 @@ def test_exposure_handler_restores_configured_default_when_live_write_fails():
 
     response = handler.manual_set_exposure_callback(_Request(12000.0), _Response())
 
-    assert response.success is True
+    assert response.success is False
     assert node._format_controller.calls == [12000.0, 30000.0]
     assert "restored configured start exposure" in response.status_message
-    assert "30000.0 us" in response.status_message
+    assert "write failed" in response.status_message
 
 
 def test_exposure_handler_clamps_to_camera_minimum_for_live_write():
@@ -185,3 +211,135 @@ def test_exposure_handler_reports_error_when_target_and_fallback_fail():
 
     assert response.success is False
     assert "fallback" in response.status_message.lower()
+
+
+def test_auto_exposure_resolves_native_12_bit_range_from_pixel_format():
+    image = np.full((8, 8), 3071, dtype=np.uint16)
+
+    level, saturated, native_max = ExposureHandler._measure_level(
+        [image],
+        None,
+        pixel_format="BayerRG12",
+        percentile=95.0,
+        saturation_threshold_fraction=0.98,
+    )
+
+    assert native_max == 4095.0
+    assert level == 3071.0 / 4095.0
+    assert saturated == 0.0
+
+
+def test_auto_exposure_detects_left_aligned_12_bit_values_in_uint16():
+    image = np.full((8, 8), 3071 << 4, dtype=np.uint16)
+
+    level, saturated, native_max = ExposureHandler._measure_level(
+        [image],
+        None,
+        pixel_format="BayerRG12",
+        percentile=95.0,
+        saturation_threshold_fraction=0.98,
+    )
+
+    assert native_max == float(4095 << 4)
+    assert level == float(3071 << 4) / float(4095 << 4)
+    assert saturated == 0.0
+
+
+def test_auto_exposure_bayer_roi_uses_only_rggb_green_sensels():
+    image = np.zeros((4, 4), dtype=np.uint16)
+    image[0::2, 0::2] = 4095  # red
+    image[1::2, 1::2] = 4095  # blue
+    image[0::2, 1::2] = 2048  # green 1
+    image[1::2, 0::2] = 2048  # green 2
+
+    values = ExposureHandler._analysis_values(
+        image,
+        None,
+        pixel_format="BayerRG12",
+    )
+
+    assert values.size == 8
+    assert np.all(values == 2048)
+
+
+def test_auto_exposure_converges_after_two_stable_raw_measurements(monkeypatch):
+    node = _Node(
+        {
+            "auto_exposure.stable_iterations": 2,
+            "auto_exposure.frames_per_iteration": 1,
+            "auto_exposure.max_iterations": 4,
+            "auto_exposure.settle_frames_after_set": 0,
+            "camera.min_exposure_us": 53.0,
+            "camera.max_exposure_us": 814000.0,
+        }
+    )
+    handler = ExposureHandler(node=node, camera_driver=_Driver())
+    frame = np.full((16, 16), 3071, dtype=np.uint16)
+    timestamps = iter((1, 2))
+
+    monkeypatch.setattr(handler, "_capture_state", lambda: ("BayerRG12", 5000.0))
+    monkeypatch.setattr(handler, "_get_latest_image_timestamp_ns", lambda: 0)
+    monkeypatch.setattr(
+        handler,
+        "_collect_raw_frames",
+        lambda _count, _timestamp, _timeout: ([frame], next(timestamps)),
+    )
+
+    response = handler.auto_exposure_callback(
+        _AutoExposureRequest(),
+        _AutoExposureResponse(),
+    )
+
+    assert response.success is True
+    assert response.exposure_time == 5000.0
+    assert response.iterations == 2
+    assert response.native_max_value == 4095.0
+    assert abs(response.measured_level_fraction - 0.75) < 0.01
+
+
+def test_auto_exposure_adjusts_exposure_and_uses_applied_readback(monkeypatch):
+    node = _Node(
+        {
+            "auto_exposure.stable_iterations": 1,
+            "auto_exposure.frames_per_iteration": 1,
+            "auto_exposure.max_iterations": 3,
+            "auto_exposure.settle_frames_after_set": 0,
+            "camera.min_exposure_us": 53.0,
+            "camera.max_exposure_us": 814000.0,
+        }
+    )
+    handler = ExposureHandler(node=node, camera_driver=_Driver())
+    dark = np.full((16, 16), 1024, dtype=np.uint16)
+    target = np.full((16, 16), 3071, dtype=np.uint16)
+    frames = iter((dark, target))
+    writes = []
+
+    monkeypatch.setattr(handler, "_capture_state", lambda: ("BayerRG12", 1000.0))
+    monkeypatch.setattr(handler, "_get_latest_image_timestamp_ns", lambda: 0)
+    monkeypatch.setattr(
+        handler,
+        "_collect_raw_frames",
+        lambda _count, timestamp, _timeout: ([next(frames)], timestamp + 1),
+    )
+    monkeypatch.setattr(
+        handler,
+        "_set_exposure_us",
+        lambda requested: writes.append(float(requested))
+        or {"success": True, "applied_exposure_us": float(requested)},
+    )
+    monkeypatch.setattr(
+        handler,
+        "_discard_raw_frames",
+        lambda _count, timestamp, _timeout: timestamp,
+    )
+
+    response = handler.auto_exposure_callback(
+        _AutoExposureRequest(),
+        _AutoExposureResponse(),
+    )
+
+    assert response.success is True
+    assert response.iterations == 2
+    assert writes
+    assert writes[0] > 1000.0
+    assert response.exposure_time == writes[0]

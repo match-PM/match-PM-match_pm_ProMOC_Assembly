@@ -62,10 +62,8 @@ def config_from_manifest_dict(data: dict[str, Any], run_dir: Path) -> MTFConfig:
 def write_capture_manifest(run_dir: Path, manifest: dict[str, Any]) -> Path:
     """Write one capture manifest JSON file."""
     path = run_dir / CAPTURE_MANIFEST_NAME
-    path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True, default=_json_default),
-        encoding="utf-8",
-    )
+    from .measurement_store import atomic_text
+    atomic_text(path, json.dumps(manifest, indent=2, sort_keys=True, default=_json_default))
     return path
 
 

@@ -1,0 +1,178 @@
+# Operational last table of V5; green-only interpretation confirmed by user.
+# Nr. is the source plan identifier, NOT an Excel physical row index.
+# Physical values below MUST be filled/confirmed before use. No safe park is guessed.
+schema_version: 1
+campaign_id: mtf-green-screening-v5
+source: "2026-09_Versuchsplan_V5.xlsx | last table | 10wDNgRd-hq7xHZ8HuV3bWWib2bMPo1v2"
+defaults:
+  operator_name: "REPLACE"
+  setup_id: "REPLACE-per-physical-assembly"
+  output_root: "/home/sterni/Dokumente/Messungen/MTF"
+  illumination_voltage_v: 0.0  # enter actually displayed value; reference 20.0 V
+  park_position_mm: -1.0
+  axis_min_mm: -1.0
+  axis_max_mm: -1.0
+  measurement_count: 50
+  frames_per_measurement: 10
+  fine_focus_half_range_mm: 0.5  # pilot-test; no 300 mm search
+  focus_samples: 21
+  position_tolerance_mm: 0.01  # validate against physical focus window
+  settle_time_s: 1.0  # pilot-test
+  exposure_target: 0.75
+  exposure_tolerance: 0.02
+  exposure_min_us: 10.0
+  exposure_max_us: 100000.0
+  expected_gain: 0.0
+  roi_width: 0  # interactive ONE slanted edge before action
+  roi_height: 0
+conditions:
+  - condition_id: "n003-v003"
+    experiment_id: "V003"
+    plan_row_number: 3
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam1; Kameraeintrag: U3-3800CP-C-HQ. "
+    camera_profile: "ids_u3_3800cp_c_hq_r22"
+    camera_serial: "4104401781"
+    objective_id: "myutron-1x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 1
+  - condition_id: "n007-v007"
+    experiment_id: "V007"
+    plan_row_number: 7
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam1; Kameraeintrag: U3-3800CP-C-HQ. "
+    camera_profile: "ids_u3_3800cp_c_hq_r22"
+    camera_serial: "4104401781"
+    objective_id: "myutron-2x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 2
+  - condition_id: "n011-v011"
+    experiment_id: "V011"
+    plan_row_number: 11
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam1; Kameraeintrag: U3-3800CP-C-HQ. "
+    camera_profile: "ids_u3_3800cp_c_hq_r22"
+    camera_serial: "4104401781"
+    objective_id: "myutron-3x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 3
+  - condition_id: "n015-v015"
+    experiment_id: "V015"
+    plan_row_number: 15
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam1; Kameraeintrag: U3-3800CP-C-HQ. "
+    camera_profile: "ids_u3_3800cp_c_hq_r22"
+    camera_serial: "4104401781"
+    objective_id: "myutron-4x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 4
+  - condition_id: "n019-v019"
+    experiment_id: "V019"
+    plan_row_number: 19
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam1; Kameraeintrag: U3-3800CP-C-HQ. "
+    camera_profile: "ids_u3_3800cp_c_hq_r22"
+    camera_serial: "4104401781"
+    objective_id: "budget-4gx"
+    objective_family: "comparison"
+    magnification_x: 4
+  - condition_id: "n023-v023"
+    experiment_id: "V023"
+    plan_row_number: 23
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    camera_profile: "ids_u3_3800cp_m_gl_r22"
+    camera_serial: "4110071724"
+    objective_id: "myutron-1x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 1
+  - condition_id: "n027-v027"
+    experiment_id: "V027"
+    plan_row_number: 27
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    camera_profile: "ids_u3_3800cp_m_gl_r22"
+    camera_serial: "4110071724"
+    objective_id: "myutron-2x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 2
+  - condition_id: "n031-v031"
+    experiment_id: "V031"
+    plan_row_number: 31
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    camera_profile: "ids_u3_3800cp_m_gl_r22"
+    camera_serial: "4110071724"
+    objective_id: "myutron-3x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 3
+  - condition_id: "n035-v035"
+    experiment_id: "V035"
+    plan_row_number: 35
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    camera_profile: "ids_u3_3800cp_m_gl_r22"
+    camera_serial: "4110071724"
+    objective_id: "myutron-4x"
+    objective_family: "Myutron FTVxxC-150"
+    magnification_x: 4
+  - condition_id: "n039-v039"
+    experiment_id: "V039"
+    plan_row_number: 39
+    setup_repeat: 0
+    component_id: "none"
+    beam_angle_deg: 0
+    target_position: "center"
+    measurement_count: 50
+    frames_per_measurement: 10
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    camera_profile: "ids_u3_3800cp_m_gl_r22"
+    camera_serial: "4110071724"
+    objective_id: "budget-4gx"
+    objective_family: "comparison"
+    magnification_x: 4

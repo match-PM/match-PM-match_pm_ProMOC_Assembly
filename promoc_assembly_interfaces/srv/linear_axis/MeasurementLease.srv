@@ -1,0 +1,7 @@
+# acquire | renew | release. Stop and emergency_stop always bypass this lease.
+string command
+string token
+---
+bool success
+string status_message
+string axis_epoch

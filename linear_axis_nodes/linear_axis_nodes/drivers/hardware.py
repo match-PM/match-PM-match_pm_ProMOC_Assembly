@@ -353,6 +353,20 @@ class ThorlabsLTS300Driver(LinearAxisDriver):
                 self.logger.warn(
                     f'Error updating position cache after homing: {e}')
 
+    def get_position_fresh(self) -> float:
+        """Measurement readback: never substitute a cached position on failure."""
+        import math
+        self._ensure_connected()
+        if not self._comm_lock.acquire(timeout=1.0):
+            raise HardwareError("Fresh axis readback unavailable: communication busy")
+        try:
+            position = float(self.device.get_position()) / self.device_units_per_mm
+            if not math.isfinite(position) or position < 0:
+                raise HardwareError("Invalid fresh axis position")
+            return position
+        finally:
+            self._comm_lock.release()
+
     def get_position(self) -> float:
         """Get current position in millimeters with caching."""
         self._ensure_connected()

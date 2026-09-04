@@ -305,6 +305,28 @@ def test_build_mtf_capture_target_enforces_scientific_raw_defaults():
     assert target["color_transform_enable"] is False
 
 
+def test_build_mtf_capture_target_preserves_live_exposure_when_override_is_zero():
+    controller = CameraFormatController(
+        _Node(
+            {
+                "mtf.capture_pixel_format": "BayerRG12",
+                "mtf.capture_exposure_us": 0.0,
+                "mtf.capture_gain": 0.0,
+            }
+        )
+    )
+
+    target = controller.build_mtf_scientific_capture_target(
+        {
+            "pixel_format": "BayerRG12",
+            "exposure_time": 5000.0,
+            "gain": 0.0,
+        }
+    )
+
+    assert "exposure_time" not in target
+
+
 def test_param_set_services_uses_configured_camera_service_names():
     controller = CameraFormatController(
         _Node(

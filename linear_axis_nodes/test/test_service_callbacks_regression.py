@@ -159,6 +159,8 @@ def test_linear_service_callbacks_motion_and_admin_paths():
     emergency_res = SimpleNamespace(success=False, was_moving=False, status_message="")
     emergency_result = callbacks.callback_emergency_stop(emergency_req, emergency_res)
     assert emergency_result.success is True
+    callbacks.callback_stop(SimpleNamespace(), SimpleNamespace(success=False, status_message=""))
+    assert callbacks.get_operation_status()[0] == OperationStatus.EMERGENCY_STOP
 
     vel_set_req = SimpleNamespace(min_velocity=0.1, acceleration=0.2, max_velocity=0.3)
     vel_set_res = SimpleNamespace(

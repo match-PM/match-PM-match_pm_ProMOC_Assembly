@@ -1,0 +1,30 @@
+# Synthetic workflow only; never use these axis values as hardware safety limits.
+schema_version: 1
+campaign_id: pilot
+source: Synthetic workflow validation; no experimental results
+defaults:
+  operator_name: simulation
+  setup_id: synthetic-assembly
+  output_root: /tmp/mtf_measurement_simulation
+  illumination_voltage_v: 20.0
+  camera_profile: synthetic
+  camera_serial: synthetic
+  objective_id: synthetic-4x
+  objective_family: synthetic
+  magnification_x: 4.0
+  component_id: none
+  target_position: center
+  axis_min_mm: 0.0
+  axis_max_mm: 20.0
+  park_position_mm: 2.0
+  measurement_count: 2
+  frames_per_measurement: 2
+  roi_x: 16
+  roi_y: 16
+  roi_width: 96
+  roi_height: 96
+  min_free_gb: 0.01
+conditions:
+  - condition_id: pilot-2x2
+    experiment_id: SIMULATION
+    plan_row_number: 1

@@ -1,0 +1,23 @@
+MeasurementCondition condition
+# Provenance only; the server never executes/parses this as configuration.
+string plan_source
+# Exact run directory basename; empty creates a new run.
+string resume_run_id
+# Physical setup, camera identity, homing and collision-free travel confirmed.
+bool setup_confirmed
+---
+bool success
+string error_code
+string status_message
+string run_id
+string output_directory
+int32 completed_measurements
+int32 captured_frames
+float64 exposure_time_us
+float64 focus_position_mm
+---
+string phase
+int32 current_measurement
+int32 completed_measurements
+int32 measurement_count
+string status_message

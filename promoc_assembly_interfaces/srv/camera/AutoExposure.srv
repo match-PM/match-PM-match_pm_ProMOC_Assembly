@@ -1,0 +1,19 @@
+# Optional pixel ROI. width/height <= 0 selects the full frame.
+int32 roi_x
+int32 roi_y
+int32 roi_width
+int32 roi_height
+
+# Values <= 0 use the configured defaults.
+float64 target_level_fraction
+float64 tolerance_fraction
+int32 max_iterations
+int32 frames_per_iteration
+---
+bool success
+string status_message
+float64 exposure_time
+int32 iterations
+float64 measured_level_fraction
+float64 saturated_fraction
+float64 native_max_value

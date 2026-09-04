@@ -23,6 +23,7 @@ endif()
 
 # Keep the package definition in sync with the filesystem after interface refactors.
 file(GLOB_RECURSE INTERFACE_FILES
+  CONFIGURE_DEPENDS
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
   "action/*.action"
   "msg/*.msg"

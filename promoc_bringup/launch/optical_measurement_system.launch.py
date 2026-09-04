@@ -89,6 +89,7 @@ def launch_setup(context, *args, **kwargs):
         return [LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}")]
 
     camera_params = camera_profile.get("camera_params", {})
+    camera_params["measurement_profile_id"] = camera_type
     camera_info = camera_profile.get("camera_info", {})
     exposure_config = camera_profile.get("exposure_time", {})
     camera_mtf_params = camera_profile.get("mtf_params", {})
@@ -296,7 +297,10 @@ def _create_startup_info():
     return LogInfo(
         msg="\n"
         "=== ProMOC Measurement Stand ===\n"
-        "Services: /promoc/camera/autofocus, /promoc/camera/measure_tenengrad_roi, /promoc/camera/measure_mtf, /promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, /promoc/camera/set_exposure\n"
+        "Services: /promoc/camera/autofocus, "
+        "/promoc/camera/measure_tenengrad_roi, /promoc/camera/measure_mtf, "
+        "/promoc/camera/measure_mtf_center, /promoc/camera/measure_mtf_roi, "
+        "/promoc/camera/set_exposure, /promoc/camera/auto_exposure\n"
         "Tilt service (rqt): /promoc/promoc_camera/estimate_target_tilt_service\n"
         "Tilt action: /promoc/promoc_camera/estimate_target_tilt\n"
       )
@@ -393,6 +397,7 @@ def _create_camera_node(
     mtf_profile = str(mtf_config.get("profile", "default"))
     mtf_debug_dir = str(mtf_config.get("debug_export_dir", "") or "")
     af_profile_json = json.dumps(config.get("autofocus_profiles", {}))
+    auto_exposure_config = config.get("auto_exposure", {})
 
     return Node(
         package="camera_nodes",
@@ -407,6 +412,8 @@ def _create_camera_node(
                 "measurement.base_path": base_dir,
                 "pixel_size_um": pixel_size_um,
                 "camera.image_topic": image_topic,
+                "camera.profile_id": camera_params.get("measurement_profile_id", ""),
+                "camera.device_id": camera_params.get("guid", ""),
                 "camera.camera_info_topic": camera_info_topic,
                 "camera.param_set_service_primary": param_set_service_primary,
                 "camera.param_set_service_secondary": param_set_service_secondary,
@@ -434,6 +441,33 @@ def _create_camera_node(
                 ),
                 "camera.max_exposure_us": float(
                     exposure_config.get("max_val", 0.0)
+                ),
+                "auto_exposure.target_level_fraction": float(
+                    auto_exposure_config.get("target_level_fraction", 0.75)
+                ),
+                "auto_exposure.tolerance_fraction": float(
+                    auto_exposure_config.get("tolerance_fraction", 0.02)
+                ),
+                "auto_exposure.percentile": float(
+                    auto_exposure_config.get("percentile", 95.0)
+                ),
+                "auto_exposure.max_saturated_fraction": float(
+                    auto_exposure_config.get("max_saturated_fraction", 0.001)
+                ),
+                "auto_exposure.saturation_threshold_fraction": float(
+                    auto_exposure_config.get("saturation_threshold_fraction", 0.98)
+                ),
+                "auto_exposure.frames_per_iteration": int(
+                    auto_exposure_config.get("frames_per_iteration", 3)
+                ),
+                "auto_exposure.max_iterations": int(
+                    auto_exposure_config.get("max_iterations", 10)
+                ),
+                "auto_exposure.stable_iterations": int(
+                    auto_exposure_config.get("stable_iterations", 2)
+                ),
+                "auto_exposure.settle_frames_after_set": int(
+                    auto_exposure_config.get("settle_frames_after_set", 2)
                 ),
                 "mtf.use_full_frame": False,
                 "mtf.use_raw_capture": bool(mtf_config.get("use_raw_capture", True)),
@@ -463,12 +497,8 @@ def _create_camera_node(
                 "mtf.capture_offset_y": 0,
                 "mtf.capture_binning": 1,
                 "mtf.capture_exposure_us": float(
-                    camera_mtf_params.get(
-                        "recommended_exposure_ms",
-                        exposure_config.get("default_ms", 30.0),
-                    )
-                )
-                * 1000.0,
+                    mtf_config.get("capture_exposure_us", 0.0)
+                ),
                 "mtf.capture_gain": camera_mtf_params.get("recommended_gain", 0.0),
                 "mtf.capture_settle_s": 0.35,
                 "mtf.capture_image_timeout_s": 2.0,

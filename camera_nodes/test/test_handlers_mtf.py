@@ -79,6 +79,13 @@ class _Param:
         self.value = value
 
 
+@pytest.fixture(autouse=True)
+def _isolate_mtf_output_directories(tmp_path, monkeypatch):
+    """Tests must not reuse/overwrite checked-in acquisition fixtures."""
+    (tmp_path / "camera_nodes" / "test" / "fixtures" / "_tmp_mtf").mkdir(parents=True)
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+
+
 class _Logger:
     def info(self, *_args, **_kwargs):
         return None

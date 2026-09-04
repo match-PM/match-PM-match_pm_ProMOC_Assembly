@@ -1,4 +1,5 @@
 float64 axis_position
+string measurement_token
 ---
 bool success
 string status_message

@@ -23,6 +23,8 @@ setup(
             "target_tilt_estimator = camera_nodes.target_tilt_node:main",
             "target_tilt_repeatability = camera_nodes.tilt_repeatability:main",
             "mtf_batch_analyze = camera_nodes.mtf_batch_analyze:main",
+            "measurement_runner = camera_nodes.measurement_runner:main",
+            "measurement_analyze = camera_nodes.measurement_analyze:main",
         ],
     },
 )

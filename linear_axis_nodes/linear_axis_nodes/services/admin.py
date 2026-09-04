@@ -35,7 +35,10 @@ class LinearAdminCallbacks:
 
     @handle_service_errors()
     def callback_get_position(self, request, response):
-        response.axis_position = float(self.driver.get_position())
+        if getattr(request, "require_fresh", False):
+            response.axis_position = float(self.driver.get_position_fresh())
+        else:
+            response.axis_position = float(self.driver.get_position())
         response.success = True
 
         status, status_message = self.get_operation_status()

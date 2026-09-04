@@ -1,3 +1,5 @@
+# true rejects cached/fallback values and requires an actual device read.
+bool require_fresh
 ---
 float64 axis_position
 bool success

@@ -21,6 +21,7 @@ def test_camera_node_registers_only_canonical_services():
     assert "/promoc/camera/measure_tenengrad_roi" in content
     assert "/promoc/camera/get_roi_coordinates" in content
     assert "/promoc/camera/set_exposure" in content
+    assert "/promoc/camera/auto_exposure" in content
     assert "/promoc/camera/autofocus_comparison" not in content
     assert "/promoc/camera/detect_rois" not in content
     assert "/promoc/camera/select_roi" not in content
@@ -31,6 +32,7 @@ def test_camera_node_registers_only_canonical_services():
     assert "SimulatedCameraDriver" not in content
     assert 'self.set_exposure_service = self.create_service(' in content
     assert "self.exposure_handler.manual_set_exposure_callback" in content
+    assert "self.exposure_handler.auto_exposure_callback" in content
 
 
 def test_legacy_callbacks_package_path_is_removed():

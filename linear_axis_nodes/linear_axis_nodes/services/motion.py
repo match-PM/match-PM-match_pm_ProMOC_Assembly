@@ -28,9 +28,12 @@ class LinearMotionCallbacks:
         self.validator = validator
         self.state_store = state_store
         self.config = config
+        self._generation = 0
 
     def _start_async(self, target, *args):
-        thread = threading.Thread(target=target, args=args, daemon=True)
+        self._generation += 1
+        thread = threading.Thread(target=target, args=args,
+                                  kwargs={"generation":self._generation}, daemon=True)
         thread.start()
 
     def _log_transition(self, phase: str, message: str) -> None:
@@ -41,8 +44,11 @@ class LinearMotionCallbacks:
         else:
             self.logger.debug(f"[{phase}] {message}")
 
-    def _async_move_operation(self, move_type: str, value_mm: float) -> None:
+    def _async_move_operation(self, move_type: str, value_mm: float, *, generation=None) -> None:
+        generation = self._generation if generation is None else generation
         try:
+            if generation != self._generation:
+                return
             if move_type == "absolute":
                 self.driver.move_absolute(value_mm)
                 done_message = f"absolute movement completed to {value_mm:.2f}mm"
@@ -58,15 +64,23 @@ class LinearMotionCallbacks:
             except Exception:
                 status_message = "Movement completed"
 
-            self.state_store.set(OperationStatus.IDLE, status_message)
+            # A completed worker must not clear a concurrently latched stop.
+            if generation == self._generation:
+                self.state_store.try_set_if(allowed={OperationStatus.MOVING},
+                                           new_status=OperationStatus.IDLE, message=status_message)
             self._log_transition("done", done_message)
         except Exception as exc:
             msg = str(exc) or "unknown motion execution error"
-            self.state_store.set(OperationStatus.ERROR, msg)
+            if generation == self._generation:
+                self.state_store.try_set_if(allowed={OperationStatus.MOVING},
+                                           new_status=OperationStatus.ERROR, message=msg)
             self._log_transition("error", msg)
 
-    def _async_home_operation(self) -> None:
+    def _async_home_operation(self, *, generation=None) -> None:
+        generation = self._generation if generation is None else generation
         try:
+            if generation != self._generation:
+                return
             self.driver.home(timeout=float(self.config.homing_timeout))
 
             try:
@@ -77,11 +91,15 @@ class LinearMotionCallbacks:
             except Exception:
                 status_message = "Homing completed successfully"
 
-            self.state_store.set(OperationStatus.IDLE, status_message)
+            if generation == self._generation:
+                self.state_store.try_set_if(allowed={OperationStatus.HOMING},
+                                           new_status=OperationStatus.IDLE, message=status_message)
             self._log_transition("done", "homing completed")
         except Exception as exc:
             msg = str(exc) or "unknown homing execution error"
-            self.state_store.set(OperationStatus.ERROR, msg)
+            if generation == self._generation:
+                self.state_store.try_set_if(allowed={OperationStatus.HOMING},
+                                           new_status=OperationStatus.ERROR, message=msg)
             self._log_transition("error", msg)
 
     @handle_service_errors()
@@ -193,6 +211,7 @@ class LinearMotionCallbacks:
 
     @handle_service_errors()
     def callback_emergency_stop(self, request, response):
+        self._generation += 1
         current_status, _ = self.state_store.get()
         was_moving = current_status in {OperationStatus.MOVING, OperationStatus.JOGGING}
 
@@ -212,11 +231,17 @@ class LinearMotionCallbacks:
 
     @handle_service_errors()
     def callback_stop(self, request, response):
+        self._generation += 1
         current_status, _ = self.state_store.get()
         was_moving = current_status in {OperationStatus.MOVING, OperationStatus.JOGGING}
 
         self.driver.stop()
-        self.state_store.set(OperationStatus.IDLE, "Stopped by request")
+        # A normal stop must never reset a concurrently latched emergency stop.
+        self.state_store.try_set_if(
+            allowed=set(OperationStatus) - {OperationStatus.EMERGENCY_STOP},
+            new_status=OperationStatus.IDLE,
+            message="Stopped by request",
+        )
         self._log_transition("done", "stop executed")
 
         response.success = True

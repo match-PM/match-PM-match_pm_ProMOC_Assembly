@@ -17,6 +17,7 @@ from promoc_assembly_interfaces.srv import (
     Stop,
     SetVelocityParameters,
     ShutdownLinearAxis,
+    MeasurementLease as MeasurementLeaseService,
 )
 import rclpy
 from rclpy.node import Node
@@ -24,6 +25,8 @@ from rclpy.node import Node
 from .config import LTS300NodeConfig
 from .drivers import create_linear_axis_driver, connect_linear_axis_driver
 from .services import ServiceHandlers
+from .measurement_lease import MeasurementLease
+from .models import OperationStatus
 from promoc_core.logging import TaggedLogger, LogTags
 
 
@@ -112,6 +115,11 @@ class LTS300Node(Node):
 
     def _setup_ros_communication(self):
         node_name = self.get_name()
+        self.measurement_lease = MeasurementLease()
+        self.create_service(MeasurementLeaseService,
+                            f"/promoc/linear_axis/{node_name}/measurement_lease",
+                            self._measurement_lease_callback)
+        self.create_timer(0.5, self._measurement_watchdog)
         self.log.info(f"Setting up ROS communication for {node_name}...")
 
         self.position_publisher = self.create_publisher(
@@ -173,12 +181,44 @@ class LTS300Node(Node):
         ]
 
         for service_type, suffix, callback in service_specs:
+            if suffix in {"move_absolute", "move_relative", "home", "jog_axis",
+                          "set_velocity_parameters", "shutdown"}:
+                callback = self._guard_measurement_motion(callback, suffix)
             self.create_service(
                 service_type,
                 f"/promoc/linear_axis/{node_name}/{suffix}",
                 callback,
             )
         self.log.info("All services created")
+
+    def _guard_measurement_motion(self, callback, suffix):
+        def guarded(request, response):
+            if not self.measurement_lease.permits(getattr(request, "measurement_token", "")):
+                response.success = False
+                response.status_message = "Axis reserved by a measurement; stop remains available"
+                return response
+            result = callback(request, response)
+            if suffix == "home" and result.success:
+                self.measurement_lease.invalidate_reference()
+            return result
+        return guarded
+
+    def _measurement_lease_callback(self, request, response):
+        status, _ = self.callbacks.get_operation_status()
+        idle = status in {OperationStatus.IDLE, OperationStatus.EMERGENCY_STOP, OperationStatus.ERROR}
+        if request.command == "acquire":
+            idle = status == OperationStatus.IDLE
+        response.success = self.measurement_lease.update(request.command, request.token, idle)
+        response.status_message = "Lease updated" if response.success else "Lease rejected (busy/expired/wrong token)"
+        response.axis_epoch = self.measurement_lease.epoch
+        return response
+
+    def _measurement_watchdog(self):
+        if self.measurement_lease.expired():
+            try:
+                self.callbacks.callback_emergency_stop(EmergencyStop.Request(), EmergencyStop.Response())
+            finally:
+                self.log.error("Measurement heartbeat expired; axis stop requested. Manual recovery required.")
 
     def publish_position(self):
         if not getattr(self.driver, "connected", False):

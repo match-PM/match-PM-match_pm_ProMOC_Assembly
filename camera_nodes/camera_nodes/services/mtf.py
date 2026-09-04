@@ -1147,6 +1147,7 @@ class MTFHandler(CallbackBase):
         )
         frames: list[tuple[np.ndarray, str]] = [(first_image, first_encoding)]
         last_ts = int(first_timestamp_ns or self._get_latest_image_timestamp_ns() or 0)
+        self._capture_frame_timestamps = [last_ts]
 
         for _ in range(requested_samples - 1):
             next_img, next_ts, next_encoding = self._wait_for_new_mtf_capture_image(
@@ -1157,6 +1158,12 @@ class MTFHandler(CallbackBase):
                 self._node.get_logger().warn(
                     "Timeout waiting for capture-only sample frame"
                 )
+                continue
+            if next_ts is None or int(next_ts) <= last_ts:
+                self._node.get_logger().warn("Skipping stale capture-only frame")
+                continue
+            if next_img.shape != first_image.shape or next_img.dtype != first_image.dtype:
+                self._node.get_logger().warn("Skipping changed capture-only geometry/dtype")
                 continue
             if next_ts is not None:
                 last_ts = int(next_ts)
@@ -1171,6 +1178,7 @@ class MTFHandler(CallbackBase):
                 )
                 continue
             frames.append((next_img, next_encoding))
+            self._capture_frame_timestamps.append(int(next_ts))
 
         return frames
 
@@ -1339,7 +1347,7 @@ class MTFHandler(CallbackBase):
                 selected_result=None,
                 selected_edge_angle_deg=None,
                 selected_sample_count=0,
-                measurement_success=True,
+                measurement_success=len(frames) == self._param_int("mtf.capture_only_samples", MTF_CAPTURE_ONLY_SAMPLES),
                 measurement_error="capture_only: pending offline MTF batch analysis",
             ),
         )
@@ -1373,6 +1381,8 @@ class MTFHandler(CallbackBase):
                 MTF_CAPTURE_ONLY_SAMPLES,
             ),
             "stored_frame_count": len(frames),
+            "frame_timestamps_ns": list(self._capture_frame_timestamps),
+            "capture_complete": len(frames) == self._param_int("mtf.capture_only_samples", MTF_CAPTURE_ONLY_SAMPLES),
             "edges": edge_entries,
             "summary_csv": summary_csv.name,
             "context_csv": context_csv.name,
@@ -1380,14 +1390,14 @@ class MTFHandler(CallbackBase):
         }
         manifest_path = write_capture_manifest(measurement_run.run_dir, manifest)
 
-        response.success = True
+        response.success = bool(manifest["capture_complete"])
         response.mtf50 = 0.0
         response.mtf20 = 0.0
         response.mtf10 = 0.0
         response.edge_angle = 0.0
         response.nyquist_frequency = 0.0
         response.status_message = (
-            f"MTF capture-only complete: edges={len(edge_entries)}, "
+            f"MTF capture-only {'complete' if response.success else 'INCOMPLETE'}: edges={len(edge_entries)}, "
             f"frames={len(frames)}, manifest={manifest_path}, summary={summary_csv}"
         )
         self._node.get_logger().info(response.status_message)
@@ -1630,7 +1640,7 @@ class MTFHandler(CallbackBase):
             run_parts.append(requested_label)
         run_id = "_".join(part for part in run_parts if part)
         run_dir = self._get_output_dir("mtf_messungen") / run_id
-        run_dir.mkdir(parents=True, exist_ok=True)
+        run_dir.mkdir(parents=True, exist_ok=False)
         return run_dir, run_id
 
     def _build_edge_export_label(

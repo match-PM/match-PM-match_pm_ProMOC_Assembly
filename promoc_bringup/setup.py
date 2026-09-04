@@ -15,6 +15,8 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name, "launch"), glob("launch/*.py")),
         (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
+        (os.path.join("share", package_name, "config", "measurement_plans"),
+         glob("config/measurement_plans/*.yaml") + glob("config/measurement_plans/*.csv")),
         (
             os.path.join("share", package_name, "config", "cameras"),
             glob("config/cameras/*.yaml"),
