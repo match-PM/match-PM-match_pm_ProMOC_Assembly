@@ -25,7 +25,8 @@ camera_params:
 
 exposure_time:
   default_ms: 7.999
-  min_val: 53.0
+  # Smallest value that was accepted reliably through the ROS service.
+  min_val: 80.0
   max_val: 814000.0
 
 frame_rate:
@@ -67,12 +68,15 @@ mtf_params:
 
 dynamic_parameters:
   - {FeatureName: AcquisitionFrameRate, Type: float, Min: 1.0, Max: 19.0}
-  - {FeatureName: ExposureTime, Type: float, Min: 53.0, Max: 814000.0}
+  - {FeatureName: ExposureTime, Type: float, Min: 80.0, Max: 814000.0}
   - {FeatureName: Gain, Type: float}
   - {FeatureName: PixelFormat, Type: string}
   - {FeatureName: ExposureAuto, Type: string}
   - {FeatureName: GainAuto, Type: string}
+  - {FeatureName: Gamma, Type: float}
   - {FeatureName: BinningHorizontal, Type: int, Min: 1, Max: 2}
   - {FeatureName: BinningVertical, Type: int, Min: 1, Max: 2}
   - {FeatureName: Width, Type: int, Min: 256, Max: 5504}
   - {FeatureName: Height, Type: int, Min: 256, Max: 3682}
+  - {FeatureName: OffsetX, Type: int}
+  - {FeatureName: OffsetY, Type: int}

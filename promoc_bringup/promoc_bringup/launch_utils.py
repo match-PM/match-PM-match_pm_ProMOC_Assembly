@@ -12,6 +12,47 @@ from typing import Dict, Optional, Tuple
 import yaml
 
 
+SUPPORTED_OBJECTIVE_MAGNIFICATIONS = (1.0, 2.0, 3.0, 4.0)
+
+
+def resolve_objective_selection(
+    user_config: dict,
+    override: str = "profile",
+) -> tuple[str, float | None]:
+    """Resolve one canonical objective label for launch, AF and MTF metadata.
+
+    ``profile`` keeps the value from ``measurement_conditions.camera_objective``.
+    Explicit launch values accept compact spellings such as ``1``, ``2x`` or
+    ``4.0x``. Only objectives supported by the measurement stand are accepted.
+    """
+    configured = str(
+        user_config.get("measurement_conditions", {}).get(
+            "camera_objective",
+            "unknown",
+        )
+    ).strip()
+    requested = str(override or "profile").strip()
+    selected = configured if requested.lower() in {"", "profile"} else requested
+
+    if selected.lower() in {"", "unknown"}:
+        return "unknown", None
+
+    match = re.fullmatch(r"(\d+(?:[.,]\d+)?)\s*x?", selected.lower())
+    if match is None:
+        raise ValueError(
+            f"Invalid objective '{selected}'. Use profile, 1x, 2x, 3x, or 4x."
+        )
+    magnification = float(match.group(1).replace(",", "."))
+    if not any(
+        abs(magnification - supported) < 1.0e-6
+        for supported in SUPPORTED_OBJECTIVE_MAGNIFICATIONS
+    ):
+        raise ValueError(
+            f"Unsupported objective '{selected}'. Use 1x, 2x, 3x, or 4x."
+        )
+    return f"{int(round(magnification))}x", magnification
+
+
 def resolve_runtime_mode(context, logger) -> str:
     """
     Resolve canonical runtime mode.

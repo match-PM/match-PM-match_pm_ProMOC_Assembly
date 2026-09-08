@@ -143,6 +143,33 @@ def test_mtf_handler_builds_default_config():
     assert cfg.raw_bayer_pattern == "RGGB"
 
 
+def test_camera_calibration_rejects_zero_placeholder():
+    node = _Node({})
+    node.latest_camera_info = types.SimpleNamespace(k=[0.0] * 9, d=[0.0] * 5)
+    handler = MTFHandler(node=node, camera_driver=object())
+
+    camera_matrix, dist_coeffs = handler._get_camera_calibration((100, 200))
+
+    assert camera_matrix is None
+    assert dist_coeffs is None
+
+
+def test_camera_calibration_shifts_principal_point_for_edge_crop():
+    node = _Node({})
+    node.latest_camera_info = types.SimpleNamespace(
+        k=[1000.0, 0.0, 500.0, 0.0, 1000.0, 400.0, 0.0, 0.0, 1.0],
+        d=[0.1, -0.01, 0.0, 0.0, 0.0],
+    )
+    handler = MTFHandler(node=node, camera_driver=object())
+
+    camera_matrix, dist_coeffs = handler._get_camera_calibration((120, 80))
+
+    assert camera_matrix is not None
+    assert camera_matrix[0, 2] == pytest.approx(380.0)
+    assert camera_matrix[1, 2] == pytest.approx(320.0)
+    assert dist_coeffs is not None
+
+
 def test_measure_mtf_center_callback_forces_auto_roi():
     handler = MTFHandler(node=_Node({}), camera_driver=object())
     captured = {}

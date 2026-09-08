@@ -23,6 +23,7 @@ from promoc_bringup.launch_utils import (
     load_yaml_config,
     materialize_camera_info_yaml,
     materialize_dynamic_parameters_yaml,
+    resolve_objective_selection,
     resolve_runtime_mode,
 )
 
@@ -63,6 +64,14 @@ def generate_launch_description():
                     "Use green only with a raw Bayer color-camera profile."
                 ),
             ),
+            DeclareLaunchArgument(
+                "objective",
+                default_value="profile",
+                description=(
+                    "Active objective: profile, 1x, 2x, 3x, or 4x. The selection "
+                    "drives autofocus profiles, MTF metadata, and target-tilt scale."
+                ),
+            ),
             OpaqueFunction(function=launch_setup),
         ]
     )
@@ -74,10 +83,18 @@ def launch_setup(context, *args, **kwargs):
     mtf_analysis_channel_override = LaunchConfiguration(
         "mtf_analysis_channel"
     ).perform(context).strip()
+    objective_override = LaunchConfiguration("objective").perform(context).strip()
     bringup_share = get_package_share_directory("promoc_bringup")
     logger = launch.logging.get_logger()
 
     user_config = load_user_config(bringup_share)
+    objective_label, objective_magnification = resolve_objective_selection(
+        user_config,
+        objective_override,
+    )
+    user_config.setdefault("measurement_conditions", {})[
+        "camera_objective"
+    ] = objective_label
     axis_config = load_linear_axis_config(bringup_share, X_AXIS_NAME)
     camera_type = _resolve_camera_profile_name(
         camera_type_override,
@@ -125,6 +142,25 @@ def launch_setup(context, *args, **kwargs):
         camera_mtf_params,
         logger,
     )
+    if objective_magnification is not None:
+        previous_tilt_magnification = target_tilt_config.get("magnification")
+        if previous_tilt_magnification is not None:
+            try:
+                profile_mismatch = abs(
+                    float(previous_tilt_magnification) - objective_magnification
+                ) > 1.0e-6
+            except (TypeError, ValueError):
+                profile_mismatch = True
+            if profile_mismatch:
+                logger.warn(
+                    "Objective selection overrides the target-tilt profile scale: "
+                    f"{previous_tilt_magnification}x -> {objective_magnification:g}x. "
+                    "The resulting object scale is nominal until calibrated."
+                )
+        target_tilt_config["magnification"] = objective_magnification
+        target_tilt_config["object_um_per_pixel"] = (
+            pixel_size_um / objective_magnification
+        )
     mtf_analysis_channel = _resolve_mtf_analysis_channel(
         mtf_analysis_channel_override,
         camera_mtf_params,
@@ -151,6 +187,17 @@ def launch_setup(context, *args, **kwargs):
     return [
         LogInfo(msg=f"Optical measurement runtime_mode={runtime_mode}"),
         LogInfo(msg=f"Camera profile: {camera_type}"),
+        LogInfo(
+            msg=(
+                f"Objective: {objective_label}"
+                + (
+                    f" (nominal object scale "
+                    f"{pixel_size_um / objective_magnification:.4f} um/px)"
+                    if objective_magnification is not None
+                    else ""
+                )
+            )
+        ),
         _create_startup_info(),
         LogInfo(
             msg=(
@@ -169,6 +216,7 @@ def launch_setup(context, *args, **kwargs):
         _create_camera_driver_node(
             camera_params,
             camera_info,
+            camera_mtf_params,
             exposure_config,
             driver_camera_info_path,
             driver_dynamic_parameters_path,
@@ -309,6 +357,7 @@ def _create_startup_info():
 def _create_camera_driver_node(
     camera_params: dict,
     camera_info: dict,
+    camera_mtf_params: dict,
     exposure_config: dict,
     camera_info_path: str,
     dynamic_parameters_path: str,
@@ -352,6 +401,11 @@ def _create_camera_driver_node(
                     "AcquisitionFrameRate": 10.0,
                     "ExposureAuto": "Off",
                     "ExposureTime": target_exposure_us,
+                },
+                "AnalogControl": {
+                    "GainAuto": "Off",
+                    "Gain": float(camera_mtf_params.get("recommended_gain", 1.0)),
+                    "Gamma": 1.0,
                 },
             }
         ],

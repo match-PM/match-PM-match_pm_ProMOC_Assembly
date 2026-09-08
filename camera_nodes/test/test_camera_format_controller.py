@@ -562,7 +562,11 @@ def test_set_live_exposure_writes_and_verifies_readback(monkeypatch):
     )
     writes = []
 
-    monkeypatch.setattr(controller, "read_capture_state", lambda: next(states))
+    monkeypatch.setattr(
+        controller,
+        "read_capture_state",
+        lambda **_kwargs: next(states),
+    )
     monkeypatch.setattr(
         controller,
         "set_capture_state",
@@ -596,7 +600,11 @@ def test_set_live_exposure_detects_readback_mismatch(monkeypatch):
         ]
     )
 
-    monkeypatch.setattr(controller, "read_capture_state", lambda: next(states))
+    monkeypatch.setattr(
+        controller,
+        "read_capture_state",
+        lambda **_kwargs: next(states),
+    )
     monkeypatch.setattr(
         controller,
         "set_capture_state",

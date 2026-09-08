@@ -51,7 +51,7 @@ class Condition:
     focus_frames: int = 3
     focus_min_prominence: float = 0.02
     focus_confirmation_ratio: float = 0.8
-    exposure_min_us: float = 10.0
+    exposure_min_us: float = 80.0
     exposure_max_us: float = 100000.0
     exposure_target: float = 0.75
     exposure_tolerance: float = 0.02

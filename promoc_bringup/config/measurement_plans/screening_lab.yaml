@@ -1,5 +1,5 @@
-# Maschinenlesbarer Bedingungskatalog; Arbeitsfortschritt siehe
-# versuchsplan_green_v5_checkliste.md. Nicht als manuelle Checkliste pflegen.
+# Aktive Laborkonfiguration; Arbeitsfortschritt siehe
+# versuchsplan_green_v5_checkliste.md. Der Runner archiviert die aufgeloesten Werte.
 # Operational last table of V5; green-only interpretation confirmed by user.
 # Nr. is the source plan identifier, NOT an Excel physical row index.
 # User-facing condition IDs are sequential m001..m010 plus a descriptive slug.
@@ -10,11 +10,10 @@ campaign_id: mtf-green-screening-v5
 source: "2026-09_Versuchsplan_V5.xlsx | last table | 10wDNgRd-hq7xHZ8HuV3bWWib2bMPo1v2"
 defaults:
   operator_name: "C.Sternberg"
-  setup_id: "REPLACE-per-physical-assembly"
+  setup_id: "2026-09-08-mono-1x-01"
   output_root: "/home/pmlab/Dokumente/Messungen/MTF"
-  # Netzteilanzeige: U=20.00 V +/-0.03 V, I=0.215 A +/-0.05 A, P=4.3 W +/-0.08 W
   illumination_voltage_v: 20.0
-  park_position_mm: -1.0
+  park_position_mm: 240.0
   axis_min_mm: 0.0
   axis_max_mm: 300.0
   measurement_count: 50
@@ -28,8 +27,8 @@ defaults:
   focus_samples: 21
   position_tolerance_mm: 0.01  # validate against physical focus window
   settle_time_s: 1.0  # pilot-test
-  exposure_target: 0.75
-  exposure_tolerance: 0.02
+  exposure_target: 0.50
+  exposure_tolerance: 0.03
   exposure_max_iterations: 15
   exposure_check_refocus_fraction: 0.10
   max_saturated_fraction: 0.001
@@ -38,6 +37,7 @@ defaults:
   expected_gain: 1.0
   roi_width: 0  # interactive ONE slanted edge before action
   roi_height: 0
+  
 conditions:
   - condition_id: "m001-screening-color-myutron-1x"
     experiment_id: "V003"
@@ -83,7 +83,7 @@ conditions:
   - condition_id: "m006-screening-mono-myutron-1x"
     experiment_id: "V023"
     plan_row_number: 23
-    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. "
+    notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Cam2; Kameraeintrag: U3-3800CP-M-GL. Licht: U=20.00 V +/-0.03 V, I=0.215 A +/-0.05 A, P=4.3 W +/-0.08 W."
     camera_profile: "ids_u3_3800cp_m_gl_r22"
     camera_serial: "4110071724"
     objective_id: "myutron-1x"

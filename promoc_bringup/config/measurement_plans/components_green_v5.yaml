@@ -1,17 +1,22 @@
+# Maschinenlesbarer Bedingungskatalog; Arbeitsfortschritt siehe
+# versuchsplan_green_v5_checkliste.md. Nicht als manuelle Checkliste pflegen.
 # Operational last table of V5; green-only interpretation confirmed by user.
 # Nr. is the source plan identifier, NOT an Excel physical row index.
+# User-facing condition IDs continue sequentially from m011 through m146.
+# experiment_id and plan_row_number preserve the original V5 references.
 # Physical values below MUST be filled/confirmed before use. No safe park is guessed.
 schema_version: 1
 campaign_id: mtf-green-components-v5
 source: "2026-09_Versuchsplan_V5.xlsx | last table | 10wDNgRd-hq7xHZ8HuV3bWWib2bMPo1v2"
 defaults:
-  operator_name: "REPLACE"
+  operator_name: "C.Sternberg"
   setup_id: "REPLACE-per-physical-assembly"
-  output_root: "/home/sterni/Dokumente/Messungen/MTF"
-  illumination_voltage_v: 0.0  # enter actually displayed value; reference 20.0 V
+  output_root: "/home/pmlab/Dokumente/Messungen/MTF"
+  # Netzteilanzeige: U=20.00 V +/-0.03 V, I=0.215 A +/-0.05 A, P=4.3 W +/-0.08 W
+  illumination_voltage_v: 20.0
   park_position_mm: -1.0
-  axis_min_mm: -1.0
-  axis_max_mm: -1.0
+  axis_min_mm: 0.0
+  axis_max_mm: 300.0
   measurement_count: 50
   frames_per_measurement: 10
   fine_focus_half_range_mm: 0.5  # pilot-test; no 300 mm search
@@ -20,9 +25,12 @@ defaults:
   settle_time_s: 1.0  # pilot-test
   exposure_target: 0.75
   exposure_tolerance: 0.02
-  exposure_min_us: 10.0
+  exposure_max_iterations: 15
+  exposure_check_refocus_fraction: 0.10
+  max_saturated_fraction: 0.001
+  exposure_min_us: 80.0  # kleinster am Messstand funktionierender Servicewert
   exposure_max_us: 100000.0
-  expected_gain: 0.0
+  expected_gain: 1.0
   roi_width: 0  # interactive ONE slanted edge before action
   roi_height: 0
   # V041 and component phase require a deliberately chosen screening winner.
@@ -32,1363 +40,1091 @@ defaults:
   objective_family: "REPLACE_AFTER_SCREENING"
   magnification_x: 0.0
 conditions:
-  - condition_id: "n041-v041"
+  - condition_id: "m011-control-winner"
     experiment_id: "V041"
     plan_row_number: 41
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Kamera-Setup Wdh.; Kameraeintrag: ?. Quasi Kontrollmessung, ob Werte mit bester Kombination reproduziert werden können."
-  - condition_id: "n042-v042"
+  - condition_id: "m012-straight-center-none-r0"
     experiment_id: "V042"
     plan_row_number: 42
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n043-v043"
+  - condition_id: "m013-straight-center-bs016-r0"
     experiment_id: "V043"
     plan_row_number: 43
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n044-v044"
+  - condition_id: "m014-straight-center-pbs210-r0"
     experiment_id: "V044"
     plan_row_number: 44
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n045-v045"
+  - condition_id: "m015-straight-center-lc-shutter-r0"
     experiment_id: "V045"
     plan_row_number: 45
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n046-v042-1"
+  - condition_id: "m016-straight-center-none-r1"
     experiment_id: "V042-1"
     plan_row_number: 46
     setup_repeat: 1
     component_id: "none"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n047-v043-1"
+  - condition_id: "m017-straight-center-bs016-r1"
     experiment_id: "V043-1"
     plan_row_number: 47
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n048-v044-1"
+  - condition_id: "m018-straight-center-pbs210-r1"
     experiment_id: "V044-1"
     plan_row_number: 48
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n049-v045-1"
+  - condition_id: "m019-straight-center-lc-shutter-r1"
     experiment_id: "V045-1"
     plan_row_number: 49
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n050-v042-2"
+  - condition_id: "m020-straight-center-none-r2"
     experiment_id: "V042-2"
     plan_row_number: 50
     setup_repeat: 2
     component_id: "none"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n051-v043-2"
+  - condition_id: "m021-straight-center-bs016-r2"
     experiment_id: "V043-2"
     plan_row_number: 51
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n052-v044-2"
+  - condition_id: "m022-straight-center-pbs210-r2"
     experiment_id: "V044-2"
     plan_row_number: 52
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n053-v045-2"
+  - condition_id: "m023-straight-center-lc-shutter-r2"
     experiment_id: "V045-2"
     plan_row_number: 53
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n054-v046"
+  - condition_id: "m024-straight-top-left-none-r0"
     experiment_id: "V046"
     plan_row_number: 54
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n055-v047"
+  - condition_id: "m025-straight-top-left-bs016-r0"
     experiment_id: "V047"
     plan_row_number: 55
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n056-v048"
+  - condition_id: "m026-straight-top-left-pbs210-r0"
     experiment_id: "V048"
     plan_row_number: 56
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n057-v049"
+  - condition_id: "m027-straight-top-left-lc-shutter-r0"
     experiment_id: "V049"
     plan_row_number: 57
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n058-v046-1"
+  - condition_id: "m028-straight-top-left-none-r1"
     experiment_id: "V046-1"
     plan_row_number: 58
     setup_repeat: 1
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n059-v047-1"
+  - condition_id: "m029-straight-top-left-bs016-r1"
     experiment_id: "V047-1"
     plan_row_number: 59
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n060-v048-1"
+  - condition_id: "m030-straight-top-left-pbs210-r1"
     experiment_id: "V048-1"
     plan_row_number: 60
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n061-v049-1"
+  - condition_id: "m031-straight-top-left-lc-shutter-r1"
     experiment_id: "V049-1"
     plan_row_number: 61
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n062-v046-2"
+  - condition_id: "m032-straight-top-left-none-r2"
     experiment_id: "V046-2"
     plan_row_number: 62
     setup_repeat: 2
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n063-v047-2"
+  - condition_id: "m033-straight-top-left-bs016-r2"
     experiment_id: "V047-2"
     plan_row_number: 63
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n064-v048-2"
+  - condition_id: "m034-straight-top-left-pbs210-r2"
     experiment_id: "V048-2"
     plan_row_number: 64
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n065-v049-2"
+  - condition_id: "m035-straight-top-left-lc-shutter-r2"
     experiment_id: "V049-2"
     plan_row_number: 65
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n066-v050"
+  - condition_id: "m036-straight-top-right-none-r0"
     experiment_id: "V050"
     plan_row_number: 66
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n067-v051"
+  - condition_id: "m037-straight-top-right-bs016-r0"
     experiment_id: "V051"
     plan_row_number: 67
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n068-v052"
+  - condition_id: "m038-straight-top-right-pbs210-r0"
     experiment_id: "V052"
     plan_row_number: 68
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n069-v053"
+  - condition_id: "m039-straight-top-right-lc-shutter-r0"
     experiment_id: "V053"
     plan_row_number: 69
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n070-v050-1"
+  - condition_id: "m040-straight-top-right-none-r1"
     experiment_id: "V050-1"
     plan_row_number: 70
     setup_repeat: 1
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n071-v051-1"
+  - condition_id: "m041-straight-top-right-bs016-r1"
     experiment_id: "V051-1"
     plan_row_number: 71
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n072-v052-1"
+  - condition_id: "m042-straight-top-right-pbs210-r1"
     experiment_id: "V052-1"
     plan_row_number: 72
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n073-v053-1"
+  - condition_id: "m043-straight-top-right-lc-shutter-r1"
     experiment_id: "V053-1"
     plan_row_number: 73
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n074-v050-2"
+  - condition_id: "m044-straight-top-right-none-r2"
     experiment_id: "V050-2"
     plan_row_number: 74
     setup_repeat: 2
     component_id: "none"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n075-v051-2"
+  - condition_id: "m045-straight-top-right-bs016-r2"
     experiment_id: "V051-2"
     plan_row_number: 75
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n076-v052-2"
+  - condition_id: "m046-straight-top-right-pbs210-r2"
     experiment_id: "V052-2"
     plan_row_number: 76
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n077-v053-2"
+  - condition_id: "m047-straight-top-right-lc-shutter-r2"
     experiment_id: "V053-2"
     plan_row_number: 77
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n078-v054"
+  - condition_id: "m048-straight-bottom-right-none-r0"
     experiment_id: "V054"
     plan_row_number: 78
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n079-v055"
+  - condition_id: "m049-straight-bottom-right-bs016-r0"
     experiment_id: "V055"
     plan_row_number: 79
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n080-v056"
+  - condition_id: "m050-straight-bottom-right-pbs210-r0"
     experiment_id: "V056"
     plan_row_number: 80
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n081-v057"
+  - condition_id: "m051-straight-bottom-right-lc-shutter-r0"
     experiment_id: "V057"
     plan_row_number: 81
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n082-v054"
+  - condition_id: "m052-straight-bottom-right-none-r1"
     experiment_id: "V054"
     plan_row_number: 82
     setup_repeat: 1
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n083-v055"
+  - condition_id: "m053-straight-bottom-right-bs016-r1"
     experiment_id: "V055"
     plan_row_number: 83
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n084-v056"
+  - condition_id: "m054-straight-bottom-right-pbs210-r1"
     experiment_id: "V056"
     plan_row_number: 84
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n085-v057"
+  - condition_id: "m055-straight-bottom-right-lc-shutter-r1"
     experiment_id: "V057"
     plan_row_number: 85
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n086-v054"
+  - condition_id: "m056-straight-bottom-right-none-r2"
     experiment_id: "V054"
     plan_row_number: 86
     setup_repeat: 2
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n087-v055"
+  - condition_id: "m057-straight-bottom-right-bs016-r2"
     experiment_id: "V055"
     plan_row_number: 87
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n088-v056"
+  - condition_id: "m058-straight-bottom-right-pbs210-r2"
     experiment_id: "V056"
     plan_row_number: 88
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n089-v057"
+  - condition_id: "m059-straight-bottom-right-lc-shutter-r2"
     experiment_id: "V057"
     plan_row_number: 89
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n090-v058"
+  - condition_id: "m060-straight-bottom-left-none-r0"
     experiment_id: "V058"
     plan_row_number: 90
     setup_repeat: 0
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n091-v059"
+  - condition_id: "m061-straight-bottom-left-bs016-r0"
     experiment_id: "V059"
     plan_row_number: 91
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n092-v060"
+  - condition_id: "m062-straight-bottom-left-pbs210-r0"
     experiment_id: "V060"
     plan_row_number: 92
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n093-v061"
+  - condition_id: "m063-straight-bottom-left-lc-shutter-r0"
     experiment_id: "V061"
     plan_row_number: 93
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n094-v058-1"
+  - condition_id: "m064-straight-bottom-left-none-r1"
     experiment_id: "V058-1"
     plan_row_number: 94
     setup_repeat: 1
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n095-v059-1"
+  - condition_id: "m065-straight-bottom-left-bs016-r1"
     experiment_id: "V059-1"
     plan_row_number: 95
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n096-v060-1"
+  - condition_id: "m066-straight-bottom-left-pbs210-r1"
     experiment_id: "V060-1"
     plan_row_number: 96
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n097-v061-1"
+  - condition_id: "m067-straight-bottom-left-lc-shutter-r1"
     experiment_id: "V061-1"
     plan_row_number: 97
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n098-v058-2"
+  - condition_id: "m068-straight-bottom-left-none-r2"
     experiment_id: "V058-2"
     plan_row_number: 98
     setup_repeat: 2
     component_id: "none"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n099-v059-2"
+  - condition_id: "m069-straight-bottom-left-bs016-r2"
     experiment_id: "V059-2"
     plan_row_number: 99
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n100-v060-2"
+  - condition_id: "m070-straight-bottom-left-pbs210-r2"
     experiment_id: "V060-2"
     plan_row_number: 100
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n101-v061-2"
+  - condition_id: "m071-straight-bottom-left-lc-shutter-r2"
     experiment_id: "V061-2"
     plan_row_number: 101
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 0
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Gerade UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n102-v062"
+  - condition_id: "m072-turn90-center-bs016-r0"
     experiment_id: "V062"
     plan_row_number: 102
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n103-v063"
+  - condition_id: "m073-turn90-center-pbs210-r0"
     experiment_id: "V063"
     plan_row_number: 103
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n104-v064"
+  - condition_id: "m074-turn90-center-lc-shutter-r0"
     experiment_id: "V064"
     plan_row_number: 104
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n105-v065"
+  - condition_id: "m075-turn90-center-mirror-r0"
     experiment_id: "V065"
     plan_row_number: 105
     setup_repeat: 0
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n106-v066"
+  - condition_id: "m076-turn90-center-prism-r0"
     experiment_id: "V066"
     plan_row_number: 106
     setup_repeat: 0
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n107-v062-1"
+  - condition_id: "m077-turn90-center-bs016-r1"
     experiment_id: "V062-1"
     plan_row_number: 107
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n108-v063-1"
+  - condition_id: "m078-turn90-center-pbs210-r1"
     experiment_id: "V063-1"
     plan_row_number: 108
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n109-v064-1"
+  - condition_id: "m079-turn90-center-lc-shutter-r1"
     experiment_id: "V064-1"
     plan_row_number: 109
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n110-v065-1"
+  - condition_id: "m080-turn90-center-mirror-r1"
     experiment_id: "V065-1"
     plan_row_number: 110
     setup_repeat: 1
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n111-v066-1"
+  - condition_id: "m081-turn90-center-prism-r1"
     experiment_id: "V066-1"
     plan_row_number: 111
     setup_repeat: 1
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n112-v062-2"
+  - condition_id: "m082-turn90-center-bs016-r2"
     experiment_id: "V062-2"
     plan_row_number: 112
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n113-v063-2"
+  - condition_id: "m083-turn90-center-pbs210-r2"
     experiment_id: "V063-2"
     plan_row_number: 113
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n114-v064-2"
+  - condition_id: "m084-turn90-center-lc-shutter-r2"
     experiment_id: "V064-2"
     plan_row_number: 114
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n115-v065-2"
+  - condition_id: "m085-turn90-center-mirror-r2"
     experiment_id: "V065-2"
     plan_row_number: 115
     setup_repeat: 2
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n116-v066-2"
+  - condition_id: "m086-turn90-center-prism-r2"
     experiment_id: "V066-2"
     plan_row_number: 116
     setup_repeat: 2
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "center"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung M Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n117-v067"
+  - condition_id: "m087-turn90-top-left-bs016-r0"
     experiment_id: "V067"
     plan_row_number: 117
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n118-v068"
+  - condition_id: "m088-turn90-top-left-pbs210-r0"
     experiment_id: "V068"
     plan_row_number: 118
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n119-v069"
+  - condition_id: "m089-turn90-top-left-lc-shutter-r0"
     experiment_id: "V069"
     plan_row_number: 119
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n120-v070"
+  - condition_id: "m090-turn90-top-left-mirror-r0"
     experiment_id: "V070"
     plan_row_number: 120
     setup_repeat: 0
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n121-v071"
+  - condition_id: "m091-turn90-top-left-prism-r0"
     experiment_id: "V071"
     plan_row_number: 121
     setup_repeat: 0
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n122-v067-1"
+  - condition_id: "m092-turn90-top-left-bs016-r1"
     experiment_id: "V067-1"
     plan_row_number: 122
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n123-v068-1"
+  - condition_id: "m093-turn90-top-left-pbs210-r1"
     experiment_id: "V068-1"
     plan_row_number: 123
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n124-v069-1"
+  - condition_id: "m094-turn90-top-left-lc-shutter-r1"
     experiment_id: "V069-1"
     plan_row_number: 124
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n125-v070-1"
+  - condition_id: "m095-turn90-top-left-mirror-r1"
     experiment_id: "V070-1"
     plan_row_number: 125
     setup_repeat: 1
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n126-v071-1"
+  - condition_id: "m096-turn90-top-left-prism-r1"
     experiment_id: "V071-1"
     plan_row_number: 126
     setup_repeat: 1
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n127-v067-2"
+  - condition_id: "m097-turn90-top-left-bs016-r2"
     experiment_id: "V067-2"
     plan_row_number: 127
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n128-v068-2"
+  - condition_id: "m098-turn90-top-left-pbs210-r2"
     experiment_id: "V068-2"
     plan_row_number: 128
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n129-v069-2"
+  - condition_id: "m099-turn90-top-left-lc-shutter-r2"
     experiment_id: "V069-2"
     plan_row_number: 129
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n130-v070-2"
+  - condition_id: "m100-turn90-top-left-mirror-r2"
     experiment_id: "V070-2"
     plan_row_number: 130
     setup_repeat: 2
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n131-v071-2"
+  - condition_id: "m101-turn90-top-left-prism-r2"
     experiment_id: "V071-2"
     plan_row_number: 131
     setup_repeat: 2
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n132-v072"
+  - condition_id: "m102-turn90-top-right-bs016-r0"
     experiment_id: "V072"
     plan_row_number: 132
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n133-v073"
+  - condition_id: "m103-turn90-top-right-pbs210-r0"
     experiment_id: "V073"
     plan_row_number: 133
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n134-v074"
+  - condition_id: "m104-turn90-top-right-lc-shutter-r0"
     experiment_id: "V074"
     plan_row_number: 134
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n135-v075"
+  - condition_id: "m105-turn90-top-right-mirror-r0"
     experiment_id: "V075"
     plan_row_number: 135
     setup_repeat: 0
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n136-v076"
+  - condition_id: "m106-turn90-top-right-prism-r0"
     experiment_id: "V076"
     plan_row_number: 136
     setup_repeat: 0
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n137-v072-1"
+  - condition_id: "m107-turn90-top-right-bs016-r1"
     experiment_id: "V072-1"
     plan_row_number: 137
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n138-v073-1"
+  - condition_id: "m108-turn90-top-right-pbs210-r1"
     experiment_id: "V073-1"
     plan_row_number: 138
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n139-v074-1"
+  - condition_id: "m109-turn90-top-right-lc-shutter-r1"
     experiment_id: "V074-1"
     plan_row_number: 139
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n140-v075-1"
+  - condition_id: "m110-turn90-top-right-mirror-r1"
     experiment_id: "V075-1"
     plan_row_number: 140
     setup_repeat: 1
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n141-v076-1"
+  - condition_id: "m111-turn90-top-right-prism-r1"
     experiment_id: "V076-1"
     plan_row_number: 141
     setup_repeat: 1
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n142-v072-2"
+  - condition_id: "m112-turn90-top-right-bs016-r2"
     experiment_id: "V072-2"
     plan_row_number: 142
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n143-v073-2"
+  - condition_id: "m113-turn90-top-right-pbs210-r2"
     experiment_id: "V073-2"
     plan_row_number: 143
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n144-v074-2"
+  - condition_id: "m114-turn90-top-right-lc-shutter-r2"
     experiment_id: "V074-2"
     plan_row_number: 144
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n145-v075-2"
+  - condition_id: "m115-turn90-top-right-mirror-r2"
     experiment_id: "V075-2"
     plan_row_number: 145
     setup_repeat: 2
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n146-v076-2"
+  - condition_id: "m116-turn90-top-right-prism-r2"
     experiment_id: "V076-2"
     plan_row_number: 146
     setup_repeat: 2
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "top_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung OR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n147-v077"
+  - condition_id: "m117-turn90-bottom-right-bs016-r0"
     experiment_id: "V077"
     plan_row_number: 147
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n148-v078"
+  - condition_id: "m118-turn90-bottom-right-pbs210-r0"
     experiment_id: "V078"
     plan_row_number: 148
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n149-v079"
+  - condition_id: "m119-turn90-bottom-right-lc-shutter-r0"
     experiment_id: "V079"
     plan_row_number: 149
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n150-v080"
+  - condition_id: "m120-turn90-bottom-right-mirror-r0"
     experiment_id: "V080"
     plan_row_number: 150
     setup_repeat: 0
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n151-v081"
+  - condition_id: "m121-turn90-bottom-right-prism-r0"
     experiment_id: "V081"
     plan_row_number: 151
     setup_repeat: 0
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n152-v077-1"
+  - condition_id: "m122-turn90-bottom-right-bs016-r1"
     experiment_id: "V077-1"
     plan_row_number: 152
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n153-v078-1"
+  - condition_id: "m123-turn90-bottom-right-pbs210-r1"
     experiment_id: "V078-1"
     plan_row_number: 153
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n154-v079-1"
+  - condition_id: "m124-turn90-bottom-right-lc-shutter-r1"
     experiment_id: "V079-1"
     plan_row_number: 154
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n155-v080-1"
+  - condition_id: "m125-turn90-bottom-right-mirror-r1"
     experiment_id: "V080-1"
     plan_row_number: 155
     setup_repeat: 1
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n156-v081-1"
+  - condition_id: "m126-turn90-bottom-right-prism-r1"
     experiment_id: "V081-1"
     plan_row_number: 156
     setup_repeat: 1
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n157-v077-2"
+  - condition_id: "m127-turn90-bottom-right-bs016-r2"
     experiment_id: "V077-2"
     plan_row_number: 157
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n158-v078-2"
+  - condition_id: "m128-turn90-bottom-right-pbs210-r2"
     experiment_id: "V078-2"
     plan_row_number: 158
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n159-v079-2"
+  - condition_id: "m129-turn90-bottom-right-lc-shutter-r2"
     experiment_id: "V079-2"
     plan_row_number: 159
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n160-v080-2"
+  - condition_id: "m130-turn90-bottom-right-mirror-r2"
     experiment_id: "V080-2"
     plan_row_number: 160
     setup_repeat: 2
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n161-v081-2"
+  - condition_id: "m131-turn90-bottom-right-prism-r2"
     experiment_id: "V081-2"
     plan_row_number: 161
     setup_repeat: 2
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_right"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UR Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n162-v082"
+  - condition_id: "m132-turn90-bottom-left-bs016-r0"
     experiment_id: "V082"
     plan_row_number: 162
     setup_repeat: 0
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n163-v083"
+  - condition_id: "m133-turn90-bottom-left-pbs210-r0"
     experiment_id: "V083"
     plan_row_number: 163
     setup_repeat: 0
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n164-v084"
+  - condition_id: "m134-turn90-bottom-left-lc-shutter-r0"
     experiment_id: "V084"
     plan_row_number: 164
     setup_repeat: 0
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n165-v085"
+  - condition_id: "m135-turn90-bottom-left-mirror-r0"
     experiment_id: "V085"
     plan_row_number: 165
     setup_repeat: 0
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n166-v086"
+  - condition_id: "m136-turn90-bottom-left-prism-r0"
     experiment_id: "V086"
     plan_row_number: 166
     setup_repeat: 0
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n167-v082-1"
+  - condition_id: "m137-turn90-bottom-left-bs016-r1"
     experiment_id: "V082-1"
     plan_row_number: 167
     setup_repeat: 1
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n168-v083-1"
+  - condition_id: "m138-turn90-bottom-left-pbs210-r1"
     experiment_id: "V083-1"
     plan_row_number: 168
     setup_repeat: 1
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n169-v084-1"
+  - condition_id: "m139-turn90-bottom-left-lc-shutter-r1"
     experiment_id: "V084-1"
     plan_row_number: 169
     setup_repeat: 1
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n170-v085-1"
+  - condition_id: "m140-turn90-bottom-left-mirror-r1"
     experiment_id: "V085-1"
     plan_row_number: 170
     setup_repeat: 1
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n171-v086-1"
+  - condition_id: "m141-turn90-bottom-left-prism-r1"
     experiment_id: "V086-1"
     plan_row_number: 171
     setup_repeat: 1
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 1; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n172-v082-2"
+  - condition_id: "m142-turn90-bottom-left-bs016-r2"
     experiment_id: "V082-2"
     plan_row_number: 172
     setup_repeat: 2
     component_id: "BS016"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n173-v083-2"
+  - condition_id: "m143-turn90-bottom-left-pbs210-r2"
     experiment_id: "V083-2"
     plan_row_number: 173
     setup_repeat: 2
     component_id: "PBS210"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n174-v084-2"
+  - condition_id: "m144-turn90-bottom-left-lc-shutter-r2"
     experiment_id: "V084-2"
     plan_row_number: 174
     setup_repeat: 2
     component_id: "lc_shutter"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n175-v085-2"
+  - condition_id: "m145-turn90-bottom-left-mirror-r2"
     experiment_id: "V085-2"
     plan_row_number: 175
     setup_repeat: 2
     component_id: "mirror"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "
-  - condition_id: "n176-v086-2"
+  - condition_id: "m146-turn90-bottom-left-prism-r2"
     experiment_id: "V086-2"
     plan_row_number: 176
     setup_repeat: 2
     component_id: "prism"
     beam_angle_deg: 90
     target_position: "bottom_left"
-    measurement_count: 50
-    frames_per_measurement: 10
     notes: "Quelle V5 letzter Tabellenreiter: Umlenkung UL Wdh. 2; Kameraeintrag: U3-3800CP-M-GL. "

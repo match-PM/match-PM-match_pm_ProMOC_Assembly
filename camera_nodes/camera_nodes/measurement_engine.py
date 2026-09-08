@@ -141,7 +141,6 @@ class MeasurementEngine:
         # One deterministic increasing scan, approached from the park side.
         self.move(self.c.park_position_mm)
         for position in np.linspace(lo, hi, self.c.focus_samples):
-            self.assert_locked(focus_state)
             actual = self.move(float(position))
             scores = [self.io.focus_score(self.fresh()["image"], self.c) for _ in range(self.c.focus_frames)]
             score = float(np.median(scores))
@@ -150,6 +149,10 @@ class MeasurementEngine:
             row = {"position_mm": actual, "requested_mm": float(position), "score": score, "stage":"scan"}
             rows.append(row)
             self.store.event("FOCUS_SAMPLE", **row)
+        # Camera settings are fixed at launch and externally serialized. A
+        # checkpoint after the scan detects real changes without querying the
+        # driver's parameter services before every individual focus position.
+        self.assert_locked(focus_state)
         best = max(range(len(rows)), key=lambda i: rows[i]["score"])
         peak = rows[best]["score"]
         if best in (0, len(rows)-1) or peak <= 0:
@@ -165,7 +168,6 @@ class MeasurementEngine:
             self.move(self.c.park_position_mm)
             refined = []
             for position in np.linspace(refine_lo,refine_hi,refine_count):
-                self.assert_locked(focus_state)
                 actual = self.move(float(position))
                 score = float(np.median([self.io.focus_score(self.fresh()["image"],self.c)
                                         for _ in range(self.c.focus_frames)]))
@@ -174,6 +176,7 @@ class MeasurementEngine:
                 row = {"position_mm":actual,"requested_mm":float(position),"score":score,"stage":"refine"}
                 refined.append(row)
                 self.store.event("FOCUS_SAMPLE", **row)
+            self.assert_locked(focus_state)
             selected = max(range(len(refined)),key=lambda i:refined[i]["score"])
             if selected in (0,len(refined)-1):
                 raise MeasurementError("FOCUS_EDGE_PEAK", "Refined maximum is on search boundary")

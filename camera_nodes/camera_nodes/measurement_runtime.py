@@ -21,6 +21,18 @@ from .services.exposure import ExposureHandler
 
 
 AXIS = "/promoc/linear_axis/lts300_x_axis"
+AXIS_READ_TIMEOUT_S = 10.0
+CAMERA_READBACK_RETRIES = 2
+CAMERA_READBACK_RETRY_DELAY_S = 0.1
+
+
+def node_parameter_snapshot(node):
+    """Return declared node parameters on ROS 2 versions without list_parameters()."""
+    parameters = node.get_parameters_by_prefix("")
+    return {
+        name: value.value if hasattr(value, "value") else value
+        for name, value in parameters.items()
+    }
 
 
 def condition_from_message(msg):
@@ -92,10 +104,20 @@ class MeasurementIO:
                 self.node.destroy_client(client)
 
     def position(self):
-        status = self.call("get_operation_status", GetOperationStatus.Request()).operation_status
+        status = self.call(
+            "get_operation_status",
+            GetOperationStatus.Request(),
+            timeout=AXIS_READ_TIMEOUT_S,
+        ).operation_status
         if status != "idle":
             raise MeasurementError("AXIS_NOT_IDLE", f"Axis reports {status}")
-        return float(self.call("get_position", GetPosition.Request(require_fresh=True)).axis_position)
+        return float(
+            self.call(
+                "get_position",
+                GetPosition.Request(require_fresh=True),
+                timeout=AXIS_READ_TIMEOUT_S,
+            ).axis_position
+        )
 
     def move(self, position, timeout, tolerance):
         self.check()
@@ -104,7 +126,11 @@ class MeasurementIO:
         stable = 0
         while time.monotonic() < deadline:
             self.check()
-            status = self.call("get_operation_status", GetOperationStatus.Request()).operation_status
+            status = self.call(
+                "get_operation_status",
+                GetOperationStatus.Request(),
+                timeout=AXIS_READ_TIMEOUT_S,
+            ).operation_status
             if status in ("error", "emergency_stop"):
                 raise MeasurementError("AXIS_ERROR", status)
             if status == "idle":
@@ -146,13 +172,79 @@ class MeasurementIO:
         values = dict(state["values"])
         required = {"pixel_format", "exposure_time", "gain", "bin_h", "bin_v", "exposure_auto", "gain_auto",
                     "width", "height", "offset_x", "offset_y"}
-        if required-set(state.get("available_keys", values)):
-            raise MeasurementError("READBACK_MISSING", f"Required keys missing: {required-set(state.get('available_keys', values))}")
+        available = set(state.get("available_keys", values))
+        initially_missing = required-available
+        for retry in range(CAMERA_READBACK_RETRIES):
+            missing = required-available
+            if not missing:
+                break
+            # Retry each absent value separately. The camera driver occasionally
+            # returns an incomplete response for one parameter group; no cached or
+            # configured value is substituted here, only fresh driver readback.
+            for key in sorted(missing):
+                supplement = self.node._format_controller.read_capture_state(
+                    required_keys=(key,),
+                    query_groups=((key,),),
+                )
+                if not supplement:
+                    continue
+                supplement_values = dict(supplement.get("values", {}))
+                supplement_available = set(
+                    supplement.get("available_keys", supplement_values)
+                )
+                if key in supplement_available and key in supplement_values:
+                    values[key] = supplement_values[key]
+                    available.add(key)
+            if required-available and retry+1 < CAMERA_READBACK_RETRIES:
+                time.sleep(CAMERA_READBACK_RETRY_DELAY_S)
+        missing = required-available
+        if missing:
+            raise MeasurementError("READBACK_MISSING", f"Required keys missing: {missing}")
+        if initially_missing:
+            recovered = initially_missing & available
+            if recovered:
+                self.node.get_logger().warning(
+                    "Recovered transient camera readback for: "
+                    + ", ".join(sorted(recovered))
+                )
         if not all(math.isfinite(float(values[k])) for k in ("exposure_time", "gain", "width", "height")):
             raise MeasurementError("READBACK_INVALID", "Nonfinite camera readback")
         for key, expected in getattr(self, "scientific_baseline", {}).items():
-            if key != "exposure_time" and values.get(key) != expected:
-                raise MeasurementError("CAMERA_CHANGED", f"Scientific setting {key} changed")
+            if key == "exposure_time" or values.get(key) == expected:
+                continue
+            initial_actual = values.get(key)
+            confirmed_actual = initial_actual
+            recovered = False
+            for retry in range(CAMERA_READBACK_RETRIES):
+                supplement = self.node._format_controller.read_capture_state(
+                    required_keys=(key,),
+                    query_groups=((key,),),
+                )
+                if supplement:
+                    supplement_values = dict(supplement.get("values", {}))
+                    supplement_available = set(
+                        supplement.get("available_keys", supplement_values)
+                    )
+                    if key in supplement_available and key in supplement_values:
+                        confirmed_actual = supplement_values[key]
+                        values[key] = confirmed_actual
+                        available.add(key)
+                        if confirmed_actual == expected:
+                            recovered = True
+                            break
+                if retry+1 < CAMERA_READBACK_RETRIES:
+                    time.sleep(CAMERA_READBACK_RETRY_DELAY_S)
+            if recovered:
+                self.node.get_logger().warning(
+                    f"Recovered transient camera readback for changed {key}: "
+                    f"{initial_actual!r} -> {confirmed_actual!r}"
+                )
+                continue
+            raise MeasurementError(
+                "CAMERA_CHANGED",
+                f"Scientific setting {key} changed: expected {expected!r}, "
+                f"confirmed readback {confirmed_actual!r}",
+            )
         return {"values": values, "identity": {"camera_node_epoch": self.node.measurement_epoch,
                 "axis_epoch": self.axis_epoch, "configured_guid": self.node._param_str("camera.device_id"),
                 "profile": self.node._param_str("camera.profile_id")},
@@ -200,8 +292,7 @@ class MeasurementIO:
                   condition.roi_width, condition.roi_height], "image_shape": self.image_shape,
                   "encoding": self.encoding, "python_version": platform.python_version(),
                   "numpy_version": np.__version__, "opencv_version": getattr(cv2, "__version__", "unknown"),
-                  "node_parameters": {name: self.node.get_parameter(name).value
-                                      for name in self.node.list_parameters([], 0).names}}
+                  "node_parameters": node_parameter_snapshot(self.node)}
         try:
             repo = Path(__file__).resolve().parents[2]
             def git(*args):

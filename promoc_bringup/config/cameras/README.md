@@ -17,8 +17,8 @@ Verfuegbare Profile:
 
 | Profil | Kamera | MTF-Kanal | Status |
 |---|---|---|---|
-| `ids_u3_3800cp_m_gl_r22` | U3-3800CP-M-GL Rev.2.2 | `mono` | aktiv, GUID vorhanden |
-| `ids_u3_3800cp_c_hq_r22` | U3-3800CP-C-HQ Rev.2.2 | `green` | GUID aus Alt-Konfiguration |
+| `ids_u3_3800cp_m_gl_r22` | U3-3800CP-M-GL Rev.2.2 | `mono` | Seriennummer `4110071724` bestaetigt |
+| `ids_u3_3800cp_c_hq_r22` | U3-3800CP-C-HQ Rev.2.2 | `green` | Seriennummer `4104401781` bestaetigt |
 | `ids_u3_3890cp_c_hq_r22` | U3-3890CP-C-HQ Rev.2.2 | `green` | GUID aus Alt-Konfiguration |
 | `ids_ui_3280cp_c_hq_r2` | UI-3280CP-C-HQ Rev.2 | `green` | Referenz; uEye-Treiber fehlt |
 

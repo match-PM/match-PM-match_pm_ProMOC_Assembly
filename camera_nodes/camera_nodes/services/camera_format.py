@@ -499,12 +499,17 @@ class CameraFormatController:
             required_keys=("width", "height"),
         )
 
-    def read_capture_state(self):
-        """Read current MTF capture state including pixel format and gain if available."""
+    def read_capture_state(
+        self,
+        *,
+        required_keys: tuple[str, ...] = (),
+        query_groups=None,
+    ):
+        """Read capture state, optionally restricting and requiring selected keys."""
         return self._read_state_from_variants(
             self.CAPTURE_PARAM_NAME_VARIANTS,
-            query_groups=self.CAPTURE_QUERY_GROUPS,
-            required_keys=(),
+            query_groups=query_groups or self.CAPTURE_QUERY_GROUPS,
+            required_keys=required_keys,
         )
 
     def get_last_capture_state(self):
@@ -517,7 +522,10 @@ class CameraFormatController:
 
     def read_current_exposure_us(self) -> float | None:
         """Return the current exposure readback from camera parameters if available."""
-        state = self.read_capture_state()
+        state = self.read_capture_state(
+            required_keys=("exposure_time",),
+            query_groups=(("exposure_time",),),
+        )
         if state is None:
             return None
         try:
@@ -534,7 +542,10 @@ class CameraFormatController:
         )
         self._last_operation_error = ""
 
-        state = self.read_capture_state()
+        state = self.read_capture_state(
+            required_keys=("exposure_time",),
+            query_groups=(("exposure_time",),),
+        )
         if state is None:
             ok = self._try_set_capture_without_state(
                 {"exposure_time": target_exposure_us},
@@ -555,7 +566,10 @@ class CameraFormatController:
                 "reason": reason,
             }
 
-        readback_state = self.read_capture_state()
+        readback_state = self.read_capture_state(
+            required_keys=("exposure_time",),
+            query_groups=(("exposure_time",),),
+        )
         if readback_state is None:
             reason = "exposure write succeeded but readback was unavailable"
             self._last_operation_error = reason

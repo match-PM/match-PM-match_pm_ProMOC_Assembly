@@ -1,6 +1,7 @@
 """Measurement safety/provenance tests without ROS or real axis commands."""
 from dataclasses import asdict, replace
 import json
+import re
 
 import numpy as np
 import pytest
@@ -217,10 +218,33 @@ def test_campaign_templates_match_green_v5():
     components,_ = load_plan(root/"components_green_v5.yaml")
     assert len(screening["conditions"]) == 10
     assert len(components["conditions"]) == 136
-    rows = screening["conditions"]+components["conditions"]
-    assert len({r["condition_id"] for r in rows}) == 146
+    raw_rows = screening["conditions"]+components["conditions"]
+    condition_ids = [row["condition_id"] for row in raw_rows]
+    assert [int(value[1:4]) for value in condition_ids] == list(range(1, 147))
+    assert all(
+        re.fullmatch(r"m[0-9]{3}-[a-z0-9]+(?:-[a-z0-9]+)*", value)
+        for value in condition_ids
+    )
+    rows = [
+        {**plan["defaults"], **row}
+        for plan in (screening, components)
+        for row in plan["conditions"]
+    ]
+    assert len({r["condition_id"] for r in raw_rows}) == 146
     assert sum(r["measurement_count"]*r["frames_per_measurement"] for r in rows) == 73000
+    assert all(
+        {"measurement_count", "frames_per_measurement"}.isdisjoint(row)
+        for row in raw_rows
+    )
+    assert all(
+        {"setup_repeat", "component_id", "beam_angle_deg", "target_position"}.isdisjoint(row)
+        for row in screening["conditions"]
+    )
+    assert screening["defaults"]["expected_gain"] == 1.0
+    assert components["defaults"]["expected_gain"] == 1.0
+    assert screening["defaults"]["exposure_min_us"] == 80.0
+    assert components["defaults"]["exposure_min_us"] == 80.0
     assert len([r for r in rows if r["experiment_id"] == "V054"]) == 3
     assert {r["objective_id"] for r in screening["conditions"]} >= {"budget-4gx","myutron-4x"}
     with pytest.raises(ValueError,match="unresolved"):
-        load_plan(root/"screening_green_v5.yaml","n003-v003")
+        load_plan(root/"screening_green_v5.yaml","m001-screening-color-myutron-1x")

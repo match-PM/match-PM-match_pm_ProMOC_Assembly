@@ -356,6 +356,17 @@ Es gibt genau einen gepflegten Hauptstart:
 ros2 launch promoc_bringup optical_measurement_system.launch.py
 ```
 
+Das montierte Objektiv wird einheitlich beim Launch ausgewaehlt. Diese Auswahl
+setzt das Autofokusprofil, die MTF-Metadaten und die nominale Target-Tilt-Skala:
+
+```bash
+ros2 launch promoc_bringup optical_measurement_system.launch.py objective:=1x
+# Alternativ: objective:=2x, objective:=3x oder objective:=4x
+```
+
+Ohne Override (`objective:=profile`) wird
+`measurement_conditions.camera_objective` aus `user_config.yaml` verwendet.
+
 ## Services
 
 Die oeffentliche Kamera-API des Messstand-Branches besteht nur aus:

@@ -110,5 +110,7 @@ mtf:
   capture_only_preview_png: true
 
 measurement_conditions:
-  camera_objective: unknown
+  # Can be overridden without editing this file:
+  # ros2 launch promoc_bringup optical_measurement_system.launch.py objective:=1x
+  camera_objective: 1x
   notes: ""

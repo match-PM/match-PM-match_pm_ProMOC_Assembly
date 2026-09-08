@@ -76,13 +76,13 @@ Für Hardware zuerst eine Arbeitskopie der Kampagnenvorlage anlegen und bearbeit
 ```bash
 cp --no-clobber src/promoc_bringup/config/measurement_plans/screening_green_v5.yaml src/promoc_bringup/config/measurement_plans/screening_lab.yaml
 nano src/promoc_bringup/config/measurement_plans/screening_lab.yaml
-ros2 run camera_nodes measurement_runner --plan src/promoc_bringup/config/measurement_plans/screening_lab.yaml --condition n003-v003 --validate
+ros2 run camera_nodes measurement_runner --plan src/promoc_bringup/config/measurement_plans/screening_lab.yaml --condition m001-screening-color-myutron-1x --validate
 ```
 
 Nach Start des passenden Kameraprofils, manueller Grobfokussierung und bestätigtem Aufbau zunächst 2×2:
 
 ```bash
-ros2 run camera_nodes measurement_runner --plan src/promoc_bringup/config/measurement_plans/screening_lab.yaml --condition n003-v003 --set measurement_count=2 --set frames_per_measurement=2 --confirm-setup
+ros2 run camera_nodes measurement_runner --plan src/promoc_bringup/config/measurement_plans/screening_lab.yaml --condition m001-screening-color-myutron-1x --set measurement_count=2 --set frames_per_measurement=2 --confirm-setup
 ```
 
 Erst nach Pilotfreigabe ohne die beiden Anzahl-Overrides die 50×10-Reihe starten.
@@ -100,10 +100,18 @@ defaults:
   setup_id: tagesdatum-physischer-aufbau-01
   # weitere typisierte Felder aus den mitgelieferten Vorlagen
 conditions:
-  - condition_id: n003-v003
+  - condition_id: m001-screening-color-myutron-1x
     experiment_id: V003
     plan_row_number: 3  # Spalte Nr., NICHT die physische Excel-Zeilennummer
 ```
+
+Die V5-Bedienkennungen sind unabhängig von den lückenhaften Excel-Zeilennummern aufgebaut:
+
+- `m001` bis `m146` geben die lückenlose Reihenfolge der Messkampagne an.
+- Der nachfolgende Slug beschreibt Screening beziehungsweise Strahlführung, Target, Komponente und Wiederholung.
+- `experiment_id` und `plan_row_number` bleiben unverändert als Rückverweis auf den ursprünglichen Excel-Plan erhalten.
+
+Beispiele: `m006-screening-mono-myutron-1x`, `m012-straight-center-none-r0` und `m146-turn90-bottom-left-prism-r2`.
 
 Keine verschachtelten AE-/AF-Blöcke aus früheren Konzeptnotizen verwenden. Zulässige Felder und
 konkrete Defaults stehen in `camera_nodes/camera_nodes/measurement_plan.py` / `MeasurementCondition.msg`.
@@ -135,7 +143,7 @@ Homing wird vom Bediener bestätigt; die Software erkennt Änderungen der Refere
 - Komponentenplan benötigt eine bewusst eingetragene Gewinnerkombination aus dem Screening.
   Ursprünglich eingetragene Mono-Kamera steht zur Nachvollziehbarkeit in den Notes; keine automatische Wahl.
 - `4gx` bleibt `budget-4gx`, getrennt von `myutron-4x` trotz nominal 4,0×.
-- IDs enthalten `Nr.` und Versuchskennung; insbesondere doppelte V054–V057 bleiben getrennt.
+- Die Bediennummer steckt lückenlos als `m001` bis `m146` in `condition_id`; doppelte Excel-Kennungen wie V054–V057 bleiben über den beschreibenden Slug und die Quellenfelder eindeutig.
 
 ## Ergebnisse und Logging
 
@@ -194,7 +202,7 @@ gleicher Kamera-Node-Sitzung und Achsreferenz. Keine neue AE/AF bei Resume. Bei 
 erneutem Homing, Drift oder unvollständiger Vorbereitung wird ein neuer Run benötigt. Alte Daten bleiben erhalten.
 
 ```bash
-ros2 run camera_nodes measurement_runner --plan /absoluter/pfad/screening_lab.yaml --condition n003-v003 --resume RUN_ID --confirm-setup
+ros2 run camera_nodes measurement_runner --plan /absoluter/pfad/screening_lab.yaml --condition m001-screening-color-myutron-1x --resume RUN_ID --confirm-setup
 ```
 
 Bei einem 2×2-Pilot-Resume müssen dieselben Anzahl-Overrides erneut angegeben werden.

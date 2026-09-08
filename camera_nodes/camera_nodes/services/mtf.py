@@ -119,6 +119,7 @@ class MTFHandler(CallbackBase):
         """Initialize MTF handler and shared camera format controller."""
         super().__init__(node, camera_driver)
         self._camera_format_controller = CameraFormatController(node)
+        self._camera_calibration_warning_emitted = False
 
     def _select_roi_interactive(self, cv_image):
         """Opens window for ROI selection."""
@@ -1689,13 +1690,53 @@ class MTFHandler(CallbackBase):
         )
         return metadata
 
-    def _get_camera_calibration(self) -> tuple[np.ndarray | None, np.ndarray | None]:
-        """Return camera calibration arrays when CameraInfo is available."""
+    def _get_camera_calibration(
+        self,
+        roi_origin: tuple[int, int] = (0, 0),
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Return a usable calibration adjusted to the analyzed ROI.
+
+        Camera drivers commonly publish an all-zero placeholder before a real
+        calibration exists. Passing that matrix to ``cv2.undistort`` creates
+        artificial axis-aligned borders which can turn a visibly slanted edge
+        into a measured 0-degree edge. A crop also needs a shifted principal
+        point because CameraInfo coordinates refer to the full sensor image.
+        """
         if self._node.latest_camera_info is None:
             return None, None
         try:
             camera_info = self._node.latest_camera_info
-            return np.array(camera_info.k).reshape(3, 3), np.array(camera_info.d)
+            camera_matrix = np.asarray(camera_info.k, dtype=np.float64).reshape(3, 3)
+            dist_coeffs = np.asarray(camera_info.d, dtype=np.float64).reshape(-1)
+
+            matrix_valid = (
+                np.all(np.isfinite(camera_matrix))
+                and camera_matrix[0, 0] > 0.0
+                and camera_matrix[1, 1] > 0.0
+                and abs(camera_matrix[2, 2]) > 1.0e-12
+            )
+            distortion_valid = (
+                dist_coeffs.size > 0 and np.all(np.isfinite(dist_coeffs))
+            )
+            if not matrix_valid or not distortion_valid:
+                if not self._camera_calibration_warning_emitted:
+                    self._node.get_logger().warn(
+                        "Ignoring invalid/unset CameraInfo calibration for MTF; "
+                        "analyzing the original raw edge pixels."
+                    )
+                    self._camera_calibration_warning_emitted = True
+                return None, None
+
+            # No distortion means there is nothing to correct. Avoiding the
+            # interpolation also preserves the raw slanted-edge samples.
+            if np.all(np.abs(dist_coeffs) <= 1.0e-12):
+                return None, None
+
+            roi_x, roi_y = [int(value) for value in roi_origin]
+            roi_matrix = camera_matrix.copy()
+            roi_matrix[0, 2] -= roi_x
+            roi_matrix[1, 2] -= roi_y
+            return roi_matrix, dist_coeffs
         except Exception as exc:
             self._node.get_logger().warn(f"Failed to process camera info: {exc}")
             return None, None
@@ -2184,7 +2225,9 @@ class MTFHandler(CallbackBase):
             actual_pixel_format=actual_pixel_format,
             image_encoding=image_encoding,
         )
-        camera_matrix, dist_coeffs = self._get_camera_calibration()
+        camera_matrix, dist_coeffs = self._get_camera_calibration(
+            edge_roi.bbox[:2]
+        )
         analyzer = MTFAnalyzer(config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
         #self._log_brightness_profile(edge_roi, edge_label, run_dir)
         result = analyzer.compute_mtf(

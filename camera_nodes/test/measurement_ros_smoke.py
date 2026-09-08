@@ -21,6 +21,71 @@ from camera_nodes import measurement_runtime as runtime
 
 def main():
     repo = Path(__file__).resolve().parents[2]
+    parameter_node = SimpleNamespace(
+        get_parameters_by_prefix=lambda prefix: {
+            "plain": 42,
+            "wrapped": SimpleNamespace(value="ok"),
+        }
+    )
+    assert runtime.node_parameter_snapshot(parameter_node) == {
+        "plain": 42,
+        "wrapped": "ok",
+    }
+    position_io = runtime.MeasurementIO.__new__(runtime.MeasurementIO)
+    position_calls = []
+    def fake_axis_call(name, request, timeout=3.0, check=True):
+        position_calls.append((name, timeout))
+        if name == "get_operation_status":
+            return SimpleNamespace(success=True, operation_status="idle")
+        return SimpleNamespace(success=True, axis_position=12.5)
+    position_io.call = fake_axis_call
+    assert position_io.position() == 12.5
+    assert position_calls == [
+        ("get_operation_status", runtime.AXIS_READ_TIMEOUT_S),
+        ("get_position", runtime.AXIS_READ_TIMEOUT_S),
+    ]
+    required_values = {
+        "pixel_format": "Mono8", "exposure_time": 6000.0,
+        "bin_h": 1, "bin_v": 1, "exposure_auto": "Off",
+        "gain_auto": "Off", "width": 1920, "height": 1200,
+        "offset_x": 0, "offset_y": 0, "gamma": 0.0,
+    }
+    readback_calls = []
+    class TransientReadback:
+        def read_capture_state(self, **kwargs):
+            readback_calls.append(kwargs)
+            if not kwargs:
+                return {"values": required_values, "available_keys": required_values}
+            key = kwargs["required_keys"][0]
+            assert kwargs == {"required_keys": (key,), "query_groups": ((key,),)}
+            expected = {"gain": 1.0, "gamma": 1.0}[key]
+            return {"values": {key: expected}, "available_keys": {key}}
+    warnings = []
+    state_io = runtime.MeasurementIO.__new__(runtime.MeasurementIO)
+    state_io.check = lambda: None
+    state_io.axis_epoch = "axis-test"
+    state_io.scientific_baseline = {"gamma": 1.0}
+    state_io.node = SimpleNamespace(
+        _format_controller=TransientReadback(),
+        measurement_epoch="camera-test",
+        _param_str=lambda name: {
+            "camera.device_id": "ids-4110071724",
+            "camera.profile_id": "test-profile",
+        }[name],
+        get_logger=lambda: SimpleNamespace(warning=warnings.append),
+    )
+    recovered_state = state_io.state()
+    assert recovered_state["values"]["gain"] == 1.0
+    assert readback_calls[1] == {
+        "required_keys": ("gain",), "query_groups": (("gain",),)
+    }
+    assert readback_calls[2] == {
+        "required_keys": ("gamma",), "query_groups": (("gamma",),)
+    }
+    assert warnings == [
+        "Recovered transient camera readback for: gain",
+        "Recovered transient camera readback for changed gamma: 0.0 -> 1.0",
+    ]
     condition, source = load_plan(repo/"promoc_bringup/config/measurement_plans/pilot_simulation.yaml", "pilot-2x2")
     with tempfile.TemporaryDirectory(prefix="measurement_ros_smoke_") as directory:
         condition.output_root = directory
