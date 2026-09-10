@@ -17,3 +17,15 @@ int32 iterations
 float64 measured_level_fraction
 float64 saturated_fraction
 float64 native_max_value
+# Additive linear-intensity diagnostics. Existing fields above remain stable.
+float64 white_level
+float64 white_level_normalized
+float64 black_level
+float64 black_level_normalized
+float64 p95
+float64 p95_normalized
+float64 p99_9
+float64 p99_9_normalized
+float64 saturation_fraction
+string intensity_method
+bool clipping_detected

@@ -47,3 +47,8 @@ float64 max_saturated_fraction
 float64 expected_gain
 float64 min_free_gb
 int32 context_margin_px
+# "" or "park_return" moves focus-travel -> focus between measurements.
+# "hold_focus" leaves the axis at the prepared focus between measurements.
+string inter_measurement_motion
+# One-way approach-reset travel used by park_return (experiment default 10 mm).
+float64 inter_measurement_travel_mm

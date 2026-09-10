@@ -233,6 +233,50 @@ def _overlay_diagnostics(roi_vis: np.ndarray, metadata: dict[str, object]) -> No
         )
 
 
+def write_mtf_plot(
+    path: Path,
+    *,
+    esf: np.ndarray,
+    lsf: np.ndarray,
+    lsf_windowed: np.ndarray,
+    frequencies: np.ndarray,
+    mtf_raw: np.ndarray,
+    mtf_used: np.ndarray,
+    mtf_ideal: np.ndarray,
+    title: str = "MTF analysis",
+) -> None:
+    """Write the canonical ESF/LSF/MTF three-panel plot."""
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+
+    figure, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
+    figure.suptitle(title)
+    axes[0].plot(esf, color="tab:blue")
+    axes[0].set_title("ESF")
+    axes[0].set_ylabel("Intensity")
+
+    axes[1].plot(lsf, color="tab:orange", label="LSF")
+    axes[1].plot(lsf_windowed, color="tab:green", alpha=0.7, label="LSF windowed")
+    axes[1].set_title("LSF")
+    axes[1].set_ylabel("dI/dx")
+    axes[1].legend(loc="best", fontsize=8)
+
+    axes[2].plot(frequencies, mtf_raw[: frequencies.size], label="MTF raw")
+    if mtf_used is not mtf_raw:
+        axes[2].plot(frequencies, mtf_used[: frequencies.size], label="MTF used")
+    if mtf_ideal.size > 0:
+        axes[2].plot(frequencies, mtf_ideal[: frequencies.size], "--", label="MTF ideal")
+    axes[2].set_title("MTF")
+    axes[2].set_xlabel("Frequency (lp/mm)")
+    axes[2].set_ylabel("MTF")
+    axes[2].set_ylim(0, max(1.1, float(np.nanmax(mtf_raw)) if mtf_raw.size else 1.1))
+    axes[2].legend(loc="best", fontsize=8)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+
+
 def export_debug(
     config: MTFConfig,
     esf: np.ndarray,
@@ -297,47 +341,16 @@ def export_debug(
 
         if config.debug_export_png:
             try:
-                import matplotlib
-                matplotlib.use("Agg", force=True)
-                import matplotlib.pyplot as plt
-
-                figure, axes = plt.subplots(3, 1, figsize=(8, 8), constrained_layout=True)
-                axes[0].plot(esf, color="tab:blue")
-                axes[0].set_title("ESF")
-                axes[0].set_ylabel("Intensity")
-
-                axes[1].plot(lsf, color="tab:orange", label="LSF")
-                axes[1].plot(
-                    lsf_windowed,
-                    color="tab:green",
-                    alpha=0.7,
-                    label="LSF windowed",
+                write_mtf_plot(
+                    out_dir / f"{stem}_plot.png",
+                    esf=esf,
+                    lsf=lsf,
+                    lsf_windowed=lsf_windowed,
+                    frequencies=frequencies,
+                    mtf_raw=mtf_raw,
+                    mtf_used=mtf_used,
+                    mtf_ideal=mtf_ideal,
                 )
-                axes[1].set_title("LSF")
-                axes[1].set_ylabel("dI/dx")
-                axes[1].legend(loc="best", fontsize=8)
-
-                axes[2].plot(frequencies, mtf_raw[: frequencies.size], label="MTF raw")
-                if mtf_used is not mtf_raw:
-                    axes[2].plot(frequencies, mtf_used[: frequencies.size], label="MTF used")
-                if mtf_ideal.size > 0:
-                    axes[2].plot(
-                        frequencies,
-                        mtf_ideal[: frequencies.size],
-                        "--",
-                        label="MTF ideal",
-                    )
-                axes[2].set_title("MTF")
-                axes[2].set_xlabel("Frequency (lp/mm)")
-                axes[2].set_ylabel("MTF")
-                axes[2].set_ylim(
-                    0,
-                    max(1.1, float(np.nanmax(mtf_raw)) if mtf_raw.size > 0 else 1.1),
-                )
-                axes[2].legend(loc="best", fontsize=8)
-
-                figure.savefig(out_dir / f"{stem}_plot.png", dpi=150)
-                plt.close(figure)
             except Exception:
                 pass
 

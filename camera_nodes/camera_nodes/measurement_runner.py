@@ -77,7 +77,9 @@ def main(argv=None):
             client = node.create_client(GetRoiCoordinates, "/promoc/camera/get_roi_coordinates")
             if not client.wait_for_service(timeout_sec=5):
                 raise RuntimeError("ROI service unavailable")
-            future = client.call_async(GetRoiCoordinates.Request(window_name="Select ONE slanted edge with dark and bright plateau"))
+            future = client.call_async(GetRoiCoordinates.Request(
+                window_name="Select search ROI around the COMPLETE cube face (all 4 edges)"
+            ))
             rclpy.spin_until_future_complete(node, future, timeout_sec=300)
             response = future.result() if future.done() else None
             if response is None or not response.success:

@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-import re
-
 import numpy as np
 
 from promoc_core.promoc_exceptions import ConfigurationError, ImageProcessingError
 from promoc_core.error_handling import handle_service_errors
+from ..intensity import (
+    aggregate_intensity,
+    analysis_values,
+    clip_roi,
+    exposure_ratio,
+    measure_intensity,
+    native_max_value,
+)
 from .base import CallbackBase
 
 
 class ExposureHandler(CallbackBase):
     """Handler for exposure control."""
-
-    _SUPPORTED_SENSOR_BITS = {8, 10, 12, 14, 16}
 
     @staticmethod
     def _format_exposure(exposure_us: float) -> str:
@@ -116,33 +120,7 @@ class ExposureHandler(CallbackBase):
     @classmethod
     def _native_max_value(cls, pixel_format: str, image: np.ndarray) -> float:
         """Resolve the sensor code maximum without confusing container and bit depth."""
-        match = re.search(r"(?:mono|bayer[a-z]*)(8|10|12|14|16)", str(pixel_format), re.I)
-        if match:
-            bits = int(match.group(1))
-            if bits in cls._SUPPORTED_SENSOR_BITS:
-                native_max = (1 << bits) - 1
-                if np.issubdtype(image.dtype, np.integer):
-                    container_bits = int(np.iinfo(image.dtype).bits)
-                    shift = container_bits - bits
-                    if shift > 0:
-                        values = image.reshape(-1)
-                        nonzero = values[values != 0]
-                        low_bit_mask = (1 << shift) - 1
-                        looks_left_aligned = (
-                            nonzero.size > 0
-                            and (
-                                int(np.max(nonzero)) > native_max
-                                or np.all(
-                                    np.bitwise_and(nonzero, low_bit_mask) == 0
-                                )
-                            )
-                        )
-                        if looks_left_aligned:
-                            return float(native_max << shift)
-                return float(native_max)
-        if np.issubdtype(image.dtype, np.integer):
-            return float(np.iinfo(image.dtype).max)
-        return 1.0
+        return native_max_value(pixel_format, image)
 
     @staticmethod
     def _clip_roi(
@@ -150,23 +128,17 @@ class ExposureHandler(CallbackBase):
         roi: tuple[int, int, int, int] | None,
     ) -> tuple[np.ndarray, tuple[int, int]]:
         """Return a valid image crop and its absolute origin."""
-        if image is None or image.size == 0:
-            raise ImageProcessingError("Auto exposure received an empty camera frame")
-        if roi is None:
-            return image, (0, 0)
-
-        x, y, width, height = (int(value) for value in roi)
-        image_height, image_width = image.shape[:2]
-        x0 = max(0, x)
-        y0 = max(0, y)
-        x1 = min(image_width, x + width)
-        y1 = min(image_height, y + height)
-        if width <= 0 or height <= 0 or x1 <= x0 or y1 <= y0:
+        try:
+            return clip_roi(image, roi)
+        except ValueError as exc:
+            if image is None or getattr(image, "size", 0) == 0:
+                raise ImageProcessingError(
+                    "Auto exposure received an empty camera frame"
+                ) from exc
             raise ConfigurationError(
                 "Auto exposure ROI does not overlap the camera image",
-                details={"roi": [x, y, width, height]},
-            )
-        return image[y0:y1, x0:x1], (x0, y0)
+                details={"roi": list(roi or ())},
+            ) from exc
 
     @staticmethod
     def _analysis_values(
@@ -176,22 +148,10 @@ class ExposureHandler(CallbackBase):
         pixel_format: str,
     ) -> np.ndarray:
         """Extract intensity samples, using only native green sensels for Bayer RGGB."""
-        cropped, (origin_x, origin_y) = ExposureHandler._clip_roi(image, roi)
-        if cropped.ndim == 3:
-            channel = 1 if cropped.shape[2] >= 2 else 0
-            return cropped[:, :, channel].reshape(-1).astype(np.float64)
-
-        if "bayer" in str(pixel_format).lower():
-            row_even = origin_y % 2
-            row_odd = 1 - row_even
-            col_even = origin_x % 2
-            col_odd = 1 - col_even
-            green_1 = cropped[row_even::2, col_odd::2].reshape(-1)
-            green_2 = cropped[row_odd::2, col_even::2].reshape(-1)
-            if green_1.size and green_2.size:
-                return np.concatenate((green_1, green_2)).astype(np.float64)
-
-        return cropped.reshape(-1).astype(np.float64)
+        try:
+            return analysis_values(image, roi, pixel_format=pixel_format)
+        except ValueError as exc:
+            raise ImageProcessingError(str(exc)) from exc
 
     @classmethod
     def _measure_level(
@@ -206,17 +166,49 @@ class ExposureHandler(CallbackBase):
         """Return robust (level fraction, saturation fraction, native maximum)."""
         if not frames:
             raise ImageProcessingError("Auto exposure did not receive camera frames")
-        native_max = cls._native_max_value(pixel_format, frames[0])
-        levels = []
-        saturated = []
-        threshold = float(saturation_threshold_fraction) * native_max
-        for frame in frames:
-            values = cls._analysis_values(frame, roi, pixel_format=pixel_format)
-            if values.size == 0:
-                raise ImageProcessingError("Auto exposure ROI contains no usable pixels")
-            levels.append(float(np.percentile(values, percentile)) / native_max)
-            saturated.append(float(np.mean(values >= threshold)))
-        return float(np.median(levels)), float(np.median(saturated)), native_max
+        diagnostics = cls._measure_diagnostics(
+            frames,
+            roi,
+            pixel_format=pixel_format,
+            saturation_threshold_fraction=saturation_threshold_fraction,
+        )
+        # Preserve the private compatibility contract used by existing tests.
+        level_key = "white_level_norm" if percentile == 95.0 else "p95_norm"
+        return (
+            float(diagnostics[level_key]),
+            float(diagnostics["saturation_fraction"]),
+            float(diagnostics["native_max"]),
+        )
+
+    @staticmethod
+    def _measure_diagnostics(
+        frames: list[np.ndarray],
+        roi: tuple[int, int, int, int] | None,
+        *,
+        pixel_format: str,
+        saturation_threshold_fraction: float,
+        clipping_level_fraction: float = 0.95,
+        max_saturated_fraction: float = 0.001,
+    ) -> dict[str, object]:
+        """Return median-combined linear intensity and clipping diagnostics."""
+        if not frames:
+            raise ImageProcessingError("Auto exposure did not receive camera frames")
+        try:
+            return aggregate_intensity(
+                [
+                    measure_intensity(
+                        frame,
+                        roi,
+                        pixel_format=pixel_format,
+                        saturation_threshold_fraction=saturation_threshold_fraction,
+                        clipping_level_fraction=clipping_level_fraction,
+                        max_saturated_fraction=max_saturated_fraction,
+                    )
+                    for frame in frames
+                ]
+            )
+        except ValueError as exc:
+            raise ImageProcessingError(str(exc)) from exc
 
     def _capture_state(self) -> tuple[str, float]:
         """Return active pixel format and exposure readback with configured fallbacks."""
@@ -294,7 +286,7 @@ class ExposureHandler(CallbackBase):
         frames = int(getattr(request, "frames_per_iteration", 0) or 0)
         options = {
             "target": target if target > 0 else self._param_float(
-                "auto_exposure.target_level_fraction", 0.75
+                "auto_exposure.target_level_fraction", 0.70
             ),
             "tolerance": tolerance if tolerance > 0 else self._param_float(
                 "auto_exposure.tolerance_fraction", 0.02
@@ -312,6 +304,9 @@ class ExposureHandler(CallbackBase):
             ),
             "saturation_threshold_fraction": self._param_float(
                 "auto_exposure.saturation_threshold_fraction", 0.98
+            ),
+            "clipping_level_fraction": self._param_float(
+                "auto_exposure.clipping_level_fraction", 0.95
             ),
         }
         options["max_iterations"] = max(1, int(options["max_iterations"]))
@@ -333,11 +328,36 @@ class ExposureHandler(CallbackBase):
             raise ConfigurationError(
                 "Auto exposure saturation threshold must be between 0.5 and 1"
             )
+        if not 0.5 <= float(options["clipping_level_fraction"]) <= 1.0:
+            raise ConfigurationError(
+                "Auto exposure clipping level must be between 0.5 and 1"
+            )
         return options
+
+    @staticmethod
+    def _populate_auto_response(response, diagnostics, exposure_us, iterations, success):
+        """Populate legacy and additive auto-exposure response fields."""
+        response.success = bool(success)
+        response.exposure_time = float(exposure_us)
+        response.iterations = int(iterations)
+        response.measured_level_fraction = float(diagnostics["white_level_norm"])
+        response.saturated_fraction = float(diagnostics["saturation_fraction"])
+        response.native_max_value = float(diagnostics["native_max"])
+        response.white_level = float(diagnostics["white_level"])
+        response.white_level_normalized = float(diagnostics["white_level_norm"])
+        response.black_level = float(diagnostics["black_level"])
+        response.black_level_normalized = float(diagnostics["black_level_norm"])
+        response.p95 = float(diagnostics["p95"])
+        response.p95_normalized = float(diagnostics["p95_norm"])
+        response.p99_9 = float(diagnostics["p99_9"])
+        response.p99_9_normalized = float(diagnostics["p99_9_norm"])
+        response.saturation_fraction = float(diagnostics["saturation_fraction"])
+        response.intensity_method = str(diagnostics["intensity_method"])
+        response.clipping_detected = bool(diagnostics["clipping_detected"])
 
     @handle_service_errors()
     def auto_exposure_callback(self, request, response):
-        """Regulate exposure from fresh raw frames using a robust bright percentile."""
+        """Regulate exposure from fresh raw frames using robust black/white plateaus."""
         options = self._resolve_auto_exposure_options(request)
         roi = self._request_roi(request)
         pixel_format, current_exposure_us = self._capture_state()
@@ -352,46 +372,59 @@ class ExposureHandler(CallbackBase):
         timeout_s = self._param_float("exposure.frame_timeout_s", 1.0)
         last_timestamp = self._get_latest_image_timestamp_ns()
         stable_count = 0
-        level = 0.0
-        saturated = 0.0
-        native_max = 0.0
+        diagnostics = {
+            "white_level": 0.0,
+            "white_level_norm": 0.0,
+            "black_level": 0.0,
+            "black_level_norm": 0.0,
+            "p95": 0.0,
+            "p95_norm": 0.0,
+            "p99_9": 0.0,
+            "p99_9_norm": 0.0,
+            "saturation_fraction": 0.0,
+            "native_max": 0.0,
+            "intensity_method": "p95_fallback",
+            "clipping_detected": False,
+        }
 
         for iteration in range(1, int(options["max_iterations"]) + 1):
             frames, last_timestamp = self._collect_raw_frames(
                 int(options["frames_per_iteration"]), last_timestamp, timeout_s
             )
-            level, saturated, native_max = self._measure_level(
+            diagnostics = self._measure_diagnostics(
                 frames,
                 roi,
                 pixel_format=pixel_format,
-                percentile=float(options["percentile"]),
                 saturation_threshold_fraction=float(
                     options["saturation_threshold_fraction"]
                 ),
+                clipping_level_fraction=float(options["clipping_level_fraction"]),
+                max_saturated_fraction=float(options["max_saturated_fraction"]),
             )
+            level = float(diagnostics["white_level_norm"])
+            saturated = float(diagnostics["saturation_fraction"])
             in_band = abs(level - float(options["target"])) <= float(
                 options["tolerance"]
             )
-            clipping_ok = saturated <= float(options["max_saturated_fraction"])
+            clipping_ok = not bool(diagnostics["clipping_detected"])
             stable_count = stable_count + 1 if in_band and clipping_ok else 0
             self._node.get_logger().info(
                 f"Auto exposure {iteration}/{int(options['max_iterations'])}: "
                 f"exposure={current_exposure_us:.1f}us, "
-                f"P{float(options['percentile']):g}={level:.3f}, "
+                f"white={level:.3f} ({diagnostics['intensity_method']}), "
+                f"P99.9={float(diagnostics['p99_9_norm']):.3f}, "
                 f"saturated={saturated:.5f}"
             )
             if stable_count >= int(options["stable_iterations"]):
                 response.success = True
                 response.status_message = (
                     f"Auto exposure converged at {current_exposure_us:.1f} us; "
-                    f"P{float(options['percentile']):g}={level:.3f}, "
+                    f"white={level:.3f}, "
                     f"saturated={saturated:.5f}"
                 )
-                response.exposure_time = float(current_exposure_us)
-                response.iterations = int(iteration)
-                response.measured_level_fraction = float(level)
-                response.saturated_fraction = float(saturated)
-                response.native_max_value = float(native_max)
+                self._populate_auto_response(
+                    response, diagnostics, current_exposure_us, iteration, True
+                )
                 return response
 
             if in_band and clipping_ok:
@@ -399,10 +432,7 @@ class ExposureHandler(CallbackBase):
                 # frame set instead of introducing an unnecessary tiny write.
                 continue
 
-            ratio = float(options["target"]) / max(level, 1e-6)
-            ratio = max(0.5, min(2.0, ratio)) ** 0.7
-            if not clipping_ok:
-                ratio = min(ratio, 0.8)
+            ratio = exposure_ratio(diagnostics, float(options["target"]))
             requested_exposure_us = max(
                 min_exposure_us,
                 min(max_exposure_us, current_exposure_us * ratio),
@@ -424,12 +454,10 @@ class ExposureHandler(CallbackBase):
         response.success = False
         response.status_message = (
             f"Auto exposure did not converge; exposure={current_exposure_us:.1f} us, "
-            f"P{float(options['percentile']):g}={level:.3f}, "
+            f"white={float(diagnostics['white_level_norm']):.3f}, "
             f"saturated={saturated:.5f}"
         )
-        response.exposure_time = float(current_exposure_us)
-        response.iterations = int(iteration)
-        response.measured_level_fraction = float(level)
-        response.saturated_fraction = float(saturated)
-        response.native_max_value = float(native_max)
+        self._populate_auto_response(
+            response, diagnostics, current_exposure_us, iteration, False
+        )
         return response

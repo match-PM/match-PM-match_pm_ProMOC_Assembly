@@ -22,6 +22,7 @@
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
   
   <!-- External camera driver -->
   <depend>camera_aravis2</depend>

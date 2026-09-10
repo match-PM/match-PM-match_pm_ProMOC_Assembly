@@ -6,6 +6,7 @@ from logging import config
 from pathlib import Path
 import re
 import time
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -1982,6 +1983,105 @@ class MTFHandler(CallbackBase):
             )
         return self._apply_requested_edge_selection(edge_rois, request)
 
+    def analyze_mtf_roi_frame(
+        self,
+        cv_image: np.ndarray,
+        roi: tuple[int, int, int, int],
+        config_data: dict[str, object],
+        edge_geometry: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        """Analyze one already-acquired frame through the standard ROI service path.
+
+        This is the hardware-free core used by ``measure_mtf_roi`` and by the
+        repeated-measurement action.  It deliberately does not acquire another
+        camera frame and does not write service exports: the action owns capture
+        timing and its single export worker.  ROI resolution is nevertheless
+        exactly the service's ``roi_search`` square detection, including the
+        four edge ROIs and the configured detector thresholds.
+        """
+        x, y, width, height = [int(value) for value in roi]
+        request = SimpleNamespace(
+            measurement_mode="roi_search",
+            target_edge="any",
+            roi_x=x,
+            roi_y=y,
+            roi_width=width,
+            roi_height=height,
+            _mtf_roi_input_source="action_roi",
+        )
+        if edge_geometry is None:
+            edge_rois = self._resolve_edge_rois(cv_image, request)
+        else:
+            edge_rois = []
+            for edge in edge_geometry:
+                ex, ey, ew, eh = [int(value) for value in edge["bbox"]]
+                if ex < 0 or ey < 0 or ex + ew > cv_image.shape[1] or ey + eh > cv_image.shape[0]:
+                    raise ImageProcessingError("Stored MTF edge geometry exceeds the current frame")
+                edge_image = cv_image[ey:ey + eh, ex:ex + ew]
+                edge_rois.append(EdgeROI(
+                    image=edge_image,
+                    bbox=(ex, ey, ew, eh),
+                    edge_direction=str(edge.get("edge_direction", "unknown")),
+                    edge_name=str(edge.get("edge_name", "edge")),
+                    contrast=RoiDetector.calculate_michelson_contrast(edge_image),
+                    parent_center=tuple(int(value) for value in edge.get(
+                        "parent_center", (ex + ew // 2, ey + eh // 2)
+                    )),
+                ))
+        analyzed_edges: list[dict[str, object]] = []
+        for edge_index, edge_roi in enumerate(edge_rois):
+            config = MTFConfig(**copy.deepcopy(config_data))
+            config.debug_export_dir = None
+            config.debug_export_csv = False
+            config.debug_export_png = False
+            edge_label = self._build_edge_export_label(
+                edge_roi, edge_index, len(edge_rois)
+            )
+            _analyzer, result = self._analyze_edge_once(edge_roi, config, edge_label)
+            analyzed_edges.append(
+                {
+                    "edge_label": edge_label,
+                    "edge_name": edge_roi.edge_name,
+                    "edge_direction": edge_roi.edge_direction,
+                    "bbox": tuple(int(value) for value in edge_roi.bbox),
+                    "contrast": float(edge_roi.contrast),
+                    "parent_center": tuple(int(value) for value in edge_roi.parent_center),
+                    "result": result,
+                }
+            )
+        return {
+            "mode": "roi_search_square4",
+            "search_roi": (x, y, width, height),
+            "edges": analyzed_edges,
+        }
+
+    def _analyze_edge_once(
+        self,
+        edge_roi: EdgeROI,
+        config: MTFConfig,
+        edge_label: str,
+    ) -> tuple[MTFAnalyzer, MTFResult]:
+        """Run the one-edge analyzer shared by service and measurement action."""
+        camera_matrix, dist_coeffs = self._get_camera_calibration(edge_roi.bbox[:2])
+        analyzer = MTFAnalyzer(
+            config,
+            camera_matrix=camera_matrix,
+            dist_coeffs=dist_coeffs,
+        )
+        try:
+            result = analyzer.compute_mtf(
+                edge_roi.image,
+                roi_origin=edge_roi.bbox[:2],
+                debug_label=edge_label,
+            )
+        except Exception as exc:
+            result = MTFResult(valid=False, error_msg=f"Analyzer exception: {exc}")
+        result.edge_name = edge_roi.edge_name
+        result.edge_direction = edge_roi.edge_direction
+        result.contrast = edge_roi.contrast
+        result.roi_bounds = edge_roi.bbox
+        return analyzer, result
+
     def _prepare_edge_config(
         self,
         *,
@@ -2225,16 +2325,7 @@ class MTFHandler(CallbackBase):
             actual_pixel_format=actual_pixel_format,
             image_encoding=image_encoding,
         )
-        camera_matrix, dist_coeffs = self._get_camera_calibration(
-            edge_roi.bbox[:2]
-        )
-        analyzer = MTFAnalyzer(config, camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
-        #self._log_brightness_profile(edge_roi, edge_label, run_dir)
-        result = analyzer.compute_mtf(
-            edge_roi.image,
-            roi_origin=edge_roi.bbox[:2],
-            debug_label=edge_label,
-        )
+        analyzer, result = self._analyze_edge_once(edge_roi, config, edge_label)
 
         valid_samples: list[MTFResult] = []
         measured_edge = None

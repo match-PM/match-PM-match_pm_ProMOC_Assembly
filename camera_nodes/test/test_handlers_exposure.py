@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-import types
 
 import numpy as np
 
@@ -14,9 +13,6 @@ for path in (ROOT / "camera_nodes", ROOT / "promoc_core"):
     path_str = str(path)
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
-
-if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.SimpleNamespace()
 
 from camera_nodes.services.exposure import ExposureHandler  # noqa: E402
 
@@ -274,7 +270,7 @@ def test_auto_exposure_converges_after_two_stable_raw_measurements(monkeypatch):
         }
     )
     handler = ExposureHandler(node=node, camera_driver=_Driver())
-    frame = np.full((16, 16), 3071, dtype=np.uint16)
+    frame = np.full((16, 16), 2867, dtype=np.uint16)
     timestamps = iter((1, 2))
 
     monkeypatch.setattr(handler, "_capture_state", lambda: ("BayerRG12", 5000.0))
@@ -294,7 +290,13 @@ def test_auto_exposure_converges_after_two_stable_raw_measurements(monkeypatch):
     assert response.exposure_time == 5000.0
     assert response.iterations == 2
     assert response.native_max_value == 4095.0
-    assert abs(response.measured_level_fraction - 0.75) < 0.01
+    assert abs(response.measured_level_fraction - 0.70) < 0.01
+    assert response.white_level == 2867.0
+    assert response.black_level == 2867.0
+    assert response.p95 == 2867.0
+    assert response.p99_9 == 2867.0
+    assert response.intensity_method == "p95_fallback"
+    assert response.clipping_detected is False
 
 
 def test_auto_exposure_adjusts_exposure_and_uses_applied_readback(monkeypatch):
@@ -310,7 +312,7 @@ def test_auto_exposure_adjusts_exposure_and_uses_applied_readback(monkeypatch):
     )
     handler = ExposureHandler(node=node, camera_driver=_Driver())
     dark = np.full((16, 16), 1024, dtype=np.uint16)
-    target = np.full((16, 16), 3071, dtype=np.uint16)
+    target = np.full((16, 16), 2867, dtype=np.uint16)
     frames = iter((dark, target))
     writes = []
 

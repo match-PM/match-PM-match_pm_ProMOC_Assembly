@@ -19,6 +19,8 @@ defaults:
   axis_max_mm: 300.0
   measurement_count: 50
   frames_per_measurement: 10
+  inter_measurement_motion: "park_return"
+  inter_measurement_travel_mm: 10.0
   setup_repeat: 0
   component_id: "none"
   beam_angle_deg: 0
@@ -28,7 +30,7 @@ defaults:
   focus_samples: 21
   position_tolerance_mm: 0.01  # validate against physical focus window
   settle_time_s: 1.0  # pilot-test
-  exposure_target: 0.75
+  exposure_target: 0.70
   exposure_tolerance: 0.02
   exposure_max_iterations: 15
   exposure_check_refocus_fraction: 0.10
@@ -36,7 +38,7 @@ defaults:
   exposure_min_us: 80.0  # kleinster am Messstand funktionierender Servicewert
   exposure_max_us: 100000.0
   expected_gain: 1.0
-  roi_width: 0  # interactive ONE slanted edge before action
+  roi_width: 0  # interactive search ROI containing the COMPLETE cube face
   roi_height: 0
 conditions:
   - condition_id: "m001-screening-color-myutron-1x"

@@ -76,12 +76,13 @@ autofocus:
   analysis_use_center_roi: true
 
 auto_exposure:
-  # P95 of the selected raw ROI is regulated to 75% of the native sensor range.
-  target_level_fraction: 0.75
+  # Median of segmented white plateau (P95 fallback) targets 70% of raw range.
+  target_level_fraction: 0.70
   tolerance_fraction: 0.02
   percentile: 95.0
   max_saturated_fraction: 0.001
   saturation_threshold_fraction: 0.98
+  clipping_level_fraction: 0.95
   frames_per_iteration: 3
   max_iterations: 10
   stable_iterations: 2

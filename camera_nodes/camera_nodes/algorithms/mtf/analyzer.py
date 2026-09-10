@@ -226,6 +226,7 @@ class MTFAnalyzer:
             "edge_fit_residual_px": float(geometry.get("fit_residual_px") or 0.0),
             "edge_support_points": int(geometry.get("support_points") or 0),
             "analysis_roi_bounds": analysis_roi_bounds,
+            "edge_line": geometry.get("edge_line"),
         }
 
     def _angle_difference_deg(self, first: float, second: float) -> float:

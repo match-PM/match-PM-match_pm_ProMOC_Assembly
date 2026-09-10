@@ -49,6 +49,7 @@ class MTFResult:
     edge_fit_residual_px: float = 0.0
     edge_support_points: int = 0
     analysis_roi_bounds: Optional[Tuple[int, int, int, int]] = None
+    edge_line: Optional[Tuple[float, float, float, float]] = None
     g1_mtf50: float = 0.0
     g2_mtf50: float = 0.0
     g1_mtf20: float = 0.0

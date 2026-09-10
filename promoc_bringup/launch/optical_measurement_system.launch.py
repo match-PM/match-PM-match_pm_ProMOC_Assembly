@@ -497,7 +497,7 @@ def _create_camera_node(
                     exposure_config.get("max_val", 0.0)
                 ),
                 "auto_exposure.target_level_fraction": float(
-                    auto_exposure_config.get("target_level_fraction", 0.75)
+                    auto_exposure_config.get("target_level_fraction", 0.70)
                 ),
                 "auto_exposure.tolerance_fraction": float(
                     auto_exposure_config.get("tolerance_fraction", 0.02)
@@ -510,6 +510,9 @@ def _create_camera_node(
                 ),
                 "auto_exposure.saturation_threshold_fraction": float(
                     auto_exposure_config.get("saturation_threshold_fraction", 0.98)
+                ),
+                "auto_exposure.clipping_level_fraction": float(
+                    auto_exposure_config.get("clipping_level_fraction", 0.95)
                 ),
                 "auto_exposure.frames_per_iteration": int(
                     auto_exposure_config.get("frames_per_iteration", 3)

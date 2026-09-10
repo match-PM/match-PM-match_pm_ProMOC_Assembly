@@ -53,7 +53,7 @@ class Condition:
     focus_confirmation_ratio: float = 0.8
     exposure_min_us: float = 80.0
     exposure_max_us: float = 100000.0
-    exposure_target: float = 0.75
+    exposure_target: float = 0.70
     exposure_tolerance: float = 0.02
     exposure_max_iterations: int = 15
     exposure_check_refocus_fraction: float = 0.1
@@ -61,6 +61,8 @@ class Condition:
     expected_gain: float = 0.0
     min_free_gb: float = 2.0
     context_margin_px: int = 64
+    inter_measurement_motion: str = "park_return"
+    inter_measurement_travel_mm: float = 10.0
 
     def validate(self, *, allow_interactive_roi=False):
         data = asdict(self)
@@ -79,6 +81,12 @@ class Condition:
         for key in ("campaign_id", "condition_id", "setup_id"):
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", data[key]):
                 raise ValueError(f"Invalid path-safe {key}")
+        if self.inter_measurement_motion == "":
+            self.inter_measurement_motion = "park_return"
+        if self.inter_measurement_motion not in ("park_return", "hold_focus"):
+            raise ValueError(
+                "inter_measurement_motion must be park_return or hold_focus"
+            )
         for key in ("experiment_id", "operator_name", "camera_profile", "camera_serial",
                     "objective_id", "objective_family", "component_id", "target_position"):
             if not data[key].strip():
@@ -100,11 +108,14 @@ class Condition:
         if not 5 <= self.focus_samples <= 201 or self.focus_samples % 2 != 1:
             raise ValueError("focus_samples must be odd, between 5 and 201")
         for key in ("position_tolerance_mm", "settle_time_s", "move_timeout_s",
-                    "frame_timeout_s", "fine_focus_half_range_mm", "min_free_gb"):
+                    "frame_timeout_s", "fine_focus_half_range_mm", "min_free_gb",
+                    "inter_measurement_travel_mm"):
             if data[key] <= 0:
                 raise ValueError(f"{key} must be positive")
         if self.fine_focus_half_range_mm > 5:
             raise ValueError("Only local focus windows up to +/-5 mm are supported")
+        if self.inter_measurement_travel_mm > 50:
+            raise ValueError("Inter-measurement travel must not exceed 50 mm")
         if 2*self.fine_focus_half_range_mm/(self.focus_samples-1) < 2*self.position_tolerance_mm:
             raise ValueError("Focus grid spacing must be >= twice the position tolerance")
         if not 1 <= self.discard_frames <= 100 or not 0 <= self.context_margin_px <= 4096:

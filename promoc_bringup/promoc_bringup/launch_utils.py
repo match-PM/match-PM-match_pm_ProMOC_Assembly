@@ -171,11 +171,12 @@ def load_user_config(bringup_share_dir: str) -> dict:
         "autofocus_profiles": {"default": {}, "profiles": {}},
         "fly_over": {"refinement_mode": 0, "refinement_strategy": "linear"},
         "auto_exposure": {
-            "target_level_fraction": 0.75,
+            "target_level_fraction": 0.70,
             "tolerance_fraction": 0.02,
             "percentile": 95.0,
             "max_saturated_fraction": 0.001,
             "saturation_threshold_fraction": 0.98,
+            "clipping_level_fraction": 0.95,
             "frames_per_iteration": 3,
             "max_iterations": 10,
             "stable_iterations": 2,

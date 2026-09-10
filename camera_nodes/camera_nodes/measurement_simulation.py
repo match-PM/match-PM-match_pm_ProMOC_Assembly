@@ -5,6 +5,7 @@ import time
 import numpy as np
 
 from .measurement_engine import MeasurementEngine
+from .intensity import aggregate_intensity, measure_intensity
 
 
 class SimulatedIO:
@@ -60,12 +61,16 @@ class SimulatedIO:
         self.exposure = exposure
 
     def levels(self, images, condition):
-        samples = [im[condition.roi_y:condition.roi_y+condition.roi_height,
-                      condition.roi_x:condition.roi_x+condition.roi_width] for im in images]
-        return {"bright_fraction": float(np.median([np.percentile(s,95)/4095 for s in samples])),
-                "dark_fraction": float(np.median([np.percentile(s,5)/4095 for s in samples])),
-                "saturated_fraction": float(np.median([np.mean(s>=0.98*4095) for s in samples])),
-                "native_max": 4095.0}
+        roi = (condition.roi_x, condition.roi_y, condition.roi_width, condition.roi_height)
+        result = aggregate_intensity([
+            measure_intensity(image, roi, pixel_format="Mono12",
+                              max_saturated_fraction=condition.max_saturated_fraction)
+            for image in images
+        ])
+        result["bright_fraction"] = result["white_level_norm"]
+        result["dark_fraction"] = result["black_level_norm"]
+        result["saturated_fraction"] = result["saturation_fraction"]
+        return result
 
     def focus_score(self, image, condition):
         crop = image[condition.roi_y:condition.roi_y+condition.roi_height,
@@ -76,6 +81,41 @@ class SimulatedIO:
         from .algorithms.mtf import MTFConfig
         from dataclasses import asdict
         return asdict(MTFConfig(input_mode="dense_gray", capture_pixel_format="Mono12", source_encoding="mono16"))
+
+    def analyze_mtf_roi_frame(self, image, condition, analysis_config, edge_geometry=None):
+        """Synthetic four-edge bundle matching the hardware action contract."""
+        from .algorithms.mtf import MTFAnalyzer, MTFConfig
+
+        x, y, width, height = (
+            condition.roi_x, condition.roi_y,
+            condition.roi_width, condition.roi_height,
+        )
+        config = MTFConfig(**analysis_config)
+        config.debug_export_dir = None
+        config.debug_export_csv = False
+        config.debug_export_png = False
+        result = MTFAnalyzer(config).compute_mtf(
+            image[y:y+height, x:x+width], roi_origin=(x, y)
+        )
+        edges = []
+        for index, name in enumerate(("top", "right", "bottom", "left"), start=1):
+            cloned = replace(result)
+            cloned.edge_name = name
+            cloned.edge_direction = "horizontal" if name in {"top", "bottom"} else "vertical"
+            cloned.roi_bounds = (x, y, width, height)
+            edges.append({
+                "edge_label": f"{index:02d}_{name}",
+                "edge_name": name,
+                "edge_direction": cloned.edge_direction,
+                "bbox": (x, y, width, height),
+                "contrast": float(cloned.contrast),
+                "result": cloned,
+            })
+        return {
+            "mode": "roi_search_square4",
+            "search_roi": (x, y, width, height),
+            "edges": edges,
+        }
 
 
 def run_simulation(condition, source):

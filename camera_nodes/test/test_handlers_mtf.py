@@ -206,6 +206,72 @@ def test_measure_mtf_roi_callback_forces_roi_mode_and_defaults_to_square_search(
     assert captured["roi_input_source"] == "alias_roi"
 
 
+def test_action_frame_core_uses_roi_service_square_search_and_all_four_edges(monkeypatch):
+    handler = MTFHandler(node=_Node({}), camera_driver=object())
+    image = np.zeros((120, 140), dtype=np.uint16)
+    captured = {}
+    edge_rois = [
+        mtf_module.EdgeROI(
+            image=np.zeros((20, 40), dtype=np.uint16),
+            bbox=(10 + index, 20 + index, 40, 20),
+            edge_direction="horizontal" if name in {"top", "bottom"} else "vertical",
+            edge_name=name,
+            contrast=0.8,
+            parent_center=(70, 60),
+        )
+        for index, name in enumerate(("top", "right", "bottom", "left"))
+    ]
+
+    def resolve(_image, request):
+        captured["mode"] = request.measurement_mode
+        captured["target"] = request.target_edge
+        captured["roi"] = (request.roi_x, request.roi_y, request.roi_width, request.roi_height)
+        return edge_rois
+
+    monkeypatch.setattr(handler, "_resolve_edge_rois", resolve)
+    monkeypatch.setattr(
+        handler,
+        "_analyze_edge_once",
+        lambda edge, _config, _label: (
+            None,
+            MTFResult(valid=True, mtf50=80.0, edge_angle=5.0, edge_line=(0, 0, 10, 1)),
+        ),
+    )
+
+    analysis = handler.analyze_mtf_roi_frame(
+        image,
+        (5, 6, 100, 90),
+        vars(MTFConfig(input_mode="dense_gray", capture_pixel_format="Mono12")),
+    )
+
+    assert captured == {
+        "mode": "roi_search",
+        "target": "any",
+        "roi": (5, 6, 100, 90),
+    }
+    assert analysis["mode"] == "roi_search_square4"
+    assert [edge["edge_name"] for edge in analysis["edges"]] == [
+        "top", "right", "bottom", "left"
+    ]
+
+    geometry = [
+        {key: edge[key] for key in ("bbox", "edge_name", "edge_direction", "parent_center")}
+        for edge in analysis["edges"]
+    ]
+    monkeypatch.setattr(
+        handler,
+        "_resolve_edge_rois",
+        lambda *_args: pytest.fail("subsequent frames must reuse the detected edge boxes"),
+    )
+    reused = handler.analyze_mtf_roi_frame(
+        image,
+        (5, 6, 100, 90),
+        vars(MTFConfig(input_mode="dense_gray", capture_pixel_format="Mono12")),
+        geometry,
+    )
+    assert len(reused["edges"]) == 4
+
+
 def test_capture_only_defaults_to_roi_square_search():
     handler = MTFHandler(node=_Node({}), camera_driver=object())
 

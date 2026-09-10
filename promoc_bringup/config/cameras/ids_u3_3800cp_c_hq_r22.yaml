@@ -70,7 +70,7 @@ dynamic_parameters:
   - {FeatureName: ExposureAuto, Type: string}
   - {FeatureName: GainAuto, Type: string}
   - {FeatureName: BalanceWhiteAuto, Type: string}
-  - {FeatureName: GammaEnable, Type: bool}
+  - {FeatureName: Gamma, Type: float}
   - {FeatureName: ColorTransformationEnable, Type: bool}
   - {FeatureName: BinningHorizontal, Type: int, Min: 1, Max: 2}
   - {FeatureName: BinningVertical, Type: int, Min: 1, Max: 2}

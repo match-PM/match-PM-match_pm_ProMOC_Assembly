@@ -77,8 +77,9 @@ def test_declare_runtime_config_uses_promoc_camera_defaults():
     assert cfg.core.default_pixel_format == "RGB8"
     assert cfg.autofocus.exposure_guard_s == 0.02
     assert cfg.exposure.readback_tolerance_us == 20.0
-    assert cfg.auto_exposure.target_level_fraction == 0.75
+    assert cfg.auto_exposure.target_level_fraction == 0.70
     assert cfg.auto_exposure.percentile == 95.0
+    assert cfg.auto_exposure.clipping_level_fraction == 0.95
     assert cfg.auto_exposure.frames_per_iteration == 3
     assert cfg.mtf.profile == "default"
     assert cfg.mtf.debug_export_dir == ""

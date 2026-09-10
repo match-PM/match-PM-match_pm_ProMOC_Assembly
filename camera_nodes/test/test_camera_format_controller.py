@@ -875,3 +875,16 @@ def test_read_capture_state_intersects_configured_and_runtime_declared(monkeypat
     assert state is not None
     assert "GammaEnable" not in queried_names
     assert queried_names == ["Width", "Height", "PixelFormat", "ExposureTime", "Gain"]
+    assert state["unsupported_keys"] == ["gamma_enable"]
+
+
+def test_scientific_target_uses_unity_gamma_when_enable_switch_is_absent():
+    controller = CameraFormatController(_Node())
+
+    target = controller.build_mtf_scientific_capture_target({
+        "pixel_format": "BayerRG12", "gain": 1.0, "gamma": 1.4,
+        "exposure_auto": "Off", "gain_auto": "Off", "white_balance_auto": "Off",
+    })
+
+    assert target["gamma"] == 1.0
+    assert "gamma_enable" not in target

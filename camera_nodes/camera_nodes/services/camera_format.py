@@ -26,7 +26,8 @@ class CameraFormatController:
         ("exposure_auto",),
         ("gain_auto",),
         ("white_balance_auto",),
-        ("gamma",),
+        ("gamma", "gamma_enable"),
+        ("color_transform_enable",),
     )
     FORMAT_PARAM_NAME_VARIANTS = (
         {
@@ -90,6 +91,7 @@ class CameraFormatController:
         "exposure_auto",
         "gain_auto",
         "white_balance_auto",
+        "gamma",
         "gamma_enable",
         "color_transform_enable",
     )
@@ -162,6 +164,7 @@ class CameraFormatController:
             "get_service": get_service,
             "list_service": list_service,
             "declared_param_names": None,
+            "declared_param_names_authoritative": False,
         }
         self._service_clients[set_service] = cached
         return cached
@@ -250,8 +253,6 @@ class CameraFormatController:
 
         cached_names = clients.get("declared_param_names")
         if isinstance(cached_names, set):
-            if isinstance(configured, set):
-                return configured.intersection(cached_names)
             return cached_names
 
         list_client = clients.get("list")
@@ -274,9 +275,31 @@ class CameraFormatController:
 
         declared = {str(name) for name in names if name is not None}
         clients["declared_param_names"] = declared
-        if isinstance(configured, set):
-            return configured.intersection(declared)
+        clients["declared_param_names_authoritative"] = True
         return declared
+
+    def _configured_unsupported_keys(self, clients, declared_names) -> set[str]:
+        """Map profile-requested but authoritatively absent driver parameters."""
+        configured = self._configured_declared_parameter_names
+        if (
+            not clients.get("declared_param_names_authoritative", False)
+            or not isinstance(configured, set)
+            or not isinstance(declared_names, set)
+        ):
+            return set()
+        unsupported = set()
+        canonical_keys = {
+            key for variant in self.CAPTURE_PARAM_NAME_VARIANTS for key in variant
+        }
+        for key in canonical_keys:
+            candidates = {
+                variant[key] for variant in self.CAPTURE_PARAM_NAME_VARIANTS if key in variant
+            }
+            requested = bool(candidates & configured)
+            available = bool(candidates & declared_names)
+            if requested and not available:
+                unsupported.add(key)
+        return unsupported
 
     def _call_set_parameter(
         self, client, name: str, value, timeout_s: float = 3.0
@@ -417,6 +440,7 @@ class CameraFormatController:
                 continue
 
             declared_names = self._get_declared_parameter_names(clients)
+            unsupported_keys = self._configured_unsupported_keys(clients, declared_names)
 
             for names in variants:
                 values = {}
@@ -483,6 +507,7 @@ class CameraFormatController:
                     "values": values,
                     "types": types,
                     "available_keys": sorted(available_keys),
+                    "unsupported_keys": sorted(unsupported_keys),
                 }
 
         if self._is_switch_logging_enabled() and last_failure_reason:
@@ -675,7 +700,12 @@ class CameraFormatController:
                 current.get("white_balance_auto", "Off")
             )
         if self._get_bool_param("mtf.capture_disable_gamma", True):
-            target["gamma_enable"] = False
+            if "gamma_enable" in current:
+                target["gamma_enable"] = False
+            elif "gamma" in current:
+                target["gamma"] = 1.0
+            else:
+                target["gamma_enable"] = False
         if self._get_bool_param("mtf.capture_disable_color_transform", True):
             target["color_transform_enable"] = False
         return target

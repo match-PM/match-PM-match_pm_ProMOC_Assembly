@@ -1,7 +1,10 @@
 """Measurement safety/provenance tests without ROS or real axis commands."""
 from dataclasses import asdict, replace
+import csv
 import json
+from pathlib import Path
 import re
+import threading
 
 import numpy as np
 import pytest
@@ -51,7 +54,6 @@ def test_complete_and_immutable_analysis(condition):
     io = SimulatedIO(condition)
     result = MeasurementEngine(condition,io).run("test source")
     assert result["success"] and result["captured_frames"] == 4
-    from pathlib import Path
     from camera_nodes.measurement_analyze import analyze_run
     path = Path(result["output_directory"])
     manifests = list(path.glob("measurements/m*/attempt_*/capture_manifest.json"))
@@ -59,16 +61,36 @@ def test_complete_and_immutable_analysis(condition):
     original = [p.read_bytes() for p in manifests]
     for manifest in manifests:
         assert verify_capture(manifest,2)["capture_status"] == "complete"
+        capture = json.loads(manifest.read_text())
+        assert capture["mtf_roi_mode"] == "roi_search_square4"
+        assert all(row["edges_total"] == 4 for row in capture["frame_analysis"])
+        assert all(row["edges_valid"] == 4 for row in capture["frame_analysis"])
     first = analyze_run(path)
     second = analyze_run(path)
     assert first != second
     assert (first/"frame_results.csv").is_file()
     assert [p.read_bytes() for p in manifests] == original
+    with (path/"summary.csv").open(newline="") as handle:
+        online_rows = list(csv.DictReader(handle))
+    assert len(online_rows) == condition.measurement_count
+    assert all(int(row["frames_total"]) == condition.frames_per_measurement for row in online_rows)
+    assert all(int(row["frames_valid"]) == condition.frames_per_measurement for row in online_rows)
+    assert len(list(path.glob("point_*_overview.png"))) == condition.measurement_count
+    assert len(list(path.glob("point_*_edges.png"))) == condition.measurement_count
+    assert (path/"analysis"/"mtf50_vs_measurement.png").is_file()
+    assert not [thread for thread in threading.enumerate()
+                if thread.name == "mtf-analysis-worker"]
     prep = json.loads((path/"preparation.json").read_text())
     assert len(prep["focus"]["curve"]) >= condition.focus_samples
-    assert prep["levels"]["bright_fraction"] == pytest.approx(.75,abs=.02)
-    # Last four moves are the identical park/focus cycles, including m001.
-    assert io.moves[-4:] == [condition.park_position_mm,prep["focus_position_mm"]]*2
+    assert prep["levels"]["bright_fraction"] == pytest.approx(.70,abs=.02)
+    # The first capture stays at the prepared focus. Only the gap between m001
+    # and m002 gets the prescribed 10 mm approach-reset cycle; no AF is rerun.
+    assert io.moves[-4:] == [
+        io.best - condition.inter_measurement_travel_mm,
+        prep["focus_position_mm"],
+        prep["focus_position_mm"] - condition.inter_measurement_travel_mm,
+        prep["focus_position_mm"],
+    ]
 
 
 def test_cancel_and_resume_without_af_or_ae(condition):
@@ -81,9 +103,29 @@ def test_cancel_and_resume_without_af_or_ae(condition):
     with pytest.raises(Cancelled):
         engine.run("test")
     assert engine.completed_count == 1
+    assert not [thread for thread in threading.enumerate()
+                if thread.name == "mtf-analysis-worker"]
     io.set_exposure = lambda value: pytest.fail("Resume must not change exposure")
     result = MeasurementEngine(condition,io).run("test",engine.store.run_id)
     assert result["captured_frames"] == 4
+
+
+def test_resume_rebuilds_missing_online_result_from_raw_stack(condition):
+    io = SimulatedIO(condition)
+    engine = MeasurementEngine(condition, io)
+    engine.run("test")
+    run = engine.store.path
+    (run/"analysis"/"points"/"point_001.json").unlink()
+    (run/"summary.csv").unlink()
+    for image in run.glob("point_001_*.png"):
+        image.unlink()
+
+    resumed = MeasurementEngine(condition, io).run("test", engine.store.run_id)
+    assert resumed["success"]
+    with (run/"summary.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == condition.measurement_count
+    assert len(list(run.glob("point_001_*.png"))) == 2
 
 
 def test_resume_after_camera_epoch_change_refused(condition):
@@ -147,6 +189,45 @@ def test_no_focus_outside_safe_window(condition):
     with pytest.raises(MeasurementError, match="unsafe"):
         MeasurementEngine(condition,io).run("test")
     assert io.moves == []
+
+
+def test_hold_focus_avoids_inter_measurement_moves(condition):
+    condition = replace(condition, inter_measurement_motion="hold_focus")
+    io = SimulatedIO(condition)
+    result = MeasurementEngine(condition, io).run("test")
+    assert result["success"]
+    preparation = json.loads((Path(result["output_directory"])/"preparation.json").read_text())
+    assert io.moves[-2:] == [
+        io.best - condition.inter_measurement_travel_mm,
+        preparation["focus_position_mm"],
+    ]
+
+
+def test_empty_motion_mode_preserves_park_return(condition):
+    assert replace(condition, inter_measurement_motion="").validate().inter_measurement_motion == "park_return"
+
+
+def test_missing_cube_edges_invalidates_point_but_does_not_abort_series(condition):
+    io = SimulatedIO(condition)
+    original = io.analyze_mtf_roi_frame
+    calls = {"count": 0}
+
+    def lose_one_frame(image, current_condition, config, edge_geometry=None):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {"mode": "roi_search_square4", "edges": []}
+        return original(image, current_condition, config, edge_geometry)
+
+    io.analyze_mtf_roi_frame = lose_one_frame
+    result = MeasurementEngine(condition, io).run("test")
+
+    assert result["success"]
+    assert result["completed_measurements"] == 2
+    with (Path(result["output_directory"]) / "summary.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["valid"] == "0"
+    assert rows[0]["quality_flags"] == "MTF_ROI_EDGE_COUNT_NOT_FOUR"
+    assert rows[1]["valid"] == "1"
 
 
 def test_lease_exclusion_watchdog_and_epoch():

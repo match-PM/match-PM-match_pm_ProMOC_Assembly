@@ -19,6 +19,8 @@ defaults:
   park_position_mm: 2.0
   measurement_count: 2
   frames_per_measurement: 2
+  inter_measurement_motion: park_return
+  inter_measurement_travel_mm: 10.0
   roi_x: 16
   roi_y: 16
   roi_width: 96

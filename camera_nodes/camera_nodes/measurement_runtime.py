@@ -17,7 +17,8 @@ from promoc_assembly_interfaces.srv import GetPosition, GetOperationStatus, Move
 
 from .measurement_engine import MeasurementEngine, MeasurementError, FrameTimeout, Cancelled
 from .measurement_plan import Condition
-from .services.exposure import ExposureHandler
+from .intensity import aggregate_intensity, measure_intensity
+from .measurement_processing import ProcessingStateError, verify_processing_state
 
 
 AXIS = "/promoc/linear_axis/lts300_x_axis"
@@ -170,6 +171,7 @@ class MeasurementIO:
         if not state:
             raise MeasurementError("READBACK_UNAVAILABLE", "Camera parameter readback unavailable")
         values = dict(state["values"])
+        unsupported = set(state.get("unsupported_keys", ()))
         required = {"pixel_format", "exposure_time", "gain", "bin_h", "bin_v", "exposure_auto", "gain_auto",
                     "width", "height", "offset_x", "offset_y"}
         available = set(state.get("available_keys", values))
@@ -189,6 +191,7 @@ class MeasurementIO:
                 if not supplement:
                     continue
                 supplement_values = dict(supplement.get("values", {}))
+                unsupported.update(supplement.get("unsupported_keys", ()))
                 supplement_available = set(
                     supplement.get("available_keys", supplement_values)
                 )
@@ -248,6 +251,7 @@ class MeasurementIO:
         return {"values": values, "identity": {"camera_node_epoch": self.node.measurement_epoch,
                 "axis_epoch": self.axis_epoch, "configured_guid": self.node._param_str("camera.device_id"),
                 "profile": self.node._param_str("camera.profile_id")},
+                "unsupported_keys": sorted(unsupported),
                 "readback_source": "ROS_driver_parameter_services", "read_at_utc_ns": time.time_ns()}
 
     def preflight(self, condition):
@@ -258,18 +262,23 @@ class MeasurementIO:
         if state["identity"]["configured_guid"].split("-")[-1] != condition.camera_serial:
             raise MeasurementError("CAMERA_IDENTITY", "Configured GUID differs from operator-confirmed camera serial")
         values = state["values"]
+        unsupported = set(state.get("unsupported_keys", ()))
         self.pixel_format = str(values["pixel_format"])
         if not (self.pixel_format.startswith("Mono") or self.pixel_format.startswith("BayerRG")):
             raise MeasurementError("RAW_REQUIRED", "Expected Mono or Bayer RGGB scientific raw")
         if values["bin_h"] != 1 or values["bin_v"] != 1 or abs(float(values["gain"])-condition.expected_gain) > 1e-6:
             raise MeasurementError("CAPTURE_SETTINGS", "Binning/gain mismatch; configure before starting")
-        for key in ("exposure_auto", "gain_auto", "white_balance_auto", "gamma_enable", "color_transform_enable"):
-            if key in values and str(values[key]).lower() not in ("off", "false", "0", "0.0"):
-                raise MeasurementError("AUTOMATIC_PROCESSING", f"{key} must be off")
-        if "gamma_enable" not in values and ("gamma" not in values or abs(float(values["gamma"])-1)>1e-6):
-            raise MeasurementError("PROCESSING_UNVERIFIED", "Gamma must be verified off or unity")
-        if self.pixel_format.startswith("Bayer") and not {"white_balance_auto","color_transform_enable"} <= set(values):
-            raise MeasurementError("PROCESSING_UNVERIFIED", "Bayer white-balance/color-transform readbacks required")
+        try:
+            accepted_unsupported = verify_processing_state(
+                values, unsupported, self.pixel_format
+            )
+        except ProcessingStateError as exc:
+            raise MeasurementError(exc.code, str(exc)) from exc
+        if accepted_unsupported:
+            self.node.get_logger().warning(
+                "Scientific processing features verified unsupported by the camera driver: "
+                + ", ".join(accepted_unsupported)
+            )
         snapshot = getattr(self.node, "measurement_image_snapshot", None)
         if not snapshot:
             raise MeasurementError("NO_IMAGE", "Camera has no image")
@@ -318,12 +327,20 @@ class MeasurementIO:
 
     def levels(self, images, condition):
         roi = (condition.roi_x, condition.roi_y, condition.roi_width, condition.roi_height)
-        maximum = ExposureHandler._native_max_value(self.pixel_format, images[0])
-        samples = [ExposureHandler._analysis_values(image, roi, pixel_format=self.pixel_format) for image in images]
-        return {"bright_fraction": float(np.median([np.percentile(v,95)/maximum for v in samples])),
-                "dark_fraction": float(np.median([np.percentile(v,5)/maximum for v in samples])),
-                "saturated_fraction": float(np.median([np.mean(v >= 0.98*maximum) for v in samples])),
-                "native_max": maximum}
+        result = aggregate_intensity([
+            measure_intensity(
+                image,
+                roi,
+                pixel_format=self.pixel_format,
+                max_saturated_fraction=condition.max_saturated_fraction,
+            )
+            for image in images
+        ])
+        # Legacy aliases keep the state machine and older manifests readable.
+        result["bright_fraction"] = result["white_level_norm"]
+        result["dark_fraction"] = result["black_level_norm"]
+        result["saturated_fraction"] = result["saturation_fraction"]
+        return result
 
     def focus_score(self, image, condition):
         x,y,w,h = condition.roi_x,condition.roi_y,condition.roi_width,condition.roi_height
@@ -344,6 +361,20 @@ class MeasurementIO:
         config.capture_gain = self.c.expected_gain
         config.source_encoding = self.encoding
         return asdict(config)
+
+    def analyze_mtf_roi_frame(self, image, condition, analysis_config, edge_geometry=None):
+        """Use the same square/four-edge core as /measure_mtf_roi."""
+        return self.node.mtf_handler.analyze_mtf_roi_frame(
+            image,
+            (
+                condition.roi_x,
+                condition.roi_y,
+                condition.roi_width,
+                condition.roi_height,
+            ),
+            analysis_config,
+            edge_geometry,
+        )
 
 
 class MeasurementAction:

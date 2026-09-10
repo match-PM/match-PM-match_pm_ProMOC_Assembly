@@ -19,11 +19,13 @@ defaults:
   axis_max_mm: 300.0
   measurement_count: 50
   frames_per_measurement: 10
+  inter_measurement_motion: "park_return"
+  inter_measurement_travel_mm: 10.0
   fine_focus_half_range_mm: 0.5  # pilot-test; no 300 mm search
   focus_samples: 21
   position_tolerance_mm: 0.01  # validate against physical focus window
   settle_time_s: 1.0  # pilot-test
-  exposure_target: 0.75
+  exposure_target: 0.70
   exposure_tolerance: 0.02
   exposure_max_iterations: 15
   exposure_check_refocus_fraction: 0.10
