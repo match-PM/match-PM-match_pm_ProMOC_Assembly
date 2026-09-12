@@ -51,8 +51,8 @@ def process_linear_request(request) -> ProcessedMotionInput:
     """
     xbot_id = _validated_xbot_id(request.xbot_id)
     target = XBotPose(
-        x=_require_finite(request.x_pos, "x_pos") / 1000.0,
-        y=_require_finite(request.y_pos, "y_pos") / 1000.0,
+        x=(request.x_pos, "x_pos") / 1000.0,
+        y=(request.y_pos, "y_pos") / 1000.0,
         z=0.001,
         rx=0.0,
         ry=0.0,
